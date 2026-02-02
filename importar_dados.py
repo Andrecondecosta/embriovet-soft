@@ -127,7 +127,7 @@ def importar_stock(csv_file, proprietario_padrao_id):
                     quantidade_inicial, existencia_atual
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                garanhao, proprietario_padrao_id, data_embriovet, origem_externa,
+                garanhao, dono_id, data_embriovet, origem_externa,
                 palhetas_produzidas, qualidade, concentracao, motilidade,
                 local_armazenagem, certificado, dose, observacoes,
                 palhetas_produzidas, existencia_atual
@@ -150,6 +150,7 @@ def importar_stock(csv_file, proprietario_padrao_id):
     
     print(f"\n📊 RESUMO DA IMPORTAÇÃO:")
     print(f"   ✅ Importados: {importados}")
+    print(f"   ✨ Novos proprietários criados: {proprietarios_criados}")
     print(f"   ❌ Erros: {erros}")
     print(f"   📦 Total: {len(df)}")
     
