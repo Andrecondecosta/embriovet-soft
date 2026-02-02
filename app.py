@@ -600,6 +600,14 @@ except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
 
+# Limpar session state do novo proprietário após usá-lo (evita que fique selecionado sempre)
+if 'novo_proprietario_usado' in st.session_state:
+    if 'novo_proprietario_id' in st.session_state:
+        del st.session_state['novo_proprietario_id']
+    if 'novo_proprietario_nome' in st.session_state:
+        del st.session_state['novo_proprietario_nome']
+    del st.session_state['novo_proprietario_usado']
+
 if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
