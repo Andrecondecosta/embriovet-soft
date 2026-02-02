@@ -84,7 +84,7 @@ def carregar_inseminacoes():
             query = """
                 SELECT i.*, d.nome as proprietario_nome
                 FROM inseminacoes i
-                LEFT JOIN proprietario d ON i.dono_id = d.id
+                LEFT JOIN dono d ON i.dono_id = d.id
                 ORDER BY i.data_inseminacao DESC
             """
             df = pd.read_sql(query, conn)
