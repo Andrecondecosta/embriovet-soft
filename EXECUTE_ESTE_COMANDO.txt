@@ -1,0 +1,48 @@
+# 🚨 AÇÃO NECESSÁRIA - Execute Este Comando
+
+## ⚡ SOLUÇÃO RÁPIDA
+
+Copie e cole este comando no seu terminal:
+
+```bash
+psql -U postgres -d embriovet -f corrigir_tabela_transferencias.sql
+```
+
+---
+
+## ❓ POR QUÊ?
+
+A tabela `transferencias` existe no seu banco, mas está **faltando a coluna `estoque_id`**.
+
+Isso acontece porque:
+- Talvez você tenha criado a tabela manualmente com estrutura diferente
+- Ou executou um script incompleto
+
+---
+
+## ✅ O QUE ESSE COMANDO FAZ
+
+1. Remove a tabela antiga (incorreta)
+2. Cria a tabela nova (correta) com TODAS as colunas necessárias
+3. Adiciona índices para melhorar performance
+
+**Tempo:** Menos de 1 segundo ⚡
+
+---
+
+## 📝 DEPOIS DE EXECUTAR
+
+1. Teste fazer uma transferência no sistema
+2. Vá para "Relatórios" → "Transferências"
+3. Verifique se aparece no histórico
+
+---
+
+## 🆘 SE DER PROBLEMA
+
+Me avise e eu ajudo! 😊
+
+---
+
+**ARQUIVO DO SCRIPT:** `corrigir_tabela_transferencias.sql`  
+**DOCUMENTAÇÃO:** `CORRIGIR_ERRO_TRANSFERENCIAS.md`
