@@ -211,16 +211,16 @@ def registrar_inseminacao(registro):
 
 # 👥 Funções de Gestão de Proprietários
 
-def adicionar_proprietario(nome, contato="", email=""):
+def adicionar_proprietario(nome):
     """Adiciona novo proprietário"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                INSERT INTO dono (nome, contato, email)
-                VALUES (%s, %s, %s)
+                INSERT INTO dono (nome)
+                VALUES (%s)
                 RETURNING id
-            """, (nome, contato, email))
+            """, (nome,))
             proprietario_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
@@ -231,16 +231,16 @@ def adicionar_proprietario(nome, contato="", email=""):
         st.error(f"Erro ao adicionar proprietário: {e}")
         return None
 
-def editar_proprietario(proprietario_id, nome, contato="", email=""):
+def editar_proprietario(proprietario_id, nome):
     """Edita proprietário existente"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
                 UPDATE dono 
-                SET nome = %s, contato = %s, email = %s
+                SET nome = %s
                 WHERE id = %s
-            """, (nome, contato, email, proprietario_id))
+            """, (nome, proprietario_id))
             conn.commit()
             cur.close()
             logger.info(f"Proprietário editado: {nome}")
