@@ -71,6 +71,11 @@ def importar_stock(csv_file, proprietario_padrao_id):
     conn = get_connection()
     cur = conn.cursor()
     
+    # Criar dicionário de proprietários existentes
+    cur.execute("SELECT nome, id FROM dono")
+    proprietarios_dict = {nome.strip().lower(): id for nome, id in cur.fetchall()}
+    
+    proprietarios_criados = 0
     importados = 0
     erros = 0
     
@@ -79,6 +84,28 @@ def importar_stock(csv_file, proprietario_padrao_id):
     for idx, row in df.iterrows():
         try:
             garanhao = row['Garanhão'] if pd.notna(row['Garanhão']) else 'Desconhecido'
+            
+            # Processar Proprietário
+            proprietario_nome = row['Proprietário'] if pd.notna(row['Proprietário']) and str(row['Proprietário']).strip() else None
+            
+            if proprietario_nome:
+                proprietario_nome_lower = proprietario_nome.strip().lower()
+                
+                # Verificar se proprietário já existe
+                if proprietario_nome_lower not in proprietarios_dict:
+                    # Criar novo proprietário
+                    cur.execute("INSERT INTO dono (nome, contato, email) VALUES (%s, '', '') RETURNING id", 
+                               (proprietario_nome.strip(),))
+                    novo_id = cur.fetchone()[0]
+                    proprietarios_dict[proprietario_nome_lower] = novo_id
+                    proprietarios_criados += 1
+                    print(f"   ✨ Novo proprietário criado: {proprietario_nome}")
+                
+                dono_id = proprietarios_dict[proprietario_nome_lower]
+            else:
+                # Sem proprietário definido
+                dono_id = proprietario_padrao_id
+            
             data_embriovet = row['Data de Produção (Embriovet)'] if pd.notna(row['Data de Produção (Embriovet)']) else None
             origem_externa = row['Origem Externa / Referência'] if pd.notna(row['Origem Externa / Referência']) else None
             palhetas_produzidas = int(row['Palhetas Produzidas']) if pd.notna(row['Palhetas Produzidas']) else 0
