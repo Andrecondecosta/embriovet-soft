@@ -561,6 +561,30 @@ st.set_page_config(
 
 st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
 
+# ------------------------------------------------------------
+# 💬 Modal para adicionar proprietário
+# ------------------------------------------------------------
+@st.dialog("➕ Adicionar Novo Proprietário")
+def modal_adicionar_proprietario():
+    """Modal para adicionar novo proprietário"""
+    novo_nome = st.text_input("Nome do Proprietário *", key="modal_novo_prop")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Adicionar", type="primary", use_container_width=True):
+            if not novo_nome:
+                st.error("❌ Nome é obrigatório")
+            else:
+                prop_id = adicionar_proprietario(novo_nome)
+                if prop_id:
+                    st.session_state['novo_proprietario_id'] = prop_id
+                    st.session_state['novo_proprietario_nome'] = novo_nome
+                    st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
+                    st.rerun()
+    with col2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.rerun()
+
 # Menu lateral
 aba = st.sidebar.radio(
     "Menu",
@@ -733,28 +757,31 @@ if aba == "📦 Ver Estoque":
 elif aba == "➕ Adicionar Stock":
     st.header("➕ Inserir novo stock com Proprietário")
 
-    # Opção de adicionar novo proprietário
-    with st.expander("➕ Adicionar Novo Proprietário"):
-        novo_prop_nome = st.text_input("Nome do Proprietário", key="novo_prop_input")
-        if st.button("Adicionar Proprietário", key="btn_add_prop"):
-            if novo_prop_nome:
-                prop_id = adicionar_proprietario(novo_prop_nome)
-                if prop_id:
-                    st.success(f"✅ Proprietário '{novo_prop_nome}' adicionado com sucesso!")
-                    st.rerun()
-            else:
-                st.error("❌ Nome é obrigatório")
-    
-    st.markdown("---")
-
     if proprietarios.empty:
-        st.error("❌ É necessário cadastrar proprietarios antes de adicionar stock.")
+        st.warning("⚠️ Nenhum proprietário cadastrado.")
+        if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
+            modal_adicionar_proprietario()
     else:
         with st.form("novo_stock"):
             garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
-            proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"])
+            
+            # Proprietário com botão +
+            col_prop, col_btn = st.columns([4, 1])
+            with col_prop:
+                # Verificar se há proprietário recém-adicionado
+                if 'novo_proprietario_id' in st.session_state:
+                    idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+                    del st.session_state['novo_proprietario_id']
+                else:
+                    idx_default = 0
+                
+                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
 
             dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
+            
+        # Botão + fora do form para funcionar
+        if st.button("➕", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+            modal_adicionar_proprietario()
 
             col1, col2 = st.columns(2)
             with col1:
@@ -857,7 +884,7 @@ elif aba == "📝 Registrar Inseminação":
                 protocolo = lote_selecionado.get("data_embriovet") or lote_selecionado.get("origem_externa") or "N/A"
                 palhetas = st.number_input("Palhetas utilizadas", min_value=1, max_value=max_palhetas, value=1)
 
-            if st.button("📝 Registrar Inseminação", type="primary"):
+            if st.button("📝 Registrar Inseminação", type="primary", key="btn_registrar_insem"):
                 palhetas_int = int(to_py(palhetas) or 0)
                 if not egua:
                     st.error("❌ Nome da égua é obrigatório")
