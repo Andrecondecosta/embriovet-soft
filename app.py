@@ -208,6 +208,149 @@ def registrar_inseminacao(registro):
         st.error(f"Erro ao registrar inseminação: {e}")
         return False
 
+
+# 👥 Funções de Gestão de Proprietários
+
+def adicionar_proprietario(nome, contato="", email=""):
+    """Adiciona novo proprietário"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO dono (nome, contato, email)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (nome, contato, email))
+            proprietario_id = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário adicionado: {nome}")
+            return proprietario_id
+    except Exception as e:
+        logger.error(f"Erro ao adicionar proprietário: {e}")
+        st.error(f"Erro ao adicionar proprietário: {e}")
+        return None
+
+def editar_proprietario(proprietario_id, nome, contato="", email=""):
+    """Edita proprietário existente"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE dono 
+                SET nome = %s, contato = %s, email = %s
+                WHERE id = %s
+            """, (nome, contato, email, proprietario_id))
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário editado: {nome}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar proprietário: {e}")
+        st.error(f"Erro ao editar proprietário: {e}")
+        return False
+
+def deletar_proprietario(proprietario_id):
+    """Deleta proprietário (apenas se não tiver stock)"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se tem stock
+            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (proprietario_id,))
+            count = cur.fetchone()[0]
+            
+            if count > 0:
+                st.error(f"❌ Não é possível deletar! Este proprietário tem {count} lotes de stock.")
+                return False
+            
+            # Verificar se tem inseminações
+            cur.execute("SELECT COUNT(*) FROM inseminacoes WHERE dono_id = %s", (proprietario_id,))
+            count_insem = cur.fetchone()[0]
+            
+            if count_insem > 0:
+                st.error(f"❌ Não é possível deletar! Este proprietário tem {count_insem} inseminações registradas.")
+                return False
+            
+            # Deletar
+            cur.execute("DELETE FROM dono WHERE id = %s", (proprietario_id,))
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário deletado: ID {proprietario_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao deletar proprietário: {e}")
+        st.error(f"Erro ao deletar proprietário: {e}")
+        return False
+
+# 📝 Funções de Edição de Stock
+
+def editar_stock(stock_id, dados):
+    """Edita um lote de stock"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE estoque_dono SET
+                    garanhao = %s,
+                    dono_id = %s,
+                    data_embriovet = %s,
+                    origem_externa = %s,
+                    palhetas_produzidas = %s,
+                    qualidade = %s,
+                    concentracao = %s,
+                    motilidade = %s,
+                    local_armazenagem = %s,
+                    certificado = %s,
+                    dose = %s,
+                    observacoes = %s,
+                    existencia_atual = %s
+                WHERE id = %s
+            """, (
+                dados["garanhao"], dados["dono_id"], dados["data"], dados["origem"],
+                dados["palhetas"], dados["qualidade"], dados["concentracao"], dados["motilidade"],
+                dados["local"], dados["certificado"], dados["dose"], dados["observacoes"],
+                dados["existencia"], stock_id
+            ))
+            conn.commit()
+            cur.close()
+            logger.info(f"Stock editado: ID {stock_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar stock: {e}")
+        st.error(f"Erro ao editar stock: {e}")
+        return False
+
+def deletar_stock(stock_id):
+    """Deleta um lote de stock"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (stock_id,))
+            conn.commit()
+            cur.close()
+            logger.info(f"Stock deletado: ID {stock_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao deletar stock: {e}")
+        st.error(f"Erro ao deletar stock: {e}")
+        return False
+
+def deletar_inseminacao(inseminacao_id):
+    """Deleta uma inseminação (não devolve palhetas ao stock!)"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM inseminacoes WHERE id = %s", (inseminacao_id,))
+            conn.commit()
+            cur.close()
+            logger.info(f"Inseminação deletada: ID {inseminacao_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao deletar inseminação: {e}")
+        st.error(f"Erro ao deletar inseminação: {e}")
+        return False
+
 # 🖼️ Interface Streamlit
 st.set_page_config(
     page_title=os.getenv('APP_TITLE', 'Gestor Sémen - Embriovet'),
