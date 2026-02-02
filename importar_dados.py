@@ -65,6 +65,15 @@ def importar_stock(csv_file, proprietario_padrao_id):
     df = pd.read_csv(csv_file)
     print(f"✅ {len(df)} registros encontrados no CSV")
     
+    # Converter colunas numéricas para tipos Python nativos (evitar numpy.int64)
+    # Isso previne o erro "can't adapt type 'numpy.int64'"
+    numeric_columns = ['Palhetas Produzidas', 'Qualidade (%)', 'Motilidade (%)', 
+                      'Concentração (milhões/mL)', 'Dose inseminante (DI)', 'Existência Atual']
+    
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = df[col].astype('float64')  # Converter para float nativo do Python
+    
     # Mostrar colunas
     print(f"📊 Colunas: {list(df.columns)}")
     
