@@ -106,17 +106,18 @@ def importar_stock(csv_file, proprietario_padrao_id):
                 # Sem proprietário definido
                 dono_id = proprietario_padrao_id
             
-            data_embriovet = row['Data de Produção (Embriovet)'] if pd.notna(row['Data de Produção (Embriovet)']) else None
-            origem_externa = row['Origem Externa / Referência'] if pd.notna(row['Origem Externa / Referência']) else None
+            # Converter valores para tipos Python nativos (não numpy)
+            data_embriovet = str(row['Data de Produção (Embriovet)']) if pd.notna(row['Data de Produção (Embriovet)']) else None
+            origem_externa = str(row['Origem Externa / Referência']) if pd.notna(row['Origem Externa / Referência']) else None
             palhetas_produzidas = int(row['Palhetas Produzidas']) if pd.notna(row['Palhetas Produzidas']) else 0
             qualidade = float(row['Qualidade (%)']) if pd.notna(row['Qualidade (%)']) else None
             motilidade = float(row['Motilidade (%)']) if pd.notna(row['Motilidade (%)']) else None
             concentracao = float(row['Concentração (milhões/mL)']) if pd.notna(row['Concentração (milhões/mL)']) else None
             dose = str(row['Dose inseminante (DI)']) if pd.notna(row['Dose inseminante (DI)']) else None
-            local_armazenagem = row['Local Armazenagem'] if pd.notna(row['Local Armazenagem']) else None
-            certificado = row['Certificado'] if pd.notna(row['Certificado']) else None
+            local_armazenagem = str(row['Local Armazenagem']) if pd.notna(row['Local Armazenagem']) else None
+            certificado = str(row['Certificado']) if pd.notna(row['Certificado']) else None
             existencia_atual = int(row['Existência Atual']) if pd.notna(row['Existência Atual']) else 0
-            observacoes = row['Observações'] if pd.notna(row['Observações']) else None
+            observacoes = str(row['Observações']) if pd.notna(row['Observações']) else None
             
             # Inserir no banco
             cur.execute("""
