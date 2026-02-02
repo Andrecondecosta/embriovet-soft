@@ -94,7 +94,7 @@ def importar_stock(csv_file, proprietario_padrao_id):
                 # Verificar se proprietário já existe
                 if proprietario_nome_lower not in proprietarios_dict:
                     # Criar novo proprietário
-                    cur.execute("INSERT INTO dono (nome, contato, email) VALUES (%s, '', '') RETURNING id", 
+                    cur.execute("INSERT INTO dono (nome) VALUES (%s) RETURNING id", 
                                (proprietario_nome.strip(),))
                     novo_id = cur.fetchone()[0]
                     proprietarios_dict[proprietario_nome_lower] = novo_id
