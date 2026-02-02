@@ -67,7 +67,7 @@ def carregar_estoque():
             query = """
                 SELECT e.*, d.nome as proprietario_nome 
                 FROM estoque_dono e
-                LEFT JOIN proprietario d ON e.dono_id = d.id
+                LEFT JOIN dono d ON e.dono_id = d.id
                 ORDER BY e.garanhao, e.id
             """
             df = pd.read_sql(query, conn)
