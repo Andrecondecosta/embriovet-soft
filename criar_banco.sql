@@ -92,11 +92,11 @@ CREATE INDEX idx_inseminacoes_data ON inseminacoes(data_inseminacao);
 
 -- 5. Inserir dados iniciais
 
--- Donos de exemplo
-INSERT INTO dono (nome, contato, email) VALUES 
-    ('Embriovet', '000000000', 'embriovet@embriovet.pt'),
-    ('André', '912345678', 'andre@example.com'),
-    ('Filipe', '913456789', 'filipe@example.com');
+-- Inserir donos de exemplo
+INSERT INTO dono (nome) VALUES 
+    ('Embriovet'),
+    ('André'),
+    ('Filipe');
 
 -- Stock de exemplo: Retoque com 2 donos
 INSERT INTO estoque_dono (
