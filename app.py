@@ -6,23 +6,66 @@ import os
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import logging
+import numpy as np
+import datetime as dt
 
+# ------------------------------------------------------------
 # Configurar logging
+# ------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ------------------------------------------------------------
 # Carregar variáveis de ambiente
+# ------------------------------------------------------------
 load_dotenv()
 
+# ------------------------------------------------------------
+# Helpers: converter tipos numpy/pandas -> tipos Python (psycopg2 friendly)
+# ------------------------------------------------------------
+def to_py(v):
+    """Converte tipos numpy/pandas para tipos Python que o psycopg2 aceita."""
+    # None fica None
+    if v is None:
+        return None
+
+    # pandas NaN / NaT -> None
+    try:
+        if pd.isna(v):
+            return None
+    except Exception:
+        pass
+
+    # numpy -> python
+    if isinstance(v, (np.integer,)):
+        return int(v)
+    if isinstance(v, (np.floating,)):
+        return float(v)
+    if isinstance(v, (np.bool_,)):
+        return bool(v)
+
+    # pandas Timestamp -> datetime python
+    if isinstance(v, (pd.Timestamp,)):
+        return v.to_pydatetime()
+
+    # datetime/date do python já é ok
+    if isinstance(v, (dt.date, dt.datetime)):
+        return v
+
+    # tudo o resto fica como está (strings, etc.)
+    return v
+
+# ------------------------------------------------------------
 # Pool de conexões
+# ------------------------------------------------------------
 try:
     connection_pool = psycopg2.pool.SimpleConnectionPool(
         1, 10,
-        dbname=os.getenv('DB_NAME', 'embriovet'),
-        user=os.getenv('DB_USER', 'postgres'),
-        password=os.getenv('DB_PASSWORD', '123'),
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=os.getenv('DB_PORT', '5432')
+        dbname=os.getenv("DB_NAME", "embriovet"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "123"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
     )
     if connection_pool:
         logger.info("✅ Pool de conexões PostgreSQL criado com sucesso")
@@ -47,8 +90,9 @@ def get_connection():
         if conn:
             connection_pool.putconn(conn)
 
+# ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
-
+# ------------------------------------------------------------
 def carregar_proprietarios():
     """Carrega lista de proprietarios do banco de dados"""
     try:
@@ -65,7 +109,7 @@ def carregar_estoque():
     try:
         with get_connection() as conn:
             query = """
-                SELECT e.*, d.nome as proprietario_nome 
+                SELECT e.*, d.nome as proprietario_nome
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
                 ORDER BY e.garanhao, e.id
@@ -94,6 +138,27 @@ def carregar_inseminacoes():
         st.error(f"Erro ao carregar inseminações: {e}")
         return pd.DataFrame()
 
+def carregar_transferencias():
+    """Carrega histórico de transferências"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT t.*, 
+                       e.garanhao,
+                       d1.nome as proprietario_origem,
+                       d2.nome as proprietario_destino
+                FROM transferencias t
+                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
+                LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
+                ORDER BY t.data_transferencia DESC
+            """
+            df = pd.read_sql(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar transferências: {e}")
+        return pd.DataFrame()
+
 def atualizar_proprietario_stock(estoque_id, novo_dono_id):
     """Atualiza o proprietario de um item de estoque"""
     try:
@@ -101,7 +166,7 @@ def atualizar_proprietario_stock(estoque_id, novo_dono_id):
             cur = conn.cursor()
             cur.execute(
                 "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
-                (novo_dono_id, estoque_id)
+                (to_py(novo_dono_id), to_py(estoque_id)),
             )
             conn.commit()
             cur.close()
@@ -112,39 +177,64 @@ def atualizar_proprietario_stock(estoque_id, novo_dono_id):
         st.error(f"Erro ao atualizar proprietario: {e}")
         return False
 
+# ------------------------------------------------------------
 # 💾 Funções de inserção
-
+# ------------------------------------------------------------
 def inserir_stock(dados):
     """Insere novo stock no banco de dados"""
     try:
-        # Validações
         if not dados.get("Garanhão"):
             st.error("❌ Nome do garanhão é obrigatório")
             return False
-        
-        if dados.get("Palhetas", 0) < 0:
+
+        palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
+        try:
+            palhetas_int = int(palhetas_val)
+        except Exception:
+            st.error("❌ Palhetas tem de ser numérico")
+            return False
+
+        if palhetas_int < 0:
             st.error("❌ Número de palhetas não pode ser negativo")
             return False
-        
+
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
+
+            params = (
+                to_py(dados.get("Garanhão")),
+                to_py(dados.get("Proprietário")),
+                to_py(dados.get("Data")),
+                to_py(dados.get("Origem")),
+                to_py(dados.get("Palhetas")),
+                to_py(dados.get("Qualidade")),
+                to_py(dados.get("Concentração")),
+                to_py(dados.get("Motilidade")),
+                to_py(dados.get("Local")),
+                to_py(dados.get("Certificado")),
+                to_py(dados.get("Dose")),
+                to_py(dados.get("Observações")),
+                to_py(dados.get("Palhetas")),
+                to_py(dados.get("Palhetas")),
+            )
+
+            cur.execute(
+                """
                 INSERT INTO estoque_dono (
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                dados["Garanhão"], dados["Proprietário"], dados["Data"], dados["Origem"],
-                dados["Palhetas"], dados["Qualidade"], dados["Concentração"], dados["Motilidade"],
-                dados["Local"], dados["Certificado"], dados["Dose"], dados["Observações"],
-                dados["Palhetas"], dados["Palhetas"]
-            ))
+                """,
+                params,
+            )
+
             conn.commit()
             cur.close()
-            logger.info(f"Stock inserido: {dados['Garanhão']}")
+            logger.info(f"Stock inserido: {dados.get('Garanhão')}")
             return True
+
     except Exception as e:
         logger.error(f"Erro ao inserir stock: {e}")
         st.error(f"Erro ao inserir stock: {e}")
@@ -153,74 +243,93 @@ def inserir_stock(dados):
 def registrar_inseminacao(registro):
     """Registra uma inseminação e atualiza o estoque"""
     try:
-        # Validações
-        if registro["palhetas"] <= 0:
+        palhetas_val = to_py(registro.get("palhetas")) or 0
+        try:
+            palhetas_int = int(palhetas_val)
+        except Exception:
+            st.error("❌ Número de palhetas deve ser numérico")
+            return False
+
+        if palhetas_int <= 0:
             st.error("❌ Número de palhetas deve ser maior que zero")
             return False
-        
+
         if not registro.get("egua"):
             st.error("❌ Nome da égua é obrigatório")
             return False
-        
+
         with get_connection() as conn:
             cur = conn.cursor()
-            
-            # Verificar se há estoque suficiente
+
             cur.execute(
                 "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
-                (registro["estoque_id"],)
+                (to_py(registro.get("estoque_id")),),
             )
             result = cur.fetchone()
-            
+
             if not result:
                 st.error("❌ Estoque não encontrado")
                 return False
-            
+
             existencia_atual = result[0] or 0
-            
-            if existencia_atual < registro["palhetas"]:
+            try:
+                existencia_atual = int(existencia_atual)
+            except Exception:
+                existencia_atual = 0
+
+            if existencia_atual < palhetas_int:
                 st.error(f"❌ Estoque insuficiente! Disponível: {existencia_atual} palhetas")
                 return False
-            
-            # Inserir inseminação
-            cur.execute("""
+
+            cur.execute(
+                """
                 INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                registro["garanhao"], registro["dono_id"], registro["data"],
-                registro["egua"], registro["protocolo"], registro["palhetas"]
-            ))
-            
-            # Atualizar estoque
-            cur.execute("""
+                """,
+                (
+                    to_py(registro.get("garanhao")),
+                    to_py(registro.get("dono_id")),
+                    to_py(registro.get("data")),
+                    to_py(registro.get("egua")),
+                    to_py(registro.get("protocolo")),
+                    to_py(palhetas_int),
+                ),
+            )
+
+            cur.execute(
+                """
                 UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
-            """, (
-                registro["palhetas"], registro["estoque_id"]
-            ))
-            
+                """,
+                (to_py(palhetas_int), to_py(registro.get("estoque_id"))),
+            )
+
             conn.commit()
             cur.close()
-            logger.info(f"Inseminação registrada: {registro['egua']} - {registro['palhetas']} palhetas")
+            logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
             return True
+
     except Exception as e:
         logger.error(f"Erro ao registrar inseminação: {e}")
         st.error(f"Erro ao registrar inseminação: {e}")
         return False
 
-
+# ------------------------------------------------------------
 # 👥 Funções de Gestão de Proprietários
-
+# ------------------------------------------------------------
 def adicionar_proprietario(nome):
     """Adiciona novo proprietário"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO dono (nome)
                 VALUES (%s)
                 RETURNING id
-            """, (nome,))
+                """,
+                (to_py(nome),),
+            )
             proprietario_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
@@ -236,11 +345,14 @@ def editar_proprietario(proprietario_id, nome):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                UPDATE dono 
+            cur.execute(
+                """
+                UPDATE dono
                 SET nome = %s
                 WHERE id = %s
-            """, (nome, proprietario_id))
+                """,
+                (to_py(nome), to_py(proprietario_id)),
+            )
             conn.commit()
             cur.close()
             logger.info(f"Proprietário editado: {nome}")
@@ -255,42 +367,42 @@ def deletar_proprietario(proprietario_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
-            # Verificar se tem stock
-            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (proprietario_id,))
-            count = cur.fetchone()[0]
-            
+
+            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (to_py(proprietario_id),))
+            count = cur.fetchone()[0] or 0
+
             if count > 0:
                 st.error(f"❌ Não é possível deletar! Este proprietário tem {count} lotes de stock.")
                 return False
-            
-            # Verificar se tem inseminações
-            cur.execute("SELECT COUNT(*) FROM inseminacoes WHERE dono_id = %s", (proprietario_id,))
-            count_insem = cur.fetchone()[0]
-            
+
+            cur.execute("SELECT COUNT(*) FROM inseminacoes WHERE dono_id = %s", (to_py(proprietario_id),))
+            count_insem = cur.fetchone()[0] or 0
+
             if count_insem > 0:
-                st.error(f"❌ Não é possível deletar! Este proprietário tem {count_insem} inseminações registradas.")
+                st.error(f"❌ Não é possível deletar! Este proprietário tem {count_insem} inseminações registadas.")
                 return False
-            
-            # Deletar
-            cur.execute("DELETE FROM dono WHERE id = %s", (proprietario_id,))
+
+            cur.execute("DELETE FROM dono WHERE id = %s", (to_py(proprietario_id),))
             conn.commit()
             cur.close()
             logger.info(f"Proprietário deletado: ID {proprietario_id}")
             return True
+
     except Exception as e:
         logger.error(f"Erro ao deletar proprietário: {e}")
         st.error(f"Erro ao deletar proprietário: {e}")
         return False
 
+# ------------------------------------------------------------
 # 📝 Funções de Edição de Stock
-
+# ------------------------------------------------------------
 def editar_stock(stock_id, dados):
     """Edita um lote de stock"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE estoque_dono SET
                     garanhao = %s,
                     dono_id = %s,
@@ -306,12 +418,24 @@ def editar_stock(stock_id, dados):
                     observacoes = %s,
                     existencia_atual = %s
                 WHERE id = %s
-            """, (
-                dados["garanhao"], dados["dono_id"], dados["data"], dados["origem"],
-                dados["palhetas"], dados["qualidade"], dados["concentracao"], dados["motilidade"],
-                dados["local"], dados["certificado"], dados["dose"], dados["observacoes"],
-                dados["existencia"], stock_id
-            ))
+                """,
+                (
+                    to_py(dados.get("garanhao")),
+                    to_py(dados.get("dono_id")),
+                    to_py(dados.get("data")),
+                    to_py(dados.get("origem")),
+                    to_py(dados.get("palhetas_produzidas")),
+                    to_py(dados.get("qualidade")),
+                    to_py(dados.get("concentracao")),
+                    to_py(dados.get("motilidade")),
+                    to_py(dados.get("local")),
+                    to_py(dados.get("certificado")),
+                    to_py(dados.get("dose")),
+                    to_py(dados.get("observacoes")),
+                    to_py(dados.get("existencia")),
+                    to_py(stock_id),
+                ),
+            )
             conn.commit()
             cur.close()
             logger.info(f"Stock editado: ID {stock_id}")
@@ -326,7 +450,7 @@ def deletar_stock(stock_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (stock_id,))
+            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")
@@ -336,38 +460,112 @@ def deletar_stock(stock_id):
         st.error(f"Erro ao deletar stock: {e}")
         return False
 
-def deletar_inseminacao(inseminacao_id):
-    """Deleta uma inseminação (não devolve palhetas ao stock!)"""
+def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quantidade):
+    """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM inseminacoes WHERE id = %s", (inseminacao_id,))
+            
+            # Buscar dados do lote origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(estoque_origem_id),))
+            
+            origem = cur.fetchone()
+            if not origem:
+                st.error("❌ Lote de origem não encontrado")
+                return False
+            
+            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
+             qual, conc, mot, local, cert, dose, obs) = origem
+            
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            
+            if quantidade_int <= 0:
+                st.error("❌ Quantidade deve ser maior que zero")
+                return False
+            
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+            
+            # Atualizar estoque origem (diminuir)
+            cur.execute("""
+                UPDATE estoque_dono 
+                SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+            """, (quantidade_int, to_py(estoque_origem_id)))
+            
+            # Verificar se já existe lote do destino com mesmo garanhão
+            cur.execute("""
+                SELECT id, existencia_atual 
+                FROM estoque_dono 
+                WHERE garanhao = %s AND dono_id = %s AND id != %s
+                LIMIT 1
+            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(estoque_origem_id)))
+            
+            lote_destino = cur.fetchone()
+            
+            if lote_destino:
+                # Já existe lote, adicionar palhetas
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade_int, lote_destino[0]))
+            else:
+                # Criar novo lote para o destino
+                cur.execute("""
+                    INSERT INTO estoque_dono (
+                        garanhao, dono_id, data_embriovet, origem_externa,
+                        palhetas_produzidas, qualidade, concentracao, motilidade,
+                        local_armazenagem, certificado, dose, observacoes,
+                        quantidade_inicial, existencia_atual
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
+                    quantidade_int, to_py(qual), to_py(conc), to_py(mot),
+                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
+                    quantidade_int, quantidade_int
+                ))
+            
+            # Registrar transferência na tabela de transferências
+            cur.execute("""
+                INSERT INTO transferencias (
+                    estoque_id, proprietario_origem_id, proprietario_destino_id,
+                    quantidade, data_transferencia
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (to_py(estoque_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
+            
             conn.commit()
             cur.close()
-            logger.info(f"Inseminação deletada: ID {inseminacao_id}")
+            logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
             return True
+            
     except Exception as e:
-        logger.error(f"Erro ao deletar inseminação: {e}")
-        st.error(f"Erro ao deletar inseminação: {e}")
+        logger.error(f"Erro ao transferir palhetas: {e}")
+        st.error(f"Erro ao transferir palhetas: {e}")
         return False
 
+# ------------------------------------------------------------
 # 🖼️ Interface Streamlit
+# ------------------------------------------------------------
 st.set_page_config(
-    page_title=os.getenv('APP_TITLE', 'Gestor Sémen - Embriovet'),
-    layout=os.getenv('APP_LAYOUT', 'wide'),
-    page_icon="🐴"
+    page_title=os.getenv("APP_TITLE", "Gestor Sémen - Embriovet"),
+    layout=os.getenv("APP_LAYOUT", "wide"),
+    page_icon="🐴",
 )
 
 st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
 
 # Menu lateral
-aba = st.sidebar.radio("Menu", [
-    "📦 Ver Estoque", 
-    "➕ Adicionar Stock", 
-    "📝 Registrar Inseminação", 
-    "📈 Relatórios",
-    "👥 Gestão de Proprietários"
-])
+aba = st.sidebar.radio(
+    "Menu",
+    ["📦 Ver Estoque", "➕ Adicionar Stock", "📝 Registrar Inseminação", "📈 Relatórios", "👥 Gestão de Proprietários"],
+)
 
 # Carregar dados
 try:
@@ -381,89 +579,182 @@ except Exception as e:
 if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
+# ------------------------------------------------------------
 # 📦 Ver Estoque
+# ------------------------------------------------------------
 if aba == "📦 Ver Estoque":
     st.header("📦 Estoque Atual por Garanhão e Proprietário")
-    
+
     if not estoque.empty:
-        # Filtro por garanhão
-        garanhaos_disponiveis = sorted(estoque["garanhao"].unique())
+        garanhaos_disponiveis = sorted(estoque["garanhao"].dropna().unique())
         filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis)
         estoque_filtrado = estoque[estoque["garanhao"] == filtro]
 
-        # Mostrar resumo por proprietario
         st.markdown("### 📊 Resumo por Proprietário")
-        resumo_por_proprietario = estoque_filtrado.groupby('proprietario_nome')['existencia_atual'].sum().reset_index()
-        resumo_por_proprietario.columns = ['Proprietário', 'Total Palhetas']
-        
-        cols = st.columns(len(resumo_por_proprietario))
+        resumo_por_proprietario = (
+            estoque_filtrado.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+        )
+        resumo_por_proprietario.columns = ["Proprietário", "Total Palhetas"]
+
+        cols = st.columns(max(1, len(resumo_por_proprietario)))
         for idx, (_, row) in enumerate(resumo_por_proprietario.iterrows()):
             with cols[idx]:
-                st.metric(
-                    label=f"👤 {row['Proprietário']}", 
-                    value=f"{int(row['Total Palhetas'])} palhetas"
-                )
-        
+                total_palhetas = to_py(row["Total Palhetas"]) or 0
+                try:
+                    total_palhetas = int(total_palhetas)
+                except Exception:
+                    total_palhetas = 0
+                st.metric(label=f"👤 {row['Proprietário']}", value=f"{total_palhetas} palhetas")
+
         st.markdown("---")
         st.markdown("### 📦 Lotes Detalhados")
 
-        # Criar dicionário de proprietarios
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
-        # Exibir cada item do estoque
-        for idx, row in estoque_filtrado.iterrows():
-            existencia = 0 if pd.isna(row['existencia_atual']) else int(row['existencia_atual'])
-            referencia = row['origem_externa'] or row['data_embriovet'] or 'Sem referência'
-            proprietario_nome = row.get('proprietario_nome', 'Sem proprietario')
-            
+        for _, row in estoque_filtrado.iterrows():
+            existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
+            referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
+            proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+
             with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas"):
-                col1, col2 = st.columns(2)
                 
-                with col1:
-                    st.markdown(f"**🏷️ Proprietário Atual:** {proprietario_nome}")
-                    st.markdown(f"**📍 Local:** {row['local_armazenagem'] or 'N/A'}")
-                    st.markdown(f"**📜 Certificado:** {row['certificado'] or 'N/A'}")
-                    st.markdown(f"**✨ Qualidade:** {row['qualidade'] or 0}%")
-                    st.markdown(f"**🔬 Concentração:** {row['concentracao'] or 0} milhões/mL")
-                    st.markdown(f"**⚡ Motilidade:** {row['motilidade'] or 0}%")
-                    if row.get('observacoes'):
-                        st.markdown(f"**📝 Observações:** {row['observacoes']}")
+                # Abas dentro do expander
+                tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
                 
-                with col2:
-                    st.markdown("### 🔄 Transferir Proprietário")
-                    st.info("Pode transferir estas palhetas para outro proprietario")
+                # TAB 1: Detalhes
+                with tab1:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
+                        st.markdown(f"**📍 Local:** {row.get('local_armazenagem') or 'N/A'}")
+                        st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
+                        st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
+                    with col2:
+                        st.markdown(f"**🔬 Concentração:** {row.get('concentracao') or 0} milhões/mL")
+                        st.markdown(f"**⚡ Motilidade:** {row.get('motilidade') or 0}%")
+                        st.markdown(f"**💊 Dose:** {row.get('dose') or 'N/A'}")
+                        if row.get("observacoes"):
+                            st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
+                
+                # TAB 2: Editar
+                with tab2:
+                    st.markdown("### ✏️ Editar Stock")
                     
-                    proprietario_atual = row['dono_id']
-                    if not proprietarios.empty:
-                        novo_proprietario = st.selectbox(
-                            "Novo Proprietário",
+                    with st.form(key=f"edit_form_{row['id']}"):
+                        edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
+                        
+                        # Proprietário
+                        prop_atual = row.get("dono_id")
+                        idx_prop = 0
+                        if prop_atual in proprietarios["id"].values:
+                            idx_prop = list(proprietarios["id"]).index(prop_atual)
+                        
+                        edit_proprietario = st.selectbox(
+                            "Proprietário",
                             options=proprietarios["id"].tolist(),
-                            format_func=lambda x: proprietarios_dict.get(x, 'Desconhecido'),
-                            index=list(proprietarios["id"]).index(proprietario_atual) if proprietario_atual in proprietarios["id"].values else 0,
-                            key=f"select_{row['id']}"
+                            format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                            index=idx_prop,
+                            key=f"edit_prop_{row['id']}"
                         )
                         
-                        if novo_proprietario != proprietario_atual:
-                            if st.button("🔄 Transferir para Novo Proprietário", key=f"btn_update_{row['id']}", type="primary"):
-                                if atualizar_proprietario_stock(row["id"], novo_proprietario):
-                                    st.success(f"✅ {existencia} palhetas transferidas de {proprietario_nome} para {proprietarios_dict[novo_proprietario]}!")
-                                    st.rerun()
-                        else:
-                            st.caption("Selecione um proprietario diferente para transferir")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
+                            edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
+                            edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
+                            edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
+                            edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+                        
+                        with col2:
+                            edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
+                            edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
+                            edit_local = st.text_input("Local", value=row.get("local_armazenagem") or "")
+                            edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
+                            edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                        
+                        edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
+                        
+                        submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
+                        
+                        if submit_edit:
+                            if editar_stock(row["id"], {
+                                "garanhao": edit_garanhao,
+                                "dono_id": edit_proprietario,
+                                "data": edit_data,
+                                "origem": edit_origem,
+                                "palhetas_produzidas": edit_palhetas,
+                                "qualidade": edit_qualidade,
+                                "concentracao": edit_concentracao,
+                                "motilidade": edit_motilidade,
+                                "local": edit_local,
+                                "certificado": edit_certificado,
+                                "dose": edit_dose,
+                                "observacoes": edit_obs,
+                                "existencia": edit_existencia
+                            }):
+                                st.success("✅ Stock atualizado com sucesso!")
+                                st.rerun()
+                
+                # TAB 3: Transferir
+                with tab3:
+                    st.markdown("### 🔄 Transferir Palhetas")
+                    st.info("Pode transferir quantidade parcial ou total para outro proprietário")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if not proprietarios.empty:
+                            ids = proprietarios["id"].tolist()
+                            novo_proprietario = st.selectbox(
+                                "Para qual proprietário?",
+                                options=ids,
+                                format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                key=f"transf_select_{row['id']}",
+                            )
+                    
+                    with col2:
+                        qtd_transferir = st.number_input(
+                            "Quantidade de palhetas",
+                            min_value=1,
+                            max_value=existencia,
+                            value=min(existencia, 1),
+                            key=f"transf_qtd_{row['id']}"
+                        )
+                    
+                    if st.button("🔄 Transferir Palhetas", key=f"btn_transf_{row['id']}", type="primary"):
+                        if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
+                            st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
+                            st.rerun()
     else:
         st.info("ℹ️ Nenhum stock cadastrado.")
 
+# ------------------------------------------------------------
 # ➕ Adicionar Stock
+# ------------------------------------------------------------
 elif aba == "➕ Adicionar Stock":
     st.header("➕ Inserir novo stock com Proprietário")
+
+    # Opção de adicionar novo proprietário
+    with st.expander("➕ Adicionar Novo Proprietário"):
+        novo_prop_nome = st.text_input("Nome do Proprietário", key="novo_prop_input")
+        if st.button("Adicionar Proprietário", key="btn_add_prop"):
+            if novo_prop_nome:
+                prop_id = adicionar_proprietario(novo_prop_nome)
+                if prop_id:
+                    st.success(f"✅ Proprietário '{novo_prop_nome}' adicionado com sucesso!")
+                    st.rerun()
+            else:
+                st.error("❌ Nome é obrigatório")
     
+    st.markdown("---")
+
     if proprietarios.empty:
         st.error("❌ É necessário cadastrar proprietarios antes de adicionar stock.")
     else:
         with st.form("novo_stock"):
             garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
             proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"])
-            dono_id = proprietarios[proprietarios["nome"] == proprietario_nome]["id"].values[0]
+
+            dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
 
             col1, col2 = st.columns(2)
             with col1:
@@ -472,230 +763,333 @@ elif aba == "➕ Adicionar Stock":
                 palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
                 qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
                 concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
-            
+
             with col2:
                 motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
                 local = st.text_input("Local Armazenagem")
                 certificado = st.selectbox("Certificado?", ["Sim", "Não"])
                 dose = st.text_input("Dose")
-            
+
             observacoes = st.text_area("Observações")
             submitted = st.form_submit_button("💾 Salvar")
 
             if submitted:
+                palhetas_int = int(to_py(palhetas) or 0)
+
                 if not garanhao:
                     st.error("❌ Nome do garanhão é obrigatório")
-                elif palhetas <= 0:
+                elif palhetas_int <= 0:
                     st.error("❌ Número de palhetas deve ser maior que zero")
                 else:
-                    if inserir_stock({
-                        "Garanhão": garanhao,
-                        "Proprietário": dono_id,
-                        "Data": data,
-                        "Origem": origem,
-                        "Palhetas": palhetas,
-                        "Qualidade": qualidade,
-                        "Concentração": concentracao,
-                        "Motilidade": motilidade,
-                        "Local": local,
-                        "Certificado": certificado,
-                        "Dose": dose,
-                        "Observações": observacoes
-                    }):
+                    ok = inserir_stock(
+                        {
+                            "Garanhão": garanhao,
+                            "Proprietário": dono_id,
+                            "Data": data,
+                            "Origem": origem,
+                            "Palhetas": palhetas_int,
+                            "Qualidade": int(to_py(qualidade) or 0),
+                            "Concentração": int(to_py(concentracao) or 0),
+                            "Motilidade": int(to_py(motilidade) or 0),
+                            "Local": local,
+                            "Certificado": certificado,
+                            "Dose": dose,
+                            "Observações": observacoes,
+                        }
+                    )
+                    if ok:
                         st.success("✅ Stock adicionado com sucesso!")
                         st.rerun()
 
+# ------------------------------------------------------------
 # 📝 Registrar Inseminação
+# ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
     st.header("📝 Registrar uso de Sémen")
-    
+
     if estoque.empty:
         st.warning("⚠️ Nenhum stock disponível.")
     else:
-        # Filtrar apenas estoque com existência > 0
         estoque_disponivel = estoque[estoque["existencia_atual"] > 0]
-        
+
         if estoque_disponivel.empty:
             st.warning("⚠️ Todo o estoque está esgotado.")
         else:
             garanhao = st.selectbox("Garanhão", sorted(estoque_disponivel["garanhao"].unique()))
             estoques_filtrados = estoque_disponivel[estoque_disponivel["garanhao"] == garanhao]
-            
-            # Mostrar resumo de palhetas por proprietario
+
             if len(estoques_filtrados) > 0:
                 st.markdown("### 📊 Sémen Disponível por Proprietário")
-                resumo = estoques_filtrados.groupby('proprietario_nome')['existencia_atual'].sum().reset_index()
-                cols = st.columns(len(resumo))
+                resumo = estoques_filtrados.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+                cols = st.columns(max(1, len(resumo)))
                 for idx, (_, row) in enumerate(resumo.iterrows()):
                     with cols[idx]:
-                        st.metric(f"👤 {row['proprietario_nome']}", f"{int(row['existencia_atual'])} palhetas")
+                        st.metric(f"👤 {row['proprietario_nome']}", f"{int(to_py(row['existencia_atual']) or 0)} palhetas")
                 st.markdown("---")
-            
-            # Criar opções de seleção de lote
-            st.markdown("### 🎯 Selecionar Lote (DE QUAL DONO)")
+
+            st.markdown("### 🎯 Selecionar Lote (DE QUAL PROPRIETÁRIO)")
             lote_opcoes = {}
-            for idx, row in estoques_filtrados.iterrows():
-                ref = row['origem_externa'] or row['data_embriovet'] or f"Lote #{row['id']}"
-                proprietario_nome = row.get('proprietario_nome', 'Sem proprietario')
-                existencia = int(row['existencia_atual'] or 0)
-                local = row.get('local_armazenagem', 'N/A')
-                lote_opcoes[row['id']] = f"👤 {proprietario_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
-            
+            for _, row in estoques_filtrados.iterrows():
+                ref = row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
+                proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+                existencia = int(to_py(row.get("existencia_atual")) or 0)
+                local = row.get("local_armazenagem", "N/A")
+                lote_opcoes[row["id"]] = f"👤 {proprietario_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
+
             estoque_id = st.selectbox(
                 "Selecionar lote de qual proprietario usar:",
                 options=list(lote_opcoes.keys()),
                 format_func=lambda x: lote_opcoes[x],
-                help="Escolha de qual proprietario você quer usar o sémen"
+                help="Escolha de qual proprietario você quer usar o sémen",
             )
-            
-            # Obter informações do lote selecionado
-            lote_selecionado = estoques_filtrados[estoques_filtrados['id'] == estoque_id].iloc[0]
-            proprietario_nome = lote_selecionado.get('proprietario_nome', 'Desconhecido')
-            max_palhetas = int(lote_selecionado['existencia_atual'] or 0)
-            
+
+            lote_selecionado = estoques_filtrados[estoques_filtrados["id"] == estoque_id].iloc[0]
+            proprietario_nome = lote_selecionado.get("proprietario_nome", "Desconhecido")
+            max_palhetas = int(to_py(lote_selecionado.get("existencia_atual")) or 0)
+
             st.info(f"🎯 Você vai usar sémen **do {proprietario_nome}** | Disponível: **{max_palhetas} palhetas**")
-            
+
             col1, col2 = st.columns(2)
             with col1:
                 data = st.date_input("Data de Inseminação")
                 egua = st.text_input("Égua *", help="Nome obrigatório")
             with col2:
-                protocolo = lote_selecionado['data_embriovet'] or lote_selecionado['origem_externa'] or 'N/A'
-                palhetas = st.number_input(
-                    "Palhetas utilizadas", 
-                    min_value=1, 
-                    max_value=max_palhetas,
-                    value=1
-                )
+                protocolo = lote_selecionado.get("data_embriovet") or lote_selecionado.get("origem_externa") or "N/A"
+                palhetas = st.number_input("Palhetas utilizadas", min_value=1, max_value=max_palhetas, value=1)
 
             if st.button("📝 Registrar Inseminação", type="primary"):
+                palhetas_int = int(to_py(palhetas) or 0)
                 if not egua:
                     st.error("❌ Nome da égua é obrigatório")
-                elif palhetas <= 0:
+                elif palhetas_int <= 0:
                     st.error("❌ Número de palhetas deve ser maior que zero")
-                elif palhetas > max_palhetas:
+                elif palhetas_int > max_palhetas:
                     st.error(f"❌ Estoque insuficiente! Disponível: {max_palhetas} palhetas")
                 else:
-                    if registrar_inseminacao({
-                        "garanhao": garanhao,
-                        "dono_id": lote_selecionado['dono_id'],
-                        "data": data,
-                        "egua": egua,
-                        "protocolo": protocolo,
-                        "palhetas": palhetas,
-                        "estoque_id": estoque_id
-                    }):
-                        st.success(f"✅ Inseminação registrada! Usado sémen do **{proprietario_nome}** ({palhetas} palhetas)")
+                    ok = registrar_inseminacao(
+                        {
+                            "garanhao": garanhao,
+                            "dono_id": to_py(lote_selecionado.get("dono_id")),
+                            "data": data,
+                            "egua": egua,
+                            "protocolo": protocolo,
+                            "palhetas": palhetas_int,
+                            "estoque_id": estoque_id,
+                        }
+                    )
+                    if ok:
+                        st.success(f"✅ Inseminação registrada! Usado sémen do **{proprietario_nome}** ({palhetas_int} palhetas)")
                         st.balloons()
                         st.rerun()
 
+# ------------------------------------------------------------
 # 📈 Relatórios
+# ------------------------------------------------------------
 elif aba == "📈 Relatórios":
-    st.header("📈 Relatório de Inseminações")
+    st.header("📈 Relatórios e Análises")
     
-    if insem.empty:
-        st.info("ℹ️ Nenhuma inseminação registrada ainda.")
-    else:
-        # Estatísticas gerais
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total de Inseminações", len(insem))
-        with col2:
-            st.metric("Total de Palhetas Gastas", int(insem['palhetas_gastas'].sum()))
-        with col3:
-            st.metric("Garanhões Utilizados", insem['garanhao'].nunique())
-        with col4:
-            st.metric("Proprietários Envolvidos", insem['proprietario_nome'].nunique())
+    # Sub-abas para diferentes relatórios
+    rel_tab1, rel_tab2, rel_tab3 = st.tabs(["📝 Inseminações", "🔄 Transferências", "📊 Estatísticas"])
+    
+    # TAB 1: Relatório de Inseminações
+    with rel_tab1:
+        st.markdown("### 📝 Histórico de Inseminações")
         
-        st.markdown("---")
-        
-        # Análise por Garanhão e Proprietário
-        st.markdown("### 📊 Consumo por Garanhão e Proprietário")
-        consumo = insem.groupby(['garanhao', 'proprietario_nome'])['palhetas_gastas'].sum().reset_index()
-        consumo.columns = ['Garanhão', 'Proprietário', 'Palhetas Gastas']
-        consumo = consumo.sort_values('Palhetas Gastas', ascending=False)
-        st.dataframe(consumo, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        # Filtros
-        st.markdown("### 🔍 Filtrar Histórico")
-        col1, col2 = st.columns(2)
-        with col1:
-            filtro_garanhao = st.multiselect(
-                "Filtrar por Garanhão",
-                options=sorted(insem['garanhao'].unique()),
-                default=None,
-                help="Deixe vazio para ver todos"
-            )
-        with col2:
-            filtro_proprietario = st.multiselect(
-                "Filtrar por Proprietário",
-                options=sorted(insem['proprietario_nome'].unique()),
-                default=None,
-                help="Deixe vazio para ver todos"
-            )
-        
-        # Aplicar filtros
-        insem_filtrado = insem.copy()
-        if filtro_garanhao:
-            insem_filtrado = insem_filtrado[insem_filtrado['garanhao'].isin(filtro_garanhao)]
-        if filtro_proprietario:
-            insem_filtrado = insem_filtrado[insem_filtrado['proprietario_nome'].isin(filtro_proprietario)]
-        
-        # Mostrar estatísticas filtradas
-        if len(insem_filtrado) > 0:
-            st.markdown(f"**📋 Mostrando {len(insem_filtrado)} registros**")
-        
-        # Exibir tabela
-        st.markdown("### 📋 Histórico Detalhado")
-        st.dataframe(
-            insem_filtrado[[
-                "garanhao", "proprietario_nome", "data_inseminacao", 
-                "egua", "protocolo", "palhetas_gastas"
-            ]].rename(columns={
-                "garanhao": "Garanhão",
-                "proprietario_nome": "Proprietário do Sémen",
-                "data_inseminacao": "Data",
-                "egua": "Égua",
-                "protocolo": "Protocolo",
-                "palhetas_gastas": "Palhetas"
-            }).sort_values("Data", ascending=False),
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # Exemplo de pesquisa
-        st.markdown("---")
-        st.markdown("### 🔎 Pesquisa Rápida")
-        pesquisa = st.text_input("Digite o nome do garanhão ou proprietario para pesquisar:", placeholder="Ex: Retoque")
-        
-        if pesquisa:
-            resultado = insem_filtrado[
-                insem_filtrado['garanhao'].str.contains(pesquisa, case=False, na=False) |
-                insem_filtrado['proprietario_nome'].str.contains(pesquisa, case=False, na=False)
-            ]
-            
-            if len(resultado) > 0:
-                st.success(f"✅ Encontrados {len(resultado)} registros")
-                st.dataframe(
-                    resultado[[
-                        "garanhao", "proprietario_nome", "data_inseminacao", 
-                        "egua", "palhetas_gastas"
-                    ]].rename(columns={
+        if insem.empty:
+            st.info("ℹ️ Nenhuma inseminação registrada ainda.")
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total de Inseminações", len(insem))
+            with col2:
+                st.metric("Total de Palhetas Gastas", int(to_py(insem["palhetas_gastas"].sum()) or 0))
+            with col3:
+                st.metric("Garanhões Utilizados", insem["garanhao"].nunique())
+            with col4:
+                st.metric("Proprietários Envolvidos", insem["proprietario_nome"].nunique())
+
+            st.markdown("---")
+
+            st.markdown("### 📊 Consumo por Garanhão e Proprietário")
+            consumo = insem.groupby(["garanhao", "proprietario_nome"])["palhetas_gastas"].sum().reset_index()
+            consumo.columns = ["Garanhão", "Proprietário", "Palhetas Gastas"]
+            consumo = consumo.sort_values("Palhetas Gastas", ascending=False)
+            st.dataframe(consumo, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+
+            st.markdown("### 🔍 Filtrar Histórico")
+            col1, col2 = st.columns(2)
+            with col1:
+                filtro_garanhao = st.multiselect(
+                    "Filtrar por Garanhão",
+                    options=sorted(insem["garanhao"].unique()),
+                    default=None,
+                    help="Deixe vazio para ver todos",
+                )
+            with col2:
+                filtro_proprietario = st.multiselect(
+                    "Filtrar por Proprietário",
+                    options=sorted(insem["proprietario_nome"].unique()),
+                    default=None,
+                    help="Deixe vazio para ver todos",
+                )
+
+            insem_filtrado = insem.copy()
+            if filtro_garanhao:
+                insem_filtrado = insem_filtrado[insem_filtrado["garanhao"].isin(filtro_garanhao)]
+            if filtro_proprietario:
+                insem_filtrado = insem_filtrado[insem_filtrado["proprietario_nome"].isin(filtro_proprietario)]
+
+            if len(insem_filtrado) > 0:
+                st.markdown(f"**📋 Mostrando {len(insem_filtrado)} registos**")
+
+            st.dataframe(
+                insem_filtrado[
+                    ["garanhao", "proprietario_nome", "data_inseminacao", "egua", "protocolo", "palhetas_gastas"]
+                ]
+                .rename(
+                    columns={
                         "garanhao": "Garanhão",
-                        "proprietario_nome": "Proprietário",
+                        "proprietario_nome": "Proprietário do Sémen",
                         "data_inseminacao": "Data",
                         "egua": "Égua",
-                        "palhetas_gastas": "Palhetas"
-                    }),
-                    use_container_width=True,
-                    hide_index=True
+                        "protocolo": "Protocolo",
+                        "palhetas_gastas": "Palhetas",
+                    }
                 )
-            else:
-                st.warning(f"❌ Nenhum resultado para '{pesquisa}'")
+                .sort_values("Data", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
 
+            st.markdown("---")
+            st.markdown("### 🔎 Pesquisa Rápida")
+            pesquisa = st.text_input("Digite o nome do garanhão ou proprietario:", placeholder="Ex: Retoque")
+
+            if pesquisa:
+                resultado = insem_filtrado[
+                    insem_filtrado["garanhao"].str.contains(pesquisa, case=False, na=False)
+                    | insem_filtrado["proprietario_nome"].str.contains(pesquisa, case=False, na=False)
+                ]
+
+                if len(resultado) > 0:
+                    st.success(f"✅ Encontrados {len(resultado)} registos")
+                    st.dataframe(
+                        resultado[["garanhao", "proprietario_nome", "data_inseminacao", "egua", "palhetas_gastas"]].rename(
+                            columns={
+                                "garanhao": "Garanhão",
+                                "proprietario_nome": "Proprietário",
+                                "data_inseminacao": "Data",
+                                "egua": "Égua",
+                                "palhetas_gastas": "Palhetas",
+                            }
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.warning(f"❌ Nenhum resultado para '{pesquisa}'")
+    
+    # TAB 2: Relatório de Transferências
+    with rel_tab2:
+        st.markdown("### 🔄 Histórico de Transferências")
+        
+        transf = carregar_transferencias()
+        
+        if transf.empty:
+            st.info("ℹ️ Nenhuma transferência registrada ainda.")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total de Transferências", len(transf))
+            with col2:
+                st.metric("Total de Palhetas Transferidas", int(to_py(transf["quantidade"].sum()) or 0))
+            
+            st.markdown("---")
+            
+            st.dataframe(
+                transf[[
+                    "garanhao", "proprietario_origem", "proprietario_destino", 
+                    "quantidade", "data_transferencia"
+                ]].rename(columns={
+                    "garanhao": "Garanhão",
+                    "proprietario_origem": "De",
+                    "proprietario_destino": "Para",
+                    "quantidade": "Palhetas",
+                    "data_transferencia": "Data"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+    
+    # TAB 3: Estatísticas
+    with rel_tab3:
+        st.markdown("### 📊 Estatísticas Gerais")
+        
+        if not estoque.empty:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                total_palhetas = int(to_py(estoque["existencia_atual"].sum()) or 0)
+                st.metric("Total em Stock", f"{total_palhetas} palhetas")
+            with col2:
+                st.metric("Total de Garanhões", estoque["garanhao"].nunique())
+            with col3:
+                st.metric("Total de Proprietários", proprietarios.shape[0])
+            
+            st.markdown("---")
+            
+            # Top garanhões por quantidade
+            st.markdown("### 🏆 Top Garanhões (por quantidade)")
+            top_garanhaos = estoque.groupby("garanhao")["existencia_atual"].sum().reset_index()
+            top_garanhaos.columns = ["Garanhão", "Palhetas"]
+            top_garanhaos = top_garanhaos.sort_values("Palhetas", ascending=False).head(10)
+            st.dataframe(top_garanhaos, use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------------
+# 👥 Gestão de Proprietários
+# ------------------------------------------------------------
+elif aba == "👥 Gestão de Proprietários":
+    st.header("👥 Gestão de Proprietários")
+    
+    tab1, tab2 = st.tabs(["📋 Lista", "➕ Adicionar/Editar"])
+    
+    with tab1:
+        if proprietarios.empty:
+            st.info("ℹ️ Nenhum proprietário cadastrado.")
+        else:
+            st.markdown(f"### 📋 Total: {len(proprietarios)} proprietários")
+            
+            for _, prop in proprietarios.iterrows():
+                with st.expander(f"👤 {prop['nome']}"):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**ID:** {prop['id']}")
+                        st.markdown(f"**Nome:** {prop['nome']}")
+                    with col2:
+                        if st.button("🗑️ Deletar", key=f"del_prop_{prop['id']}", type="secondary"):
+                            if deletar_proprietario(prop['id']):
+                                st.success("✅ Proprietário deletado!")
+                                st.rerun()
+    
+    with tab2:
+        st.markdown("### ➕ Adicionar Novo Proprietário")
+        with st.form("add_proprietario"):
+            novo_nome = st.text_input("Nome do Proprietário *")
+            submit = st.form_submit_button("➕ Adicionar")
+            
+            if submit:
+                if not novo_nome:
+                    st.error("❌ Nome é obrigatório")
+                else:
+                    prop_id = adicionar_proprietario(novo_nome)
+                    if prop_id:
+                        st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
+                        st.rerun()
+
+# ------------------------------------------------------------
 # Footer
+# ------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Embriovet Gestor v2.0**")
-st.sidebar.markdown("✅ Todas as correções aplicadas")
+st.sidebar.markdown("**Embriovet Gestor v2.1**")
+st.sidebar.markdown("✅ Sistema Completo")
