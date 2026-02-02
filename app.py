@@ -664,13 +664,22 @@ if aba == "📦 Ver Estoque":
                 with tab2:
                     st.markdown("### ✏️ Editar Stock")
                     
+                    # Botão + para adicionar proprietário
+                    if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
+                        modal_adicionar_proprietario()
+                    
                     with st.form(key=f"edit_form_{row['id']}"):
                         edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
                         
                         # Proprietário
                         prop_atual = row.get("dono_id")
                         idx_prop = 0
-                        if prop_atual in proprietarios["id"].values:
+                        
+                        # Se acabou de adicionar um proprietário novo, selecionar ele
+                        if 'novo_proprietario_id' in st.session_state:
+                            if st.session_state['novo_proprietario_id'] in proprietarios["id"].values:
+                                idx_prop = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+                        elif prop_atual in proprietarios["id"].values:
                             idx_prop = list(proprietarios["id"]).index(prop_atual)
                         
                         edit_proprietario = st.selectbox(
@@ -724,14 +733,26 @@ if aba == "📦 Ver Estoque":
                     st.markdown("### 🔄 Transferir Palhetas")
                     st.info("Pode transferir quantidade parcial ou total para outro proprietário")
                     
+                    # Botão + para adicionar proprietário
+                    if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                        modal_adicionar_proprietario()
+                    
                     col1, col2 = st.columns(2)
                     with col1:
                         if not proprietarios.empty:
                             ids = proprietarios["id"].tolist()
+                            
+                            # Se acabou de adicionar, selecionar o novo
+                            idx_transf = 0
+                            if 'novo_proprietario_id' in st.session_state:
+                                if st.session_state['novo_proprietario_id'] in ids:
+                                    idx_transf = ids.index(st.session_state['novo_proprietario_id'])
+                            
                             novo_proprietario = st.selectbox(
                                 "Para qual proprietário?",
                                 options=ids,
                                 format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                index=idx_transf,
                                 key=f"transf_select_{row['id']}",
                             )
                     
