@@ -15,8 +15,8 @@ ALTER SEQUENCE estoque_dono_id_seq RESTART WITH 1;
 ALTER SEQUENCE inseminacoes_id_seq RESTART WITH 1;
 
 -- PASSO 3: Criar proprietário padrão "Sem proprietário"
-INSERT INTO dono (nome, contato, email) VALUES 
-    ('Sem proprietário', '', '');
+INSERT INTO dono (nome) VALUES 
+    ('Sem proprietário');
 
 -- PASSO 4: (Opcional) Criar alguns proprietários exemplo
 -- Descomente as linhas abaixo se quiser alguns proprietários de exemplo
