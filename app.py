@@ -53,7 +53,7 @@ def carregar_proprietarios():
     """Carrega lista de proprietarios do banco de dados"""
     try:
         with get_connection() as conn:
-            df = pd.read_sql("SELECT * FROM proprietario ORDER BY nome", conn)
+            df = pd.read_sql("SELECT * FROM dono ORDER BY nome", conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar proprietarios: {e}")
@@ -66,8 +66,8 @@ def carregar_estoque():
         with get_connection() as conn:
             query = """
                 SELECT e.*, d.nome as proprietario_nome 
-                FROM estoque_proprietario e
-                LEFT JOIN proprietario d ON e.proprietario_id = d.id
+                FROM estoque_dono e
+                LEFT JOIN proprietario d ON e.dono_id = d.id
                 ORDER BY e.garanhao, e.id
             """
             df = pd.read_sql(query, conn)
@@ -84,7 +84,7 @@ def carregar_inseminacoes():
             query = """
                 SELECT i.*, d.nome as proprietario_nome
                 FROM inseminacoes i
-                LEFT JOIN proprietario d ON i.proprietario_id = d.id
+                LEFT JOIN proprietario d ON i.dono_id = d.id
                 ORDER BY i.data_inseminacao DESC
             """
             df = pd.read_sql(query, conn)
@@ -94,18 +94,18 @@ def carregar_inseminacoes():
         st.error(f"Erro ao carregar inseminações: {e}")
         return pd.DataFrame()
 
-def atualizar_proprietario_stock(estoque_id, novo_proprietario_id):
+def atualizar_proprietario_stock(estoque_id, novo_dono_id):
     """Atualiza o proprietario de um item de estoque"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE estoque_proprietario SET proprietario_id = %s WHERE id = %s",
-                (novo_proprietario_id, estoque_id)
+                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
+                (novo_dono_id, estoque_id)
             )
             conn.commit()
             cur.close()
-            logger.info(f"Proprietário atualizado: estoque_id={estoque_id}, novo_proprietario_id={novo_proprietario_id}")
+            logger.info(f"Proprietário atualizado: estoque_id={estoque_id}, novo_dono_id={novo_dono_id}")
             return True
     except Exception as e:
         logger.error(f"Erro ao atualizar proprietario: {e}")
@@ -129,8 +129,8 @@ def inserir_stock(dados):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                INSERT INTO estoque_proprietario (
-                    garanhao, proprietario_id, data_embriovet, origem_externa,
+                INSERT INTO estoque_dono (
+                    garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual
@@ -167,7 +167,7 @@ def registrar_inseminacao(registro):
             
             # Verificar se há estoque suficiente
             cur.execute(
-                "SELECT existencia_atual FROM estoque_proprietario WHERE id = %s",
+                "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
                 (registro["estoque_id"],)
             )
             result = cur.fetchone()
@@ -184,16 +184,16 @@ def registrar_inseminacao(registro):
             
             # Inserir inseminação
             cur.execute("""
-                INSERT INTO inseminacoes (garanhao, proprietario_id, data_inseminacao, egua, protocolo, palhetas_gastas)
+                INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                registro["garanhao"], registro["proprietario_id"], registro["data"],
+                registro["garanhao"], registro["dono_id"], registro["data"],
                 registro["egua"], registro["protocolo"], registro["palhetas"]
             ))
             
             # Atualizar estoque
             cur.execute("""
-                UPDATE estoque_proprietario SET existencia_atual = existencia_atual - %s
+                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (
                 registro["palhetas"], registro["estoque_id"]
@@ -289,7 +289,7 @@ if aba == "📦 Ver Estoque":
                     st.markdown("### 🔄 Transferir Proprietário")
                     st.info("Pode transferir estas palhetas para outro proprietario")
                     
-                    proprietario_atual = row['proprietario_id']
+                    proprietario_atual = row['dono_id']
                     if not proprietarios.empty:
                         novo_proprietario = st.selectbox(
                             "Novo Proprietário",
@@ -319,7 +319,7 @@ elif aba == "➕ Adicionar Stock":
         with st.form("novo_stock"):
             garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
             proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"])
-            proprietario_id = proprietarios[proprietarios["nome"] == proprietario_nome]["id"].values[0]
+            dono_id = proprietarios[proprietarios["nome"] == proprietario_nome]["id"].values[0]
 
             col1, col2 = st.columns(2)
             with col1:
@@ -346,7 +346,7 @@ elif aba == "➕ Adicionar Stock":
                 else:
                     if inserir_stock({
                         "Garanhão": garanhao,
-                        "Proprietário": proprietario_id,
+                        "Proprietário": dono_id,
                         "Data": data,
                         "Origem": origem,
                         "Palhetas": palhetas,
@@ -434,7 +434,7 @@ elif aba == "📝 Registrar Inseminação":
                 else:
                     if registrar_inseminacao({
                         "garanhao": garanhao,
-                        "proprietario_id": lote_selecionado['proprietario_id'],
+                        "dono_id": lote_selecionado['dono_id'],
                         "data": data,
                         "egua": egua,
                         "protocolo": protocolo,
