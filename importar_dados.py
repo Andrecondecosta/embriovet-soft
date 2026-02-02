@@ -30,8 +30,8 @@ def criar_proprietario_padrao():
     
     try:
         cur.execute("""
-            INSERT INTO dono (nome, contato, email)
-            VALUES ('Sem proprietário', '', '')
+            INSERT INTO dono (nome)
+            VALUES ('Sem proprietário')
             ON CONFLICT DO NOTHING
             RETURNING id;
         """)
