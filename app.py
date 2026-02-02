@@ -49,25 +49,25 @@ def get_connection():
 
 # 📥 Funções de carregamento de dados
 
-def carregar_donos():
-    """Carrega lista de donos do banco de dados"""
+def carregar_proprietarios():
+    """Carrega lista de proprietarios do banco de dados"""
     try:
         with get_connection() as conn:
-            df = pd.read_sql("SELECT * FROM dono ORDER BY nome", conn)
+            df = pd.read_sql("SELECT * FROM proprietario ORDER BY nome", conn)
         return df
     except Exception as e:
-        logger.error(f"Erro ao carregar donos: {e}")
-        st.error(f"Erro ao carregar donos: {e}")
+        logger.error(f"Erro ao carregar proprietarios: {e}")
+        st.error(f"Erro ao carregar proprietarios: {e}")
         return pd.DataFrame()
 
 def carregar_estoque():
-    """Carrega estoque completo com informações de dono"""
+    """Carrega estoque completo com informações de proprietario"""
     try:
         with get_connection() as conn:
             query = """
-                SELECT e.*, d.nome as dono_nome 
-                FROM estoque_dono e
-                LEFT JOIN dono d ON e.dono_id = d.id
+                SELECT e.*, d.nome as proprietario_nome 
+                FROM estoque_proprietario e
+                LEFT JOIN proprietario d ON e.proprietario_id = d.id
                 ORDER BY e.garanhao, e.id
             """
             df = pd.read_sql(query, conn)
@@ -82,9 +82,9 @@ def carregar_inseminacoes():
     try:
         with get_connection() as conn:
             query = """
-                SELECT i.*, d.nome as dono_nome
+                SELECT i.*, d.nome as proprietario_nome
                 FROM inseminacoes i
-                LEFT JOIN dono d ON i.dono_id = d.id
+                LEFT JOIN proprietario d ON i.proprietario_id = d.id
                 ORDER BY i.data_inseminacao DESC
             """
             df = pd.read_sql(query, conn)
@@ -94,22 +94,22 @@ def carregar_inseminacoes():
         st.error(f"Erro ao carregar inseminações: {e}")
         return pd.DataFrame()
 
-def atualizar_dono_stock(estoque_id, novo_dono_id):
-    """Atualiza o dono de um item de estoque"""
+def atualizar_proprietario_stock(estoque_id, novo_proprietario_id):
+    """Atualiza o proprietario de um item de estoque"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
-                (novo_dono_id, estoque_id)
+                "UPDATE estoque_proprietario SET proprietario_id = %s WHERE id = %s",
+                (novo_proprietario_id, estoque_id)
             )
             conn.commit()
             cur.close()
-            logger.info(f"Dono atualizado: estoque_id={estoque_id}, novo_dono_id={novo_dono_id}")
+            logger.info(f"Proprietário atualizado: estoque_id={estoque_id}, novo_proprietario_id={novo_proprietario_id}")
             return True
     except Exception as e:
-        logger.error(f"Erro ao atualizar dono: {e}")
-        st.error(f"Erro ao atualizar dono: {e}")
+        logger.error(f"Erro ao atualizar proprietario: {e}")
+        st.error(f"Erro ao atualizar proprietario: {e}")
         return False
 
 # 💾 Funções de inserção
@@ -129,14 +129,14 @@ def inserir_stock(dados):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                INSERT INTO estoque_dono (
-                    garanhao, dono_id, data_embriovet, origem_externa,
+                INSERT INTO estoque_proprietario (
+                    garanhao, proprietario_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                dados["Garanhão"], dados["Dono"], dados["Data"], dados["Origem"],
+                dados["Garanhão"], dados["Proprietário"], dados["Data"], dados["Origem"],
                 dados["Palhetas"], dados["Qualidade"], dados["Concentração"], dados["Motilidade"],
                 dados["Local"], dados["Certificado"], dados["Dose"], dados["Observações"],
                 dados["Palhetas"], dados["Palhetas"]
@@ -167,7 +167,7 @@ def registrar_inseminacao(registro):
             
             # Verificar se há estoque suficiente
             cur.execute(
-                "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
+                "SELECT existencia_atual FROM estoque_proprietario WHERE id = %s",
                 (registro["estoque_id"],)
             )
             result = cur.fetchone()
@@ -184,16 +184,16 @@ def registrar_inseminacao(registro):
             
             # Inserir inseminação
             cur.execute("""
-                INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
+                INSERT INTO inseminacoes (garanhao, proprietario_id, data_inseminacao, egua, protocolo, palhetas_gastas)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                registro["garanhao"], registro["dono_id"], registro["data"],
+                registro["garanhao"], registro["proprietario_id"], registro["data"],
                 registro["egua"], registro["protocolo"], registro["palhetas"]
             ))
             
             # Atualizar estoque
             cur.execute("""
-                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
+                UPDATE estoque_proprietario SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (
                 registro["palhetas"], registro["estoque_id"]
@@ -215,7 +215,7 @@ st.set_page_config(
     page_icon="🐴"
 )
 
-st.title("🐴 Gestor de Sémen com Múltiplos Donos")
+st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
 
 # Menu lateral
 aba = st.sidebar.radio("Menu", [
@@ -227,19 +227,19 @@ aba = st.sidebar.radio("Menu", [
 
 # Carregar dados
 try:
-    donos = carregar_donos()
+    proprietarios = carregar_proprietarios()
     estoque = carregar_estoque()
     insem = carregar_inseminacoes()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
 
-if donos.empty:
-    st.warning("⚠️ Nenhum dono cadastrado. Por favor, cadastre donos primeiro.")
+if proprietarios.empty:
+    st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
 # 📦 Ver Estoque
 if aba == "📦 Ver Estoque":
-    st.header("📦 Estoque Atual por Garanhão e Dono")
+    st.header("📦 Estoque Atual por Garanhão e Proprietário")
     
     if not estoque.empty:
         # Filtro por garanhão
@@ -247,36 +247,36 @@ if aba == "📦 Ver Estoque":
         filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis)
         estoque_filtrado = estoque[estoque["garanhao"] == filtro]
 
-        # Mostrar resumo por dono
-        st.markdown("### 📊 Resumo por Dono")
-        resumo_por_dono = estoque_filtrado.groupby('dono_nome')['existencia_atual'].sum().reset_index()
-        resumo_por_dono.columns = ['Dono', 'Total Palhetas']
+        # Mostrar resumo por proprietario
+        st.markdown("### 📊 Resumo por Proprietário")
+        resumo_por_proprietario = estoque_filtrado.groupby('proprietario_nome')['existencia_atual'].sum().reset_index()
+        resumo_por_proprietario.columns = ['Proprietário', 'Total Palhetas']
         
-        cols = st.columns(len(resumo_por_dono))
-        for idx, (_, row) in enumerate(resumo_por_dono.iterrows()):
+        cols = st.columns(len(resumo_por_proprietario))
+        for idx, (_, row) in enumerate(resumo_por_proprietario.iterrows()):
             with cols[idx]:
                 st.metric(
-                    label=f"👤 {row['Dono']}", 
+                    label=f"👤 {row['Proprietário']}", 
                     value=f"{int(row['Total Palhetas'])} palhetas"
                 )
         
         st.markdown("---")
         st.markdown("### 📦 Lotes Detalhados")
 
-        # Criar dicionário de donos
-        donos_dict = dict(zip(donos["id"], donos["nome"]))
+        # Criar dicionário de proprietarios
+        proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
         # Exibir cada item do estoque
         for idx, row in estoque_filtrado.iterrows():
             existencia = 0 if pd.isna(row['existencia_atual']) else int(row['existencia_atual'])
             referencia = row['origem_externa'] or row['data_embriovet'] or 'Sem referência'
-            dono_nome = row.get('dono_nome', 'Sem dono')
+            proprietario_nome = row.get('proprietario_nome', 'Sem proprietario')
             
-            with st.expander(f"📦 {referencia} — **{dono_nome}** — {existencia} palhetas"):
+            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas"):
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.markdown(f"**🏷️ Dono Atual:** {dono_nome}")
+                    st.markdown(f"**🏷️ Proprietário Atual:** {proprietario_nome}")
                     st.markdown(f"**📍 Local:** {row['local_armazenagem'] or 'N/A'}")
                     st.markdown(f"**📜 Certificado:** {row['certificado'] or 'N/A'}")
                     st.markdown(f"**✨ Qualidade:** {row['qualidade'] or 0}%")
@@ -286,40 +286,40 @@ if aba == "📦 Ver Estoque":
                         st.markdown(f"**📝 Observações:** {row['observacoes']}")
                 
                 with col2:
-                    st.markdown("### 🔄 Transferir Dono")
-                    st.info("Pode transferir estas palhetas para outro dono")
+                    st.markdown("### 🔄 Transferir Proprietário")
+                    st.info("Pode transferir estas palhetas para outro proprietario")
                     
-                    dono_atual = row['dono_id']
-                    if not donos.empty:
-                        novo_dono = st.selectbox(
-                            "Novo Dono",
-                            options=donos["id"].tolist(),
-                            format_func=lambda x: donos_dict.get(x, 'Desconhecido'),
-                            index=list(donos["id"]).index(dono_atual) if dono_atual in donos["id"].values else 0,
+                    proprietario_atual = row['proprietario_id']
+                    if not proprietarios.empty:
+                        novo_proprietario = st.selectbox(
+                            "Novo Proprietário",
+                            options=proprietarios["id"].tolist(),
+                            format_func=lambda x: proprietarios_dict.get(x, 'Desconhecido'),
+                            index=list(proprietarios["id"]).index(proprietario_atual) if proprietario_atual in proprietarios["id"].values else 0,
                             key=f"select_{row['id']}"
                         )
                         
-                        if novo_dono != dono_atual:
-                            if st.button("🔄 Transferir para Novo Dono", key=f"btn_update_{row['id']}", type="primary"):
-                                if atualizar_dono_stock(row["id"], novo_dono):
-                                    st.success(f"✅ {existencia} palhetas transferidas de {dono_nome} para {donos_dict[novo_dono]}!")
+                        if novo_proprietario != proprietario_atual:
+                            if st.button("🔄 Transferir para Novo Proprietário", key=f"btn_update_{row['id']}", type="primary"):
+                                if atualizar_proprietario_stock(row["id"], novo_proprietario):
+                                    st.success(f"✅ {existencia} palhetas transferidas de {proprietario_nome} para {proprietarios_dict[novo_proprietario]}!")
                                     st.rerun()
                         else:
-                            st.caption("Selecione um dono diferente para transferir")
+                            st.caption("Selecione um proprietario diferente para transferir")
     else:
         st.info("ℹ️ Nenhum stock cadastrado.")
 
 # ➕ Adicionar Stock
 elif aba == "➕ Adicionar Stock":
-    st.header("➕ Inserir novo stock com Dono")
+    st.header("➕ Inserir novo stock com Proprietário")
     
-    if donos.empty:
-        st.error("❌ É necessário cadastrar donos antes de adicionar stock.")
+    if proprietarios.empty:
+        st.error("❌ É necessário cadastrar proprietarios antes de adicionar stock.")
     else:
         with st.form("novo_stock"):
             garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
-            dono_nome = st.selectbox("Dono do Sémen *", donos["nome"])
-            dono_id = donos[donos["nome"] == dono_nome]["id"].values[0]
+            proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"])
+            proprietario_id = proprietarios[proprietarios["nome"] == proprietario_nome]["id"].values[0]
 
             col1, col2 = st.columns(2)
             with col1:
@@ -346,7 +346,7 @@ elif aba == "➕ Adicionar Stock":
                 else:
                     if inserir_stock({
                         "Garanhão": garanhao,
-                        "Dono": dono_id,
+                        "Proprietário": proprietario_id,
                         "Data": data,
                         "Origem": origem,
                         "Palhetas": palhetas,
@@ -377,14 +377,14 @@ elif aba == "📝 Registrar Inseminação":
             garanhao = st.selectbox("Garanhão", sorted(estoque_disponivel["garanhao"].unique()))
             estoques_filtrados = estoque_disponivel[estoque_disponivel["garanhao"] == garanhao]
             
-            # Mostrar resumo de palhetas por dono
+            # Mostrar resumo de palhetas por proprietario
             if len(estoques_filtrados) > 0:
-                st.markdown("### 📊 Sémen Disponível por Dono")
-                resumo = estoques_filtrados.groupby('dono_nome')['existencia_atual'].sum().reset_index()
+                st.markdown("### 📊 Sémen Disponível por Proprietário")
+                resumo = estoques_filtrados.groupby('proprietario_nome')['existencia_atual'].sum().reset_index()
                 cols = st.columns(len(resumo))
                 for idx, (_, row) in enumerate(resumo.iterrows()):
                     with cols[idx]:
-                        st.metric(f"👤 {row['dono_nome']}", f"{int(row['existencia_atual'])} palhetas")
+                        st.metric(f"👤 {row['proprietario_nome']}", f"{int(row['existencia_atual'])} palhetas")
                 st.markdown("---")
             
             # Criar opções de seleção de lote
@@ -392,24 +392,24 @@ elif aba == "📝 Registrar Inseminação":
             lote_opcoes = {}
             for idx, row in estoques_filtrados.iterrows():
                 ref = row['origem_externa'] or row['data_embriovet'] or f"Lote #{row['id']}"
-                dono_nome = row.get('dono_nome', 'Sem dono')
+                proprietario_nome = row.get('proprietario_nome', 'Sem proprietario')
                 existencia = int(row['existencia_atual'] or 0)
                 local = row.get('local_armazenagem', 'N/A')
-                lote_opcoes[row['id']] = f"👤 {dono_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
+                lote_opcoes[row['id']] = f"👤 {proprietario_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
             
             estoque_id = st.selectbox(
-                "Selecionar lote de qual dono usar:",
+                "Selecionar lote de qual proprietario usar:",
                 options=list(lote_opcoes.keys()),
                 format_func=lambda x: lote_opcoes[x],
-                help="Escolha de qual dono você quer usar o sémen"
+                help="Escolha de qual proprietario você quer usar o sémen"
             )
             
             # Obter informações do lote selecionado
             lote_selecionado = estoques_filtrados[estoques_filtrados['id'] == estoque_id].iloc[0]
-            dono_nome = lote_selecionado.get('dono_nome', 'Desconhecido')
+            proprietario_nome = lote_selecionado.get('proprietario_nome', 'Desconhecido')
             max_palhetas = int(lote_selecionado['existencia_atual'] or 0)
             
-            st.info(f"🎯 Você vai usar sémen **do {dono_nome}** | Disponível: **{max_palhetas} palhetas**")
+            st.info(f"🎯 Você vai usar sémen **do {proprietario_nome}** | Disponível: **{max_palhetas} palhetas**")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -434,14 +434,14 @@ elif aba == "📝 Registrar Inseminação":
                 else:
                     if registrar_inseminacao({
                         "garanhao": garanhao,
-                        "dono_id": lote_selecionado['dono_id'],
+                        "proprietario_id": lote_selecionado['proprietario_id'],
                         "data": data,
                         "egua": egua,
                         "protocolo": protocolo,
                         "palhetas": palhetas,
                         "estoque_id": estoque_id
                     }):
-                        st.success(f"✅ Inseminação registrada! Usado sémen do **{dono_nome}** ({palhetas} palhetas)")
+                        st.success(f"✅ Inseminação registrada! Usado sémen do **{proprietario_nome}** ({palhetas} palhetas)")
                         st.balloons()
                         st.rerun()
 
@@ -461,14 +461,14 @@ elif aba == "📈 Relatórios":
         with col3:
             st.metric("Garanhões Utilizados", insem['garanhao'].nunique())
         with col4:
-            st.metric("Donos Envolvidos", insem['dono_nome'].nunique())
+            st.metric("Proprietários Envolvidos", insem['proprietario_nome'].nunique())
         
         st.markdown("---")
         
-        # Análise por Garanhão e Dono
-        st.markdown("### 📊 Consumo por Garanhão e Dono")
-        consumo = insem.groupby(['garanhao', 'dono_nome'])['palhetas_gastas'].sum().reset_index()
-        consumo.columns = ['Garanhão', 'Dono', 'Palhetas Gastas']
+        # Análise por Garanhão e Proprietário
+        st.markdown("### 📊 Consumo por Garanhão e Proprietário")
+        consumo = insem.groupby(['garanhao', 'proprietario_nome'])['palhetas_gastas'].sum().reset_index()
+        consumo.columns = ['Garanhão', 'Proprietário', 'Palhetas Gastas']
         consumo = consumo.sort_values('Palhetas Gastas', ascending=False)
         st.dataframe(consumo, use_container_width=True, hide_index=True)
         
@@ -485,9 +485,9 @@ elif aba == "📈 Relatórios":
                 help="Deixe vazio para ver todos"
             )
         with col2:
-            filtro_dono = st.multiselect(
-                "Filtrar por Dono",
-                options=sorted(insem['dono_nome'].unique()),
+            filtro_proprietario = st.multiselect(
+                "Filtrar por Proprietário",
+                options=sorted(insem['proprietario_nome'].unique()),
                 default=None,
                 help="Deixe vazio para ver todos"
             )
@@ -496,8 +496,8 @@ elif aba == "📈 Relatórios":
         insem_filtrado = insem.copy()
         if filtro_garanhao:
             insem_filtrado = insem_filtrado[insem_filtrado['garanhao'].isin(filtro_garanhao)]
-        if filtro_dono:
-            insem_filtrado = insem_filtrado[insem_filtrado['dono_nome'].isin(filtro_dono)]
+        if filtro_proprietario:
+            insem_filtrado = insem_filtrado[insem_filtrado['proprietario_nome'].isin(filtro_proprietario)]
         
         # Mostrar estatísticas filtradas
         if len(insem_filtrado) > 0:
@@ -507,11 +507,11 @@ elif aba == "📈 Relatórios":
         st.markdown("### 📋 Histórico Detalhado")
         st.dataframe(
             insem_filtrado[[
-                "garanhao", "dono_nome", "data_inseminacao", 
+                "garanhao", "proprietario_nome", "data_inseminacao", 
                 "egua", "protocolo", "palhetas_gastas"
             ]].rename(columns={
                 "garanhao": "Garanhão",
-                "dono_nome": "Dono do Sémen",
+                "proprietario_nome": "Proprietário do Sémen",
                 "data_inseminacao": "Data",
                 "egua": "Égua",
                 "protocolo": "Protocolo",
@@ -524,23 +524,23 @@ elif aba == "📈 Relatórios":
         # Exemplo de pesquisa
         st.markdown("---")
         st.markdown("### 🔎 Pesquisa Rápida")
-        pesquisa = st.text_input("Digite o nome do garanhão ou dono para pesquisar:", placeholder="Ex: Retoque")
+        pesquisa = st.text_input("Digite o nome do garanhão ou proprietario para pesquisar:", placeholder="Ex: Retoque")
         
         if pesquisa:
             resultado = insem_filtrado[
                 insem_filtrado['garanhao'].str.contains(pesquisa, case=False, na=False) |
-                insem_filtrado['dono_nome'].str.contains(pesquisa, case=False, na=False)
+                insem_filtrado['proprietario_nome'].str.contains(pesquisa, case=False, na=False)
             ]
             
             if len(resultado) > 0:
                 st.success(f"✅ Encontrados {len(resultado)} registros")
                 st.dataframe(
                     resultado[[
-                        "garanhao", "dono_nome", "data_inseminacao", 
+                        "garanhao", "proprietario_nome", "data_inseminacao", 
                         "egua", "palhetas_gastas"
                     ]].rename(columns={
                         "garanhao": "Garanhão",
-                        "dono_nome": "Dono",
+                        "proprietario_nome": "Proprietário",
                         "data_inseminacao": "Data",
                         "egua": "Égua",
                         "palhetas_gastas": "Palhetas"
