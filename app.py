@@ -222,7 +222,8 @@ aba = st.sidebar.radio("Menu", [
     "📦 Ver Estoque", 
     "➕ Adicionar Stock", 
     "📝 Registrar Inseminação", 
-    "📈 Relatórios"
+    "📈 Relatórios",
+    "👥 Gestão de Proprietários"
 ])
 
 # Carregar dados
