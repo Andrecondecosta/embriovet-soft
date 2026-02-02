@@ -169,7 +169,7 @@ def main():
         return
     
     # 2. Importar stock
-    csv_file = '/tmp/base_stock_inicial.csv'
+    csv_file = '/tmp/base_stock_com_proprietario.csv'
     
     if not os.path.exists(csv_file):
         print(f"❌ Arquivo não encontrado: {csv_file}")
