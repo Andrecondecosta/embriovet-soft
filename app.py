@@ -734,6 +734,9 @@ if aba == "📦 Ver Estoque":
                                 "existencia": edit_existencia
                             }):
                                 st.success("✅ Stock atualizado com sucesso!")
+                                # Marcar que usou
+                                if 'novo_proprietario_id' in st.session_state:
+                                    st.session_state['novo_proprietario_usado'] = True
                                 st.rerun()
                 
                 # TAB 3: Transferir
@@ -776,6 +779,9 @@ if aba == "📦 Ver Estoque":
                     if st.button("🔄 Transferir Palhetas", key=f"btn_transf_{row['id']}", type="primary"):
                         if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
                             st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
+                            # Marcar que usou
+                            if 'novo_proprietario_id' in st.session_state:
+                                st.session_state['novo_proprietario_usado'] = True
                             st.rerun()
     else:
         st.info("ℹ️ Nenhum stock cadastrado.")
@@ -855,6 +861,9 @@ elif aba == "➕ Adicionar Stock":
                     )
                     if ok:
                         st.success("✅ Stock adicionado com sucesso!")
+                        # Marcar que usou o proprietário
+                        if 'novo_proprietario_id' in st.session_state:
+                            st.session_state['novo_proprietario_usado'] = True
                         st.rerun()
 
 # ------------------------------------------------------------
