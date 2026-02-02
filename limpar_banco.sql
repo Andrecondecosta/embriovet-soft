@@ -21,10 +21,10 @@ INSERT INTO dono (nome) VALUES
 -- PASSO 4: (Opcional) Criar alguns proprietários exemplo
 -- Descomente as linhas abaixo se quiser alguns proprietários de exemplo
 
--- INSERT INTO dono (nome, contato, email) VALUES 
---     ('André Costa', '912345678', 'andre@embriovet.pt'),
---     ('Filipe Silva', '913456789', 'filipe@embriovet.pt'),
---     ('João Santos', '914567890', 'joao@embriovet.pt');
+-- INSERT INTO dono (nome) VALUES 
+--     ('André Costa'),
+--     ('Filipe Silva'),
+--     ('João Santos');
 
 -- ================================================
 -- VERIFICAÇÃO
