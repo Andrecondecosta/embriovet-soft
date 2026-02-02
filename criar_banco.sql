@@ -19,15 +19,11 @@ DROP TABLE IF EXISTS dono CASCADE;
 CREATE TABLE dono (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
-    contato VARCHAR(255),
-    email VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE dono IS 'Proprietários do sémen';
 COMMENT ON COLUMN dono.nome IS 'Nome do proprietário';
-COMMENT ON COLUMN dono.contato IS 'Telefone ou contato';
-COMMENT ON COLUMN dono.email IS 'Email de contato';
 
 -- Tabela de estoque de sémen
 CREATE TABLE estoque_dono (
