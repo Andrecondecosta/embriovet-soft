@@ -1050,8 +1050,9 @@ if aba == "📦 Ver Estoque":
                                     st.session_state['novo_proprietario_usado'] = True
                                 st.rerun()
                 
-                # TAB 3: Transferir
-                with tab3:
+                # TAB 3: Transferir (Gestor e Admin)
+                if verificar_permissao('Gestor'):
+                    with tab3:
                     st.markdown("### 🔄 Transferir Palhetas")
                     
                     # Escolher tipo de transferência
