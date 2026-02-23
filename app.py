@@ -1079,7 +1079,7 @@ elif aba == "📈 Relatórios":
     st.header("📈 Relatórios e Análises")
     
     # Sub-abas para diferentes relatórios
-    rel_tab1, rel_tab2, rel_tab3 = st.tabs(["📝 Inseminações", "🔄 Transferências", "📊 Estatísticas"])
+    rel_tab1, rel_tab2, rel_tab3, rel_tab4 = st.tabs(["📝 Inseminações", "🔄 Transferências Internas", "📤 Transferências Externas", "📊 Estatísticas"])
     
     # TAB 1: Relatório de Inseminações
     with rel_tab1:
@@ -1181,14 +1181,15 @@ elif aba == "📈 Relatórios":
                 else:
                     st.warning(f"❌ Nenhum resultado para '{pesquisa}'")
     
-    # TAB 2: Relatório de Transferências
+    # TAB 2: Relatório de Transferências Internas
     with rel_tab2:
-        st.markdown("### 🔄 Histórico de Transferências")
+        st.markdown("### 🔄 Histórico de Transferências Internas")
+        st.info("Transferências entre proprietários do sistema")
         
         transf = carregar_transferencias()
         
         if transf.empty:
-            st.info("ℹ️ Nenhuma transferência registrada ainda.")
+            st.info("ℹ️ Nenhuma transferência interna registrada ainda.")
         else:
             col1, col2 = st.columns(2)
             with col1:
@@ -1213,8 +1214,82 @@ elif aba == "📈 Relatórios":
                 hide_index=True
             )
     
-    # TAB 3: Estatísticas
+    # TAB 3: Relatório de Transferências Externas (Vendas/Envios)
     with rel_tab3:
+        st.markdown("### 📤 Histórico de Vendas e Envios Externos")
+        st.warning("Saídas de sêmen para fora do sistema")
+        
+        transf_ext = carregar_transferencias_externas()
+        
+        if transf_ext.empty:
+            st.info("ℹ️ Nenhuma venda ou envio externo registrado ainda.")
+        else:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total de Saídas", len(transf_ext))
+            with col2:
+                st.metric("Total de Palhetas Vendidas/Enviadas", int(to_py(transf_ext["quantidade"].sum()) or 0))
+            with col3:
+                vendas = len(transf_ext[transf_ext["tipo"] == "Venda"]) if "tipo" in transf_ext.columns else 0
+                st.metric("Vendas", vendas)
+            
+            st.markdown("---")
+            
+            # Filtros
+            col1, col2 = st.columns(2)
+            with col1:
+                filtro_tipo = st.multiselect(
+                    "Filtrar por Tipo",
+                    options=sorted(transf_ext["tipo"].unique()) if "tipo" in transf_ext.columns else [],
+                    default=None
+                )
+            with col2:
+                filtro_garanhao_ext = st.multiselect(
+                    "Filtrar por Garanhão",
+                    options=sorted(transf_ext["garanhao"].unique()),
+                    default=None
+                )
+            
+            transf_ext_filtrado = transf_ext.copy()
+            if filtro_tipo:
+                transf_ext_filtrado = transf_ext_filtrado[transf_ext_filtrado["tipo"].isin(filtro_tipo)]
+            if filtro_garanhao_ext:
+                transf_ext_filtrado = transf_ext_filtrado[transf_ext_filtrado["garanhao"].isin(filtro_garanhao_ext)]
+            
+            if len(transf_ext_filtrado) > 0:
+                st.markdown(f"**📋 Mostrando {len(transf_ext_filtrado)} registos**")
+            
+            # Tabela principal
+            colunas_mostrar = ["garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "data_transferencia"]
+            if "observacoes" in transf_ext_filtrado.columns:
+                colunas_mostrar.append("observacoes")
+            
+            st.dataframe(
+                transf_ext_filtrado[colunas_mostrar].rename(columns={
+                    "garanhao": "Garanhão",
+                    "proprietario_origem": "Proprietário",
+                    "destinatario_externo": "Destinatário",
+                    "tipo": "Tipo",
+                    "quantidade": "Palhetas",
+                    "data_transferencia": "Data",
+                    "observacoes": "Observações"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Expandir detalhes
+            with st.expander("📊 Ver Detalhes por Destinatário"):
+                resumo_dest = transf_ext_filtrado.groupby("destinatario_externo").agg({
+                    "quantidade": "sum",
+                    "id": "count"
+                }).reset_index()
+                resumo_dest.columns = ["Destinatário", "Total Palhetas", "Nº Operações"]
+                resumo_dest = resumo_dest.sort_values("Total Palhetas", ascending=False)
+                st.dataframe(resumo_dest, use_container_width=True, hide_index=True)
+    
+    # TAB 4: Estatísticas
+    with rel_tab4:
         st.markdown("### 📊 Estatísticas Gerais")
         
         if not estoque.empty:
