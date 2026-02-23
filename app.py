@@ -866,6 +866,10 @@ if verificar_permissao('Administrador'):
     menu_options.append("⚙️ Gestão de Utilizadores")
 
 aba = st.sidebar.radio("Menu", menu_options)
+
+# ------------------------------------------------------------
+# 💬 Modal para adicionar proprietário
+# ------------------------------------------------------------
 @st.dialog("➕ Adicionar Novo Proprietário")
 def modal_adicionar_proprietario():
     """Modal para adicionar novo proprietário"""
