@@ -956,8 +956,12 @@ if aba == "📦 Ver Estoque":
 
             with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas"):
                 
-                # Abas dentro do expander
-                tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
+                # Tabs: Mostrar Editar apenas para Admin
+                if verificar_permissao('Administrador'):
+                    tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
+                else:
+                    tab1, tab3 = st.tabs(["📋 Detalhes", "🔄 Transferir"])
+                    tab2 = None  # Não existe para não-admin
                 
                 # TAB 1: Detalhes
                 with tab1:
