@@ -106,21 +106,21 @@ def carregar_proprietarios():
         st.error(f"Erro ao carregar proprietarios: {e}")
         return pd.DataFrame()
 
-def carregar_estoque():
-    """Carrega estoque completo com informações de proprietario"""
+def carregar_stock():
+    """Carrega stock completo com informações de proprietario"""
     try:
         with get_connection() as conn:
             query = """
                 SELECT e.*, d.nome as proprietario_nome
-                FROM estoque_dono e
+                FROM stock_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
                 ORDER BY e.garanhao, e.id
             """
             df = pd.read_sql(query, conn)
         return df
     except Exception as e:
-        logger.error(f"Erro ao carregar estoque: {e}")
-        st.error(f"Erro ao carregar estoque: {e}")
+        logger.error(f"Erro ao carregar stock: {e}")
+        st.error(f"Erro ao carregar stock: {e}")
         return pd.DataFrame()
 
 def carregar_inseminacoes():
@@ -150,7 +150,7 @@ def carregar_transferencias():
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
                 FROM transferencias t
-                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                LEFT JOIN stock_dono e ON t.stock_id = e.id
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
@@ -178,18 +178,18 @@ def carregar_transferencias_externas():
         logger.error(f"Erro ao carregar transferências externas: {e}")
         return pd.DataFrame()
 
-def atualizar_proprietario_stock(estoque_id, novo_dono_id):
-    """Atualiza o proprietario de um item de estoque"""
+def atualizar_proprietario_stock(stock_id, novo_dono_id):
+    """Atualiza o proprietario de um item de stock"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
-                (to_py(novo_dono_id), to_py(estoque_id)),
+                "UPDATE stock_dono SET dono_id = %s WHERE id = %s",
+                (to_py(novo_dono_id), to_py(stock_id)),
             )
             conn.commit()
             cur.close()
-            logger.info(f"Proprietário atualizado: estoque_id={estoque_id}, novo_dono_id={novo_dono_id}")
+            logger.info(f"Proprietário atualizado: stock_id={stock_id}, novo_dono_id={novo_dono_id}")
             return True
     except Exception as e:
         logger.error(f"Erro ao atualizar proprietario: {e}")
@@ -239,7 +239,7 @@ def inserir_stock(dados):
 
             cur.execute(
                 """
-                INSERT INTO estoque_dono (
+                INSERT INTO stock_dono (
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
@@ -260,7 +260,7 @@ def inserir_stock(dados):
         return False
 
 def registrar_inseminacao(registro):
-    """Registra uma inseminação e atualiza o estoque"""
+    """Registra uma inseminação e atualiza o stock"""
     try:
         palhetas_val = to_py(registro.get("palhetas")) or 0
         try:
@@ -281,8 +281,8 @@ def registrar_inseminacao(registro):
             cur = conn.cursor()
 
             cur.execute(
-                "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
-                (to_py(registro.get("estoque_id")),),
+                "SELECT existencia_atual FROM stock_dono WHERE id = %s",
+                (to_py(registro.get("stock_id")),),
             )
             result = cur.fetchone()
 
@@ -317,10 +317,10 @@ def registrar_inseminacao(registro):
 
             cur.execute(
                 """
-                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
+                UPDATE stock_dono SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
                 """,
-                (to_py(palhetas_int), to_py(registro.get("estoque_id"))),
+                (to_py(palhetas_int), to_py(registro.get("stock_id"))),
             )
 
             conn.commit()
@@ -531,7 +531,7 @@ def deletar_proprietario(proprietario_id):
         with get_connection() as conn:
             cur = conn.cursor()
 
-            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (to_py(proprietario_id),))
+            cur.execute("SELECT COUNT(*) FROM stock_dono WHERE dono_id = %s", (to_py(proprietario_id),))
             count = cur.fetchone()[0] or 0
 
             if count > 0:
@@ -566,7 +566,7 @@ def editar_stock(stock_id, dados):
             cur = conn.cursor()
             cur.execute(
                 """
-                UPDATE estoque_dono SET
+                UPDATE stock_dono SET
                     garanhao = %s,
                     dono_id = %s,
                     data_embriovet = %s,
@@ -613,7 +613,7 @@ def deletar_stock(stock_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
+            cur.execute("DELETE FROM stock_dono WHERE id = %s", (to_py(stock_id),))
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")
@@ -623,7 +623,7 @@ def deletar_stock(stock_id):
         st.error(f"Erro ao deletar stock: {e}")
         return False
 
-def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quantidade):
+def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
         with get_connection() as conn:
@@ -633,8 +633,8 @@ def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quan
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
-                FROM estoque_dono WHERE id = %s
-            """, (to_py(estoque_origem_id),))
+                FROM stock_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
             
             origem = cur.fetchone()
             if not origem:
@@ -655,34 +655,34 @@ def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quan
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
             
-            # Atualizar estoque origem (diminuir)
+            # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE stock_dono 
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
-            """, (quantidade_int, to_py(estoque_origem_id)))
+            """, (quantidade_int, to_py(stock_origem_id)))
             
             # Verificar se já existe lote do destino com mesmo garanhão
             cur.execute("""
                 SELECT id, existencia_atual 
-                FROM estoque_dono 
+                FROM stock_dono 
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
                 LIMIT 1
-            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(estoque_origem_id)))
+            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id)))
             
             lote_destino = cur.fetchone()
             
             if lote_destino:
                 # Já existe lote, adicionar palhetas
                 cur.execute("""
-                    UPDATE estoque_dono 
+                    UPDATE stock_dono 
                     SET existencia_atual = existencia_atual + %s
                     WHERE id = %s
                 """, (quantidade_int, lote_destino[0]))
             else:
                 # Criar novo lote para o destino
                 cur.execute("""
-                    INSERT INTO estoque_dono (
+                    INSERT INTO stock_dono (
                         garanhao, dono_id, data_embriovet, origem_externa,
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
@@ -698,10 +698,10 @@ def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quan
             # Registrar transferência na tabela de transferências
             cur.execute("""
                 INSERT INTO transferencias (
-                    estoque_id, proprietario_origem_id, proprietario_destino_id,
+                    stock_id, proprietario_origem_id, proprietario_destino_id,
                     quantidade, data_transferencia
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (to_py(estoque_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
+            """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
             
             conn.commit()
             cur.close()
@@ -713,7 +713,7 @@ def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quan
         st.error(f"Erro ao transferir palhetas: {e}")
         return False
 
-def transferir_palhetas_externo(estoque_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes=""):
+def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes=""):
     """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
     try:
         with get_connection() as conn:
@@ -722,8 +722,8 @@ def transferir_palhetas_externo(estoque_origem_id, destinatario_externo, quantid
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual
-                FROM estoque_dono WHERE id = %s
-            """, (to_py(estoque_origem_id),))
+                FROM stock_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
             
             origem = cur.fetchone()
             if not origem:
@@ -742,22 +742,22 @@ def transferir_palhetas_externo(estoque_origem_id, destinatario_externo, quantid
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
             
-            # Atualizar estoque origem (diminuir)
+            # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE stock_dono 
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
-            """, (quantidade_int, to_py(estoque_origem_id)))
+            """, (quantidade_int, to_py(stock_origem_id)))
             
             # Registrar transferência externa
             cur.execute("""
                 INSERT INTO transferencias_externas (
-                    estoque_id, proprietario_origem_id, garanhao,
+                    stock_id, proprietario_origem_id, garanhao,
                     destinatario_externo, quantidade, tipo, observacoes,
                     data_transferencia
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (
-                to_py(estoque_origem_id), 
+                to_py(stock_origem_id), 
                 to_py(prop_origem_id), 
                 to_py(garanhao),
                 to_py(destinatario_externo), 
@@ -855,7 +855,7 @@ if st.sidebar.button("🚪 Logout", use_container_width=True):
 st.sidebar.markdown("---")
 
 # Menu lateral adaptado às permissões
-menu_options = ["📦 Ver Estoque", "📈 Relatórios"]
+menu_options = ["📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
     menu_options.insert(1, "➕ Adicionar Stock")
@@ -894,7 +894,7 @@ def modal_adicionar_proprietario():
 # Carregar dados
 try:
     proprietarios = carregar_proprietarios()
-    estoque = carregar_estoque()
+    stock = carregar_stock()
     insem = carregar_inseminacoes()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
@@ -912,19 +912,19 @@ if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
 # ------------------------------------------------------------
-# 📦 Ver Estoque
+# 📦 Ver Stock
 # ------------------------------------------------------------
-if aba == "📦 Ver Estoque":
+if aba == "📦 Ver Stock":
     st.header("📦 Estoque Atual por Garanhão e Proprietário")
 
-    if not estoque.empty:
-        garanhaos_disponiveis = sorted(estoque["garanhao"].dropna().unique())
+    if not stock.empty:
+        garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
         filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis)
-        estoque_filtrado = estoque[estoque["garanhao"] == filtro]
+        stock_filtrado = stock[stock["garanhao"] == filtro]
 
         st.markdown("### 📊 Resumo por Proprietário")
         resumo_por_proprietario = (
-            estoque_filtrado.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+            stock_filtrado.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
         )
         resumo_por_proprietario.columns = ["Proprietário", "Total Palhetas"]
 
@@ -943,7 +943,7 @@ if aba == "📦 Ver Estoque":
 
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
-        for _, row in estoque_filtrado.iterrows():
+        for _, row in stock_filtrado.iterrows():
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
             referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
             proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
@@ -1230,20 +1230,20 @@ elif aba == "➕ Adicionar Stock":
 elif aba == "📝 Registrar Inseminação":
     st.header("📝 Registrar uso de Sémen")
 
-    if estoque.empty:
+    if stock.empty:
         st.warning("⚠️ Nenhum stock disponível.")
     else:
-        estoque_disponivel = estoque[estoque["existencia_atual"] > 0]
+        stock_disponivel = stock[stock["existencia_atual"] > 0]
 
-        if estoque_disponivel.empty:
-            st.warning("⚠️ Todo o estoque está esgotado.")
+        if stock_disponivel.empty:
+            st.warning("⚠️ Todo o stock está esgotado.")
         else:
-            garanhao = st.selectbox("Garanhão", sorted(estoque_disponivel["garanhao"].unique()))
-            estoques_filtrados = estoque_disponivel[estoque_disponivel["garanhao"] == garanhao]
+            garanhao = st.selectbox("Garanhão", sorted(stock_disponivel["garanhao"].unique()))
+            stocks_filtrados = stock_disponivel[stock_disponivel["garanhao"] == garanhao]
 
-            if len(estoques_filtrados) > 0:
+            if len(stocks_filtrados) > 0:
                 st.markdown("### 📊 Sémen Disponível por Proprietário")
-                resumo = estoques_filtrados.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+                resumo = stocks_filtrados.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
                 cols = st.columns(max(1, len(resumo)))
                 for idx, (_, row) in enumerate(resumo.iterrows()):
                     with cols[idx]:
@@ -1252,21 +1252,21 @@ elif aba == "📝 Registrar Inseminação":
 
             st.markdown("### 🎯 Selecionar Lote (DE QUAL PROPRIETÁRIO)")
             lote_opcoes = {}
-            for _, row in estoques_filtrados.iterrows():
+            for _, row in stocks_filtrados.iterrows():
                 ref = row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
                 proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
                 existencia = int(to_py(row.get("existencia_atual")) or 0)
                 local = row.get("local_armazenagem", "N/A")
                 lote_opcoes[row["id"]] = f"👤 {proprietario_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
 
-            estoque_id = st.selectbox(
+            stock_id = st.selectbox(
                 "Selecionar lote de qual proprietario usar:",
                 options=list(lote_opcoes.keys()),
                 format_func=lambda x: lote_opcoes[x],
                 help="Escolha de qual proprietario você quer usar o sémen",
             )
 
-            lote_selecionado = estoques_filtrados[estoques_filtrados["id"] == estoque_id].iloc[0]
+            lote_selecionado = stocks_filtrados[stocks_filtrados["id"] == stock_id].iloc[0]
             proprietario_nome = lote_selecionado.get("proprietario_nome", "Desconhecido")
             max_palhetas = int(to_py(lote_selecionado.get("existencia_atual")) or 0)
 
@@ -1297,7 +1297,7 @@ elif aba == "📝 Registrar Inseminação":
                             "egua": egua,
                             "protocolo": protocolo,
                             "palhetas": palhetas_int,
-                            "estoque_id": estoque_id,
+                            "stock_id": stock_id,
                         }
                     )
                     if ok:
@@ -1525,13 +1525,13 @@ elif aba == "📈 Relatórios":
     with rel_tab4:
         st.markdown("### 📊 Estatísticas Gerais")
         
-        if not estoque.empty:
+        if not stock.empty:
             col1, col2, col3 = st.columns(3)
             with col1:
-                total_palhetas = int(to_py(estoque["existencia_atual"].sum()) or 0)
+                total_palhetas = int(to_py(stock["existencia_atual"].sum()) or 0)
                 st.metric("Total em Stock", f"{total_palhetas} palhetas")
             with col2:
-                st.metric("Total de Garanhões", estoque["garanhao"].nunique())
+                st.metric("Total de Garanhões", stock["garanhao"].nunique())
             with col3:
                 st.metric("Total de Proprietários", proprietarios.shape[0])
             
@@ -1539,7 +1539,7 @@ elif aba == "📈 Relatórios":
             
             # Top garanhões por quantidade
             st.markdown("### 🏆 Top Garanhões (por quantidade)")
-            top_garanhaos = estoque.groupby("garanhao")["existencia_atual"].sum().reset_index()
+            top_garanhaos = stock.groupby("garanhao")["existencia_atual"].sum().reset_index()
             top_garanhaos.columns = ["Garanhão", "Palhetas"]
             top_garanhaos = top_garanhaos.sort_values("Palhetas", ascending=False).head(10)
             st.dataframe(top_garanhaos, use_container_width=True, hide_index=True)
@@ -1699,7 +1699,7 @@ elif aba == "⚙️ Gestão de Utilizadores":
         - NÃO pode gerir utilizadores
         
         **🟢 Visualizador:**
-        - Pode ver estoque
+        - Pode ver stock
         - Pode ver relatórios
         - NÃO pode adicionar/editar nada
         """)
