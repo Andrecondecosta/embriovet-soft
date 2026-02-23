@@ -843,9 +843,29 @@ user = st.session_state['user']
 
 st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
 
-# ------------------------------------------------------------
-# 💬 Modal para adicionar proprietário
-# ------------------------------------------------------------
+# Sidebar com info do utilizador
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"### 👤 {user['nome']}")
+st.sidebar.markdown(f"**Nível:** {user['nivel']}")
+
+if st.sidebar.button("🚪 Logout", use_container_width=True):
+    del st.session_state['user']
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+# Menu lateral adaptado às permissões
+menu_options = ["📦 Ver Estoque", "📈 Relatórios"]
+
+if verificar_permissao('Gestor'):
+    menu_options.insert(1, "➕ Adicionar Stock")
+    menu_options.insert(2, "📝 Registrar Inseminação")
+    menu_options.insert(4, "👥 Gestão de Proprietários")
+
+if verificar_permissao('Administrador'):
+    menu_options.append("⚙️ Gestão de Utilizadores")
+
+aba = st.sidebar.radio("Menu", menu_options)
 @st.dialog("➕ Adicionar Novo Proprietário")
 def modal_adicionar_proprietario():
     """Modal para adicionar novo proprietário"""
