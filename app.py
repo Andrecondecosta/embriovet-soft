@@ -1028,28 +1028,28 @@ if aba == "📦 Ver Estoque":
                             edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
                             
                             submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
-                        
-                        if submit_edit:
-                            if editar_stock(row["id"], {
-                                "garanhao": edit_garanhao,
-                                "dono_id": edit_proprietario,
-                                "data": edit_data,
-                                "origem": edit_origem,
-                                "palhetas_produzidas": edit_palhetas,
-                                "qualidade": edit_qualidade,
-                                "concentracao": edit_concentracao,
-                                "motilidade": edit_motilidade,
-                                "local": edit_local,
-                                "certificado": edit_certificado,
-                                "dose": edit_dose,
-                                "observacoes": edit_obs,
-                                "existencia": edit_existencia
-                            }):
-                                st.success("✅ Stock atualizado com sucesso!")
-                                # Marcar que usou
-                                if 'novo_proprietario_id' in st.session_state:
-                                    st.session_state['novo_proprietario_usado'] = True
-                                st.rerun()
+                            
+                            if submit_edit:
+                                if editar_stock(row["id"], {
+                                    "garanhao": edit_garanhao,
+                                    "dono_id": edit_proprietario,
+                                    "data": edit_data,
+                                    "origem": edit_origem,
+                                    "palhetas_produzidas": edit_palhetas,
+                                    "qualidade": edit_qualidade,
+                                    "concentracao": edit_concentracao,
+                                    "motilidade": edit_motilidade,
+                                    "local": edit_local,
+                                    "certificado": edit_certificado,
+                                    "dose": edit_dose,
+                                    "observacoes": edit_obs,
+                                    "existencia": edit_existencia
+                                }):
+                                    st.success("✅ Stock atualizado com sucesso!")
+                                    # Marcar que usou
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        st.session_state['novo_proprietario_usado'] = True
+                                    st.rerun()
                 
                 # TAB 3: Transferir (Gestor e Admin apenas)
                 if tab3 is not None:
