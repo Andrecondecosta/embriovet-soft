@@ -1449,6 +1449,20 @@ elif aba == "📈 Relatórios":
         if transf.empty:
             st.info("ℹ️ Nenhuma transferência interna registrada ainda.")
         else:
+            # Botão de exportação
+            col_export1, col_export2 = st.columns([6, 1])
+            with col_export2:
+                transf_export = transf[["garanhao", "proprietario_origem", "proprietario_destino", "quantidade", "data_transferencia"]].copy()
+                transf_export.columns = ["Garanhão", "De", "Para", "Palhetas", "Data"]
+                csv_transf = transf_export.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar CSV",
+                    data=csv_transf,
+                    file_name="transferencias_internas.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
             col1, col2 = st.columns(2)
             with col1:
                 st.metric("Total de Transferências", len(transf))
@@ -1482,6 +1496,23 @@ elif aba == "📈 Relatórios":
         if transf_ext.empty:
             st.info("ℹ️ Nenhuma venda ou envio externo registrado ainda.")
         else:
+            # Botão de exportação
+            col_export1, col_export2 = st.columns([6, 1])
+            with col_export2:
+                colunas_export = ["garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "data_transferencia"]
+                if "observacoes" in transf_ext.columns:
+                    colunas_export.append("observacoes")
+                transf_ext_export = transf_ext[colunas_export].copy()
+                transf_ext_export.columns = ["Garanhão", "Proprietário", "Destinatário", "Tipo", "Palhetas", "Data"] + (["Observações"] if "observacoes" in transf_ext.columns else [])
+                csv_ext = transf_ext_export.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar CSV",
+                    data=csv_ext,
+                    file_name="transferencias_externas.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total de Saídas", len(transf_ext))
@@ -1816,8 +1847,46 @@ elif aba == "📈 Relatórios":
         elif stock.empty:
             st.warning("⚠️ Nenhum stock registrado.")
         else:
-            # Filtros
-            st.markdown("### 🔍 Filtros")
+            # Botão de exportação geral no topo
+            col_title, col_export = st.columns([6, 1])
+            with col_title:
+                st.markdown("### 🔍 Filtros")
+            with col_export:
+                # Exportar TODO o stock
+                stock_export = stock[[
+                    "proprietario_nome",
+                    "garanhão",
+                    "data_embriovet",
+                    "palhetas_produzidas",
+                    "existencia_atual",
+                    "qualidade",
+                    "concentracao",
+                    "motilidade",
+                    "local_armazenagem",
+                    "certificado"
+                ]].copy()
+                stock_export.columns = [
+                    "Proprietário",
+                    "Garanhão",
+                    "Data",
+                    "Produzidas",
+                    "Stock Atual",
+                    "Qualidade (%)",
+                    "Concentração",
+                    "Motilidade (%)",
+                    "Local",
+                    "Certificado"
+                ]
+                csv_stock = stock_export.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar Tudo",
+                    data=csv_stock,
+                    file_name="stock_completo.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    help="Exportar todo o stock em CSV"
+                )
+            
             col1, col2 = st.columns(2)
             
             with col1:
