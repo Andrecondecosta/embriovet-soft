@@ -797,26 +797,22 @@ elif aba == "➕ Adicionar Stock":
         if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
             modal_adicionar_proprietario()
     else:
+        # Botão + fora do form
+        if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+            modal_adicionar_proprietario()
+        
         with st.form("novo_stock"):
             garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
             
-            # Proprietário com botão +
-            col_prop, col_btn = st.columns([4, 1])
-            with col_prop:
-                # Verificar se há proprietário recém-adicionado
-                if 'novo_proprietario_id' in st.session_state:
-                    idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
-                    del st.session_state['novo_proprietario_id']
-                else:
-                    idx_default = 0
-                
-                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
+            # Verificar se há proprietário recém-adicionado
+            if 'novo_proprietario_id' in st.session_state:
+                idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+            else:
+                idx_default = 0
+            
+            proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
 
             dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-            
-        # Botão + fora do form para funcionar
-        if st.button("➕", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
-            modal_adicionar_proprietario()
 
             col1, col2 = st.columns(2)
             with col1:
