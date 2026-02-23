@@ -1330,6 +1330,22 @@ elif aba == "📈 Relatórios":
         if insem.empty:
             st.info("ℹ️ Nenhuma inseminação registrada ainda.")
         else:
+            # Botão de exportação no topo
+            col_export1, col_export2 = st.columns([6, 1])
+            with col_export2:
+                # Preparar dados para exportação
+                insem_export = insem[["data_inseminacao", "garanhao", "egua", "proprietario_nome", "palhetas_gastas"]].copy()
+                insem_export.columns = ["Data", "Garanhão", "Égua", "Proprietário", "Palhetas"]
+                
+                csv_insem = insem_export.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar CSV",
+                    data=csv_insem,
+                    file_name="inseminacoes.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total de Inseminações", len(insem))
