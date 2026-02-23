@@ -1598,11 +1598,11 @@ elif aba == "⚙️ Gestão de Utilizadores":
     st.header("⚙️ Gestão de Utilizadores")
     
     usuarios_df = carregar_usuarios()
-        
-        tab1, tab2, tab3 = st.tabs(["📋 Lista de Utilizadores", "➕ Adicionar Utilizador", "🔒 Alterar Password"])
-        
-        # TAB 1: Lista
-        with tab1:
+    
+    tab1, tab2, tab3 = st.tabs(["📋 Lista de Utilizadores", "➕ Adicionar Utilizador", "🔒 Alterar Password"])
+    
+    # TAB 1: Lista
+    with tab1:
             if usuarios_df.empty:
                 st.info("ℹ️ Nenhum utilizador cadastrado.")
             else:
