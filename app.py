@@ -112,7 +112,7 @@ def carregar_stock():
         with get_connection() as conn:
             query = """
                 SELECT e.*, d.nome as proprietario_nome
-                FROM stock_dono e
+                FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
                 ORDER BY e.garanhao, e.id
             """
@@ -150,7 +150,7 @@ def carregar_transferencias():
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
                 FROM transferencias t
-                LEFT JOIN stock_dono e ON t.stock_id = e.id
+                LEFT JOIN estoque_dono e ON t.stock_id = e.id
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
@@ -184,7 +184,7 @@ def atualizar_proprietario_stock(stock_id, novo_dono_id):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE stock_dono SET dono_id = %s WHERE id = %s",
+                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
                 (to_py(novo_dono_id), to_py(stock_id)),
             )
             conn.commit()
@@ -239,7 +239,7 @@ def inserir_stock(dados):
 
             cur.execute(
                 """
-                INSERT INTO stock_dono (
+                INSERT INTO estoque_dono (
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
@@ -281,7 +281,7 @@ def registrar_inseminacao(registro):
             cur = conn.cursor()
 
             cur.execute(
-                "SELECT existencia_atual FROM stock_dono WHERE id = %s",
+                "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
                 (to_py(registro.get("stock_id")),),
             )
             result = cur.fetchone()
@@ -317,7 +317,7 @@ def registrar_inseminacao(registro):
 
             cur.execute(
                 """
-                UPDATE stock_dono SET existencia_atual = existencia_atual - %s
+                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
                 """,
                 (to_py(palhetas_int), to_py(registro.get("stock_id"))),
@@ -531,7 +531,7 @@ def deletar_proprietario(proprietario_id):
         with get_connection() as conn:
             cur = conn.cursor()
 
-            cur.execute("SELECT COUNT(*) FROM stock_dono WHERE dono_id = %s", (to_py(proprietario_id),))
+            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (to_py(proprietario_id),))
             count = cur.fetchone()[0] or 0
 
             if count > 0:
@@ -566,7 +566,7 @@ def editar_stock(stock_id, dados):
             cur = conn.cursor()
             cur.execute(
                 """
-                UPDATE stock_dono SET
+                UPDATE estoque_dono SET
                     garanhao = %s,
                     dono_id = %s,
                     data_embriovet = %s,
@@ -613,7 +613,7 @@ def deletar_stock(stock_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM stock_dono WHERE id = %s", (to_py(stock_id),))
+            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")
@@ -633,7 +633,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
-                FROM stock_dono WHERE id = %s
+                FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
             
             origem = cur.fetchone()
@@ -657,7 +657,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             
             # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE stock_dono 
+                UPDATE estoque_dono 
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
@@ -665,7 +665,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             # Verificar se já existe lote do destino com mesmo garanhão
             cur.execute("""
                 SELECT id, existencia_atual 
-                FROM stock_dono 
+                FROM estoque_dono 
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
                 LIMIT 1
             """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id)))
@@ -675,14 +675,14 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             if lote_destino:
                 # Já existe lote, adicionar palhetas
                 cur.execute("""
-                    UPDATE stock_dono 
+                    UPDATE estoque_dono 
                     SET existencia_atual = existencia_atual + %s
                     WHERE id = %s
                 """, (quantidade_int, lote_destino[0]))
             else:
                 # Criar novo lote para o destino
                 cur.execute("""
-                    INSERT INTO stock_dono (
+                    INSERT INTO estoque_dono (
                         garanhao, dono_id, data_embriovet, origem_externa,
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
@@ -722,7 +722,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual
-                FROM stock_dono WHERE id = %s
+                FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
             
             origem = cur.fetchone()
@@ -744,7 +744,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             
             # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE stock_dono 
+                UPDATE estoque_dono 
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
