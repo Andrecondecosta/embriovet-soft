@@ -8,6 +8,8 @@ from contextlib import contextmanager
 import logging
 import numpy as np
 import datetime as dt
+import bcrypt
+import hashlib
 
 # ------------------------------------------------------------
 # Configurar logging
@@ -329,6 +331,150 @@ def registrar_inseminacao(registro):
     except Exception as e:
         logger.error(f"Erro ao registrar inseminação: {e}")
         st.error(f"Erro ao registrar inseminação: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 🔐 Funções de Autenticação e Utilizadores
+# ------------------------------------------------------------
+def criar_hash_password(password):
+    """Cria hash da password usando bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verificar_password(password, password_hash):
+    """Verifica se a password corresponde ao hash"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        return False
+
+def autenticar_usuario(username, password):
+    """Autentica utilizador e retorna seus dados"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, username, nome_completo, password_hash, nivel, ativo
+                FROM usuarios
+                WHERE username = %s AND ativo = TRUE
+            """, (username,))
+            
+            resultado = cur.fetchone()
+            cur.close()
+            
+            if not resultado:
+                return None
+            
+            user_id, username, nome, pwd_hash, nivel, ativo = resultado
+            
+            # Verificar password
+            if verificar_password(password, pwd_hash):
+                # Atualizar last_login
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE usuarios SET last_login = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (user_id,))
+                conn.commit()
+                cur.close()
+                
+                return {
+                    'id': user_id,
+                    'username': username,
+                    'nome': nome,
+                    'nivel': nivel
+                }
+            
+            return None
+            
+    except Exception as e:
+        logger.error(f"Erro ao autenticar: {e}")
+        return None
+
+def carregar_usuarios():
+    """Carrega lista de utilizadores"""
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql("""
+                SELECT id, username, nome_completo, nivel, ativo, 
+                       created_at, last_login
+                FROM usuarios
+                ORDER BY nivel, nome_completo
+            """, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar utilizadores: {e}")
+        return pd.DataFrame()
+
+def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
+    """Adiciona novo utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se username já existe
+            cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
+            if cur.fetchone():
+                st.error("❌ Nome de utilizador já existe")
+                return False
+            
+            password_hash = criar_hash_password(password)
+            
+            cur.execute("""
+                INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, created_by)
+                VALUES (%s, %s, %s, %s, TRUE, %s)
+            """, (username, nome_completo, password_hash, nivel, created_by_id))
+            
+            conn.commit()
+            cur.close()
+            logger.info(f"Utilizador criado: {username} ({nivel})")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao adicionar utilizador: {e}")
+        st.error(f"Erro ao adicionar utilizador: {e}")
+        return False
+
+def alterar_password(user_id, nova_password):
+    """Altera password do utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            password_hash = criar_hash_password(nova_password)
+            cur.execute("""
+                UPDATE usuarios SET password_hash = %s
+                WHERE id = %s
+            """, (password_hash, user_id))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao alterar password: {e}")
+        return False
+
+def desativar_usuario(user_id):
+    """Desativa utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (user_id,))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao desativar utilizador: {e}")
+        return False
+
+def ativar_usuario(user_id):
+    """Ativa utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE usuarios SET ativo = TRUE WHERE id = %s", (user_id,))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao ativar utilizador: {e}")
         return False
 
 # ------------------------------------------------------------
