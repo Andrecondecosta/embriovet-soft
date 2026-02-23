@@ -1603,142 +1603,142 @@ elif aba == "⚙️ Gestão de Utilizadores":
     
     # TAB 1: Lista
     with tab1:
-            if usuarios_df.empty:
-                st.info("ℹ️ Nenhum utilizador cadastrado.")
-            else:
-                st.markdown(f"### 📋 Total: {len(usuarios_df)} utilizadores")
-                
-                # Filtros
-                col1, col2 = st.columns(2)
-                with col1:
-                    filtro_nivel = st.multiselect(
-                        "Filtrar por Nível",
-                        options=usuarios_df["nivel"].unique(),
-                        default=None
-                    )
-                with col2:
-                    filtro_status = st.selectbox(
-                        "Status",
-                        ["Todos", "Ativos", "Inativos"]
-                    )
-                
-                usuarios_filtrado = usuarios_df.copy()
-                if filtro_nivel:
-                    usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["nivel"].isin(filtro_nivel)]
-                if filtro_status == "Ativos":
-                    usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == True]
-                elif filtro_status == "Inativos":
-                    usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == False]
-                
-                st.markdown("---")
-                
-                for _, usr in usuarios_filtrado.iterrows():
-                    status_emoji = "✅" if usr['ativo'] else "❌"
-                    with st.expander(f"{status_emoji} {usr['nome_completo']} (@{usr['username']}) - {usr['nivel']}"):
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.markdown(f"**ID:** {usr['id']}")
-                            st.markdown(f"**Username:** {usr['username']}")
-                            st.markdown(f"**Nome:** {usr['nome_completo']}")
-                            st.markdown(f"**Nível:** {usr['nivel']}")
-                            st.markdown(f"**Status:** {'Ativo' if usr['ativo'] else 'Inativo'}")
-                            st.markdown(f"**Criado em:** {usr['created_at']}")
-                            if usr['last_login']:
-                                st.markdown(f"**Último login:** {usr['last_login']}")
-                        
-                        with col2:
-                            if usr['ativo']:
-                                if st.button("🚫 Desativar", key=f"deactivate_{usr['id']}", type="secondary"):
-                                    if desativar_usuario(usr['id']):
-                                        st.success("✅ Utilizador desativado!")
-                                        st.rerun()
-                            else:
-                                if st.button("✅ Ativar", key=f"activate_{usr['id']}", type="primary"):
-                                    if ativar_usuario(usr['id']):
-                                        st.success("✅ Utilizador ativado!")
-                                        st.rerun()
-        
-        # TAB 2: Adicionar
-        with tab2:
-            st.markdown("### ➕ Adicionar Novo Utilizador")
+        if usuarios_df.empty:
+            st.info("ℹ️ Nenhum utilizador cadastrado.")
+        else:
+            st.markdown(f"### 📋 Total: {len(usuarios_df)} utilizadores")
             
-            with st.form("add_usuario"):
-                novo_username = st.text_input("Username *", placeholder="sem espaços, minúsculas")
-                novo_nome = st.text_input("Nome Completo *")
-                novo_nivel = st.selectbox("Nível de Acesso *", ["Administrador", "Gestor", "Visualizador"])
-                nova_password = st.text_input("Password *", type="password", placeholder="Mínimo 6 caracteres")
-                confirma_password = st.text_input("Confirmar Password *", type="password")
-                
-                submit = st.form_submit_button("➕ Criar Utilizador", type="primary")
-                
-                if submit:
-                    if not novo_username or not novo_nome or not nova_password:
-                        st.error("❌ Preencha todos os campos obrigatórios")
-                    elif len(nova_password) < 6:
-                        st.error("❌ Password deve ter pelo menos 6 caracteres")
-                    elif nova_password != confirma_password:
-                        st.error("❌ Passwords não coincidem")
-                    elif " " in novo_username:
-                        st.error("❌ Username não pode conter espaços")
-                    else:
-                        if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, user['id']):
-                            st.success(f"✅ Utilizador '{novo_username}' criado com sucesso!")
-                            st.info(f"🔐 **Credenciais:**\n\n👤 Username: `{novo_username}`\n\n🔒 Password: `{nova_password}`")
-                            st.rerun()
+            # Filtros
+            col1, col2 = st.columns(2)
+            with col1:
+                filtro_nivel = st.multiselect(
+                    "Filtrar por Nível",
+                    options=usuarios_df["nivel"].unique(),
+                    default=None
+                )
+            with col2:
+                filtro_status = st.selectbox(
+                    "Status",
+                    ["Todos", "Ativos", "Inativos"]
+                )
+            
+            usuarios_filtrado = usuarios_df.copy()
+            if filtro_nivel:
+                usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["nivel"].isin(filtro_nivel)]
+            if filtro_status == "Ativos":
+                usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == True]
+            elif filtro_status == "Inativos":
+                usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == False]
             
             st.markdown("---")
-            st.info("""
-            ### 📋 Níveis de Acesso
             
-            **🔴 Administrador:**
-            - Acesso total ao sistema
-            - Pode adicionar/editar/deletar stock
-            - Pode gerir proprietários
-            - Pode gerir utilizadores
-            - Pode adicionar outros administradores
-            
-            **🟡 Gestor/Veterinário:**
-            - Pode adicionar stock
-            - Pode registrar inseminações
-            - Pode transferir sêmen (interna e externa)
-            - NÃO pode editar ou deletar
-            - NÃO pode gerir utilizadores
-            
-            **🟢 Visualizador:**
-            - Pode ver estoque
-            - Pode ver relatórios
-            - NÃO pode adicionar/editar nada
-            """)
-        
-        # TAB 3: Alterar Password
-        with tab3:
-            st.markdown("### 🔒 Alterar Password de Utilizador")
-            
-            if not usuarios_df.empty:
-                with st.form("change_password"):
-                    usuario_selecionado = st.selectbox(
-                        "Selecionar Utilizador",
-                        options=usuarios_df["id"].tolist(),
-                        format_func=lambda x: f"{usuarios_df[usuarios_df['id']==x]['nome_completo'].values[0]} (@{usuarios_df[usuarios_df['id']==x]['username'].values[0]})"
-                    )
+            for _, usr in usuarios_filtrado.iterrows():
+                status_emoji = "✅" if usr['ativo'] else "❌"
+                with st.expander(f"{status_emoji} {usr['nome_completo']} (@{usr['username']}) - {usr['nivel']}"):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**ID:** {usr['id']}")
+                        st.markdown(f"**Username:** {usr['username']}")
+                        st.markdown(f"**Nome:** {usr['nome_completo']}")
+                        st.markdown(f"**Nível:** {usr['nivel']}")
+                        st.markdown(f"**Status:** {'Ativo' if usr['ativo'] else 'Inativo'}")
+                        st.markdown(f"**Criado em:** {usr['created_at']}")
+                        if usr['last_login']:
+                            st.markdown(f"**Último login:** {usr['last_login']}")
                     
-                    nova_senha = st.text_input("Nova Password *", type="password", placeholder="Mínimo 6 caracteres")
-                    confirma_senha = st.text_input("Confirmar Nova Password *", type="password")
-                    
-                    submit_senha = st.form_submit_button("🔄 Alterar Password", type="primary")
-                    
-                    if submit_senha:
-                        if not nova_senha:
-                            st.error("❌ Digite a nova password")
-                        elif len(nova_senha) < 6:
-                            st.error("❌ Password deve ter pelo menos 6 caracteres")
-                        elif nova_senha != confirma_senha:
-                            st.error("❌ Passwords não coincidem")
+                    with col2:
+                        if usr['ativo']:
+                            if st.button("🚫 Desativar", key=f"deactivate_{usr['id']}", type="secondary"):
+                                if desativar_usuario(usr['id']):
+                                    st.success("✅ Utilizador desativado!")
+                                    st.rerun()
                         else:
-                            if alterar_password(usuario_selecionado, nova_senha):
-                                usr_nome = usuarios_df[usuarios_df['id']==usuario_selecionado]['nome_completo'].values[0]
-                                st.success(f"✅ Password alterada para {usr_nome}!")
-                                st.info(f"🔐 Nova password: `{nova_senha}`")
+                            if st.button("✅ Ativar", key=f"activate_{usr['id']}", type="primary"):
+                                if ativar_usuario(usr['id']):
+                                    st.success("✅ Utilizador ativado!")
+                                    st.rerun()
+    
+    # TAB 2: Adicionar
+    with tab2:
+        st.markdown("### ➕ Adicionar Novo Utilizador")
+        
+        with st.form("add_usuario"):
+            novo_username = st.text_input("Username *", placeholder="sem espaços, minúsculas")
+            novo_nome = st.text_input("Nome Completo *")
+            novo_nivel = st.selectbox("Nível de Acesso *", ["Administrador", "Gestor", "Visualizador"])
+            nova_password = st.text_input("Password *", type="password", placeholder="Mínimo 6 caracteres")
+            confirma_password = st.text_input("Confirmar Password *", type="password")
+            
+            submit = st.form_submit_button("➕ Criar Utilizador", type="primary")
+            
+            if submit:
+                if not novo_username or not novo_nome or not nova_password:
+                    st.error("❌ Preencha todos os campos obrigatórios")
+                elif len(nova_password) < 6:
+                    st.error("❌ Password deve ter pelo menos 6 caracteres")
+                elif nova_password != confirma_password:
+                    st.error("❌ Passwords não coincidem")
+                elif " " in novo_username:
+                    st.error("❌ Username não pode conter espaços")
+                else:
+                    if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, user['id']):
+                        st.success(f"✅ Utilizador '{novo_username}' criado com sucesso!")
+                        st.info(f"🔐 **Credenciais:**\n\n👤 Username: `{novo_username}`\n\n🔒 Password: `{nova_password}`")
+                        st.rerun()
+        
+        st.markdown("---")
+        st.info("""
+        ### 📋 Níveis de Acesso
+        
+        **🔴 Administrador:**
+        - Acesso total ao sistema
+        - Pode adicionar/editar/deletar stock
+        - Pode gerir proprietários
+        - Pode gerir utilizadores
+        - Pode adicionar outros administradores
+        
+        **🟡 Gestor/Veterinário:**
+        - Pode adicionar stock
+        - Pode registrar inseminações
+        - Pode transferir sêmen (interna e externa)
+        - NÃO pode editar ou deletar
+        - NÃO pode gerir utilizadores
+        
+        **🟢 Visualizador:**
+        - Pode ver estoque
+        - Pode ver relatórios
+        - NÃO pode adicionar/editar nada
+        """)
+    
+    # TAB 3: Alterar Password
+    with tab3:
+        st.markdown("### 🔒 Alterar Password de Utilizador")
+        
+        if not usuarios_df.empty:
+            with st.form("change_password"):
+                usuario_selecionado = st.selectbox(
+                    "Selecionar Utilizador",
+                    options=usuarios_df["id"].tolist(),
+                    format_func=lambda x: f"{usuarios_df[usuarios_df['id']==x]['nome_completo'].values[0]} (@{usuarios_df[usuarios_df['id']==x]['username'].values[0]})"
+                )
+                
+                nova_senha = st.text_input("Nova Password *", type="password", placeholder="Mínimo 6 caracteres")
+                confirma_senha = st.text_input("Confirmar Nova Password *", type="password")
+                
+                submit_senha = st.form_submit_button("🔄 Alterar Password", type="primary")
+                
+                if submit_senha:
+                    if not nova_senha:
+                        st.error("❌ Digite a nova password")
+                    elif len(nova_senha) < 6:
+                        st.error("❌ Password deve ter pelo menos 6 caracteres")
+                    elif nova_senha != confirma_senha:
+                        st.error("❌ Passwords não coincidem")
+                    else:
+                        if alterar_password(usuario_selecionado, nova_senha):
+                            usr_nome = usuarios_df[usuarios_df['id']==usuario_selecionado]['nome_completo'].values[0]
+                            st.success(f"✅ Password alterada para {usr_nome}!")
+                            st.info(f"🔐 Nova password: `{nova_senha}`")
 
 # ------------------------------------------------------------
 # Footer
