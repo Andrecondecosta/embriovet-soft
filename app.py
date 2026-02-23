@@ -1737,5 +1737,5 @@ elif aba == "⚙️ Gestão de Utilizadores":
 # Footer
 # ------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Embriovet Gestor v2.1**")
-st.sidebar.markdown("✅ Sistema Completo")
+st.sidebar.markdown("**Embriovet Gestor v3.0**")
+st.sidebar.markdown("✅ Sistema com Autenticação")
