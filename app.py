@@ -974,11 +974,9 @@ if aba == "📦 Ver Estoque":
                         if row.get("observacoes"):
                             st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
                 
-                # TAB 2: Editar
-                with tab2:
-                    if not verificar_permissao('Administrador'):
-                        st.warning("⚠️ Apenas Administradores podem editar stock")
-                    else:
+                # TAB 2: Editar (Apenas Admin)
+                if verificar_permissao('Administrador'):
+                    with tab2:
                         st.markdown("### ✏️ Editar Stock")
                         
                         # Botão + para adicionar proprietário
