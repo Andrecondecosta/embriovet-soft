@@ -1595,12 +1595,9 @@ elif aba == "👥 Gestão de Proprietários":
 # ⚙️ Gestão de Utilizadores (Apenas Administrador)
 # ------------------------------------------------------------
 elif aba == "⚙️ Gestão de Utilizadores":
-    if not verificar_permissao('Administrador'):
-        st.error("❌ Acesso negado. Apenas Administradores podem aceder a esta seção.")
-    else:
-        st.header("⚙️ Gestão de Utilizadores")
-        
-        usuarios_df = carregar_usuarios()
+    st.header("⚙️ Gestão de Utilizadores")
+    
+    usuarios_df = carregar_usuarios()
         
         tab1, tab2, tab3 = st.tabs(["📋 Lista de Utilizadores", "➕ Adicionar Utilizador", "🔒 Alterar Password"])
         
