@@ -1558,7 +1558,7 @@ elif aba == "📈 Relatórios":
         st.markdown("### 📈 Análise Completa por Garanhão")
         
         # Recarregar dados para garantir que estoque está disponível
-        stock = carregar_estoque()
+        stock = carregar_stock()
         
         if stock.empty:
             st.info("ℹ️ Nenhum stock registrado.")
@@ -1650,7 +1650,7 @@ elif aba == "📈 Relatórios":
         st.markdown("### 👥 Análise Completa por Proprietário")
         
         # Recarregar dados
-        stock = carregar_estoque()
+        stock = carregar_stock()
         
         if proprietarios.empty:
             st.info("ℹ️ Nenhum proprietário cadastrado.")
@@ -1793,7 +1793,7 @@ elif aba == "📈 Relatórios":
         st.info("📋 Relatório completo mostrando todos os lotes de cada proprietário com quantidades e datas")
         
         # Recarregar dados
-        stock = carregar_estoque()
+        stock = carregar_stock()
         
         if proprietarios.empty:
             st.warning("⚠️ Nenhum proprietário cadastrado.")
