@@ -10,6 +10,7 @@ import numpy as np
 import datetime as dt
 import bcrypt
 import hashlib
+import time
 
 # ------------------------------------------------------------
 # Configurar logging
