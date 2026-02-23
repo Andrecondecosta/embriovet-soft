@@ -1786,6 +1786,163 @@ elif aba == "📈 Relatórios":
                                 )
                             else:
                                 st.info("Nenhuma transferência enviada")
+    
+    # TAB 7: Stock Detalhado por Proprietário (com quantidades e datas)
+    with rel_tab7:
+        st.markdown("### 🧬 Stock Detalhado de Sêmen por Proprietário")
+        st.info("📋 Relatório completo mostrando todos os lotes de cada proprietário com quantidades e datas")
+        
+        # Recarregar dados
+        stock = carregar_estoque()
+        
+        if proprietarios.empty:
+            st.warning("⚠️ Nenhum proprietário cadastrado.")
+        elif stock.empty:
+            st.warning("⚠️ Nenhum stock registrado.")
+        else:
+            # Filtros
+            st.markdown("### 🔍 Filtros")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                filtro_prop = st.multiselect(
+                    "Filtrar por Proprietário",
+                    options=proprietarios["nome"].tolist(),
+                    default=None
+                )
+            
+            with col2:
+                filtro_garanhao = st.multiselect(
+                    "Filtrar por Garanhão",
+                    options=sorted(stock["garanhão"].unique()),
+                    default=None
+                )
+            
+            # Aplicar filtros
+            stock_filtrado = stock.copy()
+            if filtro_prop:
+                stock_filtrado = stock_filtrado[stock_filtrado["proprietario_nome"].isin(filtro_prop)]
+            if filtro_garanhao:
+                stock_filtrado = stock_filtrado[stock_filtrado["garanhão"].isin(filtro_garanhao)]
+            
+            st.markdown("---")
+            
+            # Agrupar por proprietário
+            for prop_nome in sorted(stock_filtrado["proprietario_nome"].unique()):
+                with st.expander(f"👤 {prop_nome}", expanded=True):
+                    stock_proprietario = stock_filtrado[stock_filtrado["proprietario_nome"] == prop_nome]
+                    
+                    # Métricas do proprietário
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_palhetas = int(to_py(stock_proprietario["existencia_atual"].sum()) or 0)
+                        st.metric("Total Palhetas", total_palhetas)
+                    with col2:
+                        num_garanhaos = stock_proprietario["garanhão"].nunique()
+                        st.metric("Garanhões", num_garanhaos)
+                    with col3:
+                        num_lotes = len(stock_proprietario)
+                        st.metric("Lotes", num_lotes)
+                    with col4:
+                        media_qualidade = int(to_py(stock_proprietario["qualidade"].mean()) or 0)
+                        st.metric("Qualidade Média", f"{media_qualidade}%")
+                    
+                    st.markdown("---")
+                    
+                    # Tabela detalhada de lotes
+                    st.markdown("#### 📋 Lotes Detalhados")
+                    
+                    # Preparar dados para exibição
+                    tabela_lotes = stock_proprietario[[
+                        "garanhão", 
+                        "data_embriovet", 
+                        "origem_externa",
+                        "palhetas_produzidas",
+                        "existencia_atual",
+                        "qualidade",
+                        "concentracao",
+                        "motilidade",
+                        "local_armazenagem",
+                        "certificado",
+                        "dose"
+                    ]].copy()
+                    
+                    # Renomear colunas
+                    tabela_lotes.columns = [
+                        "Garanhão",
+                        "Data Produção",
+                        "Origem Externa",
+                        "Produzidas",
+                        "Stock Atual",
+                        "Qualidade (%)",
+                        "Concentração",
+                        "Motilidade (%)",
+                        "Local",
+                        "Certificado",
+                        "Dose"
+                    ]
+                    
+                    # Converter para tipos Python nativos
+                    for col in tabela_lotes.columns:
+                        if tabela_lotes[col].dtype == 'object':
+                            continue
+                        tabela_lotes[col] = tabela_lotes[col].apply(lambda x: to_py(x) if pd.notna(x) else "")
+                    
+                    # Exibir tabela
+                    st.dataframe(
+                        tabela_lotes,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(len(tabela_lotes) * 35 + 38, 400)  # Altura dinâmica
+                    )
+                    
+                    # Resumo por garanhão dentro do proprietário
+                    st.markdown("#### 🐴 Resumo por Garanhão")
+                    resumo_garanhao = stock_proprietario.groupby("garanhão").agg({
+                        "existencia_atual": "sum",
+                        "palhetas_produzidas": "sum",
+                        "qualidade": "mean",
+                        "data_embriovet": lambda x: x.dropna().iloc[-1] if len(x.dropna()) > 0 else ""
+                    }).reset_index()
+                    
+                    resumo_garanhao.columns = [
+                        "Garanhão",
+                        "Stock Atual",
+                        "Total Produzidas",
+                        "Qualidade Média (%)",
+                        "Última Data"
+                    ]
+                    
+                    # Converter para tipos Python nativos
+                    for col in ["Stock Atual", "Total Produzidas"]:
+                        resumo_garanhao[col] = resumo_garanhao[col].apply(lambda x: int(to_py(x)) if pd.notna(x) else 0)
+                    resumo_garanhao["Qualidade Média (%)"] = resumo_garanhao["Qualidade Média (%)"].apply(lambda x: round(to_py(x), 1) if pd.notna(x) else 0)
+                    
+                    resumo_garanhao = resumo_garanhao.sort_values("Stock Atual", ascending=False)
+                    
+                    st.dataframe(
+                        resumo_garanhao,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+            
+            # Resumo geral no final
+            st.markdown("---")
+            st.markdown("### 📊 Resumo Geral")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                total_proprietarios = stock_filtrado["proprietario_nome"].nunique()
+                st.metric("Proprietários", total_proprietarios)
+            with col2:
+                total_palhetas_geral = int(to_py(stock_filtrado["existencia_atual"].sum()) or 0)
+                st.metric("Total Palhetas", total_palhetas_geral)
+            with col3:
+                total_garanhaos = stock_filtrado["garanhão"].nunique()
+                st.metric("Garanhões", total_garanhaos)
+            with col4:
+                total_lotes_geral = len(stock_filtrado)
+                st.metric("Total Lotes", total_lotes_geral)
 
 # ------------------------------------------------------------
 # 👥 Gestão de Proprietários
