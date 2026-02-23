@@ -891,12 +891,6 @@ def modal_adicionar_proprietario():
         if st.button("❌ Cancelar", use_container_width=True):
             st.rerun()
 
-# Menu lateral
-aba = st.sidebar.radio(
-    "Menu",
-    ["📦 Ver Estoque", "➕ Adicionar Stock", "📝 Registrar Inseminação", "📈 Relatórios", "👥 Gestão de Proprietários"],
-)
-
 # Carregar dados
 try:
     proprietarios = carregar_proprietarios()
