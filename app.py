@@ -1556,11 +1556,14 @@ elif aba == "📈 Relatórios":
     with rel_tab5:
         st.markdown("### 📈 Análise Completa por Garanhão")
         
-        if estoque.empty:
+        # Recarregar dados para garantir que estoque está disponível
+        stock = carregar_estoque()
+        
+        if stock.empty:
             st.info("ℹ️ Nenhum stock registrado.")
         else:
             # Seleção do garanhão
-            garanhoes_lista = sorted(estoque["garanhão"].unique())
+            garanhoes_lista = sorted(stock["garanhão"].unique())
             garanhao_selecionado = st.selectbox("Selecione o Garanhão", garanhoes_lista)
             
             if garanhao_selecionado:
@@ -1568,7 +1571,7 @@ elif aba == "📈 Relatórios":
                 st.markdown("---")
                 
                 # Dados do garanhão
-                dados_garanhao = estoque[estoque["garanhão"] == garanhao_selecionado]
+                dados_garanhao = stock[stock["garanhão"] == garanhao_selecionado]
                 
                 # Métricas principais
                 col1, col2, col3, col4 = st.columns(4)
@@ -1645,6 +1648,9 @@ elif aba == "📈 Relatórios":
     with rel_tab6:
         st.markdown("### 👥 Análise Completa por Proprietário")
         
+        # Recarregar dados
+        stock = carregar_estoque()
+        
         if proprietarios.empty:
             st.info("ℹ️ Nenhum proprietário cadastrado.")
         else:
@@ -1661,7 +1667,7 @@ elif aba == "📈 Relatórios":
                 st.markdown("---")
                 
                 # Stock do proprietário
-                stock_prop = estoque[estoque["dono_id"] == prop_selecionado]
+                stock_prop = stock[stock["dono_id"] == prop_selecionado]
                 
                 # Métricas principais
                 col1, col2, col3 = st.columns(3)
