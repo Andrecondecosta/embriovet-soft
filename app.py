@@ -802,7 +802,7 @@ def mostrar_tela_login():
             username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
             password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
@@ -849,7 +849,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
 
-if st.sidebar.button("🚪 Logout", use_container_width=True):
+if st.sidebar.button("🚪 Logout", width="stretch"):
     del st.session_state['user']
     st.rerun()
 
@@ -878,7 +878,7 @@ def modal_adicionar_proprietario():
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Adicionar", type="primary", use_container_width=True):
+        if st.button("✅ Adicionar", type="primary", width="stretch"):
             if not novo_nome:
                 st.error("❌ Nome é obrigatório")
             else:
@@ -889,7 +889,7 @@ def modal_adicionar_proprietario():
                     st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
                     st.rerun()
     with col2:
-        if st.button("❌ Cancelar", use_container_width=True):
+        if st.button("❌ Cancelar", width="stretch"):
             st.rerun()
 
 # Carregar dados
@@ -1343,7 +1343,7 @@ elif aba == "📈 Relatórios":
                     data=csv_insem,
                     file_name="inseminacoes.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             col1, col2, col3, col4 = st.columns(4)
@@ -1362,7 +1362,7 @@ elif aba == "📈 Relatórios":
             consumo = insem.groupby(["garanhao", "proprietario_nome"])["palhetas_gastas"].sum().reset_index()
             consumo.columns = ["Garanhão", "Proprietário", "Palhetas Gastas"]
             consumo = consumo.sort_values("Palhetas Gastas", ascending=False)
-            st.dataframe(consumo, use_container_width=True, hide_index=True)
+            st.dataframe(consumo, width="stretch", hide_index=True)
 
             st.markdown("---")
 
@@ -1407,7 +1407,7 @@ elif aba == "📈 Relatórios":
                     }
                 )
                 .sort_values("Data", ascending=False),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -1433,7 +1433,7 @@ elif aba == "📈 Relatórios":
                                 "palhetas_gastas": "Palhetas",
                             }
                         ),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
                 else:
@@ -1460,7 +1460,7 @@ elif aba == "📈 Relatórios":
                     data=csv_transf,
                     file_name="transferencias_internas.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             col1, col2 = st.columns(2)
@@ -1482,7 +1482,7 @@ elif aba == "📈 Relatórios":
                     "quantidade": "Palhetas",
                     "data_transferencia": "Data"
                 }),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
     
@@ -1510,7 +1510,7 @@ elif aba == "📈 Relatórios":
                     data=csv_ext,
                     file_name="transferencias_externas.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             col1, col2, col3 = st.columns(3)
@@ -1563,7 +1563,7 @@ elif aba == "📈 Relatórios":
                     "data_transferencia": "Data",
                     "observacoes": "Observações"
                 }),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
             
@@ -1575,7 +1575,7 @@ elif aba == "📈 Relatórios":
                 }).reset_index()
                 resumo_dest.columns = ["Destinatário", "Total Palhetas", "Nº Operações"]
                 resumo_dest = resumo_dest.sort_values("Total Palhetas", ascending=False)
-                st.dataframe(resumo_dest, use_container_width=True, hide_index=True)
+                st.dataframe(resumo_dest, width="stretch", hide_index=True)
     
     # TAB 4: Estatísticas
     with rel_tab4:
@@ -1598,7 +1598,7 @@ elif aba == "📈 Relatórios":
             top_garanhaos = stock.groupby("garanhao")["existencia_atual"].sum().reset_index()
             top_garanhaos.columns = ["Garanhão", "Palhetas"]
             top_garanhaos = top_garanhaos.sort_values("Palhetas", ascending=False).head(10)
-            st.dataframe(top_garanhaos, use_container_width=True, hide_index=True)
+            st.dataframe(top_garanhaos, width="stretch", hide_index=True)
     
     # TAB 5: Análise Detalhada por Garanhão
     with rel_tab5:
@@ -1611,7 +1611,7 @@ elif aba == "📈 Relatórios":
             st.info("ℹ️ Nenhum stock registrado.")
         else:
             # Seleção do garanhão
-            garanhoes_lista = sorted(stock["garanhão"].unique())
+            garanhoes_lista = sorted(stock["garanhao"].unique())
             garanhao_selecionado = st.selectbox("Selecione o Garanhão", garanhoes_lista)
             
             if garanhao_selecionado:
@@ -1619,7 +1619,7 @@ elif aba == "📈 Relatórios":
                 st.markdown("---")
                 
                 # Dados do garanhão
-                dados_garanhao = stock[stock["garanhão"] == garanhao_selecionado]
+                dados_garanhao = stock[stock["garanhao"] == garanhao_selecionado]
                 
                 # Métricas principais
                 col1, col2, col3, col4 = st.columns(4)
@@ -1643,7 +1643,7 @@ elif aba == "📈 Relatórios":
                 dist_prop = dados_garanhao.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
                 dist_prop.columns = ["Proprietário", "Palhetas"]
                 dist_prop = dist_prop.sort_values("Palhetas", ascending=False)
-                st.dataframe(dist_prop, use_container_width=True, hide_index=True)
+                st.dataframe(dist_prop, width="stretch", hide_index=True)
                 
                 # Inseminações deste garanhão
                 if not insem.empty:
@@ -1668,7 +1668,7 @@ elif aba == "📈 Relatórios":
                                 "palhetas_gastas": "Palhetas"
                             })
                             .sort_values("Data", ascending=False),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                 
@@ -1688,7 +1688,7 @@ elif aba == "📈 Relatórios":
                                 "proprietario_destino": "Para",
                                 "quantidade": "Palhetas"
                             }),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
     
@@ -1728,7 +1728,7 @@ elif aba == "📈 Relatórios":
                 
                 with col2:
                     if not stock_prop.empty:
-                        num_garanhaos = stock_prop["garanhão"].nunique()
+                        num_garanhaos = stock_prop["garanhao"].nunique()
                         st.metric("🐴 Garanhões", num_garanhaos)
                     else:
                         st.metric("🐴 Garanhões", 0)
@@ -1744,14 +1744,14 @@ elif aba == "📈 Relatórios":
                 if not stock_prop.empty:
                     st.markdown("---")
                     st.markdown("### 📦 Stock Detalhado")
-                    stock_resumo = stock_prop.groupby("garanhão").agg({
+                    stock_resumo = stock_prop.groupby("garanhao").agg({
                         "existencia_atual": "sum",
                         "qualidade": "mean"
                     }).reset_index()
                     stock_resumo.columns = ["Garanhão", "Palhetas", "Qualidade Média (%)"]
                     stock_resumo["Qualidade Média (%)"] = stock_resumo["Qualidade Média (%)"].round(1)
                     stock_resumo = stock_resumo.sort_values("Palhetas", ascending=False)
-                    st.dataframe(stock_resumo, use_container_width=True, hide_index=True)
+                    st.dataframe(stock_resumo, width="stretch", hide_index=True)
                 
                 # Inseminações realizadas
                 if not insem.empty:
@@ -1779,7 +1779,7 @@ elif aba == "📈 Relatórios":
                             })
                             .sort_values("Data", ascending=False)
                             .head(10),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True
                         )
                 
@@ -1808,7 +1808,7 @@ elif aba == "📈 Relatórios":
                                         "data_transferencia": "Data"
                                     })
                                     .head(5),
-                                    use_container_width=True,
+                                    width="stretch",
                                     hide_index=True
                                 )
                             else:
@@ -1828,7 +1828,7 @@ elif aba == "📈 Relatórios":
                                         "data_transferencia": "Data"
                                     })
                                     .head(5),
-                                    use_container_width=True,
+                                    width="stretch",
                                     hide_index=True
                                 )
                             else:
@@ -1855,7 +1855,7 @@ elif aba == "📈 Relatórios":
                 # Exportar TODO o stock
                 stock_export = stock[[
                     "proprietario_nome",
-                    "garanhão",
+                    "garanhao",
                     "data_embriovet",
                     "palhetas_produzidas",
                     "existencia_atual",
@@ -1883,7 +1883,7 @@ elif aba == "📈 Relatórios":
                     data=csv_stock,
                     file_name="stock_completo.csv",
                     mime="text/csv",
-                    use_container_width=True,
+                    width="stretch",
                     help="Exportar todo o stock em CSV"
                 )
             
@@ -1899,7 +1899,7 @@ elif aba == "📈 Relatórios":
             with col2:
                 filtro_garanhao = st.multiselect(
                     "Filtrar por Garanhão",
-                    options=sorted(stock["garanhão"].unique()),
+                    options=sorted(stock["garanhao"].unique()),
                     default=None
                 )
             
@@ -1908,7 +1908,7 @@ elif aba == "📈 Relatórios":
             if filtro_prop:
                 stock_filtrado = stock_filtrado[stock_filtrado["proprietario_nome"].isin(filtro_prop)]
             if filtro_garanhao:
-                stock_filtrado = stock_filtrado[stock_filtrado["garanhão"].isin(filtro_garanhao)]
+                stock_filtrado = stock_filtrado[stock_filtrado["garanhao"].isin(filtro_garanhao)]
             
             st.markdown("---")
             
@@ -1923,7 +1923,7 @@ elif aba == "📈 Relatórios":
                         total_palhetas = int(to_py(stock_proprietario["existencia_atual"].sum()) or 0)
                         st.metric("Total Palhetas", total_palhetas)
                     with col2:
-                        num_garanhaos = stock_proprietario["garanhão"].nunique()
+                        num_garanhaos = stock_proprietario["garanhao"].nunique()
                         st.metric("Garanhões", num_garanhaos)
                     with col3:
                         num_lotes = len(stock_proprietario)
@@ -1939,7 +1939,7 @@ elif aba == "📈 Relatórios":
                     
                     # Preparar dados para exibição
                     tabela_lotes = stock_proprietario[[
-                        "garanhão", 
+                        "garanhao", 
                         "data_embriovet", 
                         "origem_externa",
                         "palhetas_produzidas",
@@ -1976,14 +1976,14 @@ elif aba == "📈 Relatórios":
                     # Exibir tabela
                     st.dataframe(
                         tabela_lotes,
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         height=min(len(tabela_lotes) * 35 + 38, 400)  # Altura dinâmica
                     )
                     
                     # Resumo por garanhão dentro do proprietário
                     st.markdown("#### 🐴 Resumo por Garanhão")
-                    resumo_garanhao = stock_proprietario.groupby("garanhão").agg({
+                    resumo_garanhao = stock_proprietario.groupby("garanhao").agg({
                         "existencia_atual": "sum",
                         "palhetas_produzidas": "sum",
                         "qualidade": "mean",
@@ -2007,7 +2007,7 @@ elif aba == "📈 Relatórios":
                     
                     st.dataframe(
                         resumo_garanhao,
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True
                     )
             
@@ -2023,7 +2023,7 @@ elif aba == "📈 Relatórios":
                 total_palhetas_geral = int(to_py(stock_filtrado["existencia_atual"].sum()) or 0)
                 st.metric("Total Palhetas", total_palhetas_geral)
             with col3:
-                total_garanhaos = stock_filtrado["garanhão"].nunique()
+                total_garanhaos = stock_filtrado["garanhao"].nunique()
                 st.metric("Garanhões", total_garanhaos)
             with col4:
                 total_lotes_geral = len(stock_filtrado)
