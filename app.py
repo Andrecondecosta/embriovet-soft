@@ -1678,6 +1678,8 @@ elif aba == "⚙️ Gestão de Utilizadores":
                     if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, user['id']):
                         st.success(f"✅ Utilizador '{novo_username}' criado com sucesso!")
                         st.info(f"🔐 **Credenciais:**\n\n👤 Username: `{novo_username}`\n\n🔒 Password: `{nova_password}`")
+                        # Redirecionar para a lista de utilizadores
+                        st.session_state['show_user_tab'] = 0  # Tab lista
                         st.rerun()
         
         st.markdown("---")
