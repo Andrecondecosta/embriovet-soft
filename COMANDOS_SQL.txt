@@ -1,0 +1,67 @@
+# 📋 LISTA DE COMANDOS SQL - Execute Todos
+
+Copie e cole estes comandos no terminal, um de cada vez:
+
+## 1️⃣ Corrigir Tabela de Transferências Internas
+```bash
+psql -U postgres -d embriovet -f corrigir_tabela_transferencias.sql
+```
+
+## 2️⃣ Criar Tabela de Transferências Externas (Vendas)
+```bash
+psql -U postgres -d embriovet -f criar_tabela_transferencias_externas.sql
+```
+
+## 3️⃣ Criar Tabela de Utilizadores (Autenticação)
+```bash
+psql -U postgres -d embriovet -f criar_tabela_usuarios.sql
+```
+
+---
+
+## ✅ VERIFICAR SE DEU CERTO
+
+Execute este comando para ver todas as tabelas:
+
+```bash
+psql -U postgres -d embriovet -c "\dt"
+```
+
+**Deve mostrar 6 tabelas:**
+- dono
+- estoque_dono
+- inseminacoes
+- transferencias ✅ (corrigida)
+- transferencias_externas ✅ (nova)
+- usuarios ✅ (nova)
+
+---
+
+## 🔐 CREDENCIAIS INICIAIS
+
+Após criar as tabelas, use para login:
+
+**Username:** `admin`  
+**Password:** `admin123`
+
+---
+
+## 🆘 SE DER ERRO
+
+Se algum comando falhar:
+
+1. Verifique se o PostgreSQL está rodando
+2. Verifique as credenciais (usuário: postgres, senha: 123)
+3. Verifique se o banco `embriovet` existe
+
+Para verificar se o banco existe:
+```bash
+psql -U postgres -l
+```
+
+Se não existir, crie:
+```bash
+psql -U postgres -c "CREATE DATABASE embriovet;"
+```
+
+Depois execute os 3 comandos SQL acima novamente.
