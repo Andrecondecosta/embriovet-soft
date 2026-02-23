@@ -979,7 +979,7 @@ if aba == "📦 Ver Estoque":
                             st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
                 
                 # TAB 2: Editar (Apenas Admin)
-                if verificar_permissao('Administrador'):
+                if tab2 is not None:
                     with tab2:
                         st.markdown("### ✏️ Editar Stock")
                         
