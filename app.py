@@ -159,6 +159,23 @@ def carregar_transferencias():
         logger.error(f"Erro ao carregar transferências: {e}")
         return pd.DataFrame()
 
+def carregar_transferencias_externas():
+    """Carrega histórico de transferências externas (vendas/envios)"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT te.*, 
+                       d.nome as proprietario_origem
+                FROM transferencias_externas te
+                LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+                ORDER BY te.data_transferencia DESC
+            """
+            df = pd.read_sql(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar transferências externas: {e}")
+        return pd.DataFrame()
+
 def atualizar_proprietario_stock(estoque_id, novo_dono_id):
     """Atualiza o proprietario de um item de estoque"""
     try:
@@ -548,6 +565,69 @@ def transferir_palhetas_parcial(estoque_origem_id, proprietario_destino_id, quan
     except Exception as e:
         logger.error(f"Erro ao transferir palhetas: {e}")
         st.error(f"Erro ao transferir palhetas: {e}")
+        return False
+
+def transferir_palhetas_externo(estoque_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes=""):
+    """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Buscar dados do lote origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(estoque_origem_id),))
+            
+            origem = cur.fetchone()
+            if not origem:
+                st.error("❌ Lote de origem não encontrado")
+                return False
+            
+            garanhao, prop_origem_id, exist_atual = origem
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            
+            if quantidade_int <= 0:
+                st.error("❌ Quantidade deve ser maior que zero")
+                return False
+            
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+            
+            # Atualizar estoque origem (diminuir)
+            cur.execute("""
+                UPDATE estoque_dono 
+                SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+            """, (quantidade_int, to_py(estoque_origem_id)))
+            
+            # Registrar transferência externa
+            cur.execute("""
+                INSERT INTO transferencias_externas (
+                    estoque_id, proprietario_origem_id, garanhao,
+                    destinatario_externo, quantidade, tipo, observacoes,
+                    data_transferencia
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (
+                to_py(estoque_origem_id), 
+                to_py(prop_origem_id), 
+                to_py(garanhao),
+                to_py(destinatario_externo), 
+                quantidade_int,
+                to_py(tipo),
+                to_py(observacoes)
+            ))
+            
+            conn.commit()
+            cur.close()
+            logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao transferir para externo: {e}")
+        st.error(f"Erro ao transferir para externo: {e}")
         return False
 
 # ------------------------------------------------------------
