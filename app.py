@@ -1009,25 +1009,25 @@ if aba == "📦 Ver Estoque":
                                 index=idx_prop,
                                 key=f"edit_prop_{row['id']}"
                             )
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
-                            edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
-                            edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
-                            edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
-                            edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
-                        
-                        with col2:
-                            edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
-                            edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
-                            edit_local = st.text_input("Local", value=row.get("local_armazenagem") or "")
-                            edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
-                            edit_dose = st.text_input("Dose", value=row.get("dose") or "")
-                        
-                        edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
-                        
-                        submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
+                                edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
+                                edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
+                                edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
+                                edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+                            
+                            with col2:
+                                edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
+                                edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
+                                edit_local = st.text_input("Local", value=row.get("local_armazenagem") or "")
+                                edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
+                                edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                            
+                            edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
+                            
+                            submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
                         
                         if submit_edit:
                             if editar_stock(row["id"], {
