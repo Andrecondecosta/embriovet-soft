@@ -1551,6 +1551,234 @@ elif aba == "📈 Relatórios":
             top_garanhaos.columns = ["Garanhão", "Palhetas"]
             top_garanhaos = top_garanhaos.sort_values("Palhetas", ascending=False).head(10)
             st.dataframe(top_garanhaos, use_container_width=True, hide_index=True)
+    
+    # TAB 5: Análise Detalhada por Garanhão
+    with rel_tab5:
+        st.markdown("### 📈 Análise Completa por Garanhão")
+        
+        if estoque.empty:
+            st.info("ℹ️ Nenhum stock registrado.")
+        else:
+            # Seleção do garanhão
+            garanhoes_lista = sorted(estoque["garanhão"].unique())
+            garanhao_selecionado = st.selectbox("Selecione o Garanhão", garanhoes_lista)
+            
+            if garanhao_selecionado:
+                st.markdown(f"## 🐴 {garanhao_selecionado}")
+                st.markdown("---")
+                
+                # Dados do garanhão
+                dados_garanhao = estoque[estoque["garanhão"] == garanhao_selecionado]
+                
+                # Métricas principais
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_palhetas = int(to_py(dados_garanhao["existencia_atual"].sum()) or 0)
+                    st.metric("📦 Total Palhetas", total_palhetas)
+                with col2:
+                    num_proprietarios = dados_garanhao["proprietario_nome"].nunique()
+                    st.metric("👥 Proprietários", num_proprietarios)
+                with col3:
+                    media_qualidade = int(to_py(dados_garanhao["qualidade"].mean()) or 0)
+                    st.metric("⭐ Qualidade Média", f"{media_qualidade}%")
+                with col4:
+                    total_lotes = len(dados_garanhao)
+                    st.metric("📋 Lotes", total_lotes)
+                
+                st.markdown("---")
+                
+                # Distribuição por proprietário
+                st.markdown("### 👥 Distribuição por Proprietário")
+                dist_prop = dados_garanhao.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+                dist_prop.columns = ["Proprietário", "Palhetas"]
+                dist_prop = dist_prop.sort_values("Palhetas", ascending=False)
+                st.dataframe(dist_prop, use_container_width=True, hide_index=True)
+                
+                # Inseminações deste garanhão
+                if not insem.empty:
+                    insem_garanhao = insem[insem["garanhao"] == garanhao_selecionado]
+                    if not insem_garanhao.empty:
+                        st.markdown("---")
+                        st.markdown("### 📝 Histórico de Inseminações")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Total Inseminações", len(insem_garanhao))
+                        with col2:
+                            total_palhetas_usadas = int(to_py(insem_garanhao["palhetas_gastas"].sum()) or 0)
+                            st.metric("Palhetas Utilizadas", total_palhetas_usadas)
+                        
+                        st.dataframe(
+                            insem_garanhao[["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]]
+                            .rename(columns={
+                                "data_inseminacao": "Data",
+                                "egua": "Égua",
+                                "proprietario_nome": "Proprietário",
+                                "palhetas_gastas": "Palhetas"
+                            })
+                            .sort_values("Data", ascending=False),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                
+                # Transferências deste garanhão
+                transf = carregar_transferencias()
+                if not transf.empty:
+                    transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado]
+                    if not transf_garanhao.empty:
+                        st.markdown("---")
+                        st.markdown("### 🔄 Transferências Realizadas")
+                        st.metric("Total Movimentações", len(transf_garanhao))
+                        st.dataframe(
+                            transf_garanhao[["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]]
+                            .rename(columns={
+                                "data_transferencia": "Data",
+                                "proprietario_origem": "De",
+                                "proprietario_destino": "Para",
+                                "quantidade": "Palhetas"
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+    
+    # TAB 6: Análise por Proprietário
+    with rel_tab6:
+        st.markdown("### 👥 Análise Completa por Proprietário")
+        
+        if proprietarios.empty:
+            st.info("ℹ️ Nenhum proprietário cadastrado.")
+        else:
+            # Seleção do proprietário
+            prop_selecionado = st.selectbox(
+                "Selecione o Proprietário",
+                proprietarios["id"].tolist(),
+                format_func=lambda x: proprietarios[proprietarios["id"]==x]["nome"].values[0]
+            )
+            
+            if prop_selecionado:
+                prop_nome = proprietarios[proprietarios["id"]==prop_selecionado]["nome"].values[0]
+                st.markdown(f"## 👤 {prop_nome}")
+                st.markdown("---")
+                
+                # Stock do proprietário
+                stock_prop = estoque[estoque["dono_id"] == prop_selecionado]
+                
+                # Métricas principais
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if not stock_prop.empty:
+                        total_palhetas_prop = int(to_py(stock_prop["existencia_atual"].sum()) or 0)
+                        st.metric("📦 Total Palhetas", total_palhetas_prop)
+                    else:
+                        st.metric("📦 Total Palhetas", 0)
+                
+                with col2:
+                    if not stock_prop.empty:
+                        num_garanhaos = stock_prop["garanhão"].nunique()
+                        st.metric("🐴 Garanhões", num_garanhaos)
+                    else:
+                        st.metric("🐴 Garanhões", 0)
+                
+                with col3:
+                    if not stock_prop.empty:
+                        num_lotes = len(stock_prop)
+                        st.metric("📋 Lotes", num_lotes)
+                    else:
+                        st.metric("📋 Lotes", 0)
+                
+                # Stock detalhado
+                if not stock_prop.empty:
+                    st.markdown("---")
+                    st.markdown("### 📦 Stock Detalhado")
+                    stock_resumo = stock_prop.groupby("garanhão").agg({
+                        "existencia_atual": "sum",
+                        "qualidade": "mean"
+                    }).reset_index()
+                    stock_resumo.columns = ["Garanhão", "Palhetas", "Qualidade Média (%)"]
+                    stock_resumo["Qualidade Média (%)"] = stock_resumo["Qualidade Média (%)"].round(1)
+                    stock_resumo = stock_resumo.sort_values("Palhetas", ascending=False)
+                    st.dataframe(stock_resumo, use_container_width=True, hide_index=True)
+                
+                # Inseminações realizadas
+                if not insem.empty:
+                    insem_prop = insem[insem["dono_id"] == prop_selecionado]
+                    if not insem_prop.empty:
+                        st.markdown("---")
+                        st.markdown("### 📝 Inseminações Realizadas")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Total Inseminações", len(insem_prop))
+                        with col2:
+                            total_gasto = int(to_py(insem_prop["palhetas_gastas"].sum()) or 0)
+                            st.metric("Palhetas Utilizadas", total_gasto)
+                        
+                        # Últimas inseminações
+                        st.markdown("#### 📋 Últimas 10 Inseminações")
+                        st.dataframe(
+                            insem_prop[["data_inseminacao", "garanhao", "egua", "palhetas_gastas"]]
+                            .rename(columns={
+                                "data_inseminacao": "Data",
+                                "garanhao": "Garanhão",
+                                "egua": "Égua",
+                                "palhetas_gastas": "Palhetas"
+                            })
+                            .sort_values("Data", ascending=False)
+                            .head(10),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                
+                # Transferências recebidas e enviadas
+                transf = carregar_transferencias()
+                if not transf.empty:
+                    transf_recebidas = transf[transf["proprietario_destino_id"] == prop_selecionado]
+                    transf_enviadas = transf[transf["proprietario_origem_id"] == prop_selecionado]
+                    
+                    if not transf_recebidas.empty or not transf_enviadas.empty:
+                        st.markdown("---")
+                        st.markdown("### 🔄 Movimentações")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("#### 📥 Recebidas")
+                            if not transf_recebidas.empty:
+                                total_recebido = int(to_py(transf_recebidas["quantidade"].sum()) or 0)
+                                st.metric("Palhetas Recebidas", total_recebido)
+                                st.dataframe(
+                                    transf_recebidas[["garanhao", "proprietario_origem", "quantidade", "data_transferencia"]]
+                                    .rename(columns={
+                                        "garanhao": "Garanhão",
+                                        "proprietario_origem": "De",
+                                        "quantidade": "Qtd",
+                                        "data_transferencia": "Data"
+                                    })
+                                    .head(5),
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            else:
+                                st.info("Nenhuma transferência recebida")
+                        
+                        with col2:
+                            st.markdown("#### 📤 Enviadas")
+                            if not transf_enviadas.empty:
+                                total_enviado = int(to_py(transf_enviadas["quantidade"].sum()) or 0)
+                                st.metric("Palhetas Enviadas", total_enviado)
+                                st.dataframe(
+                                    transf_enviadas[["garanhao", "proprietario_destino", "quantidade", "data_transferencia"]]
+                                    .rename(columns={
+                                        "garanhao": "Garanhão",
+                                        "proprietario_destino": "Para",
+                                        "quantidade": "Qtd",
+                                        "data_transferencia": "Data"
+                                    })
+                                    .head(5),
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            else:
+                                st.info("Nenhuma transferência enviada")
 
 # ------------------------------------------------------------
 # 👥 Gestão de Proprietários
