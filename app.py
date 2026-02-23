@@ -1068,89 +1068,89 @@ if aba == "📦 Ver Estoque":
                             ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],
                             key=f"tipo_transf_{row['id']}"
                         )
-                    
-                    if tipo_transf.startswith("🔄"):
-                        # TRANSFERÊNCIA INTERNA
-                        st.info("Transferir para outro proprietário cadastrado no sistema")
                         
-                        # Botão + para adicionar proprietário
-                        if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
-                            modal_adicionar_proprietario()
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if not proprietarios.empty:
-                                ids = proprietarios["id"].tolist()
-                                
-                                # Se acabou de adicionar, selecionar o novo
-                                idx_transf = 0
-                                if 'novo_proprietario_id' in st.session_state:
-                                    if st.session_state['novo_proprietario_id'] in ids:
-                                        idx_transf = ids.index(st.session_state['novo_proprietario_id'])
-                                
-                                novo_proprietario = st.selectbox(
-                                    "Para qual proprietário?",
-                                    options=ids,
-                                    format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
-                                    index=idx_transf,
-                                    key=f"transf_select_{row['id']}",
+                        if tipo_transf.startswith("🔄"):
+                            # TRANSFERÊNCIA INTERNA
+                            st.info("Transferir para outro proprietário cadastrado no sistema")
+                            
+                            # Botão + para adicionar proprietário
+                            if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                                modal_adicionar_proprietario()
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if not proprietarios.empty:
+                                    ids = proprietarios["id"].tolist()
+                                    
+                                    # Se acabou de adicionar, selecionar o novo
+                                    idx_transf = 0
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        if st.session_state['novo_proprietario_id'] in ids:
+                                            idx_transf = ids.index(st.session_state['novo_proprietario_id'])
+                                    
+                                    novo_proprietario = st.selectbox(
+                                        "Para qual proprietário?",
+                                        options=ids,
+                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                        index=idx_transf,
+                                        key=f"transf_select_{row['id']}",
+                                    )
+                            
+                            with col2:
+                                qtd_transferir = st.number_input(
+                                    "Quantidade de palhetas",
+                                    min_value=1,
+                                    max_value=existencia,
+                                    value=min(existencia, 1),
+                                    key=f"transf_qtd_{row['id']}"
                                 )
+                            
+                            if st.button("🔄 Transferir Internamente", key=f"btn_transf_{row['id']}", type="primary"):
+                                if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
+                                    st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
+                                    # Marcar que usou
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        st.session_state['novo_proprietario_usado'] = True
+                                    st.rerun()
                         
-                        with col2:
-                            qtd_transferir = st.number_input(
-                                "Quantidade de palhetas",
-                                min_value=1,
-                                max_value=existencia,
-                                value=min(existencia, 1),
-                                key=f"transf_qtd_{row['id']}"
-                            )
-                        
-                        if st.button("🔄 Transferir Internamente", key=f"btn_transf_{row['id']}", type="primary"):
-                            if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
-                                st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
-                                # Marcar que usou
-                                if 'novo_proprietario_id' in st.session_state:
-                                    st.session_state['novo_proprietario_usado'] = True
-                                st.rerun()
-                    
-                    else:
-                        # TRANSFERÊNCIA EXTERNA
-                        st.warning("⚠️ Esta operação retira o sêmen do stock (venda/envio)")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            destinatario_ext = st.text_input(
-                                "Nome do Comprador/Destinatário *",
-                                placeholder="Ex: João Silva, Fazenda XYZ",
-                                key=f"dest_ext_{row['id']}"
-                            )
-                            tipo_saida = st.selectbox(
-                                "Tipo de Saída",
-                                ["Venda", "Doação", "Exportação", "Outro"],
-                                key=f"tipo_saida_{row['id']}"
-                            )
-                        
-                        with col2:
-                            qtd_transferir_ext = st.number_input(
-                                "Quantidade de palhetas",
-                                min_value=1,
-                                max_value=existencia,
-                                value=min(existencia, 1),
-                                key=f"transf_qtd_ext_{row['id']}"
-                            )
-                            obs_ext = st.text_area(
-                                "Observações",
-                                placeholder="Ex: Valor, forma de pagamento, contato...",
-                                key=f"obs_ext_{row['id']}",
-                                height=80
-                            )
-                        
-                        if st.button("📤 Enviar para Externo", key=f"btn_transf_ext_{row['id']}", type="primary"):
-                            if not destinatario_ext:
-                                st.error("❌ Nome do destinatário é obrigatório")
-                            elif transferir_palhetas_externo(row["id"], destinatario_ext, qtd_transferir_ext, tipo_saida, obs_ext):
-                                st.success(f"✅ {qtd_transferir_ext} palhetas enviadas para {destinatario_ext} ({tipo_saida})")
-                                st.rerun()
+                        else:
+                            # TRANSFERÊNCIA EXTERNA
+                            st.warning("⚠️ Esta operação retira o sêmen do stock (venda/envio)")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                destinatario_ext = st.text_input(
+                                    "Nome do Comprador/Destinatário *",
+                                    placeholder="Ex: João Silva, Fazenda XYZ",
+                                    key=f"dest_ext_{row['id']}"
+                                )
+                                tipo_saida = st.selectbox(
+                                    "Tipo de Saída",
+                                    ["Venda", "Doação", "Exportação", "Outro"],
+                                    key=f"tipo_saida_{row['id']}"
+                                )
+                            
+                            with col2:
+                                qtd_transferir_ext = st.number_input(
+                                    "Quantidade de palhetas",
+                                    min_value=1,
+                                    max_value=existencia,
+                                    value=min(existencia, 1),
+                                    key=f"transf_qtd_ext_{row['id']}"
+                                )
+                                obs_ext = st.text_area(
+                                    "Observações",
+                                    placeholder="Ex: Valor, forma de pagamento, contato...",
+                                    key=f"obs_ext_{row['id']}",
+                                    height=80
+                                )
+                            
+                            if st.button("📤 Enviar para Externo", key=f"btn_transf_ext_{row['id']}", type="primary"):
+                                if not destinatario_ext:
+                                    st.error("❌ Nome do destinatário é obrigatório")
+                                elif transferir_palhetas_externo(row["id"], destinatario_ext, qtd_transferir_ext, tipo_saida, obs_ext):
+                                    st.success(f"✅ {qtd_transferir_ext} palhetas enviadas para {destinatario_ext} ({tipo_saida})")
+                                    st.rerun()
     else:
         st.info("ℹ️ Nenhum stock cadastrado.")
 
