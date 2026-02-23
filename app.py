@@ -1060,14 +1060,14 @@ if aba == "📦 Ver Estoque":
                 # TAB 3: Transferir (Gestor e Admin apenas)
                 if tab3 is not None:
                     with tab3:
-                    st.markdown("### 🔄 Transferir Palhetas")
-                    
-                    # Escolher tipo de transferência
-                    tipo_transf = st.radio(
-                        "Tipo de Transferência:",
-                        ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],
-                        key=f"tipo_transf_{row['id']}"
-                    )
+                        st.markdown("### 🔄 Transferir Palhetas")
+                        
+                        # Escolher tipo de transferência
+                        tipo_transf = st.radio(
+                            "Tipo de Transferência:",
+                            ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],
+                            key=f"tipo_transf_{row['id']}"
+                        )
                     
                     if tipo_transf.startswith("🔄"):
                         # TRANSFERÊNCIA INTERNA
