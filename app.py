@@ -976,7 +976,10 @@ if aba == "📦 Ver Estoque":
                 
                 # TAB 2: Editar
                 with tab2:
-                    st.markdown("### ✏️ Editar Stock")
+                    if not verificar_permissao('Administrador'):
+                        st.warning("⚠️ Apenas Administradores podem editar stock")
+                    else:
+                        st.markdown("### ✏️ Editar Stock")
                     
                     # Botão + para adicionar proprietário
                     if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
