@@ -785,6 +785,62 @@ st.set_page_config(
     page_icon="🐴",
 )
 
+# ------------------------------------------------------------
+# 🔐 Sistema de Login
+# ------------------------------------------------------------
+def mostrar_tela_login():
+    """Exibe tela de login"""
+    st.title("🔐 Login - Gestor de Sémen Embriovet")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("### Autenticação")
+        
+        with st.form("login_form"):
+            username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
+            password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
+            
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not username or not password:
+                    st.error("❌ Preencha todos os campos")
+                else:
+                    user = autenticar_usuario(username, password)
+                    if user:
+                        st.session_state['user'] = user
+                        st.success(f"✅ Bem-vindo, {user['nome']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Utilizador ou password incorretos")
+        
+        st.markdown("---")
+        st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
+
+def verificar_permissao(nivel_minimo):
+    """Verifica se o usuário tem permissão mínima necessária"""
+    if 'user' not in st.session_state:
+        return False
+    
+    user_nivel = st.session_state['user']['nivel']
+    
+    niveis = {
+        'Administrador': 3,
+        'Gestor': 2,
+        'Visualizador': 1
+    }
+    
+    return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
+
+# Verificar se está logado
+if 'user' not in st.session_state:
+    mostrar_tela_login()
+    st.stop()
+
+# Usuário logado - mostrar info no sidebar
+user = st.session_state['user']
+
 st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
 
 # ------------------------------------------------------------
