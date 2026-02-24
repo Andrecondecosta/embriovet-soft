@@ -1703,9 +1703,9 @@ elif aba == "📈 Relatórios":
                         st.metric("Total Palhetas Vendidas/Enviadas", total_ext)
                         
                         transf_ext_exibir = transf_ext_prop[[
-                            "data_transferencia", "garanhao", "destinatario_externo", "quantidade", "tipo"
+                            "data_transferencia", "garanhao", "destinatario_externo", "quantidade", "tipo", "observacoes"
                         ]].copy().sort_values("data_transferencia", ascending=False)
-                        transf_ext_exibir.columns = ["Data", "Garanhão", "Para", "Palhetas", "Tipo"]
+                        transf_ext_exibir.columns = ["Data", "Garanhão", "Para", "Palhetas", "Tipo", "Observações"]
                         st.dataframe(transf_ext_exibir, width="stretch", hide_index=True, height=200)
     
     # TAB 3: Histórico Geral
