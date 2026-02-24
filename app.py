@@ -1486,8 +1486,6 @@ elif aba == "📈 Relatórios":
     
     # TAB 2: Pesquisa Completa por Proprietário
     with rel_tab2:
-    # TAB 2: Pesquisa Completa por Proprietário
-    with rel_tab2:
         st.markdown("### 🔍 Pesquisa Completa por Proprietário")
         st.info("📋 Selecione um proprietário para ver TODO o histórico e informações")
         
