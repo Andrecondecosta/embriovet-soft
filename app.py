@@ -1340,6 +1340,7 @@ elif aba == "📈 Relatórios":
         st.info("📋 Selecione um garanhão para ver TODO o histórico e informações")
         
         stock = carregar_stock()
+        insem = carregar_inseminacoes()
         
         if stock.empty:
             st.warning("⚠️ Nenhum stock registrado.")
