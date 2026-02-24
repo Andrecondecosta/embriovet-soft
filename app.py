@@ -1555,6 +1555,8 @@ elif aba == "📈 Relatórios":
                 transf = carregar_transferencias()
                 transf_recebidas = transf[transf["proprietario_destino_id"] == prop_selecionado] if not transf.empty else pd.DataFrame()
                 transf_enviadas = transf[transf["proprietario_origem_id"] == prop_selecionado] if not transf.empty else pd.DataFrame()
+                transf_ext = carregar_transferencias_externas()
+                transf_ext_prop = transf_ext[transf_ext["proprietario_origem_id"] == prop_selecionado] if not transf_ext.empty else pd.DataFrame()
                 
                 # Botão exportar tudo deste proprietário
                 with col_export:
