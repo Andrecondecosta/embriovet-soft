@@ -1312,15 +1312,11 @@ elif aba == "📝 Registrar Inseminação":
 elif aba == "📈 Relatórios":
     st.header("📈 Relatórios e Análises")
     
-    # Sub-abas para diferentes relatórios
-    rel_tab1, rel_tab2, rel_tab3, rel_tab4, rel_tab5, rel_tab6, rel_tab7 = st.tabs([
-        "📝 Inseminações", 
-        "🔄 Transferências Internas", 
-        "📤 Transferências Externas", 
-        "📊 Estatísticas Gerais",
-        "📈 Análise por Garanhão",
-        "👥 Análise por Proprietário",
-        "🧬 Stock Detalhado por Proprietário"
+    # Sub-abas principais simplificadas
+    rel_tab1, rel_tab2, rel_tab3 = st.tabs([
+        "🔍 Pesquisa por Garanhão", 
+        "🔍 Pesquisa por Proprietário",
+        "📊 Histórico Geral"
     ])
     
     # TAB 1: Relatório de Inseminações
