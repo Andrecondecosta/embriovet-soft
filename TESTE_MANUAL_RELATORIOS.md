@@ -1,9 +1,15 @@
-# 🧪 Teste Manual - Correção de Erros nos Relatórios
+# 🧪 Teste Manual - Correção de Erros
 
 ## 📋 Data: 2025-01-XX
 ## 🔧 Correções Aplicadas:
+
+### ✅ Correção 1: Erros nos Relatórios
 1. Adicionado carregamento da variável `insem` (inseminações) em todas as 3 abas de relatórios
 2. Adicionado carregamento da variável `proprietarios` na aba "Pesquisa por Proprietário"
+
+### ✅ Correção 2: Erro na Transferência Externa
+1. Corrigido nome da coluna de `stock_id` para `estoque_id` no INSERT da tabela `transferencias_externas`
+2. Alinhado com o schema correto do banco de dados
 
 ---
 
