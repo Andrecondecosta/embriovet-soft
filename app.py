@@ -861,7 +861,7 @@ menu_options = ["📦 Ver Stock", "📈 Relatórios"]
 if verificar_permissao('Gestor'):
     menu_options.insert(1, "➕ Adicionar Stock")
     menu_options.insert(2, "📝 Registrar Inseminação")
-    menu_options.insert(4, "👥 Gestão de Proprietários")
+    menu_options.append("👥 Gestão de Proprietários")
 
 if verificar_permissao('Administrador'):
     menu_options.append("⚙️ Gestão de Utilizadores")
