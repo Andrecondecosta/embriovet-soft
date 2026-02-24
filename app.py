@@ -1672,6 +1672,7 @@ elif aba == "📈 Relatórios":
         st.info("📋 Visualize todo o histórico com filtros")
         
         stock = carregar_stock()
+        insem = carregar_inseminacoes()
         
         # Escolher tipo de histórico
         tipo_historico = st.radio(
