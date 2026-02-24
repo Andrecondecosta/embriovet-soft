@@ -106,7 +106,8 @@ INSERT INTO transferencias_externas (
 ## 🔍 O QUE FOI CORRIGIDO (DETALHES):
 
 ### Problema Identificado:
-O código estava tentando usar as variáveis `insem` e `proprietarios` sem carregá-las primeiro nas abas de relatórios.
+1. **Relatórios:** O código tentava usar as variáveis `insem` e `proprietarios` sem carregá-las
+2. **Transferência Externa:** Nome incorreto da coluna no banco de dados (`stock_id` vs `estoque_id`)
 
 ### Solução Aplicada:
 ```python
@@ -122,6 +123,14 @@ proprietarios = carregar_proprietarios()  # ← ADICIONADO
 # TAB 3: Adicionado carregamento de inseminações
 stock = carregar_stock()
 insem = carregar_inseminacoes()  # ← ADICIONADO
+
+# CORREÇÃO: Nome da coluna no INSERT
+INSERT INTO transferencias_externas (
+    estoque_id,  # ← CORRIGIDO (antes: stock_id)
+    proprietario_origem_id, garanhao,
+    destinatario_externo, quantidade, tipo, observacoes,
+    data_transferencia
+)
 ```
 
 ---
@@ -131,6 +140,7 @@ insem = carregar_inseminacoes()  # ← ADICIONADO
 - [ ] Teste 1: Pesquisa por Garanhão - **AGUARDANDO TESTE DO USUÁRIO**
 - [ ] Teste 2: Pesquisa por Proprietário - **AGUARDANDO TESTE DO USUÁRIO**
 - [ ] Teste 3: Histórico Geral - **AGUARDANDO TESTE DO USUÁRIO**
+- [ ] Teste 4: Transferência Externa - **AGUARDANDO TESTE DO USUÁRIO** ⭐ NOVO
 
 ---
 
