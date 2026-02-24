@@ -1319,8 +1319,173 @@ elif aba == "📈 Relatórios":
         "📊 Histórico Geral"
     ])
     
-    # TAB 1: Relatório de Inseminações
+    # TAB 1: Pesquisa Completa por Garanhão
     with rel_tab1:
+        st.markdown("### 🔍 Pesquisa Completa por Garanhão")
+        st.info("📋 Selecione um garanhão para ver TODO o histórico e informações")
+        
+        stock = carregar_stock()
+        
+        if stock.empty:
+            st.warning("⚠️ Nenhum stock registrado.")
+        else:
+            # Seleção do garanhão
+            col_select, col_export = st.columns([5, 1])
+            with col_select:
+                garanhoes_lista = sorted(stock["garanhao"].unique())
+                garanhao_selecionado = st.selectbox(
+                    "🐴 Escolha o Garanhão",
+                    garanhoes_lista,
+                    key="garanhao_pesquisa"
+                )
+            
+            if garanhao_selecionado:
+                # Filtrar dados deste garanhão
+                dados_garanhao = stock[stock["garanhao"] == garanhao_selecionado]
+                insem_garanhao = insem[insem["garanhao"] == garanhao_selecionado] if not insem.empty else pd.DataFrame()
+                transf = carregar_transferencias()
+                transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
+                
+                # Botão exportar tudo deste garanhão
+                with col_export:
+                    # Preparar dados completos para exportação
+                    export_data = {
+                        'Stock': dados_garanhao[["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade", "local_armazenagem"]],
+                        'Inseminações': insem_garanhao[["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]] if not insem_garanhao.empty else pd.DataFrame(),
+                        'Transferências': transf_garanhao[["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]] if not transf_garanhao.empty else pd.DataFrame()
+                    }
+                    
+                    # Criar CSV completo
+                    csv_completo = f"=== GARANHÃO: {garanhao_selecionado} ===\n\n"
+                    for nome, df in export_data.items():
+                        if not df.empty:
+                            csv_completo += f"\n{nome}:\n{df.to_csv(index=False)}\n"
+                    
+                    st.download_button(
+                        label="📥 Exportar",
+                        data=csv_completo.encode('utf-8'),
+                        file_name=f"garanhao_{garanhao_selecionado}.csv",
+                        mime="text/csv",
+                        help="Exportar todas as informações deste garanhão"
+                    )
+                
+                st.markdown(f"# 🐴 {garanhao_selecionado}")
+                st.markdown("---")
+                
+                # Filtros de visualização
+                st.markdown("### 🔍 Escolha o que quer ver:")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    ver_resumo = st.checkbox("📊 Resumo Geral", value=True)
+                with col2:
+                    ver_stock = st.checkbox("📦 Stock Detalhado", value=True)
+                with col3:
+                    ver_insem = st.checkbox("📝 Inseminações", value=True)
+                with col4:
+                    ver_transf = st.checkbox("🔄 Transferências", value=True)
+                
+                st.markdown("---")
+                
+                # RESUMO GERAL
+                if ver_resumo:
+                    st.markdown("## 📊 Resumo Geral")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_palhetas = int(to_py(dados_garanhao["existencia_atual"].sum()) or 0)
+                        st.metric("📦 Stock Total", total_palhetas)
+                    with col2:
+                        num_proprietarios = dados_garanhao["proprietario_nome"].nunique()
+                        st.metric("👥 Proprietários", num_proprietarios)
+                    with col3:
+                        if not insem_garanhao.empty:
+                            total_insem = len(insem_garanhao)
+                            st.metric("📝 Inseminações", total_insem)
+                        else:
+                            st.metric("📝 Inseminações", 0)
+                    with col4:
+                        media_qualidade = int(to_py(dados_garanhao["qualidade"].mean()) or 0)
+                        st.metric("⭐ Qualidade Média", f"{media_qualidade}%")
+                    st.markdown("---")
+                
+                # STOCK DETALHADO
+                if ver_stock:
+                    st.markdown("## 📦 Stock Detalhado")
+                    st.markdown("#### Distribuição por Proprietário")
+                    
+                    # Tabela de stock por proprietário
+                    stock_resumo = dados_garanhao.groupby("proprietario_nome").agg({
+                        "existencia_atual": "sum",
+                        "qualidade": "mean",
+                        "data_embriovet": "max"
+                    }).reset_index()
+                    stock_resumo.columns = ["Proprietário", "Palhetas", "Qualidade Média (%)", "Última Data"]
+                    stock_resumo["Qualidade Média (%)"] = stock_resumo["Qualidade Média (%)"].round(1)
+                    stock_resumo = stock_resumo.sort_values("Palhetas", ascending=False)
+                    
+                    st.dataframe(stock_resumo, width="stretch", hide_index=True)
+                    
+                    # Detalhes de cada lote
+                    with st.expander("📋 Ver Todos os Lotes Detalhados"):
+                        lotes_detalhados = dados_garanhao[[
+                            "proprietario_nome", "data_embriovet", "palhetas_produzidas",
+                            "existencia_atual", "qualidade", "concentracao", "motilidade",
+                            "local_armazenagem", "certificado"
+                        ]].copy()
+                        lotes_detalhados.columns = [
+                            "Proprietário", "Data", "Produzidas", "Stock Atual",
+                            "Qualidade (%)", "Concentração", "Motilidade (%)", "Local", "Certificado"
+                        ]
+                        st.dataframe(lotes_detalhados, width="stretch", hide_index=True)
+                    
+                    st.markdown("---")
+                
+                # INSEMINAÇÕES
+                if ver_insem:
+                    st.markdown("## 📝 Histórico de Inseminações")
+                    if insem_garanhao.empty:
+                        st.info("ℹ️ Nenhuma inseminação registrada para este garanhão")
+                    else:
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total Inseminações", len(insem_garanhao))
+                        with col2:
+                            total_palhetas_usadas = int(to_py(insem_garanhao["palhetas_gastas"].sum()) or 0)
+                            st.metric("Palhetas Utilizadas", total_palhetas_usadas)
+                        with col3:
+                            num_eguas = insem_garanhao["egua"].nunique()
+                            st.metric("Éguas Diferentes", num_eguas)
+                        
+                        st.markdown("#### 📋 Todas as Inseminações")
+                        insem_exibir = insem_garanhao[[
+                            "data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"
+                        ]].copy().sort_values("data_inseminacao", ascending=False)
+                        insem_exibir.columns = ["Data", "Égua", "Proprietário", "Palhetas"]
+                        st.dataframe(insem_exibir, width="stretch", hide_index=True, height=300)
+                    
+                    st.markdown("---")
+                
+                # TRANSFERÊNCIAS
+                if ver_transf:
+                    st.markdown("## 🔄 Histórico de Transferências")
+                    if transf_garanhao.empty:
+                        st.info("ℹ️ Nenhuma transferência registrada para este garanhão")
+                    else:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Total Transferências", len(transf_garanhao))
+                        with col2:
+                            total_transf = int(to_py(transf_garanhao["quantidade"].sum()) or 0)
+                            st.metric("Palhetas Movimentadas", total_transf)
+                        
+                        st.markdown("#### 📋 Todas as Transferências")
+                        transf_exibir = transf_garanhao[[
+                            "data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"
+                        ]].copy().sort_values("data_transferencia", ascending=False)
+                        transf_exibir.columns = ["Data", "De", "Para", "Palhetas"]
+                        st.dataframe(transf_exibir, width="stretch", hide_index=True, height=300)
+    
+    # TAB 2: Pesquisa Completa por Proprietário
+    with rel_tab2:
         st.markdown("### 📝 Histórico de Inseminações")
         
         if insem.empty:
