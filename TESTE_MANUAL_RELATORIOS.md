@@ -62,6 +62,49 @@
 
 ## 🔍 O QUE FOI CORRIGIDO:
 
+### Problema 1: Relatórios (KeyError)
+O código estava tentando usar as variáveis `insem` e `proprietarios` sem carregá-las primeiro nas abas de relatórios.
+
+### Problema 2: Transferência Externa
+O código estava usando o nome de coluna **`stock_id`** no INSERT, mas o schema da tabela usa **`estoque_id`**.
+
+### Solução Aplicada:
+```python
+# PROBLEMA 1: Adicionado carregamento nas 3 abas de relatórios
+stock = carregar_stock()
+insem = carregar_inseminacoes()  # ← ADICIONADO
+proprietarios = carregar_proprietarios()  # ← ADICIONADO (tab 2)
+
+# PROBLEMA 2: Corrigido nome da coluna
+INSERT INTO transferencias_externas (
+    estoque_id,  # ← CORRIGIDO (era stock_id)
+    proprietario_origem_id, 
+    garanhao,
+    ...
+)
+```
+
+---
+
+### Teste 4: Transferência Externa (NOVA CORREÇÃO)
+1. Acesse: **🔄 Transferências**
+2. Escolha um lote de stock com palhetas disponíveis
+3. No expander "📤 Enviar para Externo":
+   - Preencha o nome do comprador/destinatário
+   - Escolha o tipo de saída (Venda, Doação, etc.)
+   - Defina a quantidade
+   - Adicione observações (opcional)
+4. Clique em **📤 Enviar para Externo**
+5. **Resultado Esperado:**
+   - ✅ A transferência deve ser registrada SEM erro
+   - ✅ O stock deve ser atualizado (diminuído)
+   - ✅ Mensagem de sucesso deve aparecer
+6. **Erro Anterior:** `coluna "stock_id" of relation "transferencias_externas" does not exist`
+
+---
+
+## 🔍 O QUE FOI CORRIGIDO (DETALHES):
+
 ### Problema Identificado:
 O código estava tentando usar as variáveis `insem` e `proprietarios` sem carregá-las primeiro nas abas de relatórios.
 
