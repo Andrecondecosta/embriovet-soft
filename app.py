@@ -1371,7 +1371,7 @@ elif aba == "📈 Relatórios":
                         'Stock': dados_garanhao[["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade", "local_armazenagem"]],
                         'Inseminações': insem_garanhao[["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]] if not insem_garanhao.empty else pd.DataFrame(),
                         'Transferências Internas': transf_garanhao[["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]] if not transf_garanhao.empty else pd.DataFrame(),
-                        'Transferências Externas': transf_ext_garanhao[["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"]] if not transf_ext_garanhao.empty else pd.DataFrame()
+                        'Transferências Externas': transf_ext_garanhao[["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo", "observacoes"]] if not transf_ext_garanhao.empty else pd.DataFrame()
                     }
                     
                     # Criar CSV completo
