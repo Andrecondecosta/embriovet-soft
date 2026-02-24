@@ -11,6 +11,12 @@ import datetime as dt
 import bcrypt
 import hashlib
 import time
+from io import BytesIO
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
 
 # ------------------------------------------------------------
 # Configurar logging
