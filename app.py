@@ -200,6 +200,163 @@ def carregar_transferencias_externas():
         logger.error(f"Erro ao carregar transferências externas: {e}")
         return pd.DataFrame()
 
+def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int, dados_transf_ext):
+    """Gera PDF com histórico completo do garanhão"""
+    try:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Estilo customizado
+        titulo_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#1f4788'),
+            spaceAfter=12,
+            alignment=1  # Center
+        )
+        
+        subtitulo_style = ParagraphStyle(
+            'CustomSubtitle',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#2e5c9a'),
+            spaceAfter=10
+        )
+        
+        # Título
+        elements.append(Paragraph(f"Relatório Completo: {garanhao_nome}", titulo_style))
+        elements.append(Paragraph(f"Gerado em: {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # STOCK
+        if not dados_stock.empty:
+            elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
+            
+            stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
+            for _, row in dados_stock.iterrows():
+                stock_data.append([
+                    str(row.get('proprietario_nome', 'N/A'))[:30],
+                    str(row.get('data_embriovet', 'N/A'))[:10],
+                    str(int(row.get('existencia_atual', 0))),
+                    f"{int(row.get('qualidade', 0))}%",
+                    str(row.get('local_armazenagem', 'N/A'))[:20]
+                ])
+            
+            t = Table(stock_data, colWidths=[4*cm, 3*cm, 2.5*cm, 2.5*cm, 4*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # INSEMINAÇÕES
+        if not dados_insem.empty:
+            elements.append(Paragraph("📝 Histórico de Inseminações", subtitulo_style))
+            
+            insem_data = [['Data', 'Égua', 'Proprietário', 'Palhetas']]
+            for _, row in dados_insem.iterrows():
+                insem_data.append([
+                    str(row.get('data_inseminacao', 'N/A'))[:10],
+                    str(row.get('egua', 'N/A'))[:25],
+                    str(row.get('proprietario_nome', 'N/A'))[:25],
+                    str(int(row.get('palhetas_gastas', 0)))
+                ])
+            
+            t = Table(insem_data, colWidths=[3*cm, 5*cm, 5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # TRANSFERÊNCIAS INTERNAS
+        if not dados_transf_int.empty:
+            elements.append(Paragraph("🔄 Transferências Internas", subtitulo_style))
+            
+            transf_data = [['Data', 'De', 'Para', 'Palhetas']]
+            for _, row in dados_transf_int.iterrows():
+                transf_data.append([
+                    str(row.get('data_transferencia', 'N/A'))[:10],
+                    str(row.get('proprietario_origem', 'N/A'))[:20],
+                    str(row.get('proprietario_destino', 'N/A'))[:20],
+                    str(int(row.get('quantidade', 0)))
+                ])
+            
+            t = Table(transf_data, colWidths=[3*cm, 4.5*cm, 4.5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # TRANSFERÊNCIAS EXTERNAS
+        if not dados_transf_ext.empty:
+            elements.append(Paragraph("📤 Transferências Externas (Vendas/Doações)", subtitulo_style))
+            
+            for _, row in dados_transf_ext.iterrows():
+                transf_ext_data = [['Data', 'De', 'Para', 'Palhetas', 'Tipo']]
+                transf_ext_data.append([
+                    str(row.get('data_transferencia', 'N/A'))[:10],
+                    str(row.get('proprietario_origem', 'N/A'))[:18],
+                    str(row.get('destinatario_externo', 'N/A'))[:18],
+                    str(int(row.get('quantidade', 0))),
+                    str(row.get('tipo', 'N/A'))[:15]
+                ])
+                
+                t = Table(transf_ext_data, colWidths=[2.5*cm, 3.5*cm, 3.5*cm, 2.5*cm, 3*cm])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                elements.append(t)
+                
+                # Adicionar observações se existirem
+                obs = row.get('observacoes', '')
+                if obs and str(obs) != 'nan' and str(obs).strip():
+                    obs_style = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, leftIndent=10)
+                    elements.append(Paragraph(f"<b>Observações:</b> {str(obs)}", obs_style))
+                
+                elements.append(Spacer(1, 0.3*cm))
+        
+        # Gerar PDF
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar PDF: {e}")
+        return None
+
 def atualizar_proprietario_stock(stock_id, novo_dono_id):
     """Atualiza o proprietario de um item de stock"""
     try:
