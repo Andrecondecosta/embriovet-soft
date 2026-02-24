@@ -1544,12 +1544,32 @@ elif aba == "📈 Relatórios":
                             csv_completo += f"\n{nome}:\n{df.to_csv(index=False)}\n"
                     
                     st.download_button(
-                        label="📥 Exportar",
+                        label="📥 CSV",
                         data=csv_completo.encode('utf-8'),
                         file_name=f"garanhao_{garanhao_selecionado}.csv",
                         mime="text/csv",
-                        help="Exportar todas as informações deste garanhão"
+                        help="Exportar em CSV",
+                        use_container_width=True
                     )
+                    
+                    # Botão PDF
+                    pdf_buffer = gerar_pdf_garanhao(
+                        garanhao_selecionado,
+                        dados_garanhao,
+                        insem_garanhao,
+                        transf_garanhao,
+                        transf_ext_garanhao
+                    )
+                    
+                    if pdf_buffer:
+                        st.download_button(
+                            label="📄 PDF",
+                            data=pdf_buffer,
+                            file_name=f"garanhao_{garanhao_selecionado}.pdf",
+                            mime="application/pdf",
+                            help="Exportar relatório completo em PDF",
+                            use_container_width=True
+                        )
                 
                 st.markdown(f"# 🐴 {garanhao_selecionado}")
                 st.markdown("---")
