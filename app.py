@@ -768,7 +768,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             # Registrar transferência externa
             cur.execute("""
                 INSERT INTO transferencias_externas (
-                    stock_id, proprietario_origem_id, garanhao,
+                    estoque_id, proprietario_origem_id, garanhao,
                     destinatario_externo, quantidade, tipo, observacoes,
                     data_transferencia
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
