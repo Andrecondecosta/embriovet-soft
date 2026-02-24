@@ -1361,6 +1361,8 @@ elif aba == "📈 Relatórios":
                 insem_garanhao = insem[insem["garanhao"] == garanhao_selecionado] if not insem.empty else pd.DataFrame()
                 transf = carregar_transferencias()
                 transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
+                transf_ext = carregar_transferencias_externas()
+                transf_ext_garanhao = transf_ext[transf_ext["garanhao"] == garanhao_selecionado] if not transf_ext.empty else pd.DataFrame()
                 
                 # Botão exportar tudo deste garanhão
                 with col_export:
