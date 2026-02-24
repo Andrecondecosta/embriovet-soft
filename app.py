@@ -1506,6 +1506,8 @@ elif aba == "📈 Relatórios":
         st.info("📋 Selecione um proprietário para ver TODO o histórico e informações")
         
         stock = carregar_stock()
+        insem = carregar_inseminacoes()
+        proprietarios = carregar_proprietarios()
         
         if proprietarios.empty:
             st.warning("⚠️ Nenhum proprietário cadastrado.")
