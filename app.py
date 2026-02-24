@@ -1485,22 +1485,43 @@ elif aba == "📈 Relatórios":
                 # TRANSFERÊNCIAS
                 if ver_transf:
                     st.markdown("## 🔄 Histórico de Transferências")
-                    if transf_garanhao.empty:
-                        st.info("ℹ️ Nenhuma transferência registrada para este garanhão")
-                    else:
+                    
+                    # Mostrar transferências internas
+                    if not transf_garanhao.empty:
+                        st.markdown("### 🔄 Transferências Internas")
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric("Total Transferências", len(transf_garanhao))
+                            st.metric("Total Transferências Internas", len(transf_garanhao))
                         with col2:
                             total_transf = int(to_py(transf_garanhao["quantidade"].sum()) or 0)
                             st.metric("Palhetas Movimentadas", total_transf)
                         
-                        st.markdown("#### 📋 Todas as Transferências")
                         transf_exibir = transf_garanhao[[
                             "data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"
                         ]].copy().sort_values("data_transferencia", ascending=False)
                         transf_exibir.columns = ["Data", "De", "Para", "Palhetas"]
-                        st.dataframe(transf_exibir, width="stretch", hide_index=True, height=300)
+                        st.dataframe(transf_exibir, width="stretch", hide_index=True, height=250)
+                        st.markdown("---")
+                    
+                    # Mostrar transferências externas
+                    if not transf_ext_garanhao.empty:
+                        st.markdown("### 📤 Transferências Externas (Vendas/Doações)")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Total Transferências Externas", len(transf_ext_garanhao))
+                        with col2:
+                            total_ext = int(to_py(transf_ext_garanhao["quantidade"].sum()) or 0)
+                            st.metric("Palhetas Enviadas", total_ext)
+                        
+                        transf_ext_exibir = transf_ext_garanhao[[
+                            "data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"
+                        ]].copy().sort_values("data_transferencia", ascending=False)
+                        transf_ext_exibir.columns = ["Data", "De", "Para", "Palhetas", "Tipo"]
+                        st.dataframe(transf_ext_exibir, width="stretch", hide_index=True, height=250)
+                    
+                    # Se não houver nenhuma transferência
+                    if transf_garanhao.empty and transf_ext_garanhao.empty:
+                        st.info("ℹ️ Nenhuma transferência registrada para este garanhão")
     
     # TAB 2: Pesquisa Completa por Proprietário
     with rel_tab2:
