@@ -1515,9 +1515,9 @@ elif aba == "📈 Relatórios":
                             st.metric("Palhetas Enviadas", total_ext)
                         
                         transf_ext_exibir = transf_ext_garanhao[[
-                            "data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"
+                            "data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo", "observacoes"
                         ]].copy().sort_values("data_transferencia", ascending=False)
-                        transf_ext_exibir.columns = ["Data", "De", "Para", "Palhetas", "Tipo"]
+                        transf_ext_exibir.columns = ["Data", "De", "Para", "Palhetas", "Tipo", "Observações"]
                         st.dataframe(transf_ext_exibir, width="stretch", hide_index=True, height=250)
                     
                     # Se não houver nenhuma transferência
