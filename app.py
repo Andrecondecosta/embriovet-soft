@@ -1679,9 +1679,9 @@ elif aba == "📈 Relatórios":
                 
                 # TRANSFERÊNCIAS ENVIADAS
                 if ver_enviadas:
-                    st.markdown("## 📤 Transferências Enviadas")
+                    st.markdown("## 📤 Transferências Enviadas (Internas)")
                     if transf_enviadas.empty:
-                        st.info("ℹ️ Nenhuma transferência enviada")
+                        st.info("ℹ️ Nenhuma transferência interna enviada")
                     else:
                         total_enviado = int(to_py(transf_enviadas["quantidade"].sum()) or 0)
                         st.metric("Total Palhetas Enviadas", total_enviado)
@@ -1691,6 +1691,22 @@ elif aba == "📈 Relatórios":
                         ]].copy().sort_values("data_transferencia", ascending=False)
                         transf_env_exibir.columns = ["Data", "Garanhão", "Para", "Palhetas"]
                         st.dataframe(transf_env_exibir, width="stretch", hide_index=True, height=200)
+                    
+                    st.markdown("---")
+                    
+                    # TRANSFERÊNCIAS EXTERNAS
+                    st.markdown("## 📤 Transferências Externas (Vendas/Doações)")
+                    if transf_ext_prop.empty:
+                        st.info("ℹ️ Nenhuma transferência externa registrada")
+                    else:
+                        total_ext = int(to_py(transf_ext_prop["quantidade"].sum()) or 0)
+                        st.metric("Total Palhetas Vendidas/Enviadas", total_ext)
+                        
+                        transf_ext_exibir = transf_ext_prop[[
+                            "data_transferencia", "garanhao", "destinatario_externo", "quantidade", "tipo"
+                        ]].copy().sort_values("data_transferencia", ascending=False)
+                        transf_ext_exibir.columns = ["Data", "Garanhão", "Para", "Palhetas", "Tipo"]
+                        st.dataframe(transf_ext_exibir, width="stretch", hide_index=True, height=200)
     
     # TAB 3: Histórico Geral
     with rel_tab3:
