@@ -166,6 +166,21 @@ def carregar_transferencias_externas():
     """Carrega histórico de transferências externas (vendas/envios)"""
     try:
         with get_connection() as conn:
+            # Verificar se a tabela existe
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'transferencias_externas'
+                );
+            """)
+            tabela_existe = cur.fetchone()[0]
+            cur.close()
+            
+            if not tabela_existe:
+                logger.warning("Tabela transferencias_externas não existe")
+                return pd.DataFrame()
+            
             query = """
                 SELECT te.*, 
                        d.nome as proprietario_origem
