@@ -2054,7 +2054,11 @@ elif aba == "📈 Relatórios":
                 resumo_dest.columns = ["Destinatário", "Total Palhetas", "Nº Operações"]
                 resumo_dest = resumo_dest.sort_values("Total Palhetas", ascending=False)
                 st.dataframe(resumo_dest, width="stretch", hide_index=True)
-    
+
+# ------------------------------------------------------------
+# 👥 Gestão de Proprietários
+# ------------------------------------------------------------
+elif aba == "👥 Gestão de Proprietários":
     st.header("👥 Gestão de Proprietários")
     
     tab1, tab2 = st.tabs(["📋 Lista", "➕ Adicionar/Editar"])
