@@ -174,6 +174,11 @@ def alternar_status_proprietario(proprietario_id):
         db_port = os.getenv("DB_PORT", "5432")
         
         logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
+        logger.info(f"🆔 Proprietário ID recebido: {proprietario_id} (tipo: {type(proprietario_id)})")
+        
+        # Converter ID para int
+        prop_id_int = int(proprietario_id)
+        logger.info(f"🆔 Proprietário ID convertido: {prop_id_int} (tipo: {type(prop_id_int)})")
         
         # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
         conn = psycopg2.connect(
@@ -190,50 +195,44 @@ def alternar_status_proprietario(proprietario_id):
         
         logger.info(f"✅ AUTOCOMMIT ativado")
         
-        # Verificar se a coluna ativo existe
-        cur.execute("""
-            SELECT column_name FROM information_schema.columns 
-            WHERE table_name='dono' AND column_name='ativo'
-        """)
-        
-        if not cur.fetchone():
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
-            st.error("❌ Coluna 'ativo' não existe!")
-            return None
-        
         # Verificar o valor atual
-        cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
+        sql_select = "SELECT ativo FROM dono WHERE id = %s"
+        logger.info(f"📋 SQL SELECT: {sql_select} com id={prop_id_int}")
+        cur.execute(sql_select, (prop_id_int,))
         status_antes = cur.fetchone()
         logger.info(f"📋 Status ANTES: {status_antes}")
         
-        # Calcular novo valor
-        novo_valor = not status_antes[0] if status_antes else True
-        logger.info(f"🔄 Novo valor calculado: {novo_valor}")
+        if not status_antes:
+            logger.error(f"❌ Proprietário com ID {prop_id_int} não encontrado!")
+            cur.close()
+            conn.close()
+            return None
         
-        # UPDATE direto (com autocommit vai commitar automaticamente)
-        cur.execute("""
-            UPDATE dono 
-            SET ativo = %s
-            WHERE id = %s
-            RETURNING ativo
-        """, (novo_valor, to_py(proprietario_id)))
+        # Calcular novo valor
+        novo_valor = not status_antes[0]
+        logger.info(f"🔄 Novo valor calculado: {novo_valor} (tipo: {type(novo_valor)})")
+        
+        # UPDATE direto (SEM to_py)
+        sql_update = "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo"
+        logger.info(f"📝 SQL UPDATE: {sql_update}")
+        logger.info(f"📝 Parâmetros: ativo={novo_valor}, id={prop_id_int}")
+        
+        cur.execute(sql_update, (novo_valor, prop_id_int))
         
         resultado = cur.fetchone()
         logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
         
         if resultado:
             novo_status = resultado[0]
-            
-            # Não precisa de commit manual com autocommit
-            logger.info(f"✅ UPDATE executado com AUTOCOMMIT (sem transação)")
+            logger.info(f"✅ UPDATE executado com sucesso. Novo status: {novo_status}")
             
             # Verificar com SELECT
-            cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
+            cur.execute("SELECT ativo FROM dono WHERE id = %s", (prop_id_int,))
             status_verificacao = cur.fetchone()
             logger.info(f"🔍 Verificação final: {status_verificacao}")
+            
+            # Verificar FORA da conexão Python
+            logger.info(f"⚠️ Execute no terminal: psql -U postgres -d embriovet -c \"SELECT id, nome, ativo FROM dono WHERE id={prop_id_int};\"")
             
             cur.close()
             conn.close()
