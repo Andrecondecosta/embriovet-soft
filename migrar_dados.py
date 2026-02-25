@@ -132,163 +132,59 @@ Para poucos registros, pode fazer manualmente:
 
 ---
 
-## 🛠️ Opção 4: Script Python de Migração
+## 🛠️ Opção 4: Script Python de Migração (RECOMENDADO - Mais fácil!)
 
-Vou criar um script automático:
+**Criamos um script automático para você!**
 
-<function_calls>
-<invoke name="mcp_create_file">
-<parameter name="file_text">#!/usr/bin/env python3
-"""Script de migração de dados - Local para Render"""
+### Passo 1: Preparar
 
-import os
-import psycopg2
-from psycopg2.extras import execute_values
-import sys
+```bash
+# Já deve ter instalado, mas confirme:
+pip install psycopg2-binary
+```
 
-def conectar_local():
-    """Conecta ao banco local"""
-    try:
-        conn = psycopg2.connect(
-            host="localhost",
-            port=5432,
-            database="embriovet",
-            user="postgres",
-            password="123"
-        )
-        print("✅ Conectado ao banco LOCAL")
-        return conn
-    except Exception as e:
-        print(f"❌ Erro ao conectar LOCAL: {e}")
-        return None
+### Passo 2: Executar Script
 
-def conectar_render(database_url):
-    """Conecta ao banco do Render"""
-    try:
-        conn = psycopg2.connect(database_url)
-        print("✅ Conectado ao banco RENDER")
-        return conn
-    except Exception as e:
-        print(f"❌ Erro ao conectar RENDER: {e}")
-        return None
+```bash
+# No seu terminal LOCAL
+python3 migrar_dados.py
+```
 
-def migrar_tabela(conn_origem, conn_destino, tabela, truncate=True):
-    """Migra uma tabela completa"""
-    try:
-        # Ler dados da origem
-        cur_origem = conn_origem.cursor()
-        cur_origem.execute(f"SELECT * FROM {tabela}")
-        dados = cur_origem.fetchall()
-        
-        if not dados:
-            print(f"  ⚠️ {tabela}: Nenhum dado para migrar")
-            return True
-        
-        # Obter nomes das colunas
-        colunas = [desc[0] for desc in cur_origem.description]
-        
-        # Limpar tabela destino (opcional)
-        cur_destino = conn_destino.cursor()
-        if truncate:
-            cur_destino.execute(f"TRUNCATE TABLE {tabela} CASCADE")
-        
-        # Inserir dados no destino
-        query = f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES %s"
-        execute_values(cur_destino, query, dados)
-        
-        conn_destino.commit()
-        
-        print(f"  ✅ {tabela}: {len(dados)} registros migrados")
-        
-        cur_origem.close()
-        cur_destino.close()
-        return True
-        
-    except Exception as e:
-        print(f"  ❌ {tabela}: Erro - {e}")
-        return False
+### Passo 3: Seguir Instruções
 
-def migrar_completo(database_url_render):
-    """Migração completa de todas as tabelas"""
-    
-    print("="*60)
-    print("🔄 MIGRAÇÃO DE DADOS - LOCAL → RENDER")
-    print("="*60)
-    print()
-    
-    # Conectar aos bancos
-    conn_local = conectar_local()
-    if not conn_local:
-        return False
-    
-    conn_render = conectar_render(database_url_render)
-    if not conn_render:
-        conn_local.close()
-        return False
-    
-    print()
-    print("📦 Migrando tabelas...")
-    print()
-    
-    # Ordem de migração (respeitando foreign keys)
-    tabelas = [
-        'usuarios',
-        'dono',
-        'estoque_dono',
-        'inseminacoes',
-        'transferencias',
-        'transferencias_externas'
-    ]
-    
-    sucesso = True
-    for tabela in tabelas:
-        if not migrar_tabela(conn_local, conn_render, tabela):
-            sucesso = False
-    
-    # Fechar conexões
-    conn_local.close()
-    conn_render.close()
-    
-    print()
-    if sucesso:
-        print("="*60)
-        print("✅ MIGRAÇÃO CONCLUÍDA COM SUCESSO!")
-        print("="*60)
-        print()
-        print("📝 Próximos passos:")
-        print("1. Acessar aplicação no Render")
-        print("2. Verificar se os dados estão corretos")
-        print("3. Fazer login com suas credenciais existentes")
-        print()
-        return True
-    else:
-        print("="*60)
-        print("⚠️ MIGRAÇÃO CONCLUÍDA COM ALGUNS ERROS")
-        print("="*60)
-        return False
+O script vai:
+1. ✅ Conectar ao banco local automaticamente
+2. ✅ Pedir a External Database URL do Render
+3. ✅ Pedir confirmação
+4. ✅ Migrar TODAS as tabelas automaticamente
+5. ✅ Mostrar progresso em tempo real
 
-if __name__ == "__main__":
-    print()
-    print("⚠️ IMPORTANTE:")
-    print("1. Certifique-se que o deploy no Render foi concluído")
-    print("2. As tabelas já devem existir no Render")
-    print("3. Tenha a External Database URL do Render em mãos")
-    print()
-    
-    # Pedir URL do Render
-    database_url = input("Cole aqui a External Database URL do Render:\n> ").strip()
-    
-    if not database_url or not database_url.startswith("postgresql://"):
-        print("❌ URL inválida!")
-        sys.exit(1)
-    
-    print()
-    confirmacao = input("⚠️ ATENÇÃO: Isso vai SUBSTITUIR os dados no Render. Confirma? (sim/não): ").strip().lower()
-    
-    if confirmacao not in ['sim', 's', 'yes', 'y']:
-        print("❌ Migração cancelada")
-        sys.exit(0)
-    
-    print()
-    sucesso = migrar_completo(database_url)
-    sys.exit(0 if sucesso else 1)
+**Saída esperada:**
+```
+============================================================
+🔄 MIGRAÇÃO DE DADOS - LOCAL → RENDER
+============================================================
+
+✅ Conectado ao banco LOCAL
+✅ Conectado ao banco RENDER
+
+📦 Migrando tabelas...
+
+  ✅ usuarios: 3 registros migrados
+  ✅ dono: 5 registros migrados
+  ✅ estoque_dono: 12 registros migrados
+  ✅ inseminacoes: 8 registros migrados
+  ✅ transferencias: 2 registros migrados
+  ✅ transferencias_externas: 1 registros migrados
+
+============================================================
+✅ MIGRAÇÃO CONCLUÍDA COM SUCESSO!
+============================================================
+
+📝 Próximos passos:
+1. Acessar aplicação no Render
+2. Verificar se os dados estão corretos
+3. Fazer login com suas credenciais existentes
+```
+
+---
