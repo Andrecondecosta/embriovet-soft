@@ -1654,7 +1654,7 @@ elif aba == "📝 Registrar Inseminação":
                 egua = st.text_input("Égua *", help="Nome obrigatório")
             with col2:
                 protocolo = lote_selecionado.get("data_embriovet") or lote_selecionado.get("origem_externa") or "N/A"
-                palhetas = st.number_input("Palhetas utilizadas", min_value=1, max_value=max_palhetas, value=1)
+                palhetas = st.number_input("Palhetas utilizadas", min_value=1, max_value=max(max_palhetas, 1), value=min(max_palhetas, 1) if max_palhetas > 0 else 1)
 
             if st.button("📝 Registrar Inseminação", type="primary", key="btn_registrar_insem"):
                 palhetas_int = int(to_py(palhetas) or 0)
