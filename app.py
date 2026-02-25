@@ -768,6 +768,15 @@ def adicionar_proprietario(dados):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            
+            # Verificar se já existe proprietário com este nome
+            cur.execute("SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s)", (to_py(dados.get('nome')),))
+            existe = cur.fetchone()
+            
+            if existe:
+                st.error(f"❌ Já existe um proprietário com o nome '{dados.get('nome')}'")
+                return None
+            
             cur.execute(
                 """
                 INSERT INTO dono (nome, email, telemovel, nome_completo, nif, morada, codigo_postal, cidade, ativo)
