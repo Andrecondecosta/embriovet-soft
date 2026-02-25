@@ -1167,8 +1167,8 @@ def modal_adicionar_proprietario():
 
 # Carregar dados
 try:
-    proprietarios = carregar_proprietarios()
-    stock = carregar_stock()
+    proprietarios = carregar_proprietarios(apenas_ativos=True)  # Apenas ativos por padrão
+    stock = carregar_stock(apenas_ativos=True)  # Apenas de proprietários ativos
     insem = carregar_inseminacoes()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
