@@ -121,6 +121,22 @@ def criar_tabelas():
         """)
         print("✅ Tabela 'usuarios' criada/verificada")
         
+        # Adicionar colunas se não existirem (para bancos já existentes)
+        try:
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS nome_completo VARCHAR(255)
+            """)
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+            """)
+            conn.commit()
+            print("✅ Colunas adicionais verificadas/adicionadas")
+        except Exception as e:
+            print(f"⚠️ Aviso ao verificar colunas: {e}")
+            conn.rollback()
+        
         # Criar usuário admin padrão (senha: admin123)
         import bcrypt
         senha_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
