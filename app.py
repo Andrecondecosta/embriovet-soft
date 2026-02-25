@@ -163,40 +163,51 @@ def atualizar_status_proprietarios():
 
 def alternar_status_proprietario(proprietario_id):
     """Alterna o status ativo/inativo de um proprietário"""
+    conn = None
     try:
-        with get_connection() as conn:
-            cur = conn.cursor()
+        conn = connection_pool.getconn()
+        cur = conn.cursor()
+        
+        # Verificar se a coluna ativo existe
+        cur.execute("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name='dono' AND column_name='ativo'
+        """)
+        
+        if not cur.fetchone():
+            cur.close()
+            if conn:
+                connection_pool.putconn(conn)
+            st.error("❌ Coluna 'ativo' não existe. Execute o script SQL primeiro!")
+            return None
+        
+        # Alternar status
+        cur.execute("""
+            UPDATE dono 
+            SET ativo = NOT ativo
+            WHERE id = %s
+            RETURNING ativo
+        """, (to_py(proprietario_id),))
+        
+        resultado = cur.fetchone()
+        if resultado:
+            novo_status = resultado[0]
+            conn.commit()  # COMMIT EXPLÍCITO
+            cur.close()
+            logger.info(f"Status do proprietário {proprietario_id} alterado para {novo_status}")
+            if conn:
+                connection_pool.putconn(conn)
+            return novo_status
+        else:
+            cur.close()
+            if conn:
+                connection_pool.putconn(conn)
+            return None
             
-            # Verificar se a coluna ativo existe
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='dono' AND column_name='ativo'
-            """)
-            
-            if not cur.fetchone():
-                st.error("❌ Coluna 'ativo' não existe. Execute o script SQL primeiro!")
-                return None
-            
-            # Alternar status
-            cur.execute("""
-                UPDATE dono 
-                SET ativo = NOT ativo
-                WHERE id = %s
-                RETURNING ativo
-            """, (to_py(proprietario_id),))
-            
-            resultado = cur.fetchone()
-            if resultado:
-                novo_status = resultado[0]
-                conn.commit()
-                cur.close()
-                logger.info(f"Status do proprietário {proprietario_id} alterado para {novo_status}")
-                return novo_status
-            else:
-                cur.close()
-                return None
-                
     except Exception as e:
+        if conn:
+            conn.rollback()
+            connection_pool.putconn(conn)
         logger.error(f"Erro ao alternar status: {e}")
         st.error(f"Erro ao alternar status: {e}")
         return None
