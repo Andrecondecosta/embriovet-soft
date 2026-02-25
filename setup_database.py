@@ -64,6 +64,22 @@ def criar_tabelas():
         """)
         print("✅ Tabela 'estoque_dono' criada/verificada")
         
+        # Adicionar colunas de auditoria se não existirem
+        try:
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            """)
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS criado_por VARCHAR(100)
+            """)
+            conn.commit()
+            print("✅ Colunas de auditoria verificadas/adicionadas")
+        except Exception as e:
+            print(f"⚠️ Aviso ao verificar colunas de auditoria: {e}")
+            conn.rollback()
+        
         # Criar tabela de inseminações
         cur.execute("""
             CREATE TABLE IF NOT EXISTS inseminacoes (
