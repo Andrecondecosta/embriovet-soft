@@ -167,7 +167,12 @@ def alternar_status_proprietario(proprietario_id):
     cur = None
     try:
         conn = connection_pool.getconn()
-        conn.autocommit = False  # Garantir que está em modo transação
+        
+        # LIMPAR QUALQUER TRANSAÇÃO PENDENTE
+        conn.rollback()
+        
+        # Garantir modo transação
+        conn.autocommit = False
         cur = conn.cursor()
         
         # Verificar se a coluna ativo existe
@@ -181,54 +186,60 @@ def alternar_status_proprietario(proprietario_id):
                 cur.close()
             if conn:
                 connection_pool.putconn(conn)
-            st.error("❌ Coluna 'ativo' não existe. Execute o script SQL primeiro!")
+            st.error("❌ Coluna 'ativo' não existe!")
             return None
         
         # Primeiro verificar o valor atual
-        cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
+        cur.execute("SELECT ativo FROM dono WHERE id = %s FOR UPDATE", (to_py(proprietario_id),))
         status_antes = cur.fetchone()
         logger.info(f"Status ANTES do proprietário {proprietario_id}: {status_antes}")
         
-        # Alternar status
+        # Alternar status diretamente
+        novo_valor = not status_antes[0] if status_antes else True
         cur.execute("""
             UPDATE dono 
-            SET ativo = NOT ativo
+            SET ativo = %s
             WHERE id = %s
             RETURNING ativo
-        """, (to_py(proprietario_id),))
+        """, (novo_valor, to_py(proprietario_id)))
         
         resultado = cur.fetchone()
         if resultado:
             novo_status = resultado[0]
-            logger.info(f"Status DEPOIS do proprietário {proprietario_id}: {novo_status} (antes de commit)")
+            logger.info(f"Status DEPOIS do UPDATE: {novo_status}")
             
-            # COMMIT EXPLÍCITO E FORÇADO
+            # COMMIT EXPLÍCITO
             conn.commit()
+            logger.info(f"✅ COMMIT executado!")
             
-            # Verificar se realmente salvou
+            # Verificar se realmente salvou (nova query após commit)
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
             status_apos_commit = cur.fetchone()
-            logger.info(f"Status APÓS COMMIT do proprietário {proprietario_id}: {status_apos_commit}")
+            logger.info(f"Status APÓS COMMIT: {status_apos_commit}")
             
             cur.close()
+            # Limpar estado antes de devolver ao pool
+            conn.rollback()
             connection_pool.putconn(conn)
-            logger.info(f"✅ Status do proprietário {proprietario_id} alterado de {status_antes} para {novo_status}")
+            
             return novo_status
         else:
             if cur:
                 cur.close()
             if conn:
+                conn.rollback()
                 connection_pool.putconn(conn)
-            logger.error(f"UPDATE não retornou resultado para proprietário {proprietario_id}")
+            logger.error(f"UPDATE não retornou resultado")
             return None
             
     except Exception as e:
         logger.error(f"ERRO ao alternar status: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         if conn:
             conn.rollback()
-            logger.error("Rollback executado")
             connection_pool.putconn(conn)
-        st.error(f"Erro ao alternar status: {e}")
+        st.error(f"Erro: {e}")
         return None
 
 def editar_proprietario(proprietario_id, dados):
