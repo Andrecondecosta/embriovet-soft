@@ -2468,7 +2468,12 @@ elif aba == "👥 Gestão de Proprietários":
     # Atualizar status automaticamente
     atualizar_status_proprietarios()
     
-    # Recarregar proprietários (todos, não apenas ativos)
+    # Limpar cache se houver mudança de status
+    if 'status_changed' in st.session_state:
+        del st.session_state['status_changed']
+        st.cache_data.clear()
+    
+    # Recarregar proprietários (todos, não apenas ativos) - sempre fresh
     proprietarios_todos = carregar_proprietarios(apenas_ativos=False)
     
     tab1, tab2 = st.tabs(["📋 Lista", "➕ Adicionar"])
