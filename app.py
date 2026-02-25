@@ -1504,8 +1504,8 @@ if aba == "📦 Ver Stock":
                                 qtd_transferir_ext = st.number_input(
                                     "Quantidade de palhetas",
                                     min_value=1,
-                                    max_value=existencia,
-                                    value=min(existencia, 1),
+                                    max_value=max(existencia, 1),
+                                    value=max(min(existencia, 1), 1),
                                     key=f"transf_qtd_ext_{row['id']}"
                                 )
                                 obs_ext = st.text_area(
