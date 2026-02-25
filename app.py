@@ -2466,11 +2466,11 @@ elif aba == "👥 Gestão de Proprietários":
             
             # Aplicar filtro
             if filtro_status == "Ativos":
-                props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True]
+                props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True].copy()
             elif filtro_status == "Inativos":
-                props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False]
+                props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False].copy()
             else:
-                props_exibir = proprietarios_todos
+                props_exibir = proprietarios_todos.copy()
             
             # Aplicar ordenação
             if ordenar_por == "Nome":
@@ -2483,44 +2483,23 @@ elif aba == "👥 Gestão de Proprietários":
             st.markdown(f"**{len(props_exibir)} proprietários**")
             st.markdown("---")
             
-            # Cabeçalho alinhado
-            st.markdown("""
-            <style>
-            .prop-header {
-                display: grid;
-                grid-template-columns: 60px 300px 120px;
-                gap: 20px;
-                font-weight: bold;
-                padding: 10px;
-                background-color: #f0f2f6;
-                border-radius: 5px;
-                margin-bottom: 10px;
-            }
-            </style>
-            <div class="prop-header">
-                <div>ID</div>
-                <div>Nome</div>
-                <div>Status</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Lista de proprietários (estilo lotes)
+            # Lista de proprietários com expander estilo lotes
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
                 status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
                 
-                # Título do expander com formatação alinhada
-                id_str = f"{prop['id']:>3}"  # Alinhado à direita com 3 dígitos
-                nome_str = f"{prop['nome']:<30}"  # Alinhado à esquerda com 30 caracteres
-                status_str = f"{status_icon} {status_text}"
+                # Criar título alinhado usando espaçamento fixo
+                id_pad = str(prop['id']).rjust(3)
+                nome_pad = str(prop['nome'])[:40].ljust(40)
+                status_pad = f"{status_icon} {status_text}"
                 
-                titulo = f"{id_str} | {nome_str} | {status_str}"
+                titulo = f"{id_pad}  |  {nome_pad}  |  {status_pad}"
                 
                 # Verificar se este expander deve estar expandido
                 expandido = st.session_state.get(f'expand_{prop["id"]}', False)
                 
-                # Expander (igual aos lotes)
+                # Expander com fonte monospace para alinhamento
                 with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
