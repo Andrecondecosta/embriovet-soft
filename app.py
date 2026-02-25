@@ -166,19 +166,31 @@ def alternar_status_proprietario(proprietario_id):
     conn = None
     cur = None
     try:
-        # CRIAR CONEXÃO NOVA (não do pool) para garantir commit real
+        # Pegar credenciais
+        db_name = os.getenv("DB_NAME", "embriovet")
+        db_user = os.getenv("DB_USER", "postgres")
+        db_pass = os.getenv("DB_PASSWORD", "123")
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        
+        logger.info(f"🔌 Conectando em: {db_user}@{db_host}:{db_port}/{db_name}")
+        
+        # CRIAR CONEXÃO NOVA
         conn = psycopg2.connect(
-            dbname=os.getenv("DB_NAME", "embriovet"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "123"),
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432")
+            dbname=db_name,
+            user=db_user,
+            password=db_pass,
+            host=db_host,
+            port=db_port
         )
         
         conn.autocommit = False
         cur = conn.cursor()
         
-        logger.info(f"🔧 Conexão NOVA criada para alternar status")
+        # Verificar banco atual
+        cur.execute("SELECT current_database(), current_user, inet_server_addr(), inet_server_port()")
+        info_conexao = cur.fetchone()
+        logger.info(f"📡 Conectado em: database={info_conexao[0]}, user={info_conexao[1]}, host={info_conexao[2]}, port={info_conexao[3]}")
         
         # Verificar se a coluna ativo existe
         cur.execute("""
@@ -217,14 +229,23 @@ def alternar_status_proprietario(proprietario_id):
         if resultado:
             novo_status = resultado[0]
             
-            # COMMIT
+            # COMMIT com FLUSH
             conn.commit()
-            logger.info(f"✅ COMMIT executado na conexão nova!")
+            logger.info(f"✅ COMMIT executado!")
             
-            # Verificar com SELECT após commit
+            # FLUSH das mudanças pendentes
+            cur.execute("SELECT pg_sleep(0.1)")  # pequeno delay
+            
+            # Verificar com SELECT após commit EM UMA NOVA TRANSAÇÃO
+            cur.execute("BEGIN")
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
             status_verificacao = cur.fetchone()
-            logger.info(f"🔍 Verificação após commit: {status_verificacao}")
+            cur.execute("COMMIT")
+            logger.info(f"🔍 Verificação após commit (nova transação): {status_verificacao}")
+            
+            # Forçar flush no banco
+            cur.execute("CHECKPOINT")
+            logger.info(f"💾 CHECKPOINT executado")
             
             cur.close()
             conn.close()
