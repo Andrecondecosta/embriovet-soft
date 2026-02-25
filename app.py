@@ -2483,17 +2483,45 @@ elif aba == "👥 Gestão de Proprietários":
             st.markdown(f"**{len(props_exibir)} proprietários**")
             st.markdown("---")
             
+            # Cabeçalho alinhado
+            st.markdown("""
+            <style>
+            .prop-header {
+                display: grid;
+                grid-template-columns: 60px 300px 120px;
+                gap: 20px;
+                font-weight: bold;
+                padding: 10px;
+                background-color: #f0f2f6;
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+            </style>
+            <div class="prop-header">
+                <div>ID</div>
+                <div>Nome</div>
+                <div>Status</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             # Lista de proprietários (estilo lotes)
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
                 status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
                 
-                # Título do expander: ID | Nome | Status
-                titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
+                # Título do expander com formatação alinhada
+                id_str = f"{prop['id']:>3}"  # Alinhado à direita com 3 dígitos
+                nome_str = f"{prop['nome']:<30}"  # Alinhado à esquerda com 30 caracteres
+                status_str = f"{status_icon} {status_text}"
+                
+                titulo = f"{id_str} | {nome_str} | {status_str}"
+                
+                # Verificar se este expander deve estar expandido
+                expandido = st.session_state.get(f'expand_{prop["id"]}', False)
                 
                 # Expander (igual aos lotes)
-                with st.expander(titulo):
+                with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
                     tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
@@ -2527,22 +2555,24 @@ elif aba == "👥 Gestão de Proprietários":
                                 if st.button("🔴 Desativar", key=f"desat_{prop['id']}", use_container_width=True):
                                     resultado = alternar_status_proprietario(prop['id'])
                                     if resultado is not None:
-                                        st.success("✅ Status alterado!")
-                                        time.sleep(0.5)
+                                        st.session_state[f'expand_{prop["id"]}'] = True  # Manter expandido
+                                        st.success("✅ Status alterado para INATIVO!")
                                         st.rerun()
                             else:
                                 if st.button("🟢 Ativar", key=f"ativar_{prop['id']}", use_container_width=True, type="primary"):
                                     resultado = alternar_status_proprietario(prop['id'])
                                     if resultado is not None:
-                                        st.success("✅ Status alterado!")
-                                        time.sleep(0.5)
+                                        st.session_state[f'expand_{prop["id"]}'] = True  # Manter expandido
+                                        st.success("✅ Status alterado para ATIVO!")
                                         st.rerun()
                         
                         with col_a2:
                             if st.button("🗑️ Apagar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
                                 if deletar_proprietario(prop['id']):
+                                    # Remover do session state
+                                    if f'expand_{prop["id"]}' in st.session_state:
+                                        del st.session_state[f'expand_{prop["id"]}']
                                     st.success("✅ Apagado!")
-                                    time.sleep(0.5)
                                     st.rerun()
                     
                     # TAB: Editar
