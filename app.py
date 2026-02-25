@@ -126,14 +126,19 @@ def carregar_proprietarios(apenas_ativos=False):
         return pd.DataFrame()
 
 def atualizar_status_proprietarios():
-    """Atualiza status dos proprietários baseado no stock disponível"""
+    """
+    Desativa automaticamente proprietários quando stock chega a 0.
+    NUNCA reativa automaticamente - controle manual após desativação.
+    """
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            # Desativar proprietários sem stock
+            # APENAS desativar proprietários que estão ATIVOS e têm stock = 0
+            # Nunca forçar ativação ou desativação se já está inativo
             cur.execute("""
                 UPDATE dono SET ativo = FALSE
-                WHERE id IN (
+                WHERE ativo = TRUE
+                AND id IN (
                     SELECT d.id FROM dono d
                     LEFT JOIN (
                         SELECT dono_id, SUM(existencia_atual) as total_stock
@@ -144,15 +149,8 @@ def atualizar_status_proprietarios():
                 )
             """)
             
-            # Ativar proprietários com stock
-            cur.execute("""
-                UPDATE dono SET ativo = TRUE
-                WHERE id IN (
-                    SELECT dono_id FROM estoque_dono
-                    WHERE existencia_atual > 0
-                    GROUP BY dono_id
-                )
-            """)
+            # NÃO ativar automaticamente - apenas controle manual!
+            # Removido: código que ativava automaticamente com stock > 0
             
             conn.commit()
             cur.close()
