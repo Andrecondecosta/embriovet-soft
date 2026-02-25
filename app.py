@@ -72,12 +72,21 @@ def to_py(v):
 # Pool de conexões
 # ------------------------------------------------------------
 try:
-    connection_pool = psycopg2.pool.SimpleConnectionPool(
-        1, 10,
-        dbname=os.getenv("DB_NAME", "embriovet"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "123"),
-        host=os.getenv("DB_HOST", "localhost"),
+    # Verificar se há DATABASE_URL (Render, Heroku, etc)
+    database_url = os.getenv("DATABASE_URL")
+    
+    if database_url:
+        # Usar DATABASE_URL (produção)
+        connection_pool = psycopg2.pool.SimpleConnectionPool(1, 10, database_url)
+        logger.info("✅ Pool de conexões PostgreSQL criado com DATABASE_URL")
+    else:
+        # Usar variáveis individuais (desenvolvimento local)
+        connection_pool = psycopg2.pool.SimpleConnectionPool(
+            1, 10,
+            dbname=os.getenv("DB_NAME", "embriovet"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "123"),
+            host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
     )
     if connection_pool:
