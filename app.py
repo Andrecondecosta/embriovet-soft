@@ -211,16 +211,22 @@ def editar_proprietario(proprietario_id, dados):
         logger.error(f"Erro ao editar proprietário: {e}")
         return False
 
-def carregar_stock():
-    """Carrega stock completo com informações de proprietario"""
+def carregar_stock(apenas_ativos=True):
+    """Carrega stock completo com informações de proprietario
+    
+    Args:
+        apenas_ativos: Se True, retorna apenas stock de proprietários ativos
+    """
     try:
         with get_connection() as conn:
             query = """
                 SELECT e.*, d.nome as proprietario_nome
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
-                ORDER BY e.garanhao, e.id
             """
+            if apenas_ativos:
+                query += " WHERE d.ativo = TRUE"
+            query += " ORDER BY e.garanhao, e.id"
             df = pd.read_sql(query, conn)
         return df
     except Exception as e:
