@@ -2504,42 +2504,22 @@ elif aba == "👥 Gestão de Proprietários":
                 props_exibir = props_exibir.sort_values('ativo', ascending=False)
             
             st.markdown(f"**{len(props_exibir)} proprietários**")
-            
-            # CSS para alinhamento perfeito
-            st.markdown("""
-            <style>
-            .prop-item {
-                font-family: 'Courier New', monospace;
-                padding: 8px;
-                margin: 2px 0;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-                font-size: 14px;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
             st.markdown("---")
             
-            # Lista de proprietários
+            # Lista de proprietários (estilo lotes)
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
-                status_text = "ATIVO  " if prop.get('ativo', True) else "INATIVO"
+                status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
                 
-                # Criar título com fonte monospace para alinhamento
-                id_str = f"{prop['id']:3d}"
-                nome_str = f"{prop['nome'][:35]:<35}"
-                
-                # Mostrar como texto monospace HTML
-                st.markdown(f'<div class="prop-item">{id_str} | {nome_str} | {status_icon} {status_text}</div>', unsafe_allow_html=True)
+                # Título do expander com ID | Nome | Status
+                titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
                 
                 # Verificar se este expander deve estar expandido
                 expandido = st.session_state.get(f'expand_{prop["id"]}', False)
                 
-                # Usar expander vazio só para conteúdo
-                if st.button(f"▼ Abrir detalhes", key=f"btn_{prop['id']}", use_container_width=True) or expandido:
-                    st.session_state[f'expand_{prop["id"]}'] = True
+                # Expander
+                with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
                     tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
@@ -2569,34 +2549,28 @@ elif aba == "👥 Gestão de Proprietários":
                         with col_a1:
                             # Botão de alternar status
                             status_atual = prop.get('ativo', True)
-                            if status_atual:
-                                if st.button("🔴 Desativar", key=f"desat_{prop['id']}", use_container_width=True):
-                                    resultado = alternar_status_proprietario(prop['id'])
-                                    if resultado is not None:
-                                        st.session_state[f'expand_{prop["id"]}'] = True  # Manter expandido
-                                        st.success("✅ Status alterado para INATIVO!")
-                                        st.rerun()
-                            else:
-                                if st.button("🟢 Ativar", key=f"ativar_{prop['id']}", use_container_width=True, type="primary"):
-                                    resultado = alternar_status_proprietario(prop['id'])
-                                    if resultado is not None:
-                                        st.session_state[f'expand_{prop["id"]}'] = True  # Manter expandido
-                                        st.success("✅ Status alterado para ATIVO!")
-                                        st.rerun()
+                            btn_label = "🔴 Desativar" if status_atual else "🟢 Ativar"
+                            btn_type = "secondary" if status_atual else "primary"
+                            
+                            if st.button(btn_label, key=f"status_{prop['id']}", use_container_width=True, type=btn_type):
+                                # Marcar para manter expandido
+                                st.session_state[f'expand_{prop["id"]}'] = True
+                                # Alternar status
+                                resultado = alternar_status_proprietario(prop['id'])
+                                if resultado is not None:
+                                    novo_status = "ATIVO" if resultado else "INATIVO"
+                                    st.success(f"✅ Status alterado para {novo_status}!")
+                                else:
+                                    st.error("❌ Erro ao alterar status. Verifique se a coluna 'ativo' existe.")
+                                st.rerun()
                         
                         with col_a2:
                             if st.button("🗑️ Apagar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
                                 if deletar_proprietario(prop['id']):
-                                    # Remover do session state
                                     if f'expand_{prop["id"]}' in st.session_state:
                                         del st.session_state[f'expand_{prop["id"]}']
                                     st.success("✅ Apagado!")
                                     st.rerun()
-                    
-                    # Botão fechar
-                    if st.button("✖ Fechar", key=f"close_{prop['id']}", use_container_width=True):
-                        del st.session_state[f'expand_{prop["id"]}']
-                        st.rerun()
                     
                     # TAB: Editar
                     with tab_edit:
