@@ -2457,8 +2457,35 @@ elif aba == "👥 Gestão de Proprietários":
                 status_icon = "✅" if prop.get('ativo', True) else "❌"
                 status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
                 
-                with st.expander(f"{status_icon} {prop['nome']} ({status_text})"):
-                    col1, col2 = st.columns([2, 1])
+                # Criar colunas para o cabeçalho do expander
+                col_header1, col_header2, col_header3 = st.columns([0.5, 3, 1])
+                
+                with col_header1:
+                    # Botão de status clicável (ícone)
+                    if st.button(status_icon, key=f"status_{prop['id']}", help="Clique para alternar ativo/inativo"):
+                        if alternar_status_proprietario(prop['id']) is not None:
+                            st.success("✅ Status alterado!")
+                            st.rerun()
+                
+                with col_header2:
+                    st.markdown(f"**{prop['nome']}** ({status_text})")
+                
+                with col_header3:
+                    # Botões de ação
+                    col_edit, col_del = st.columns(2)
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_{prop['id']}", help="Editar"):
+                            st.session_state['editando_prop_id'] = prop['id']
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑️", key=f"del_{prop['id']}", help="Deletar"):
+                            if deletar_proprietario(prop['id']):
+                                st.success("✅ Proprietário deletado!")
+                                st.rerun()
+                
+                # Detalhes em expander
+                with st.expander("📋 Ver Detalhes"):
+                    col1, col2 = st.columns(2)
                     
                     with col1:
                         st.markdown(f"**ID:** {prop['id']}")
@@ -2467,45 +2494,23 @@ elif aba == "👥 Gestão de Proprietários":
                             st.markdown(f"**Email:** {prop['email']}")
                         if prop.get('telemovel'):
                             st.markdown(f"**Telemóvel:** {prop['telemovel']}")
-                        
+                    
+                    with col2:
                         # Dados de faturação
                         if prop.get('nome_completo') or prop.get('nif'):
-                            st.markdown("---")
                             st.markdown("**📄 Dados de Faturação:**")
                             if prop.get('nome_completo'):
-                                st.markdown(f"- Nome Completo/Razão Social: {prop['nome_completo']}")
+                                st.markdown(f"- Nome: {prop['nome_completo']}")
                             if prop.get('nif'):
                                 st.markdown(f"- NIF: {prop['nif']}")
                             if prop.get('morada'):
                                 st.markdown(f"- Morada: {prop['morada']}")
                             if prop.get('codigo_postal'):
-                                st.markdown(f"- Código Postal: {prop['codigo_postal']}")
+                                st.markdown(f"- CP: {prop['codigo_postal']}")
                             if prop.get('cidade'):
                                 st.markdown(f"- Cidade: {prop['cidade']}")
-                    
-                    with col2:
-                        # Botão Ativar/Desativar
-                        if prop.get('ativo', True):
-                            if st.button("🔴 Desativar", key=f"desat_{prop['id']}", use_container_width=True):
-                                if alternar_status_proprietario(prop['id']) is not None:
-                                    st.success("Status alterado!")
-                                    st.rerun()
-                        else:
-                            if st.button("🟢 Ativar", key=f"ativar_{prop['id']}", use_container_width=True, type="primary"):
-                                if alternar_status_proprietario(prop['id']) is not None:
-                                    st.success("Status alterado!")
-                                    st.rerun()
-                        
-                        # Botão Editar
-                        if st.button("✏️ Editar", key=f"edit_{prop['id']}", use_container_width=True):
-                            st.session_state['editando_prop_id'] = prop['id']
-                            st.rerun()
-                        
-                        # Botão Deletar
-                        if st.button("🗑️ Deletar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
-                            if deletar_proprietario(prop['id']):
-                                st.success("✅ Proprietário deletado!")
-                                st.rerun()
+                
+                st.markdown("---")
             
             # Modal de edição
             if 'editando_prop_id' in st.session_state:
