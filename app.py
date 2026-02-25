@@ -90,8 +90,6 @@ try:
             port=os.getenv("DB_PORT", "5432"),
         )
         logger.info("✅ Pool de conexões PostgreSQL criado localmente")
-    if connection_pool:
-        logger.info("✅ Pool de conexões PostgreSQL criado com sucesso")
 except Exception as e:
     logger.error(f"❌ Erro ao criar pool de conexões: {e}")
     st.error(f"Erro de conexão com banco de dados: {e}")
