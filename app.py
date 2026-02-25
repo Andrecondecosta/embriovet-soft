@@ -173,9 +173,9 @@ def alternar_status_proprietario(proprietario_id):
         db_host = os.getenv("DB_HOST", "localhost")
         db_port = os.getenv("DB_PORT", "5432")
         
-        logger.info(f"🔌 Conectando em: {db_user}@{db_host}:{db_port}/{db_name}")
+        logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
         
-        # CRIAR CONEXÃO NOVA
+        # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
         conn = psycopg2.connect(
             dbname=db_name,
             user=db_user,
@@ -184,13 +184,11 @@ def alternar_status_proprietario(proprietario_id):
             port=db_port
         )
         
-        conn.autocommit = False
+        # FORÇAR AUTOCOMMIT - COMMIT IMEDIATO APÓS CADA COMANDO
+        conn.set_session(autocommit=True)
         cur = conn.cursor()
         
-        # Verificar banco atual
-        cur.execute("SELECT current_database(), current_user, inet_server_addr(), inet_server_port()")
-        info_conexao = cur.fetchone()
-        logger.info(f"📡 Conectado em: database={info_conexao[0]}, user={info_conexao[1]}, host={info_conexao[2]}, port={info_conexao[3]}")
+        logger.info(f"✅ AUTOCOMMIT ativado")
         
         # Verificar se a coluna ativo existe
         cur.execute("""
@@ -207,7 +205,7 @@ def alternar_status_proprietario(proprietario_id):
             return None
         
         # Verificar o valor atual
-        cur.execute("SELECT ativo FROM dono WHERE id = %s FOR UPDATE", (to_py(proprietario_id),))
+        cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
         status_antes = cur.fetchone()
         logger.info(f"📋 Status ANTES: {status_antes}")
         
@@ -215,7 +213,7 @@ def alternar_status_proprietario(proprietario_id):
         novo_valor = not status_antes[0] if status_antes else True
         logger.info(f"🔄 Novo valor calculado: {novo_valor}")
         
-        # UPDATE direto
+        # UPDATE direto (com autocommit vai commitar automaticamente)
         cur.execute("""
             UPDATE dono 
             SET ativo = %s
@@ -224,28 +222,18 @@ def alternar_status_proprietario(proprietario_id):
         """, (novo_valor, to_py(proprietario_id)))
         
         resultado = cur.fetchone()
-        logger.info(f"📝 Resultado do UPDATE: {resultado}")
+        logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
         
         if resultado:
             novo_status = resultado[0]
             
-            # COMMIT com FLUSH
-            conn.commit()
-            logger.info(f"✅ COMMIT executado!")
+            # Não precisa de commit manual com autocommit
+            logger.info(f"✅ UPDATE executado com AUTOCOMMIT (sem transação)")
             
-            # FLUSH das mudanças pendentes
-            cur.execute("SELECT pg_sleep(0.1)")  # pequeno delay
-            
-            # Verificar com SELECT após commit EM UMA NOVA TRANSAÇÃO
-            cur.execute("BEGIN")
+            # Verificar com SELECT
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
             status_verificacao = cur.fetchone()
-            cur.execute("COMMIT")
-            logger.info(f"🔍 Verificação após commit (nova transação): {status_verificacao}")
-            
-            # Forçar flush no banco
-            cur.execute("CHECKPOINT")
-            logger.info(f"💾 CHECKPOINT executado")
+            logger.info(f"🔍 Verificação final: {status_verificacao}")
             
             cur.close()
             conn.close()
@@ -266,7 +254,6 @@ def alternar_status_proprietario(proprietario_id):
         logger.error(traceback.format_exc())
         if conn:
             try:
-                conn.rollback()
                 conn.close()
             except:
                 pass
