@@ -763,50 +763,37 @@ def ativar_usuario(user_id):
 # ------------------------------------------------------------
 # 👥 Funções de Gestão de Proprietários
 # ------------------------------------------------------------
-def adicionar_proprietario(nome):
-    """Adiciona novo proprietário"""
+def adicionar_proprietario(dados):
+    """Adiciona novo proprietário com todos os campos"""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO dono (nome)
-                VALUES (%s)
+                INSERT INTO dono (nome, email, telemovel, nome_completo, nif, morada, codigo_postal, cidade, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
                 RETURNING id
                 """,
-                (to_py(nome),),
+                (
+                    to_py(dados.get('nome')),
+                    to_py(dados.get('email')),
+                    to_py(dados.get('telemovel')),
+                    to_py(dados.get('nome_completo')),
+                    to_py(dados.get('nif')),
+                    to_py(dados.get('morada')),
+                    to_py(dados.get('codigo_postal')),
+                    to_py(dados.get('cidade'))
+                ),
             )
             proprietario_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
-            logger.info(f"Proprietário adicionado: {nome}")
+            logger.info(f"Proprietário adicionado: {dados.get('nome')}")
             return proprietario_id
     except Exception as e:
         logger.error(f"Erro ao adicionar proprietário: {e}")
         st.error(f"Erro ao adicionar proprietário: {e}")
         return None
-
-def editar_proprietario(proprietario_id, nome):
-    """Edita proprietário existente"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                UPDATE dono
-                SET nome = %s
-                WHERE id = %s
-                """,
-                (to_py(nome), to_py(proprietario_id)),
-            )
-            conn.commit()
-            cur.close()
-            logger.info(f"Proprietário editado: {nome}")
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao editar proprietário: {e}")
-        st.error(f"Erro ao editar proprietário: {e}")
-        return False
 
 def deletar_proprietario(proprietario_id):
     """Deleta proprietário (apenas se não tiver stock)"""
