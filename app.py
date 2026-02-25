@@ -17,6 +17,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
+import warnings
+
+# Suprimir avisos do pandas sobre conexões
+warnings.filterwarnings('ignore', category=UserWarning, module='pandas')
 
 # ------------------------------------------------------------
 # Configurar logging
