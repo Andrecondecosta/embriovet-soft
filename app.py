@@ -1279,7 +1279,14 @@ if verificar_permissao('Gestor'):
 if verificar_permissao('Administrador'):
     menu_options.append("⚙️ Gestão de Utilizadores")
 
-aba = st.sidebar.radio("Menu", menu_options)
+# Verificar se há redirecionamento pendente
+if 'aba_selecionada' in st.session_state:
+    idx_aba = menu_options.index(st.session_state['aba_selecionada']) if st.session_state['aba_selecionada'] in menu_options else 0
+    del st.session_state['aba_selecionada']
+else:
+    idx_aba = 0
+
+aba = st.sidebar.radio("Menu", menu_options, index=idx_aba)
 
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
