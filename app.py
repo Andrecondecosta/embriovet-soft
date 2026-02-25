@@ -239,7 +239,7 @@ def carregar_stock(apenas_ativos=True):
             if apenas_ativos:
                 query += " WHERE d.ativo = TRUE"
             query += " ORDER BY e.garanhao, e.id"
-            df = pd.read_sql(query, conn)
+            df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar stock: {e}")
@@ -256,7 +256,7 @@ def carregar_inseminacoes():
                 LEFT JOIN dono d ON i.dono_id = d.id
                 ORDER BY i.data_inseminacao DESC
             """
-            df = pd.read_sql(query, conn)
+            df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar inseminações: {e}")
@@ -278,7 +278,7 @@ def carregar_transferencias():
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
             """
-            df = pd.read_sql(query, conn)
+            df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar transferências: {e}")
@@ -310,7 +310,7 @@ def carregar_transferencias_externas():
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 ORDER BY te.data_transferencia DESC
             """
-            df = pd.read_sql(query, conn)
+            df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar transferências externas: {e}")
@@ -689,7 +689,7 @@ def carregar_usuarios():
     """Carrega lista de utilizadores"""
     try:
         with get_connection() as conn:
-            df = pd.read_sql("""
+            df = pd.read_sql_query("""
                 SELECT id, username, nome_completo, nivel, ativo, 
                        created_at, last_login
                 FROM usuarios
