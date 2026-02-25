@@ -2560,14 +2560,17 @@ elif aba == "👥 Gestão de Proprietários":
                             if st.button(btn_label, key=f"status_{prop['id']}", use_container_width=True, type=btn_type):
                                 # Marcar para manter expandido
                                 st.session_state[f'expand_{prop["id"]}'] = True
+                                st.session_state['status_changed'] = True
                                 # Alternar status
                                 resultado = alternar_status_proprietario(prop['id'])
                                 if resultado is not None:
                                     novo_status = "ATIVO" if resultado else "INATIVO"
                                     st.success(f"✅ Status alterado para {novo_status}!")
+                                    # Forçar rerun imediato
+                                    time.sleep(0.3)
+                                    st.rerun()
                                 else:
                                     st.error("❌ Erro ao alterar status. Verifique se a coluna 'ativo' existe.")
-                                st.rerun()
                         
                         with col_a2:
                             if st.button("🗑️ Apagar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
