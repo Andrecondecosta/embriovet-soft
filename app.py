@@ -102,11 +102,19 @@ def get_connection():
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
-def carregar_proprietarios():
-    """Carrega lista de proprietarios do banco de dados"""
+def carregar_proprietarios(apenas_ativos=False):
+    """Carrega lista de proprietarios do banco de dados
+    
+    Args:
+        apenas_ativos: Se True, retorna apenas proprietários ativos
+    """
     try:
         with get_connection() as conn:
-            df = pd.read_sql("SELECT * FROM dono ORDER BY nome", conn)
+            query = "SELECT * FROM dono"
+            if apenas_ativos:
+                query += " WHERE ativo = TRUE"
+            query += " ORDER BY nome"
+            df = pd.read_sql(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar proprietarios: {e}")
