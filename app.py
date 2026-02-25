@@ -2434,14 +2434,9 @@ elif aba == "👥 Gestão de Proprietários":
         if proprietarios_todos.empty:
             st.info("ℹ️ Nenhum proprietário cadastrado.")
         else:
-            # Filtro simples
-            filtro_status = st.radio(
-                "Filtrar:",
-                ["Todos", "Ativos", "Inativos"],
-                horizontal=True
-            )
+            # Filtro
+            filtro_status = st.radio("Filtrar:", ["Todos", "Ativos", "Inativos"], horizontal=True)
             
-            # Aplicar filtro
             if filtro_status == "Ativos":
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True]
             elif filtro_status == "Inativos":
@@ -2449,171 +2444,182 @@ elif aba == "👥 Gestão de Proprietários":
             else:
                 props_exibir = proprietarios_todos
             
-            st.markdown(f"**Total: {len(props_exibir)}**")
+            st.markdown(f"**Total: {len(props_exibir)} proprietários**")
+            
+            # Cabeçalho da tabela
+            col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns([0.6, 0.6, 3, 2.5, 0.8])
+            with col_h1:
+                st.markdown("**Status**")
+            with col_h2:
+                st.markdown("**ID**")
+            with col_h3:
+                st.markdown("**Nome**")
+            with col_h4:
+                st.markdown("**Contacto**")
+            with col_h5:
+                st.markdown("**Ações**")
+            
             st.markdown("---")
             
-            # Lista compacta
+            # Linhas da tabela
             for _, prop in props_exibir.iterrows():
-                status_icon = "✅" if prop.get('ativo', True) else "❌"
-                
-                # Layout compacto em linha única
-                col1, col2, col3, col4, col5 = st.columns([0.5, 3, 0.5, 0.5, 0.5])
+                col1, col2, col3, col4, col5 = st.columns([0.6, 0.6, 3, 2.5, 0.8])
                 
                 with col1:
-                    if st.button(status_icon, key=f"st_{prop['id']}", help="Alternar status"):
-                        alternar_status_proprietario(prop['id'])
-                        st.rerun()
+                    # Ícone de status clicável
+                    status_atual = prop.get('ativo', True)
+                    if status_atual:
+                        if st.button("🟢", key=f"s_{prop['id']}", help="Ativo - Click para desativar"):
+                            alternar_status_proprietario(prop['id'])
+                            st.rerun()
+                    else:
+                        if st.button("🔴", key=f"s_{prop['id']}", help="Inativo - Click para ativar"):
+                            alternar_status_proprietario(prop['id'])
+                            st.rerun()
                 
                 with col2:
-                    # Nome com informações inline
-                    info_extra = []
-                    if prop.get('email'):
-                        info_extra.append(f"📧 {prop['email']}")
-                    if prop.get('telemovel'):
-                        info_extra.append(f"📱 {prop['telemovel']}")
-                    
-                    info_text = " | ".join(info_extra) if info_extra else ""
-                    st.markdown(f"**{prop['nome']}**  \n<small>{info_text}</small>", unsafe_allow_html=True)
+                    st.markdown(f"{prop['id']}")
                 
                 with col3:
-                    if st.button("👁️", key=f"view_{prop['id']}", help="Ver detalhes"):
-                        st.session_state['visualizando_prop_id'] = prop['id']
-                        st.rerun()
+                    st.markdown(f"**{prop['nome']}**")
                 
                 with col4:
-                    if st.button("✏️", key=f"ed_{prop['id']}", help="Editar"):
-                        st.session_state['editando_prop_id'] = prop['id']
-                        st.rerun()
+                    contato_info = []
+                    if prop.get('email'):
+                        contato_info.append(prop['email'])
+                    if prop.get('telemovel'):
+                        contato_info.append(prop['telemovel'])
+                    st.markdown(" | ".join(contato_info) if contato_info else "-")
                 
                 with col5:
-                    if st.button("🗑️", key=f"del_{prop['id']}", help="Deletar"):
-                        if deletar_proprietario(prop['id']):
-                            st.success("✅ Deletado!")
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        if st.button("👁", key=f"v_{prop['id']}", help="Ver"):
+                            st.session_state['ver_prop_id'] = prop['id']
                             st.rerun()
+                    with c2:
+                        if st.button("✏", key=f"e_{prop['id']}", help="Editar"):
+                            st.session_state['editar_prop_id'] = prop['id']
+                            st.rerun()
+                    with c3:
+                        if st.button("🗑", key=f"d_{prop['id']}", help="Deletar"):
+                            if deletar_proprietario(prop['id']):
+                                st.success("✅ Deletado!")
+                                st.rerun()
             
-            st.markdown("---")
-            
-            # MODAL DE VISUALIZAÇÃO
-            if 'visualizando_prop_id' in st.session_state:
-                prop_view = proprietarios_todos[proprietarios_todos['id'] == st.session_state['visualizando_prop_id']].iloc[0]
+            # POPUP DE VISUALIZAÇÃO
+            if 'ver_prop_id' in st.session_state:
+                prop_view = proprietarios_todos[proprietarios_todos['id'] == st.session_state['ver_prop_id']].iloc[0]
                 
-                with st.container():
-                    st.markdown("### 📋 Detalhes do Proprietário")
+                st.markdown("---")
+                st.markdown("### 👁️ Detalhes do Proprietário")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.text_input("Nome", value=prop_view['nome'], disabled=True, key="view_nome")
+                    st.text_input("Email", value=prop_view.get('email', '') or '', disabled=True, key="view_email")
+                    st.text_input("Telemóvel", value=prop_view.get('telemovel', '') or '', disabled=True, key="view_tel")
+                    st.text_input("Nome Completo", value=prop_view.get('nome_completo', '') or '', disabled=True, key="view_nc")
+                
+                with col2:
+                    st.text_input("NIF", value=prop_view.get('nif', '') or '', disabled=True, key="view_nif")
+                    st.text_area("Morada", value=prop_view.get('morada', '') or '', disabled=True, key="view_morada", height=100)
+                    st.text_input("Código Postal", value=prop_view.get('codigo_postal', '') or '', disabled=True, key="view_cp")
+                    st.text_input("Cidade", value=prop_view.get('cidade', '') or '', disabled=True, key="view_cidade")
+                
+                if st.button("✖ Fechar", type="secondary", use_container_width=True):
+                    del st.session_state['ver_prop_id']
+                    st.rerun()
+            
+            # POPUP DE EDIÇÃO
+            if 'editar_prop_id' in st.session_state:
+                prop_edit = proprietarios_todos[proprietarios_todos['id'] == st.session_state['editar_prop_id']].iloc[0]
+                
+                st.markdown("---")
+                st.markdown("### ✏️ Editar Proprietário")
+                
+                with st.form("form_editar", clear_on_submit=False):
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown(f"**Nome:** {prop_view['nome']}")
-                        if prop_view.get('email'):
-                            st.markdown(f"**Email:** {prop_view['email']}")
-                        if prop_view.get('telemovel'):
-                            st.markdown(f"**Telemóvel:** {prop_view['telemovel']}")
+                        nome_e = st.text_input("Nome *", value=prop_edit.get('nome', ''))
+                        email_e = st.text_input("Email", value=prop_edit.get('email', '') or '')
+                        tel_e = st.text_input("Telemóvel", value=prop_edit.get('telemovel', '') or '')
+                        nc_e = st.text_input("Nome Completo", value=prop_edit.get('nome_completo', '') or '')
                     
                     with col2:
-                        if prop_view.get('nome_completo'):
-                            st.markdown(f"**Nome Completo:** {prop_view['nome_completo']}")
-                        if prop_view.get('nif'):
-                            st.markdown(f"**NIF:** {prop_view['nif']}")
-                        if prop_view.get('morada'):
-                            st.markdown(f"**Morada:** {prop_view['morada']}")
-                        if prop_view.get('codigo_postal'):
-                            st.markdown(f"**CP:** {prop_view['codigo_postal']}")
-                        if prop_view.get('cidade'):
-                            st.markdown(f"**Cidade:** {prop_view['cidade']}")
+                        nif_e = st.text_input("NIF", value=prop_edit.get('nif', '') or '')
+                        morada_e = st.text_area("Morada", value=prop_edit.get('morada', '') or '', height=100)
+                        cp_e = st.text_input("Código Postal", value=prop_edit.get('codigo_postal', '') or '')
+                        cidade_e = st.text_input("Cidade", value=prop_edit.get('cidade', '') or '')
                     
-                    if st.button("❌ Fechar", key="fechar_view"):
-                        del st.session_state['visualizando_prop_id']
+                    col_s, col_c = st.columns(2)
+                    with col_s:
+                        salvar = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
+                    with col_c:
+                        cancelar = st.form_submit_button("✖ Cancelar", use_container_width=True)
+                    
+                    if salvar:
+                        if not nome_e:
+                            st.error("❌ Nome é obrigatório")
+                        else:
+                            dados = {
+                                'nome': nome_e,
+                                'email': email_e,
+                                'telemovel': tel_e,
+                                'nome_completo': nc_e,
+                                'nif': nif_e,
+                                'morada': morada_e,
+                                'codigo_postal': cp_e,
+                                'cidade': cidade_e
+                            }
+                            if editar_proprietario(st.session_state['editar_prop_id'], dados):
+                                st.success("✅ Atualizado!")
+                                del st.session_state['editar_prop_id']
+                                st.rerun()
+                    
+                    if cancelar:
+                        del st.session_state['editar_prop_id']
                         st.rerun()
-            
-            # MODAL DE EDIÇÃO
-            if 'editando_prop_id' in st.session_state:
-                prop_edit = proprietarios_todos[proprietarios_todos['id'] == st.session_state['editando_prop_id']].iloc[0]
-                
-                with st.container():
-                    st.markdown("### ✏️ Editar Proprietário")
-                    
-                    with st.form("form_edit_prop", clear_on_submit=False):
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            nome_edit = st.text_input("Nome *", value=prop_edit.get('nome', ''))
-                            email_edit = st.text_input("Email", value=prop_edit.get('email', '') or '')
-                            telemovel_edit = st.text_input("Telemóvel", value=prop_edit.get('telemovel', '') or '')
-                            nome_completo_edit = st.text_input("Nome Completo", value=prop_edit.get('nome_completo', '') or '')
-                        
-                        with col2:
-                            nif_edit = st.text_input("NIF", value=prop_edit.get('nif', '') or '')
-                            morada_edit = st.text_area("Morada", value=prop_edit.get('morada', '') or '', height=100)
-                            codigo_postal_edit = st.text_input("Código Postal", value=prop_edit.get('codigo_postal', '') or '')
-                            cidade_edit = st.text_input("Cidade", value=prop_edit.get('cidade', '') or '')
-                        
-                        col_save, col_cancel = st.columns(2)
-                        with col_save:
-                            submit_edit = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
-                        with col_cancel:
-                            cancel_edit = st.form_submit_button("❌ Cancelar", use_container_width=True)
-                        
-                        if submit_edit:
-                            if not nome_edit:
-                                st.error("❌ Nome é obrigatório")
-                            else:
-                                dados_edit = {
-                                    'nome': nome_edit,
-                                    'email': email_edit,
-                                    'telemovel': telemovel_edit,
-                                    'nome_completo': nome_completo_edit,
-                                    'nif': nif_edit,
-                                    'morada': morada_edit,
-                                    'codigo_postal': codigo_postal_edit,
-                                    'cidade': cidade_edit
-                                }
-                                if editar_proprietario(st.session_state['editando_prop_id'], dados_edit):
-                                    st.success("✅ Proprietário atualizado!")
-                                    del st.session_state['editando_prop_id']
-                                    st.rerun()
-                        
-                        if cancel_edit:
-                            del st.session_state['editando_prop_id']
-                            st.rerun()
     
     # TAB 2: Adicionar
     with tab2:
-        st.markdown("### ➕ Adicionar Novo Proprietário")
+        st.markdown("### ➕ Novo Proprietário")
         
-        with st.form("add_proprietario"):
+        with st.form("form_adicionar"):
             col1, col2 = st.columns(2)
             
             with col1:
-                novo_nome = st.text_input("Nome *")
-                novo_email = st.text_input("Email")
-                novo_telemovel = st.text_input("Telemóvel")
-                novo_nome_completo = st.text_input("Nome Completo")
+                nome_n = st.text_input("Nome *")
+                email_n = st.text_input("Email")
+                tel_n = st.text_input("Telemóvel")
+                nc_n = st.text_input("Nome Completo")
             
             with col2:
-                novo_nif = st.text_input("NIF")
-                novo_morada = st.text_area("Morada", height=100)
-                novo_codigo_postal = st.text_input("Código Postal")
-                novo_cidade = st.text_input("Cidade")
+                nif_n = st.text_input("NIF")
+                morada_n = st.text_area("Morada", height=100)
+                cp_n = st.text_input("Código Postal")
+                cidade_n = st.text_input("Cidade")
             
-            submit = st.form_submit_button("➕ Adicionar", type="primary")
+            adicionar = st.form_submit_button("➕ Adicionar", type="primary", use_container_width=True)
             
-            if submit:
-                if not novo_nome:
+            if adicionar:
+                if not nome_n:
                     st.error("❌ Nome é obrigatório")
                 else:
-                    dados_novo = {
-                        'nome': novo_nome,
-                        'email': novo_email,
-                        'telemovel': novo_telemovel,
-                        'nome_completo': novo_nome_completo,
-                        'nif': novo_nif,
-                        'morada': novo_morada,
-                        'codigo_postal': novo_codigo_postal,
-                        'cidade': novo_cidade
+                    dados = {
+                        'nome': nome_n,
+                        'email': email_n,
+                        'telemovel': tel_n,
+                        'nome_completo': nc_n,
+                        'nif': nif_n,
+                        'morada': morada_n,
+                        'codigo_postal': cp_n,
+                        'cidade': cidade_n
                     }
-                    prop_id = adicionar_proprietario(dados_novo)
+                    prop_id = adicionar_proprietario(dados)
                     if prop_id:
-                        st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
-                        st.balloons()
+                        st.success(f"✅ '{nome_n}' adicionado!")
                         st.rerun()
 
 # ------------------------------------------------------------
