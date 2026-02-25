@@ -162,18 +162,39 @@ def alternar_status_proprietario(proprietario_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            
+            # Verificar se a coluna ativo existe
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='dono' AND column_name='ativo'
+            """)
+            
+            if not cur.fetchone():
+                st.error("❌ Coluna 'ativo' não existe. Execute o script SQL primeiro!")
+                return None
+            
+            # Alternar status
             cur.execute("""
                 UPDATE dono 
                 SET ativo = NOT ativo
                 WHERE id = %s
                 RETURNING ativo
             """, (to_py(proprietario_id),))
-            novo_status = cur.fetchone()[0]
-            conn.commit()
-            cur.close()
-            return novo_status
+            
+            resultado = cur.fetchone()
+            if resultado:
+                novo_status = resultado[0]
+                conn.commit()
+                cur.close()
+                logger.info(f"Status do proprietário {proprietario_id} alterado para {novo_status}")
+                return novo_status
+            else:
+                cur.close()
+                return None
+                
     except Exception as e:
         logger.error(f"Erro ao alternar status: {e}")
+        st.error(f"Erro ao alternar status: {e}")
         return None
 
 def editar_proprietario(proprietario_id, dados):
