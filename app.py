@@ -114,7 +114,7 @@ def carregar_proprietarios(apenas_ativos=False):
             if apenas_ativos:
                 query += " WHERE ativo = TRUE"
             query += " ORDER BY nome"
-            df = pd.read_sql(query, conn)
+            df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
         logger.error(f"Erro ao carregar proprietarios: {e}")
