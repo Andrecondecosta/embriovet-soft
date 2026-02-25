@@ -1421,6 +1421,23 @@ if aba == "📦 Ver Stock":
                         st.markdown(f"**💊 Dose:** {row.get('dose') or 'N/A'}")
                         if row.get("observacoes"):
                             st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
+                    
+                    # Informações de auditoria
+                    st.markdown("---")
+                    audit_col1, audit_col2 = st.columns(2)
+                    with audit_col1:
+                        if row.get("data_criacao"):
+                            from datetime import datetime
+                            try:
+                                data_criacao = row.get("data_criacao")
+                                if isinstance(data_criacao, str):
+                                    data_criacao = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
+                                st.markdown(f"**📅 Criado em:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
+                            except Exception:
+                                st.markdown(f"**📅 Criado em:** {row.get('data_criacao')}")
+                    with audit_col2:
+                        if row.get("criado_por"):
+                            st.markdown(f"**👤 Criado por:** {row.get('criado_por')}")
                 
                 # TAB 2: Editar (Apenas Admin)
                 if tab2 is not None:
