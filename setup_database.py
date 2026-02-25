@@ -126,8 +126,8 @@ def criar_tabelas():
         senha_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
         cur.execute("""
-            INSERT INTO usuarios (username, password_hash, nivel, ativo)
-            VALUES ('admin', %s, 'Administrador', TRUE)
+            INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo)
+            VALUES ('admin', 'Administrador', %s, 'Administrador', TRUE)
             ON CONFLICT (username) DO NOTHING
         """, (senha_hash,))
         print("✅ Usuário admin criado (username: admin, password: admin123)")
