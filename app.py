@@ -2504,26 +2504,42 @@ elif aba == "👥 Gestão de Proprietários":
                 props_exibir = props_exibir.sort_values('ativo', ascending=False)
             
             st.markdown(f"**{len(props_exibir)} proprietários**")
+            
+            # CSS para alinhamento perfeito
+            st.markdown("""
+            <style>
+            .prop-item {
+                font-family: 'Courier New', monospace;
+                padding: 8px;
+                margin: 2px 0;
+                background-color: #f8f9fa;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
             st.markdown("---")
             
-            # Lista de proprietários com expander estilo lotes
+            # Lista de proprietários
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
-                status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
+                status_text = "ATIVO  " if prop.get('ativo', True) else "INATIVO"
                 
-                # Criar título alinhado usando espaçamento fixo
-                id_pad = str(prop['id']).rjust(3)
-                nome_pad = str(prop['nome'])[:40].ljust(40)
-                status_pad = f"{status_icon} {status_text}"
+                # Criar título com fonte monospace para alinhamento
+                id_str = f"{prop['id']:3d}"
+                nome_str = f"{prop['nome'][:35]:<35}"
                 
-                titulo = f"{id_pad}  |  {nome_pad}  |  {status_pad}"
+                # Mostrar como texto monospace HTML
+                st.markdown(f'<div class="prop-item">{id_str} | {nome_str} | {status_icon} {status_text}</div>', unsafe_allow_html=True)
                 
                 # Verificar se este expander deve estar expandido
                 expandido = st.session_state.get(f'expand_{prop["id"]}', False)
                 
-                # Expander com fonte monospace para alinhamento
-                with st.expander(titulo, expanded=expandido):
+                # Usar expander vazio só para conteúdo
+                if st.button(f"▼ Abrir detalhes", key=f"btn_{prop['id']}", use_container_width=True) or expandido:
+                    st.session_state[f'expand_{prop["id"]}'] = True
                     
                     # Tabs: Detalhes e Editar
                     tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
