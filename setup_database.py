@@ -112,9 +112,11 @@ def criar_tabelas():
             CREATE TABLE IF NOT EXISTS usuarios (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
+                nome_completo VARCHAR(255),
                 password_hash VARCHAR(255) NOT NULL,
                 nivel VARCHAR(50) DEFAULT 'Visualizador',
-                ativo BOOLEAN DEFAULT TRUE
+                ativo BOOLEAN DEFAULT TRUE,
+                created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
             )
         """)
         print("✅ Tabela 'usuarios' criada/verificada")
