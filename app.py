@@ -1082,6 +1082,10 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             
             conn.commit()
             cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
             logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
             return True
             
