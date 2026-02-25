@@ -1,59 +1,105 @@
 ================================================================
-INSTRUÇÕES IMPORTANTES - EXECUTE ANTES DE USAR A APLICAÇÃO
+⚠️  AÇÃO NECESSÁRIA - EXECUTE NO SEU COMPUTADOR LOCAL
 ================================================================
 
-Foi implementado um novo sistema de gestão de proprietários com:
-✅ Status ativo/inativo
-✅ Campos adicionais (email, telemóvel, dados de faturação)
-✅ Edição de perfis
-✅ Ativação/desativação automática baseada no stock
+ERRO ENCONTRADO: A coluna 'ativo' não existe na tabela 'dono'
+
+SOLUÇÃO: Execute o script SQL no seu banco de dados PostgreSQL LOCAL
 
 ----------------------------------------------------------------
-PASSO 1: EXECUTAR O SCRIPT SQL
+OPÇÃO 1: Via Terminal/CMD (RECOMENDADO)
 ----------------------------------------------------------------
 
-No terminal, execute:
+1. Abra o terminal/prompt de comando
+2. Navegue até a pasta do projeto:
+   cd /caminho/para/embriovet-soft
 
-psql -U postgres -d embriovet -f /app/adicionar_campos_proprietarios.sql
+3. Execute o comando:
+   psql -U postgres -d embriovet -f adicionar_campos_proprietarios.sql
 
-Ou conecte-se ao PostgreSQL e execute o arquivo SQL:
-
-\i /app/adicionar_campos_proprietarios.sql
+4. Digite a senha do PostgreSQL quando solicitado (padrão: 123)
 
 ----------------------------------------------------------------
-PASSO 2: REINICIAR A APLICAÇÃO
+OPÇÃO 2: Via Interface Gráfica (pgAdmin, DBeaver, etc)
 ----------------------------------------------------------------
 
-Após executar o SQL, reinicie o Streamlit:
+1. Abra sua ferramenta de gerenciamento PostgreSQL
+2. Conecte ao banco 'embriovet'
+3. Abra o arquivo 'adicionar_campos_proprietarios.sql'
+4. Execute o script
 
-Ctrl+C (para parar)
-streamlit run app.py
+----------------------------------------------------------------
+OPÇÃO 3: Via psql interativo
+----------------------------------------------------------------
+
+1. Abra o terminal e conecte ao PostgreSQL:
+   psql -U postgres -d embriovet
+
+2. Execute o arquivo:
+   \i adicionar_campos_proprietarios.sql
+
+3. Digite \q para sair
+
+----------------------------------------------------------------
+VERIFICAR SE DEU CERTO
+----------------------------------------------------------------
+
+Execute este comando para verificar:
+
+psql -U postgres -d embriovet -c "\d dono"
+
+Você deverá ver as novas colunas:
+- ativo
+- email
+- telemovel
+- nome_completo
+- nif
+- morada
+- codigo_postal
+- cidade
+
+----------------------------------------------------------------
+DEPOIS DE EXECUTAR O SQL
+----------------------------------------------------------------
+
+1. Instale o reportlab (se ainda não instalou):
+   pip install reportlab
+
+2. Reinicie o Streamlit:
+   - Pare com Ctrl+C
+   - Execute: streamlit run app.py
 
 ================================================================
-O QUE FOI IMPLEMENTADO?
+O QUE SERÁ ADICIONADO?
 ================================================================
 
-1. NOVOS CAMPOS NA TABELA DONO:
-   - ativo (Boolean) - Status do proprietário
-   - email (Varchar)
-   - telemovel (Varchar)
-   - nome_completo (Varchar) - Nome completo/Razão social
-   - nif (Varchar)
-   - morada (Text)
-   - codigo_postal (Varchar)
-   - cidade (Varchar)
+✅ Campo 'ativo' (Boolean) - Controla se proprietário aparece no sistema
+✅ Campo 'email' (Texto)
+✅ Campo 'telemovel' (Texto)
+✅ Campo 'nome_completo' (Texto) - Para faturação
+✅ Campo 'nif' (Texto)
+✅ Campo 'morada' (Texto)
+✅ Campo 'codigo_postal' (Texto)
+✅ Campo 'cidade' (Texto)
 
-2. FUNCIONALIDADES:
-   ✅ Ativação/Desativação automática baseada no stock
-   ✅ Proprietários inativos não aparecem em pesquisas/relatórios
-   ✅ Botões de Ativar/Desativar na gestão
-   ✅ Botão de Editar perfil
-   ✅ Formulário completo com todos os campos
-   ✅ Filtro por status (Todos/Ativos/Inativos)
+================================================================
+FUNCIONALIDADES IMPLEMENTADAS
+================================================================
 
-3. ONDE USAR:
-   - Vá em "👥 Gestão de Proprietários"
-   - Aba "📋 Lista de Proprietários": Ver, editar, ativar/desativar
-   - Aba "➕ Adicionar Novo": Formulário completo
+Após executar o SQL, você terá acesso a:
 
+1. 👥 Gestão de Proprietários:
+   - Ver todos os proprietários (ativos e inativos)
+   - Filtrar por status
+   - Editar perfil completo
+   - Ativar/Desativar manualmente
+   - Sistema automático: desativa quando stock = 0
+
+2. 📊 Relatórios:
+   - Apenas proprietários ATIVOS aparecem
+   - Filtros automáticos aplicados
+
+3. 🔍 Pesquisas:
+   - Apenas proprietários ATIVOS nos dropdowns
+   
 ================================================================
