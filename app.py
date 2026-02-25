@@ -1142,23 +1142,27 @@ aba = st.sidebar.radio("Menu", menu_options)
 # ------------------------------------------------------------
 @st.dialog("➕ Adicionar Novo Proprietário")
 def modal_adicionar_proprietario():
-    """Modal para adicionar novo proprietário"""
+    """Modal para adicionar novo proprietário rapidamente"""
     novo_nome = st.text_input("Nome do Proprietário *", key="modal_novo_prop")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Adicionar", type="primary", width="stretch"):
+        if st.button("✅ Adicionar", type="primary", use_container_width=True):
             if not novo_nome:
                 st.error("❌ Nome é obrigatório")
             else:
-                prop_id = adicionar_proprietario(novo_nome)
+                # Criar dados mínimos
+                dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
+                              'nome_completo': None, 'nif': None, 'morada': None,
+                              'codigo_postal': None, 'cidade': None}
+                prop_id = adicionar_proprietario(dados_novo)
                 if prop_id:
                     st.session_state['novo_proprietario_id'] = prop_id
                     st.session_state['novo_proprietario_nome'] = novo_nome
                     st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
                     st.rerun()
     with col2:
-        if st.button("❌ Cancelar", width="stretch"):
+        if st.button("❌ Cancelar", use_container_width=True):
             st.rerun()
 
 # Carregar dados
