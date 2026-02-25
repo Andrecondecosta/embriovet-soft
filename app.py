@@ -1387,8 +1387,11 @@ if aba == "📦 Ver Stock":
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
             referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
             proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+            
+            # Verificar se é o lote recém-adicionado para abrir automaticamente
+            expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False
 
-            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas"):
+            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas", expanded=expanded):
                 
                 # Tabs: Mostrar conforme permissões
                 if verificar_permissao('Administrador'):
