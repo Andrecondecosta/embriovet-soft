@@ -121,6 +121,96 @@ def carregar_proprietarios(apenas_ativos=False):
         st.error(f"Erro ao carregar proprietarios: {e}")
         return pd.DataFrame()
 
+def atualizar_status_proprietarios():
+    """Atualiza status dos proprietários baseado no stock disponível"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            # Desativar proprietários sem stock
+            cur.execute("""
+                UPDATE dono SET ativo = FALSE
+                WHERE id IN (
+                    SELECT d.id FROM dono d
+                    LEFT JOIN (
+                        SELECT dono_id, SUM(existencia_atual) as total_stock
+                        FROM estoque_dono
+                        GROUP BY dono_id
+                    ) s ON d.id = s.dono_id
+                    WHERE COALESCE(s.total_stock, 0) = 0
+                )
+            """)
+            
+            # Ativar proprietários com stock
+            cur.execute("""
+                UPDATE dono SET ativo = TRUE
+                WHERE id IN (
+                    SELECT dono_id FROM estoque_dono
+                    WHERE existencia_atual > 0
+                    GROUP BY dono_id
+                )
+            """)
+            
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status: {e}")
+        return False
+
+def alternar_status_proprietario(proprietario_id):
+    """Alterna o status ativo/inativo de um proprietário"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE dono 
+                SET ativo = NOT ativo
+                WHERE id = %s
+                RETURNING ativo
+            """, (to_py(proprietario_id),))
+            novo_status = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            return novo_status
+    except Exception as e:
+        logger.error(f"Erro ao alternar status: {e}")
+        return None
+
+def editar_proprietario(proprietario_id, dados):
+    """Edita informações do proprietário"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE dono SET
+                    nome = %s,
+                    email = %s,
+                    telemovel = %s,
+                    nome_completo = %s,
+                    nif = %s,
+                    morada = %s,
+                    codigo_postal = %s,
+                    cidade = %s
+                WHERE id = %s
+            """, (
+                to_py(dados.get('nome')),
+                to_py(dados.get('email')),
+                to_py(dados.get('telemovel')),
+                to_py(dados.get('nome_completo')),
+                to_py(dados.get('nif')),
+                to_py(dados.get('morada')),
+                to_py(dados.get('codigo_postal')),
+                to_py(dados.get('cidade')),
+                to_py(proprietario_id)
+            ))
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário editado: ID {proprietario_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar proprietário: {e}")
+        return False
+
 def carregar_stock():
     """Carrega stock completo com informações de proprietario"""
     try:
