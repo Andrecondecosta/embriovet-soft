@@ -1,0 +1,59 @@
+================================================================
+INSTRUÇÕES IMPORTANTES - EXECUTE ANTES DE USAR A APLICAÇÃO
+================================================================
+
+Foi implementado um novo sistema de gestão de proprietários com:
+✅ Status ativo/inativo
+✅ Campos adicionais (email, telemóvel, dados de faturação)
+✅ Edição de perfis
+✅ Ativação/desativação automática baseada no stock
+
+----------------------------------------------------------------
+PASSO 1: EXECUTAR O SCRIPT SQL
+----------------------------------------------------------------
+
+No terminal, execute:
+
+psql -U postgres -d embriovet -f /app/adicionar_campos_proprietarios.sql
+
+Ou conecte-se ao PostgreSQL e execute o arquivo SQL:
+
+\i /app/adicionar_campos_proprietarios.sql
+
+----------------------------------------------------------------
+PASSO 2: REINICIAR A APLICAÇÃO
+----------------------------------------------------------------
+
+Após executar o SQL, reinicie o Streamlit:
+
+Ctrl+C (para parar)
+streamlit run app.py
+
+================================================================
+O QUE FOI IMPLEMENTADO?
+================================================================
+
+1. NOVOS CAMPOS NA TABELA DONO:
+   - ativo (Boolean) - Status do proprietário
+   - email (Varchar)
+   - telemovel (Varchar)
+   - nome_completo (Varchar) - Nome completo/Razão social
+   - nif (Varchar)
+   - morada (Text)
+   - codigo_postal (Varchar)
+   - cidade (Varchar)
+
+2. FUNCIONALIDADES:
+   ✅ Ativação/Desativação automática baseada no stock
+   ✅ Proprietários inativos não aparecem em pesquisas/relatórios
+   ✅ Botões de Ativar/Desativar na gestão
+   ✅ Botão de Editar perfil
+   ✅ Formulário completo com todos os campos
+   ✅ Filtro por status (Todos/Ativos/Inativos)
+
+3. ONDE USAR:
+   - Vá em "👥 Gestão de Proprietários"
+   - Aba "📋 Lista de Proprietários": Ver, editar, ativar/desativar
+   - Aba "➕ Adicionar Novo": Formulário completo
+
+================================================================
