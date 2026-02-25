@@ -87,8 +87,9 @@ try:
             user=os.getenv("DB_USER", "postgres"),
             password=os.getenv("DB_PASSWORD", "123"),
             host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-    )
+            port=os.getenv("DB_PORT", "5432"),
+        )
+        logger.info("✅ Pool de conexões PostgreSQL criado localmente")
     if connection_pool:
         logger.info("✅ Pool de conexões PostgreSQL criado com sucesso")
 except Exception as e:
