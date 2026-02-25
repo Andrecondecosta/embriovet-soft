@@ -123,11 +123,27 @@ def verificar_render_yaml():
             'DATABASE_URL': 'Variável DATABASE_URL'
         }
         
+        problemas = []
         for check, descricao in checks.items():
             if check in conteudo:
                 print(f"  ✅ {descricao}")
             else:
                 print(f"  ❌ {descricao} - FALTANDO")
+                problemas.append(descricao)
+        
+        # Verificar versão do Python
+        if 'PYTHON_VERSION' in conteudo:
+            if '3.11.0' in conteudo or '3.11.1' in conteudo or '3.11.2' in conteudo:
+                print(f"  ✅ PYTHON_VERSION com formato correto (3.11.x)")
+            elif '3.11' in conteudo and '3.11.' not in conteudo:
+                print(f"  ⚠️ PYTHON_VERSION deve ser 3.11.0 (não apenas 3.11)")
+                problemas.append("Versão Python incompleta")
+            else:
+                print(f"  ✅ PYTHON_VERSION definida")
+        
+        if problemas:
+            print(f"\n⚠️ Problemas encontrados: {', '.join(problemas)}")
+            return False
         
         print("\n✅ render.yaml verificado")
         return True
