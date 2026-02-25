@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════════
+⚠️  AÇÃO OBRIGATÓRIA - EXECUTE AGORA
+═══════════════════════════════════════════════════════════
+
+Você NÃO verá nenhuma funcionalidade nova funcionando até executar estes comandos!
+
+═══════════════════════════════════════════════════════════
+PASSO 1: Abra o Terminal/CMD
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+PASSO 2: Navegue até a pasta do projeto
+═══════════════════════════════════════════════════════════
+
+cd /caminho/para/embriovet-soft
+
+═══════════════════════════════════════════════════════════
+PASSO 3: Execute o primeiro script SQL
+═══════════════════════════════════════════════════════════
+
+psql -U postgres -d embriovet -f adicionar_campos_proprietarios.sql
+
+Senha: 123
+
+═══════════════════════════════════════════════════════════
+PASSO 4: Execute o segundo script SQL
+═══════════════════════════════════════════════════════════
+
+psql -U postgres -d embriovet -f adicionar_constraint_nome_unico.sql
+
+Senha: 123
+
+═══════════════════════════════════════════════════════════
+PASSO 5: Instale reportlab
+═══════════════════════════════════════════════════════════
+
+pip install reportlab
+
+═══════════════════════════════════════════════════════════
+PASSO 6: Faça git pull
+═══════════════════════════════════════════════════════════
+
+git pull origin master
+
+(Se houver conflitos: git stash && git pull origin master)
+
+═══════════════════════════════════════════════════════════
+PASSO 7: Reinicie o Streamlit
+═══════════════════════════════════════════════════════════
+
+Ctrl+C (parar)
+streamlit run app.py
+
+═══════════════════════════════════════════════════════════
+✅ DEPOIS DISSO VERÁ:
+═══════════════════════════════════════════════════════════
+
+1. Alinhamento vertical dos proprietários
+2. Ordenação funcionando (Nome, ID, Status)
+3. Botão Ativar/Desativar funcionando
+4. Expander permanece aberto após mudar status
+5. Cor e texto mudam imediatamente
+6. Validação de nomes únicos
+
+═══════════════════════════════════════════════════════════
+❌ SEM EXECUTAR OS SCRIPTS SQL:
+═══════════════════════════════════════════════════════════
+
+- NADA VAI FUNCIONAR
+- Coluna "ativo" não existe no banco
+- Botões não fazem nada
+- Erros em toda parte
+
+═══════════════════════════════════════════════════════════
