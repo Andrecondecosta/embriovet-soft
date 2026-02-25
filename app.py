@@ -316,9 +316,10 @@ def carregar_stock(apenas_ativos=True):
                 SELECT e.*, d.nome as proprietario_nome
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
+                WHERE e.existencia_atual > 0
             """
             if apenas_ativos:
-                query += " WHERE d.ativo = TRUE"
+                query += " AND d.ativo = TRUE"
             query += " ORDER BY e.garanhao, e.id"
             df = pd.read_sql_query(query, conn)
         return df
