@@ -164,8 +164,10 @@ def atualizar_status_proprietarios():
 def alternar_status_proprietario(proprietario_id):
     """Alterna o status ativo/inativo de um proprietário"""
     conn = None
+    cur = None
     try:
         conn = connection_pool.getconn()
+        conn.autocommit = False  # Garantir que está em modo transação
         cur = conn.cursor()
         
         # Verificar se a coluna ativo existe
@@ -175,11 +177,17 @@ def alternar_status_proprietario(proprietario_id):
         """)
         
         if not cur.fetchone():
-            cur.close()
+            if cur:
+                cur.close()
             if conn:
                 connection_pool.putconn(conn)
             st.error("❌ Coluna 'ativo' não existe. Execute o script SQL primeiro!")
             return None
+        
+        # Primeiro verificar o valor atual
+        cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
+        status_antes = cur.fetchone()
+        logger.info(f"Status ANTES do proprietário {proprietario_id}: {status_antes}")
         
         # Alternar status
         cur.execute("""
@@ -192,23 +200,34 @@ def alternar_status_proprietario(proprietario_id):
         resultado = cur.fetchone()
         if resultado:
             novo_status = resultado[0]
-            conn.commit()  # COMMIT EXPLÍCITO
+            logger.info(f"Status DEPOIS do proprietário {proprietario_id}: {novo_status} (antes de commit)")
+            
+            # COMMIT EXPLÍCITO E FORÇADO
+            conn.commit()
+            
+            # Verificar se realmente salvou
+            cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
+            status_apos_commit = cur.fetchone()
+            logger.info(f"Status APÓS COMMIT do proprietário {proprietario_id}: {status_apos_commit}")
+            
             cur.close()
-            logger.info(f"Status do proprietário {proprietario_id} alterado para {novo_status}")
-            if conn:
-                connection_pool.putconn(conn)
+            connection_pool.putconn(conn)
+            logger.info(f"✅ Status do proprietário {proprietario_id} alterado de {status_antes} para {novo_status}")
             return novo_status
         else:
-            cur.close()
+            if cur:
+                cur.close()
             if conn:
                 connection_pool.putconn(conn)
+            logger.error(f"UPDATE não retornou resultado para proprietário {proprietario_id}")
             return None
             
     except Exception as e:
+        logger.error(f"ERRO ao alternar status: {e}")
         if conn:
             conn.rollback()
+            logger.error("Rollback executado")
             connection_pool.putconn(conn)
-        logger.error(f"Erro ao alternar status: {e}")
         st.error(f"Erro ao alternar status: {e}")
         return None
 
