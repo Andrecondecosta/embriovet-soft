@@ -702,6 +702,10 @@ def registrar_inseminacao(registro):
 
             conn.commit()
             cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
             logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
             return True
 
