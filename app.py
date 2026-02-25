@@ -2494,17 +2494,24 @@ elif aba == "👥 Gestão de Proprietários":
                             status_atual = prop.get('ativo', True)
                             if status_atual:
                                 if st.button("🔴 Desativar", key=f"desat_{prop['id']}", use_container_width=True):
-                                    alternar_status_proprietario(prop['id'])
-                                    st.rerun()
+                                    resultado = alternar_status_proprietario(prop['id'])
+                                    if resultado is not None:
+                                        st.success("✅ Status alterado!")
+                                        time.sleep(0.5)
+                                        st.rerun()
                             else:
                                 if st.button("🟢 Ativar", key=f"ativar_{prop['id']}", use_container_width=True, type="primary"):
-                                    alternar_status_proprietario(prop['id'])
-                                    st.rerun()
+                                    resultado = alternar_status_proprietario(prop['id'])
+                                    if resultado is not None:
+                                        st.success("✅ Status alterado!")
+                                        time.sleep(0.5)
+                                        st.rerun()
                         
                         with col_a2:
-                            if st.button("🗑️ Deletar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
+                            if st.button("🗑️ Apagar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
                                 if deletar_proprietario(prop['id']):
-                                    st.success("✅ Deletado!")
+                                    st.success("✅ Apagado!")
+                                    time.sleep(0.5)
                                     st.rerun()
                     
                     # TAB: Editar
