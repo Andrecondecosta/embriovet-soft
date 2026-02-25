@@ -2455,15 +2455,30 @@ elif aba == "👥 Gestão de Proprietários":
         if proprietarios_todos.empty:
             st.info("ℹ️ Nenhum proprietário cadastrado.")
         else:
-            # Filtro
-            filtro_status = st.radio("Filtrar:", ["Todos", "Ativos", "Inativos"], horizontal=True)
+            # Filtro e Ordenação
+            col_f1, col_f2 = st.columns(2)
             
+            with col_f1:
+                filtro_status = st.radio("Filtrar:", ["Todos", "Ativos", "Inativos"], horizontal=True)
+            
+            with col_f2:
+                ordenar_por = st.selectbox("Ordenar por:", ["Nome", "ID", "Status"])
+            
+            # Aplicar filtro
             if filtro_status == "Ativos":
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True]
             elif filtro_status == "Inativos":
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False]
             else:
                 props_exibir = proprietarios_todos
+            
+            # Aplicar ordenação
+            if ordenar_por == "Nome":
+                props_exibir = props_exibir.sort_values('nome')
+            elif ordenar_por == "ID":
+                props_exibir = props_exibir.sort_values('id')
+            elif ordenar_por == "Status":
+                props_exibir = props_exibir.sort_values('ativo', ascending=False)
             
             st.markdown(f"**{len(props_exibir)} proprietários**")
             st.markdown("---")
@@ -2474,16 +2489,11 @@ elif aba == "👥 Gestão de Proprietários":
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
                 status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
                 
-                # Informação extra
-                info_extra = []
-                if prop.get('email'):
-                    info_extra.append(f"📧 {prop['email']}")
-                if prop.get('telemovel'):
-                    info_extra.append(f"📱 {prop['telemovel']}")
-                info_display = " | ".join(info_extra) if info_extra else "Sem contacto"
+                # Título do expander: ID | Nome | Status
+                titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
                 
                 # Expander (igual aos lotes)
-                with st.expander(f"{status_icon} {prop['nome']} — {status_text} — {info_display}"):
+                with st.expander(titulo):
                     
                     # Tabs: Detalhes e Editar
                     tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
