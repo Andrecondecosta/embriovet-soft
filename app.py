@@ -166,14 +166,19 @@ def alternar_status_proprietario(proprietario_id):
     conn = None
     cur = None
     try:
-        conn = connection_pool.getconn()
+        # CRIAR CONEXÃO NOVA (não do pool) para garantir commit real
+        conn = psycopg2.connect(
+            dbname=os.getenv("DB_NAME", "embriovet"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "123"),
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432")
+        )
         
-        # LIMPAR QUALQUER TRANSAÇÃO PENDENTE
-        conn.rollback()
-        
-        # Garantir modo transação
         conn.autocommit = False
         cur = conn.cursor()
+        
+        logger.info(f"🔧 Conexão NOVA criada para alternar status")
         
         # Verificar se a coluna ativo existe
         cur.execute("""
@@ -185,17 +190,20 @@ def alternar_status_proprietario(proprietario_id):
             if cur:
                 cur.close()
             if conn:
-                connection_pool.putconn(conn)
+                conn.close()
             st.error("❌ Coluna 'ativo' não existe!")
             return None
         
-        # Primeiro verificar o valor atual
+        # Verificar o valor atual
         cur.execute("SELECT ativo FROM dono WHERE id = %s FOR UPDATE", (to_py(proprietario_id),))
         status_antes = cur.fetchone()
-        logger.info(f"Status ANTES do proprietário {proprietario_id}: {status_antes}")
+        logger.info(f"📋 Status ANTES: {status_antes}")
         
-        # Alternar status diretamente
+        # Calcular novo valor
         novo_valor = not status_antes[0] if status_antes else True
+        logger.info(f"🔄 Novo valor calculado: {novo_valor}")
+        
+        # UPDATE direto
         cur.execute("""
             UPDATE dono 
             SET ativo = %s
@@ -204,41 +212,43 @@ def alternar_status_proprietario(proprietario_id):
         """, (novo_valor, to_py(proprietario_id)))
         
         resultado = cur.fetchone()
+        logger.info(f"📝 Resultado do UPDATE: {resultado}")
+        
         if resultado:
             novo_status = resultado[0]
-            logger.info(f"Status DEPOIS do UPDATE: {novo_status}")
             
-            # COMMIT EXPLÍCITO
+            # COMMIT
             conn.commit()
-            logger.info(f"✅ COMMIT executado!")
+            logger.info(f"✅ COMMIT executado na conexão nova!")
             
-            # Verificar se realmente salvou (nova query após commit)
+            # Verificar com SELECT após commit
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (to_py(proprietario_id),))
-            status_apos_commit = cur.fetchone()
-            logger.info(f"Status APÓS COMMIT: {status_apos_commit}")
+            status_verificacao = cur.fetchone()
+            logger.info(f"🔍 Verificação após commit: {status_verificacao}")
             
             cur.close()
-            # Limpar estado antes de devolver ao pool
-            conn.rollback()
-            connection_pool.putconn(conn)
+            conn.close()
+            logger.info(f"🔒 Conexão fechada")
             
             return novo_status
         else:
             if cur:
                 cur.close()
             if conn:
-                conn.rollback()
-                connection_pool.putconn(conn)
-            logger.error(f"UPDATE não retornou resultado")
+                conn.close()
+            logger.error(f"❌ UPDATE não retornou resultado")
             return None
             
     except Exception as e:
-        logger.error(f"ERRO ao alternar status: {e}")
+        logger.error(f"💥 ERRO: {e}")
         import traceback
         logger.error(traceback.format_exc())
         if conn:
-            conn.rollback()
-            connection_pool.putconn(conn)
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
         st.error(f"Erro: {e}")
         return None
 
