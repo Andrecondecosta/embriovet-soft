@@ -2593,6 +2593,11 @@ elif aba == "👥 Gestão de Proprietários":
                                     st.success("✅ Apagado!")
                                     st.rerun()
                     
+                    # Botão fechar
+                    if st.button("✖ Fechar", key=f"close_{prop['id']}", use_container_width=True):
+                        del st.session_state[f'expand_{prop["id"]}']
+                        st.rerun()
+                    
                     # TAB: Editar
                     with tab_edit:
                         st.markdown("### ✏️ Editar Proprietário")
