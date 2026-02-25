@@ -1149,6 +1149,10 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             
             conn.commit()
             cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
             logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
             return True
             
