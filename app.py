@@ -2521,8 +2521,9 @@ elif aba == "👥 Gestão de Proprietários":
     except Exception as e:
         st.error(f"❌ Erro ao verificar/criar coluna ativo: {e}")
     
-    # COMENTADO: NÃO atualizar status automaticamente
-    # atualizar_status_proprietarios()
+    # Atualizar status automaticamente: desativa quando stock = 0
+    # Não força ativação - controle manual
+    atualizar_status_proprietarios()
     
     # Limpar cache se houver mudança de status
     if 'status_changed' in st.session_state:
