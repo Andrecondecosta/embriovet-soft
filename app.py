@@ -596,6 +596,22 @@ def inserir_stock(dados):
 
         with get_connection() as conn:
             cur = conn.cursor()
+            
+            # Verificar e criar colunas de auditoria se não existirem
+            try:
+                cur.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name='estoque_dono' AND column_name='data_criacao'
+                """)
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN criado_por VARCHAR(100)")
+                    conn.commit()
+            except Exception as e:
+                logger.warning(f"Aviso ao verificar colunas de auditoria: {e}")
+
+            # Obter utilizador atual
+            username = st.session_state.get('username', 'desconhecido')
 
             params = (
                 to_py(dados.get("Garanhão")),
@@ -612,6 +628,7 @@ def inserir_stock(dados):
                 to_py(dados.get("Observações")),
                 to_py(dados.get("Palhetas")),
                 to_py(dados.get("Palhetas")),
+                username  # criado_por
             )
 
             cur.execute(
@@ -620,15 +637,27 @@ def inserir_stock(dados):
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     local_armazenagem, certificado, dose, observacoes,
-                    quantidade_inicial, existencia_atual
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    quantidade_inicial, existencia_atual, criado_por, data_criacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id, garanhao
                 """,
                 params,
             )
+            
+            # Obter ID e garanhão do stock inserido
+            result = cur.fetchone()
+            stock_id = result[0]
+            garanhao_nome = result[1]
 
             conn.commit()
             cur.close()
-            logger.info(f"Stock inserido: {dados.get('Garanhão')}")
+            logger.info(f"Stock inserido: {dados.get('Garanhão')} (ID: {stock_id})")
+            
+            # Guardar informações para redirecionamento
+            st.session_state['ultimo_stock_id'] = stock_id
+            st.session_state['ultimo_garanhao'] = garanhao_nome
+            st.session_state['redirecionar_ver_stock'] = True
+            
             return True
 
     except Exception as e:
