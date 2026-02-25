@@ -1337,7 +1337,29 @@ if aba == "📦 Ver Stock":
 
     if not stock.empty:
         garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
-        filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis)
+        
+        # Verificar se há redirecionamento de stock recém-adicionado
+        filtro_default = None
+        stock_id_expandir = None
+        
+        if 'redirecionar_ver_stock' in st.session_state:
+            if 'ultimo_garanhao' in st.session_state:
+                filtro_default = st.session_state['ultimo_garanhao']
+                stock_id_expandir = st.session_state.get('ultimo_stock_id')
+            # Limpar flags
+            del st.session_state['redirecionar_ver_stock']
+            if 'ultimo_garanhao' in st.session_state:
+                del st.session_state['ultimo_garanhao']
+            if 'ultimo_stock_id' in st.session_state:
+                del st.session_state['ultimo_stock_id']
+        
+        # Definir índice do selectbox
+        if filtro_default and filtro_default in garanhaos_disponiveis:
+            idx_default = garanhaos_disponiveis.index(filtro_default)
+        else:
+            idx_default = 0
+        
+        filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis, index=idx_default)
         stock_filtrado = stock[stock["garanhao"] == filtro]
 
         st.markdown("### 📊 Resumo por Proprietário")
