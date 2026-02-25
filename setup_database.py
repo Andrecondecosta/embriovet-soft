@@ -112,9 +112,11 @@ def criar_tabelas():
             CREATE TABLE IF NOT EXISTS usuarios (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
+                nome_completo VARCHAR(255),
                 password_hash VARCHAR(255) NOT NULL,
                 nivel VARCHAR(50) DEFAULT 'Visualizador',
-                ativo BOOLEAN DEFAULT TRUE
+                ativo BOOLEAN DEFAULT TRUE,
+                created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
             )
         """)
         print("✅ Tabela 'usuarios' criada/verificada")
@@ -124,8 +126,8 @@ def criar_tabelas():
         senha_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
         cur.execute("""
-            INSERT INTO usuarios (username, password_hash, nivel, ativo)
-            VALUES ('admin', %s, 'Administrador', TRUE)
+            INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo)
+            VALUES ('admin', 'Administrador', %s, 'Administrador', TRUE)
             ON CONFLICT (username) DO NOTHING
         """, (senha_hash,))
         print("✅ Usuário admin criado (username: admin, password: admin123)")
