@@ -1470,8 +1470,8 @@ if aba == "📦 Ver Stock":
                                 qtd_transferir = st.number_input(
                                     "Quantidade de palhetas",
                                     min_value=1,
-                                    max_value=existencia,
-                                    value=min(existencia, 1),
+                                    max_value=max(existencia, 1),
+                                    value=max(min(existencia, 1), 1),
                                     key=f"transf_qtd_{row['id']}"
                                 )
                             
