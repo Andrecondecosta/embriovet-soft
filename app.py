@@ -2442,6 +2442,25 @@ elif aba == "📈 Relatórios":
 elif aba == "👥 Gestão de Proprietários":
     st.header("👥 Gestão de Proprietários")
     
+    # Verificar e criar coluna ativo se não existir
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            # Verificar se a coluna existe
+            cur.execute("""
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name='dono' AND column_name='ativo'
+            """)
+            if not cur.fetchone():
+                # Criar coluna se não existir
+                cur.execute("ALTER TABLE dono ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
+                cur.execute("UPDATE dono SET ativo = TRUE WHERE ativo IS NULL")
+                conn.commit()
+                st.success("✅ Coluna 'ativo' criada automaticamente!")
+            cur.close()
+    except Exception as e:
+        st.error(f"❌ Erro ao verificar/criar coluna ativo: {e}")
+    
     # Atualizar status automaticamente
     atualizar_status_proprietarios()
     
