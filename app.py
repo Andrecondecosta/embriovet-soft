@@ -181,6 +181,18 @@ def editar_proprietario(proprietario_id, dados):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            
+            # Verificar se já existe outro proprietário com este nome
+            cur.execute(
+                "SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s) AND id != %s", 
+                (to_py(dados.get('nome')), to_py(proprietario_id))
+            )
+            existe = cur.fetchone()
+            
+            if existe:
+                st.error(f"❌ Já existe outro proprietário com o nome '{dados.get('nome')}'")
+                return False
+            
             cur.execute("""
                 UPDATE dono SET
                     nome = %s,
