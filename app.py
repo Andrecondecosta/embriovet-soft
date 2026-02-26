@@ -992,11 +992,13 @@ def editar_stock(stock_id, dados):
                     qualidade = %s,
                     concentracao = %s,
                     motilidade = %s,
-                    local_armazenagem = %s,
                     certificado = %s,
                     dose = %s,
                     observacoes = %s,
-                    existencia_atual = %s
+                    existencia_atual = %s,
+                    contentor_id = %s,
+                    canister = %s,
+                    andar = %s
                 WHERE id = %s
                 """,
                 (
@@ -1008,11 +1010,13 @@ def editar_stock(stock_id, dados):
                     to_py(dados.get("qualidade")),
                     to_py(dados.get("concentracao")),
                     to_py(dados.get("motilidade")),
-                    to_py(dados.get("local")),
                     to_py(dados.get("certificado")),
                     to_py(dados.get("dose")),
                     to_py(dados.get("observacoes")),
                     to_py(dados.get("existencia")),
+                    to_py(dados.get("contentor_id")),
+                    to_py(dados.get("canister")),
+                    to_py(dados.get("andar")),
                     to_py(stock_id),
                 ),
             )
@@ -1162,6 +1166,35 @@ def obter_stock_contentor(contentor_id):
                     e.origem_externa
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
+
+
+def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
+    """Aplica filtro de data em um DataFrame"""
+    if df.empty:
+        return df
+    
+    if coluna_data not in df.columns:
+        return df
+    
+    df_filtrado = df.copy()
+    
+    try:
+        # Converter coluna para datetime se necessário
+        if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
+            df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
+        
+        # Aplicar filtros
+        if data_inicio:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
+        
+        if data_fim:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
+        
+        return df_filtrado
+    except Exception as e:
+        logger.error(f"Erro ao aplicar filtro de data: {e}")
+        return df
+
                 WHERE e.contentor_id = %s AND e.existencia_atual > 0
                 ORDER BY e.canister, e.andar, e.garanhao
             """
@@ -1779,6 +1812,9 @@ if aba == "📦 Ver Stock":
                         if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
                             modal_adicionar_proprietario()
                         
+                        # Carregar contentores para edição
+                        contentores_df_edit = carregar_contentores()
+                        
                         with st.form(key=f"edit_form_{row['id']}"):
                             edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
                             
@@ -1812,9 +1848,54 @@ if aba == "📦 Ver Stock":
                             with col2:
                                 edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
                                 edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
-                                edit_local = st.text_input("Local", value=row.get("local_armazenagem") or "")
                                 edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
                                 edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                            
+                            st.markdown("---")
+                            st.subheader("📍 Localização Física")
+                            
+                            if not contentores_df_edit.empty:
+                                col_loc1, col_loc2, col_loc3 = st.columns(3)
+                                
+                                # Contentor atual
+                                contentor_atual_id = row.get("contentor_id")
+                                idx_contentor = 0
+                                if contentor_atual_id and contentor_atual_id in contentores_df_edit["id"].values:
+                                    idx_contentor = list(contentores_df_edit["id"]).index(contentor_atual_id)
+                                
+                                with col_loc1:
+                                    edit_contentor_codigo = st.selectbox(
+                                        "Contentor *",
+                                        options=contentores_df_edit["codigo"].tolist(),
+                                        index=idx_contentor,
+                                        key=f"edit_cont_{row['id']}"
+                                    )
+                                    edit_contentor_id = int(contentores_df_edit.loc[contentores_df_edit["codigo"] == edit_contentor_codigo, "id"].iloc[0])
+                                
+                                with col_loc2:
+                                    canister_atual = row.get("canister", 1)
+                                    edit_canister = st.selectbox(
+                                        "Canister *",
+                                        options=list(range(1, 11)),
+                                        index=canister_atual - 1 if canister_atual else 0,
+                                        key=f"edit_can_{row['id']}"
+                                    )
+                                
+                                with col_loc3:
+                                    andar_atual = row.get("andar", 1)
+                                    edit_andar = st.radio(
+                                        "Andar *",
+                                        options=[1, 2],
+                                        format_func=lambda x: f"{x}º",
+                                        horizontal=True,
+                                        index=andar_atual - 1 if andar_atual else 0,
+                                        key=f"edit_and_{row['id']}"
+                                    )
+                            else:
+                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")
+                                edit_contentor_id = None
+                                edit_canister = 1
+                                edit_andar = 1
                             
                             edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
                             
@@ -1830,7 +1911,9 @@ if aba == "📦 Ver Stock":
                                     "qualidade": edit_qualidade,
                                     "concentracao": edit_concentracao,
                                     "motilidade": edit_motilidade,
-                                    "local": edit_local,
+                                    "contentor_id": edit_contentor_id,
+                                    "canister": edit_canister,
+                                    "andar": edit_andar,
                                     "certificado": edit_certificado,
                                     "dose": edit_dose,
                                     "observacoes": edit_obs,
@@ -2139,6 +2222,30 @@ elif aba == "📝 Registrar Inseminação":
 elif aba == "📈 Relatórios":
     st.header("📈 Relatórios e Análises")
     
+    # Filtros globais de data
+    st.markdown("### 📅 Filtros de Período")
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([2, 2, 1])
+    
+    with col_filtro1:
+        usar_filtro_data = st.checkbox("Filtrar por período", value=False, help="Ativar para filtrar por datas")
+    
+    data_inicio = None
+    data_fim = None
+    
+    if usar_filtro_data:
+        with col_filtro2:
+            data_inicio = st.date_input("Data início", value=None, help="Deixe vazio para sem limite")
+        
+        with col_filtro3:
+            data_fim = st.date_input("Data fim", value=None, help="Deixe vazio para sem limite")
+        
+        if data_inicio and data_fim and data_inicio > data_fim:
+            st.error("❌ Data de início não pode ser maior que data de fim")
+            data_inicio = None
+            data_fim = None
+    
+    st.markdown("---")
+    
     # Sub-abas principais simplificadas
     rel_tab1, rel_tab2, rel_tab3 = st.tabs([
         "🔍 Pesquisa por Garanhão", 
@@ -2153,6 +2260,10 @@ elif aba == "📈 Relatórios":
         
         stock = carregar_stock()
         insem = carregar_inseminacoes()
+        
+        # Aplicar filtros de data se ativos
+        if usar_filtro_data and (data_inicio or data_fim):
+            insem = aplicar_filtro_data(insem, 'data_inseminacao', data_inicio, data_fim)
         
         if stock.empty:
             st.warning("⚠️ Nenhum stock registrado.")
@@ -2172,8 +2283,14 @@ elif aba == "📈 Relatórios":
                 dados_garanhao = stock[stock["garanhao"] == garanhao_selecionado]
                 insem_garanhao = insem[insem["garanhao"] == garanhao_selecionado] if not insem.empty else pd.DataFrame()
                 transf = carregar_transferencias()
-                transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
                 transf_ext = carregar_transferencias_externas()
+                
+                # Aplicar filtros de data nas transferências
+                if usar_filtro_data and (data_inicio or data_fim):
+                    transf = aplicar_filtro_data(transf, 'data_transferencia', data_inicio, data_fim)
+                    transf_ext = aplicar_filtro_data(transf_ext, 'data_transferencia', data_inicio, data_fim)
+                
+                transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
                 transf_ext_garanhao = transf_ext[transf_ext["garanhao"] == garanhao_selecionado] if not transf_ext.empty else pd.DataFrame()
                 
                 # Botão exportar tudo deste garanhão
