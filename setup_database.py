@@ -80,6 +80,55 @@ def criar_tabelas():
             print(f"⚠️ Aviso ao verificar colunas de auditoria: {e}")
             conn.rollback()
         
+        # Criar tabela de contentores
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS contentores (
+                id SERIAL PRIMARY KEY,
+                codigo VARCHAR(50) UNIQUE NOT NULL,
+                descricao TEXT,
+                x INTEGER DEFAULT 100,
+                y INTEGER DEFAULT 100,
+                w INTEGER DEFAULT 150,
+                h INTEGER DEFAULT 150,
+                ativo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("✅ Tabela 'contentores' criada/verificada")
+        
+        # Criar contentor temporário padrão
+        try:
+            cur.execute("""
+                INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
+                VALUES ('CT-TEMP', 'Contentor Temporário (migração)', 100, 100, 150, 150, TRUE)
+                ON CONFLICT (codigo) DO NOTHING
+            """)
+            conn.commit()
+            print("✅ Contentor temporário criado/verificado")
+        except Exception as e:
+            print(f"⚠️ Aviso ao criar contentor temporário: {e}")
+            conn.rollback()
+        
+        # Adicionar colunas de localização estruturada ao estoque
+        try:
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS contentor_id INTEGER REFERENCES contentores(id) ON DELETE RESTRICT
+            """)
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS canister INTEGER CHECK (canister >= 1 AND canister <= 10)
+            """)
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS andar INTEGER CHECK (andar IN (1, 2))
+            """)
+            conn.commit()
+            print("✅ Colunas de localização estruturada adicionadas")
+        except Exception as e:
+            print(f"⚠️ Aviso ao adicionar colunas de localização: {e}")
+            conn.rollback()
+        
         # Criar tabela de inseminações
         cur.execute("""
             CREATE TABLE IF NOT EXISTS inseminacoes (
