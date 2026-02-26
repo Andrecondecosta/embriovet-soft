@@ -2193,6 +2193,30 @@ elif aba == "📝 Registrar Inseminação":
 elif aba == "📈 Relatórios":
     st.header("📈 Relatórios e Análises")
     
+    # Filtros globais de data
+    st.markdown("### 📅 Filtros de Período")
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([2, 2, 1])
+    
+    with col_filtro1:
+        usar_filtro_data = st.checkbox("Filtrar por período", value=False, help="Ativar para filtrar por datas")
+    
+    data_inicio = None
+    data_fim = None
+    
+    if usar_filtro_data:
+        with col_filtro2:
+            data_inicio = st.date_input("Data início", value=None, help="Deixe vazio para sem limite")
+        
+        with col_filtro3:
+            data_fim = st.date_input("Data fim", value=None, help="Deixe vazio para sem limite")
+        
+        if data_inicio and data_fim and data_inicio > data_fim:
+            st.error("❌ Data de início não pode ser maior que data de fim")
+            data_inicio = None
+            data_fim = None
+    
+    st.markdown("---")
+    
     # Sub-abas principais simplificadas
     rel_tab1, rel_tab2, rel_tab3 = st.tabs([
         "🔍 Pesquisa por Garanhão", 
