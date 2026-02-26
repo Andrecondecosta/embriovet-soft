@@ -1769,72 +1769,107 @@ elif aba == "➕ Adicionar Stock":
         if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
             modal_adicionar_proprietario()
     else:
-        # Botão + fora do form
-        if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
-            modal_adicionar_proprietario()
+        # Carregar contentores
+        contentores_df = carregar_contentores()
         
-        with st.form("novo_stock"):
-            garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+        if contentores_df.empty:
+            st.warning("⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.")
+        else:
+            # Botão + fora do form
+            if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+                modal_adicionar_proprietario()
             
-            # Verificar se há proprietário recém-adicionado
-            if 'novo_proprietario_id' in st.session_state:
-                idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
-            else:
-                idx_default = 0
-            
-            proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
-
-            dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-
-            col1, col2 = st.columns(2)
-            with col1:
-                data = st.text_input("Data de Produção")
-                origem = st.text_input("Origem Externa / Referência")
-                palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
-                qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
-                concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
-
-            with col2:
-                motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
-                local = st.text_input("Local Armazenagem")
-                certificado = st.selectbox("Certificado?", ["Sim", "Não"])
-                dose = st.text_input("Dose")
-
-            observacoes = st.text_area("Observações")
-            submitted = st.form_submit_button("💾 Salvar")
-
-            if submitted:
-                palhetas_int = int(to_py(palhetas) or 0)
-
-                if not garanhao:
-                    st.error("❌ Nome do garanhão é obrigatório")
-                elif palhetas_int <= 0:
-                    st.error("❌ Número de palhetas deve ser maior que zero")
+            with st.form("novo_stock"):
+                garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+                
+                # Verificar se há proprietário recém-adicionado
+                if 'novo_proprietario_id' in st.session_state:
+                    idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
                 else:
-                    ok = inserir_stock(
-                        {
-                            "Garanhão": garanhao,
-                            "Proprietário": dono_id,
-                            "Data": data,
-                            "Origem": origem,
-                            "Palhetas": palhetas_int,
-                            "Qualidade": int(to_py(qualidade) or 0),
-                            "Concentração": int(to_py(concentracao) or 0),
-                            "Motilidade": int(to_py(motilidade) or 0),
-                            "Local": local,
-                            "Certificado": certificado,
-                            "Dose": dose,
-                            "Observações": observacoes,
-                        }
+                    idx_default = 0
+                
+                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
+
+                dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    data = st.text_input("Data de Produção")
+                    origem = st.text_input("Origem Externa / Referência")
+                    palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
+                    qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
+                    concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
+
+                with col2:
+                    motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
+                    certificado = st.selectbox("Certificado?", ["Sim", "Não"])
+                    dose = st.text_input("Dose")
+
+                st.markdown("---")
+                st.subheader("📍 Localização Física")
+                
+                col_loc1, col_loc2, col_loc3 = st.columns(3)
+                with col_loc1:
+                    contentor_selecionado = st.selectbox(
+                        "Contentor *",
+                        options=contentores_df["codigo"].tolist(),
+                        help="Selecione o contentor onde o sémen será armazenado"
                     )
-                    if ok:
-                        st.success("✅ Stock adicionado com sucesso!")
-                        # Marcar que usou o proprietário
-                        if 'novo_proprietario_id' in st.session_state:
-                            st.session_state['novo_proprietario_usado'] = True
-                        # Mudar aba para Ver Stock
-                        st.session_state['aba_selecionada'] = "📦 Ver Stock"
-                        st.rerun()
+                    contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])
+                
+                with col_loc2:
+                    canister = st.selectbox(
+                        "Canister *",
+                        options=list(range(1, 11)),
+                        help="Número do canister (1-10)"
+                    )
+                
+                with col_loc3:
+                    andar = st.radio(
+                        "Andar *",
+                        options=[1, 2],
+                        format_func=lambda x: f"{x}º",
+                        horizontal=True,
+                        help="Nível dentro do canister"
+                    )
+
+                observacoes = st.text_area("Observações", help="Informações adicionais (opcional)")
+                submitted = st.form_submit_button("💾 Salvar")
+
+                if submitted:
+                    palhetas_int = int(to_py(palhetas) or 0)
+
+                    if not garanhao:
+                        st.error("❌ Nome do garanhão é obrigatório")
+                    elif palhetas_int <= 0:
+                        st.error("❌ Número de palhetas deve ser maior que zero")
+                    else:
+                        ok = inserir_stock(
+                            {
+                                "Garanhão": garanhao,
+                                "Proprietário": dono_id,
+                                "Data": data,
+                                "Origem": origem,
+                                "Palhetas": palhetas_int,
+                                "Qualidade": int(to_py(qualidade) or 0),
+                                "Concentração": int(to_py(concentracao) or 0),
+                                "Motilidade": int(to_py(motilidade) or 0),
+                                "Certificado": certificado,
+                                "Dose": dose,
+                                "Contentor": contentor_id,
+                                "Canister": canister,
+                                "Andar": andar,
+                                "Observações": observacoes,
+                            }
+                        )
+                        if ok:
+                            st.success("✅ Stock adicionado com sucesso!")
+                            # Marcar que usou o proprietário
+                            if 'novo_proprietario_id' in st.session_state:
+                                st.session_state['novo_proprietario_usado'] = True
+                            # Mudar aba para Ver Stock
+                            st.session_state['aba_selecionada'] = "📦 Ver Stock"
+                            st.rerun()
 
 # ------------------------------------------------------------
 # 📝 Registrar Inseminação
