@@ -1202,15 +1202,6 @@ def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
         logger.error(f"Erro ao aplicar filtro de data: {e}")
         return df
 
-                WHERE e.contentor_id = %s AND e.existencia_atual > 0
-                ORDER BY e.canister, e.andar, e.garanhao
-            """
-            df = pd.read_sql_query(query, conn, params=(contentor_id,))
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao obter stock do contentor: {e}")
-        return pd.DataFrame()
-
 
 def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
