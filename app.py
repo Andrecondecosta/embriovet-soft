@@ -1725,7 +1725,25 @@ if aba == "📦 Ver Stock":
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
-                        st.markdown(f"**📍 Local:** {row.get('local_armazenagem') or 'N/A'}")
+                        
+                        # Localização estruturada
+                        if row.get('contentor_id'):
+                            try:
+                                contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
+                                with get_connection() as conn:
+                                    contentor_df = pd.read_sql_query(contentor_query, conn)
+                                    if not contentor_df.empty:
+                                        contentor_codigo = contentor_df.iloc[0]['codigo']
+                                        canister_num = row.get('canister', 'N/A')
+                                        andar_num = row.get('andar', 'N/A')
+                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")
+                                    else:
+                                        st.markdown(f"**📍 Localização:** N/A")
+                            except Exception:
+                                st.markdown(f"**📍 Localização:** N/A")
+                        else:
+                            st.markdown(f"**📍 Localização:** N/A")
+                        
                         st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
                         st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
                     with col2:
