@@ -992,11 +992,13 @@ def editar_stock(stock_id, dados):
                     qualidade = %s,
                     concentracao = %s,
                     motilidade = %s,
-                    local_armazenagem = %s,
                     certificado = %s,
                     dose = %s,
                     observacoes = %s,
-                    existencia_atual = %s
+                    existencia_atual = %s,
+                    contentor_id = %s,
+                    canister = %s,
+                    andar = %s
                 WHERE id = %s
                 """,
                 (
@@ -1008,11 +1010,13 @@ def editar_stock(stock_id, dados):
                     to_py(dados.get("qualidade")),
                     to_py(dados.get("concentracao")),
                     to_py(dados.get("motilidade")),
-                    to_py(dados.get("local")),
                     to_py(dados.get("certificado")),
                     to_py(dados.get("dose")),
                     to_py(dados.get("observacoes")),
                     to_py(dados.get("existencia")),
+                    to_py(dados.get("contentor_id")),
+                    to_py(dados.get("canister")),
+                    to_py(dados.get("andar")),
                     to_py(stock_id),
                 ),
             )
