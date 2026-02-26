@@ -2261,6 +2261,10 @@ elif aba == "📈 Relatórios":
         stock = carregar_stock()
         insem = carregar_inseminacoes()
         
+        # Aplicar filtros de data se ativos
+        if usar_filtro_data and (data_inicio or data_fim):
+            insem = aplicar_filtro_data(insem, 'data_inseminacao', data_inicio, data_fim)
+        
         if stock.empty:
             st.warning("⚠️ Nenhum stock registrado.")
         else:
@@ -2279,8 +2283,14 @@ elif aba == "📈 Relatórios":
                 dados_garanhao = stock[stock["garanhao"] == garanhao_selecionado]
                 insem_garanhao = insem[insem["garanhao"] == garanhao_selecionado] if not insem.empty else pd.DataFrame()
                 transf = carregar_transferencias()
-                transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
                 transf_ext = carregar_transferencias_externas()
+                
+                # Aplicar filtros de data nas transferências
+                if usar_filtro_data and (data_inicio or data_fim):
+                    transf = aplicar_filtro_data(transf, 'data_transferencia', data_inicio, data_fim)
+                    transf_ext = aplicar_filtro_data(transf_ext, 'data_transferencia', data_inicio, data_fim)
+                
+                transf_garanhao = transf[transf["garanhao"] == garanhao_selecionado] if not transf.empty else pd.DataFrame()
                 transf_ext_garanhao = transf_ext[transf_ext["garanhao"] == garanhao_selecionado] if not transf_ext.empty else pd.DataFrame()
                 
                 # Botão exportar tudo deste garanhão
