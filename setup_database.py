@@ -64,6 +64,22 @@ def criar_tabelas():
         """)
         print("✅ Tabela 'estoque_dono' criada/verificada")
         
+        # Adicionar colunas de auditoria se não existirem
+        try:
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            """)
+            cur.execute("""
+                ALTER TABLE estoque_dono 
+                ADD COLUMN IF NOT EXISTS criado_por VARCHAR(100)
+            """)
+            conn.commit()
+            print("✅ Colunas de auditoria verificadas/adicionadas")
+        except Exception as e:
+            print(f"⚠️ Aviso ao verificar colunas de auditoria: {e}")
+            conn.rollback()
+        
         # Criar tabela de inseminações
         cur.execute("""
             CREATE TABLE IF NOT EXISTS inseminacoes (
@@ -120,6 +136,22 @@ def criar_tabelas():
             )
         """)
         print("✅ Tabela 'usuarios' criada/verificada")
+        
+        # Adicionar colunas se não existirem (para bancos já existentes)
+        try:
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS nome_completo VARCHAR(255)
+            """)
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+            """)
+            conn.commit()
+            print("✅ Colunas adicionais verificadas/adicionadas")
+        except Exception as e:
+            print(f"⚠️ Aviso ao verificar colunas: {e}")
+            conn.rollback()
         
         # Criar usuário admin padrão (senha: admin123)
         import bcrypt
