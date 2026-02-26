@@ -590,6 +590,18 @@ def inserir_stock(dados):
         if not dados.get("Garanhão"):
             st.error("❌ Nome do garanhão é obrigatório")
             return False
+        
+        if not dados.get("Contentor"):
+            st.error("❌ Contentor é obrigatório")
+            return False
+        
+        if not dados.get("Canister"):
+            st.error("❌ Canister é obrigatório")
+            return False
+        
+        if not dados.get("Andar"):
+            st.error("❌ Andar é obrigatório")
+            return False
 
         palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
         try:
@@ -605,19 +617,6 @@ def inserir_stock(dados):
         with get_connection() as conn:
             cur = conn.cursor()
             
-            # Verificar e criar colunas de auditoria se não existirem
-            try:
-                cur.execute("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name='estoque_dono' AND column_name='data_criacao'
-                """)
-                if not cur.fetchone():
-                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN criado_por VARCHAR(100)")
-                    conn.commit()
-            except Exception as e:
-                logger.warning(f"Aviso ao verificar colunas de auditoria: {e}")
-
             # Obter utilizador atual
             username = st.session_state.get('username', 'desconhecido')
 
@@ -630,13 +629,15 @@ def inserir_stock(dados):
                 to_py(dados.get("Qualidade")),
                 to_py(dados.get("Concentração")),
                 to_py(dados.get("Motilidade")),
-                to_py(dados.get("Local")),
                 to_py(dados.get("Certificado")),
                 to_py(dados.get("Dose")),
                 to_py(dados.get("Observações")),
                 to_py(dados.get("Palhetas")),
                 to_py(dados.get("Palhetas")),
-                username  # criado_por
+                to_py(dados.get("Contentor")),
+                to_py(dados.get("Canister")),
+                to_py(dados.get("Andar")),
+                username
             )
 
             cur.execute(
@@ -644,9 +645,11 @@ def inserir_stock(dados):
                 INSERT INTO estoque_dono (
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
-                    local_armazenagem, certificado, dose, observacoes,
-                    quantidade_inicial, existencia_atual, criado_por, data_criacao
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    certificado, dose, observacoes,
+                    quantidade_inicial, existencia_atual,
+                    contentor_id, canister, andar,
+                    criado_por, data_criacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id, garanhao
                 """,
                 params,
