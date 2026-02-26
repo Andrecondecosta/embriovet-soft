@@ -590,6 +590,18 @@ def inserir_stock(dados):
         if not dados.get("Garanhão"):
             st.error("❌ Nome do garanhão é obrigatório")
             return False
+        
+        if not dados.get("Contentor"):
+            st.error("❌ Contentor é obrigatório")
+            return False
+        
+        if not dados.get("Canister"):
+            st.error("❌ Canister é obrigatório")
+            return False
+        
+        if not dados.get("Andar"):
+            st.error("❌ Andar é obrigatório")
+            return False
 
         palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
         try:
@@ -605,19 +617,6 @@ def inserir_stock(dados):
         with get_connection() as conn:
             cur = conn.cursor()
             
-            # Verificar e criar colunas de auditoria se não existirem
-            try:
-                cur.execute("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name='estoque_dono' AND column_name='data_criacao'
-                """)
-                if not cur.fetchone():
-                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-                    cur.execute("ALTER TABLE estoque_dono ADD COLUMN criado_por VARCHAR(100)")
-                    conn.commit()
-            except Exception as e:
-                logger.warning(f"Aviso ao verificar colunas de auditoria: {e}")
-
             # Obter utilizador atual
             username = st.session_state.get('username', 'desconhecido')
 
@@ -630,13 +629,15 @@ def inserir_stock(dados):
                 to_py(dados.get("Qualidade")),
                 to_py(dados.get("Concentração")),
                 to_py(dados.get("Motilidade")),
-                to_py(dados.get("Local")),
                 to_py(dados.get("Certificado")),
                 to_py(dados.get("Dose")),
                 to_py(dados.get("Observações")),
                 to_py(dados.get("Palhetas")),
                 to_py(dados.get("Palhetas")),
-                username  # criado_por
+                to_py(dados.get("Contentor")),
+                to_py(dados.get("Canister")),
+                to_py(dados.get("Andar")),
+                username
             )
 
             cur.execute(
@@ -644,9 +645,11 @@ def inserir_stock(dados):
                 INSERT INTO estoque_dono (
                     garanhao, dono_id, data_embriovet, origem_externa,
                     palhetas_produzidas, qualidade, concentracao, motilidade,
-                    local_armazenagem, certificado, dose, observacoes,
-                    quantidade_inicial, existencia_atual, criado_por, data_criacao
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    certificado, dose, observacoes,
+                    quantidade_inicial, existencia_atual,
+                    contentor_id, canister, andar,
+                    criado_por, data_criacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id, garanhao
                 """,
                 params,
@@ -1409,11 +1412,11 @@ if st.sidebar.button("🚪 Logout", width="stretch"):
 st.sidebar.markdown("---")
 
 # Menu lateral adaptado às permissões
-menu_options = ["📦 Ver Stock", "📈 Relatórios"]
+menu_options = ["🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
-    menu_options.insert(1, "➕ Adicionar Stock")
-    menu_options.insert(2, "📝 Registrar Inseminação")
+    menu_options.insert(2, "➕ Adicionar Stock")
+    menu_options.insert(3, "📝 Registrar Inseminação")
     menu_options.append("👥 Gestão de Proprietários")
 
 if verificar_permissao('Administrador'):
@@ -1479,6 +1482,169 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 # 📦 Ver Stock
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# 🗺️ Mapa dos Contentores
+# ------------------------------------------------------------
+if aba == "🗺️ Mapa dos Contentores":
+    st.header("🗺️ Mapa dos Contentores")
+    
+    # Carregar contentores
+    contentores_df = carregar_contentores()
+    
+    # Botões de ação
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 4])
+    with col_btn1:
+        if st.button("➕ Novo Contentor", type="primary"):
+            st.session_state['modal_novo_contentor'] = True
+    
+    with col_btn2:
+        st.metric("Total Contentores", len(contentores_df))
+    
+    # Modal para adicionar contentor
+    if st.session_state.get('modal_novo_contentor', False):
+        with st.form("form_novo_contentor"):
+            st.subheader("➕ Adicionar Contentor")
+            
+            codigo = st.text_input("Código do Contentor *", 
+                                  placeholder="Ex: CT-01, A1, EMB01",
+                                  help="Identificador único alfanumérico")
+            descricao = st.text_area("Descrição (opcional)")
+            
+            col_submit1, col_submit2 = st.columns(2)
+            with col_submit1:
+                submitted = st.form_submit_button("💾 Criar Contentor")
+            with col_submit2:
+                cancelar = st.form_submit_button("❌ Cancelar")
+            
+            if cancelar:
+                st.session_state['modal_novo_contentor'] = False
+                st.rerun()
+            
+            if submitted:
+                if not codigo:
+                    st.error("❌ Código é obrigatório")
+                else:
+                    # Verificar se código já existe
+                    if codigo in contentores_df['codigo'].values:
+                        st.error(f"❌ Já existe um contentor com o código '{codigo}'")
+                    else:
+                        contentor_id = adicionar_contentor({
+                            'codigo': codigo,
+                            'descricao': descricao,
+                            'x': 100,
+                            'y': 100,
+                            'w': 150,
+                            'h': 150
+                        })
+                        if contentor_id:
+                            st.success(f"✅ Contentor '{codigo}' criado com sucesso!")
+                            st.session_state['modal_novo_contentor'] = False
+                            st.rerun()
+    
+    st.markdown("---")
+    
+    # Área do mapa
+    if contentores_df.empty:
+        st.info("📦 Nenhum contentor cadastrado. Clique em 'Novo Contentor' para começar.")
+    else:
+        st.subheader("Contentores Cadastrados")
+        
+        # Exibir contentores em cards
+        for idx, row in contentores_df.iterrows():
+            # Obter stock do contentor
+            stock_contentor = obter_stock_contentor(row['id'])
+            total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+            total_lotes = len(stock_contentor)
+            
+            # Cor baseada na ocupação
+            if total_palhetas == 0:
+                cor_badge = "🟢"
+                status = "Vazio"
+            elif total_palhetas < 50:
+                cor_badge = "🟡"
+                status = "Baixa ocupação"
+            elif total_palhetas < 150:
+                cor_badge = "🟠"
+                status = "Média ocupação"
+            else:
+                cor_badge = "🔴"
+                status = "Alta ocupação"
+            
+            with st.expander(f"{cor_badge} **{row['codigo']}** - {total_palhetas} palhetas | {total_lotes} lotes | {status}"):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.markdown(f"**Descrição:** {row['descricao'] or 'Sem descrição'}")
+                    st.markdown(f"**Total de palhetas:** {total_palhetas}")
+                    st.markdown(f"**Total de lotes:** {total_lotes}")
+                    
+                    if not stock_contentor.empty:
+                        st.markdown("---")
+                        st.markdown("**📦 Lotes dentro:**")
+                        
+                        # Agrupar por canister e andar
+                        for canister in sorted(stock_contentor['canister'].unique()):
+                            st.markdown(f"**Canister {canister}:**")
+                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                            
+                            for andar in sorted(stock_canister['andar'].unique()):
+                                st.markdown(f"  *{andar}º Andar:*")
+                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                
+                                for _, lote in stock_andar.iterrows():
+                                    ref = lote['origem_externa'] or lote['data_embriovet'] or 'S/ ref'
+                                    st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+                
+                with col2:
+                    st.markdown("**Ações:**")
+                    
+                    # Botão editar
+                    if st.button("✏️ Editar", key=f"edit_{row['id']}"):
+                        st.session_state[f'modal_editar_{row["id"]}'] = True
+                        st.rerun()
+                    
+                    # Botão apagar
+                    if st.button("🗑️ Apagar", key=f"del_{row['id']}", type="secondary"):
+                        if deletar_contentor(row['id']):
+                            st.success(f"✅ Contentor '{row['codigo']}' apagado!")
+                            st.rerun()
+                
+                # Modal de edição
+                if st.session_state.get(f'modal_editar_{row["id"]}', False):
+                    with st.form(f"form_editar_{row['id']}"):
+                        st.subheader(f"✏️ Editar Contentor: {row['codigo']}")
+                        
+                        novo_codigo = st.text_input("Código", value=row['codigo'])
+                        nova_descricao = st.text_area("Descrição", value=row['descricao'] or '')
+                        
+                        col_edit1, col_edit2 = st.columns(2)
+                        with col_edit1:
+                            salvar = st.form_submit_button("💾 Salvar")
+                        with col_edit2:
+                            cancelar_edit = st.form_submit_button("❌ Cancelar")
+                        
+                        if cancelar_edit:
+                            st.session_state[f'modal_editar_{row["id"]}'] = False
+                            st.rerun()
+                        
+                        if salvar:
+                            if editar_contentor(row['id'], {
+                                'codigo': novo_codigo,
+                                'descricao': nova_descricao,
+                                'x': row['x'],
+                                'y': row['y'],
+                                'w': row['w'],
+                                'h': row['h']
+                            }):
+                                st.success("✅ Contentor atualizado!")
+                                st.session_state[f'modal_editar_{row["id"]}'] = False
+                                st.rerun()
+
+# ------------------------------------------------------------
+# 📦 Ver Stock
+# ------------------------------------------------------------
+
 if aba == "📦 Ver Stock":
     st.header("📦 Estoque Atual por Garanhão e Proprietário")
 
@@ -1559,7 +1725,25 @@ if aba == "📦 Ver Stock":
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
-                        st.markdown(f"**📍 Local:** {row.get('local_armazenagem') or 'N/A'}")
+                        
+                        # Localização estruturada
+                        if row.get('contentor_id'):
+                            try:
+                                contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
+                                with get_connection() as conn:
+                                    contentor_df = pd.read_sql_query(contentor_query, conn)
+                                    if not contentor_df.empty:
+                                        contentor_codigo = contentor_df.iloc[0]['codigo']
+                                        canister_num = row.get('canister', 'N/A')
+                                        andar_num = row.get('andar', 'N/A')
+                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")
+                                    else:
+                                        st.markdown(f"**📍 Localização:** N/A")
+                            except Exception:
+                                st.markdown(f"**📍 Localização:** N/A")
+                        else:
+                            st.markdown(f"**📍 Localização:** N/A")
+                        
                         st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
                         st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
                     with col2:
@@ -1766,72 +1950,107 @@ elif aba == "➕ Adicionar Stock":
         if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
             modal_adicionar_proprietario()
     else:
-        # Botão + fora do form
-        if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
-            modal_adicionar_proprietario()
+        # Carregar contentores
+        contentores_df = carregar_contentores()
         
-        with st.form("novo_stock"):
-            garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+        if contentores_df.empty:
+            st.warning("⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.")
+        else:
+            # Botão + fora do form
+            if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+                modal_adicionar_proprietario()
             
-            # Verificar se há proprietário recém-adicionado
-            if 'novo_proprietario_id' in st.session_state:
-                idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
-            else:
-                idx_default = 0
-            
-            proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
-
-            dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-
-            col1, col2 = st.columns(2)
-            with col1:
-                data = st.text_input("Data de Produção")
-                origem = st.text_input("Origem Externa / Referência")
-                palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
-                qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
-                concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
-
-            with col2:
-                motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
-                local = st.text_input("Local Armazenagem")
-                certificado = st.selectbox("Certificado?", ["Sim", "Não"])
-                dose = st.text_input("Dose")
-
-            observacoes = st.text_area("Observações")
-            submitted = st.form_submit_button("💾 Salvar")
-
-            if submitted:
-                palhetas_int = int(to_py(palhetas) or 0)
-
-                if not garanhao:
-                    st.error("❌ Nome do garanhão é obrigatório")
-                elif palhetas_int <= 0:
-                    st.error("❌ Número de palhetas deve ser maior que zero")
+            with st.form("novo_stock"):
+                garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+                
+                # Verificar se há proprietário recém-adicionado
+                if 'novo_proprietario_id' in st.session_state:
+                    idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
                 else:
-                    ok = inserir_stock(
-                        {
-                            "Garanhão": garanhao,
-                            "Proprietário": dono_id,
-                            "Data": data,
-                            "Origem": origem,
-                            "Palhetas": palhetas_int,
-                            "Qualidade": int(to_py(qualidade) or 0),
-                            "Concentração": int(to_py(concentracao) or 0),
-                            "Motilidade": int(to_py(motilidade) or 0),
-                            "Local": local,
-                            "Certificado": certificado,
-                            "Dose": dose,
-                            "Observações": observacoes,
-                        }
+                    idx_default = 0
+                
+                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
+
+                dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    data = st.text_input("Data de Produção")
+                    origem = st.text_input("Origem Externa / Referência")
+                    palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
+                    qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
+                    concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
+
+                with col2:
+                    motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
+                    certificado = st.selectbox("Certificado?", ["Sim", "Não"])
+                    dose = st.text_input("Dose")
+
+                st.markdown("---")
+                st.subheader("📍 Localização Física")
+                
+                col_loc1, col_loc2, col_loc3 = st.columns(3)
+                with col_loc1:
+                    contentor_selecionado = st.selectbox(
+                        "Contentor *",
+                        options=contentores_df["codigo"].tolist(),
+                        help="Selecione o contentor onde o sémen será armazenado"
                     )
-                    if ok:
-                        st.success("✅ Stock adicionado com sucesso!")
-                        # Marcar que usou o proprietário
-                        if 'novo_proprietario_id' in st.session_state:
-                            st.session_state['novo_proprietario_usado'] = True
-                        # Mudar aba para Ver Stock
-                        st.session_state['aba_selecionada'] = "📦 Ver Stock"
-                        st.rerun()
+                    contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])
+                
+                with col_loc2:
+                    canister = st.selectbox(
+                        "Canister *",
+                        options=list(range(1, 11)),
+                        help="Número do canister (1-10)"
+                    )
+                
+                with col_loc3:
+                    andar = st.radio(
+                        "Andar *",
+                        options=[1, 2],
+                        format_func=lambda x: f"{x}º",
+                        horizontal=True,
+                        help="Nível dentro do canister"
+                    )
+
+                observacoes = st.text_area("Observações", help="Informações adicionais (opcional)")
+                submitted = st.form_submit_button("💾 Salvar")
+
+                if submitted:
+                    palhetas_int = int(to_py(palhetas) or 0)
+
+                    if not garanhao:
+                        st.error("❌ Nome do garanhão é obrigatório")
+                    elif palhetas_int <= 0:
+                        st.error("❌ Número de palhetas deve ser maior que zero")
+                    else:
+                        ok = inserir_stock(
+                            {
+                                "Garanhão": garanhao,
+                                "Proprietário": dono_id,
+                                "Data": data,
+                                "Origem": origem,
+                                "Palhetas": palhetas_int,
+                                "Qualidade": int(to_py(qualidade) or 0),
+                                "Concentração": int(to_py(concentracao) or 0),
+                                "Motilidade": int(to_py(motilidade) or 0),
+                                "Certificado": certificado,
+                                "Dose": dose,
+                                "Contentor": contentor_id,
+                                "Canister": canister,
+                                "Andar": andar,
+                                "Observações": observacoes,
+                            }
+                        )
+                        if ok:
+                            st.success("✅ Stock adicionado com sucesso!")
+                            # Marcar que usou o proprietário
+                            if 'novo_proprietario_id' in st.session_state:
+                                st.session_state['novo_proprietario_usado'] = True
+                            # Mudar aba para Ver Stock
+                            st.session_state['aba_selecionada'] = "📦 Ver Stock"
+                            st.rerun()
 
 # ------------------------------------------------------------
 # 📝 Registrar Inseminação
