@@ -1412,11 +1412,11 @@ if st.sidebar.button("🚪 Logout", width="stretch"):
 st.sidebar.markdown("---")
 
 # Menu lateral adaptado às permissões
-menu_options = ["📦 Ver Stock", "📈 Relatórios"]
+menu_options = ["🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
-    menu_options.insert(1, "➕ Adicionar Stock")
-    menu_options.insert(2, "📝 Registrar Inseminação")
+    menu_options.insert(2, "➕ Adicionar Stock")
+    menu_options.insert(3, "📝 Registrar Inseminação")
     menu_options.append("👥 Gestão de Proprietários")
 
 if verificar_permissao('Administrador'):
