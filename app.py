@@ -1779,6 +1779,9 @@ if aba == "📦 Ver Stock":
                         if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
                             modal_adicionar_proprietario()
                         
+                        # Carregar contentores para edição
+                        contentores_df_edit = carregar_contentores()
+                        
                         with st.form(key=f"edit_form_{row['id']}"):
                             edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
                             
@@ -1812,9 +1815,54 @@ if aba == "📦 Ver Stock":
                             with col2:
                                 edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
                                 edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
-                                edit_local = st.text_input("Local", value=row.get("local_armazenagem") or "")
                                 edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
                                 edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                            
+                            st.markdown("---")
+                            st.subheader("📍 Localização Física")
+                            
+                            if not contentores_df_edit.empty:
+                                col_loc1, col_loc2, col_loc3 = st.columns(3)
+                                
+                                # Contentor atual
+                                contentor_atual_id = row.get("contentor_id")
+                                idx_contentor = 0
+                                if contentor_atual_id and contentor_atual_id in contentores_df_edit["id"].values:
+                                    idx_contentor = list(contentores_df_edit["id"]).index(contentor_atual_id)
+                                
+                                with col_loc1:
+                                    edit_contentor_codigo = st.selectbox(
+                                        "Contentor *",
+                                        options=contentores_df_edit["codigo"].tolist(),
+                                        index=idx_contentor,
+                                        key=f"edit_cont_{row['id']}"
+                                    )
+                                    edit_contentor_id = int(contentores_df_edit.loc[contentores_df_edit["codigo"] == edit_contentor_codigo, "id"].iloc[0])
+                                
+                                with col_loc2:
+                                    canister_atual = row.get("canister", 1)
+                                    edit_canister = st.selectbox(
+                                        "Canister *",
+                                        options=list(range(1, 11)),
+                                        index=canister_atual - 1 if canister_atual else 0,
+                                        key=f"edit_can_{row['id']}"
+                                    )
+                                
+                                with col_loc3:
+                                    andar_atual = row.get("andar", 1)
+                                    edit_andar = st.radio(
+                                        "Andar *",
+                                        options=[1, 2],
+                                        format_func=lambda x: f"{x}º",
+                                        horizontal=True,
+                                        index=andar_atual - 1 if andar_atual else 0,
+                                        key=f"edit_and_{row['id']}"
+                                    )
+                            else:
+                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")
+                                edit_contentor_id = None
+                                edit_canister = 1
+                                edit_andar = 1
                             
                             edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
                             
@@ -1830,7 +1878,9 @@ if aba == "📦 Ver Stock":
                                     "qualidade": edit_qualidade,
                                     "concentracao": edit_concentracao,
                                     "motilidade": edit_motilidade,
-                                    "local": edit_local,
+                                    "contentor_id": edit_contentor_id,
+                                    "canister": edit_canister,
+                                    "andar": edit_andar,
                                     "certificado": edit_certificado,
                                     "dose": edit_dose,
                                     "observacoes": edit_obs,
