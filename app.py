@@ -1166,6 +1166,35 @@ def obter_stock_contentor(contentor_id):
                     e.origem_externa
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
+
+
+def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
+    """Aplica filtro de data em um DataFrame"""
+    if df.empty:
+        return df
+    
+    if coluna_data not in df.columns:
+        return df
+    
+    df_filtrado = df.copy()
+    
+    try:
+        # Converter coluna para datetime se necessário
+        if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
+            df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
+        
+        # Aplicar filtros
+        if data_inicio:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
+        
+        if data_fim:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
+        
+        return df_filtrado
+    except Exception as e:
+        logger.error(f"Erro ao aplicar filtro de data: {e}")
+        return df
+
                 WHERE e.contentor_id = %s AND e.existencia_atual > 0
                 ORDER BY e.canister, e.andar, e.garanhao
             """
