@@ -1037,6 +1037,138 @@ def deletar_stock(stock_id):
         st.error(f"Erro ao deletar stock: {e}")
         return False
 
+# ------------------------------------------------------------
+# 🗺️ Funções de Gestão de Contentores
+# ------------------------------------------------------------
+
+def carregar_contentores(apenas_ativos=True):
+    """Carrega todos os contentores"""
+    try:
+        with get_connection() as conn:
+            query = "SELECT * FROM contentores"
+            if apenas_ativos:
+                query += " WHERE ativo = TRUE"
+            query += " ORDER BY codigo"
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar contentores: {e}")
+        st.error(f"Erro ao carregar contentores: {e}")
+        return pd.DataFrame()
+
+def adicionar_contentor(dados):
+    """Adiciona novo contentor"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                to_py(dados.get('codigo')),
+                to_py(dados.get('descricao', '')),
+                to_py(dados.get('x', 100)),
+                to_py(dados.get('y', 100)),
+                to_py(dados.get('w', 150)),
+                to_py(dados.get('h', 150)),
+                True
+            ))
+            contentor_id = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor criado: {dados.get('codigo')} (ID: {contentor_id})")
+            return contentor_id
+    except Exception as e:
+        logger.error(f"Erro ao adicionar contentor: {e}")
+        st.error(f"Erro ao adicionar contentor: {e}")
+        return None
+
+def editar_contentor(contentor_id, dados):
+    """Edita um contentor existente"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE contentores 
+                SET codigo = %s, descricao = %s, x = %s, y = %s, w = %s, h = %s
+                WHERE id = %s
+            """, (
+                to_py(dados.get('codigo')),
+                to_py(dados.get('descricao')),
+                to_py(dados.get('x')),
+                to_py(dados.get('y')),
+                to_py(dados.get('w')),
+                to_py(dados.get('h')),
+                to_py(contentor_id)
+            ))
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor editado: ID {contentor_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar contentor: {e}")
+        st.error(f"Erro ao editar contentor: {e}")
+        return False
+
+def deletar_contentor(contentor_id):
+    """Deleta um contentor apenas se não tiver stock associado"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se tem stock associado
+            cur.execute("""
+                SELECT COALESCE(SUM(existencia_atual), 0) as total
+                FROM estoque_dono
+                WHERE contentor_id = %s
+            """, (to_py(contentor_id),))
+            
+            total_stock = cur.fetchone()[0]
+            
+            if total_stock > 0:
+                st.error(f"❌ Não é possível eliminar: este contentor ainda tem sémen ({total_stock} palhetas).")
+                return False
+            
+            # Se não tem stock, pode deletar
+            cur.execute("DELETE FROM contentores WHERE id = %s", (to_py(contentor_id),))
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor deletado: ID {contentor_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao deletar contentor: {e}")
+        st.error(f"Erro ao deletar contentor: {e}")
+        return False
+
+def obter_stock_contentor(contentor_id):
+    """Obtém informações de stock de um contentor específico"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT 
+                    e.id,
+                    e.garanhao,
+                    d.nome as proprietario_nome,
+                    e.canister,
+                    e.andar,
+                    e.existencia_atual,
+                    e.qualidade,
+                    e.data_embriovet,
+                    e.origem_externa
+                FROM estoque_dono e
+                LEFT JOIN dono d ON e.dono_id = d.id
+                WHERE e.contentor_id = %s AND e.existencia_atual > 0
+                ORDER BY e.canister, e.andar, e.garanhao
+            """
+            df = pd.read_sql_query(query, conn, params=(contentor_id,))
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao obter stock do contentor: {e}")
+        return pd.DataFrame()
+
+
 def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
