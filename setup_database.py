@@ -132,7 +132,9 @@ def criar_tabelas():
                 password_hash VARCHAR(255) NOT NULL,
                 nivel VARCHAR(50) DEFAULT 'Visualizador',
                 ativo BOOLEAN DEFAULT TRUE,
-                created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+                created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
             )
         """)
         print("✅ Tabela 'usuarios' criada/verificada")
@@ -146,6 +148,14 @@ def criar_tabelas():
             cur.execute("""
                 ALTER TABLE usuarios 
                 ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+            """)
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            """)
+            cur.execute("""
+                ALTER TABLE usuarios 
+                ADD COLUMN IF NOT EXISTS last_login TIMESTAMP
             """)
             conn.commit()
             print("✅ Colunas adicionais verificadas/adicionadas")
