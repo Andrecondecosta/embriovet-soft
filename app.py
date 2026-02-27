@@ -1646,30 +1646,13 @@ if aba == "🗺️ Mapa dos Contentores":
     is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
     modo_visualizacao = True
 
-    if "mapa_layout_cache" not in st.session_state:
-        st.session_state["mapa_layout_cache"] = {}
-
-    if js_eval_disponivel:
-        layout_live_raw = streamlit_js_eval(
+    layout_pending_raw = None
+    if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
+        layout_pending_raw = streamlit_js_eval(
             js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
-            key='map_layout_live_reader',
+            key=f"map_layout_pending_reader_{st.session_state.get('mapa_salvar_layout_tentativas', 0)}",
             want_output=True,
         )
-
-        if layout_live_raw and layout_live_raw != "null":
-            try:
-                layout_parsed = layout_live_raw if isinstance(layout_live_raw, dict) else json.loads(str(layout_live_raw))
-                if isinstance(layout_parsed, dict) and "output" in layout_parsed:
-                    output_value = layout_parsed.get("output")
-                    if isinstance(output_value, dict):
-                        layout_parsed = output_value
-                    elif isinstance(output_value, str) and output_value.strip():
-                        layout_parsed = json.loads(output_value)
-
-                if isinstance(layout_parsed, dict):
-                    st.session_state["mapa_layout_cache"] = layout_parsed
-            except Exception:
-                pass
     
     # Modal para adicionar contentor - design limpo
     if st.session_state.get('modal_novo_contentor', False):
