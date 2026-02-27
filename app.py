@@ -2533,7 +2533,9 @@ if aba == "🗺️ Mapa dos Contentores":
     st.stop()
 
 if aba == "📦 Ver Stock":
-    st.header("📦 Estoque Atual por Garanhão e Proprietário")
+    st.header("Estoque Atual")
+    inject_stock_css()
+    inject_reports_css()
 
     if not stock.empty:
         garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
@@ -2559,27 +2561,105 @@ if aba == "📦 Ver Stock":
         else:
             idx_default = 0
         
-        filtro = st.selectbox("Filtrar por Garanhão:", garanhaos_disponiveis, index=idx_default)
-        stock_filtrado = stock[stock["garanhao"] == filtro]
+        render_zone_title("Zona de seleção", "stock-zone-title")
+        filtro = st.selectbox("Garanhão", garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
 
-        st.markdown("### 📊 Resumo por Proprietário")
+        render_zone_title("Zona de filtros", "stock-zone-title")
+        with st.expander("Filtros de consulta", expanded=False):
+            f1, f2, f3 = st.columns(3)
+            with f1:
+                filtro_props = st.multiselect(
+                    "Proprietários",
+                    sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),
+                    key="stock_filter_props",
+                )
+            with f2:
+                min_palhetas = st.number_input("Mín. palhetas", min_value=0, value=0, step=1, key="stock_filter_min")
+            with f3:
+                mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")
+
+        stock_filtrado = stock[stock["garanhao"] == filtro].copy()
+        if filtro_props:
+            stock_filtrado = stock_filtrado[stock_filtrado["proprietario_nome"].isin(filtro_props)]
+        if min_palhetas > 0:
+            stock_filtrado = stock_filtrado[(stock_filtrado["existencia_atual"].fillna(0)) >= min_palhetas]
+        if not mostrar_sem_stock:
+            stock_filtrado = stock_filtrado[(stock_filtrado["existencia_atual"].fillna(0)) > 0]
+
+        render_zone_title("Zona de resultados", "stock-zone-title")
+        render_kpi_strip([
+            ("lotes", len(stock_filtrado)),
+            ("palhetas", int(to_py(stock_filtrado["existencia_atual"].sum()) or 0) if not stock_filtrado.empty else 0),
+            ("proprietários", stock_filtrado["proprietario_nome"].nunique() if not stock_filtrado.empty else 0),
+            ("qualidade média", f"{round(float(to_py(stock_filtrado['qualidade'].mean()) or 0), 1)}%" if not stock_filtrado.empty else "0%"),
+        ])
+
         resumo_por_proprietario = (
             stock_filtrado.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+            if not stock_filtrado.empty else pd.DataFrame(columns=["proprietario_nome", "existencia_atual"])
         )
-        resumo_por_proprietario.columns = ["Proprietário", "Total Palhetas"]
+        if not resumo_por_proprietario.empty:
+            resumo_por_proprietario.columns = ["Proprietário", "Total Palhetas"]
+            st.dataframe(
+                resumo_por_proprietario.sort_values("Total Palhetas", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                height=220,
+            )
 
-        cols = st.columns(max(1, len(resumo_por_proprietario)))
-        for idx, (_, row) in enumerate(resumo_por_proprietario.iterrows()):
-            with cols[idx]:
-                total_palhetas = to_py(row["Total Palhetas"]) or 0
-                try:
-                    total_palhetas = int(total_palhetas)
-                except Exception:
-                    total_palhetas = 0
-                st.metric(label=f"👤 {row['Proprietário']}", value=f"{total_palhetas} palhetas")
+        with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
+            transf_hist = carregar_transferencias()
+            transf_ext_hist = carregar_transferencias_externas()
 
-        st.markdown("---")
-        st.markdown("### 📦 Lotes Detalhados")
+            transf_hist = transf_hist[transf_hist["garanhao"] == filtro] if not transf_hist.empty else transf_hist
+            transf_ext_hist = transf_ext_hist[transf_ext_hist["garanhao"] == filtro] if not transf_ext_hist.empty else transf_ext_hist
+
+            if filtro_props:
+                if not transf_hist.empty:
+                    transf_hist = transf_hist[
+                        (transf_hist["proprietario_origem"].isin(filtro_props)) |
+                        (transf_hist["proprietario_destino"].isin(filtro_props))
+                    ]
+                if not transf_ext_hist.empty:
+                    transf_ext_hist = transf_ext_hist[transf_ext_hist["proprietario_origem"].isin(filtro_props)]
+
+            cexp1, cexp2 = st.columns(2)
+            with cexp1:
+                if not transf_hist.empty:
+                    csv_ti = safe_pick(transf_hist, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"])
+                    st.download_button(
+                        "CSV Internas",
+                        csv_ti.to_csv(index=False).encode("utf-8"),
+                        f"transferencias_internas_{filtro}.csv",
+                        "text/csv",
+                        key=f"stock_hist_ti_{filtro}",
+                        use_container_width=True,
+                    )
+            with cexp2:
+                if not transf_ext_hist.empty:
+                    csv_te = safe_pick(transf_ext_hist, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"])
+                    st.download_button(
+                        "CSV Externas",
+                        csv_te.to_csv(index=False).encode("utf-8"),
+                        f"transferencias_externas_{filtro}.csv",
+                        "text/csv",
+                        key=f"stock_hist_te_{filtro}",
+                        use_container_width=True,
+                    )
+
+            if not transf_hist.empty:
+                ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)
+                ex_ti.columns = ["Data", "De", "Para", "Palhetas"]
+                st.dataframe(ex_ti, use_container_width=True, hide_index=True, height=220)
+            if not transf_ext_hist.empty:
+                ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)
+                ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]
+                st.dataframe(ex_te, use_container_width=True, hide_index=True, height=220)
+
+            if transf_hist.empty and transf_ext_hist.empty:
+                st.info("Sem transferências para o filtro atual.")
+
+        st.markdown("<div class='stock-table-head'>Lotes Detalhados</div>", unsafe_allow_html=True)
 
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
