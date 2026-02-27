@@ -1825,9 +1825,16 @@ if aba == "🗺️ Mapa dos Contentores":
                     
                     // Salvar nova posição
                     const id = parseInt(draggedElement.id.replace('contentor-', ''));
-                    const x = parseInt(draggedElement.style.left);
-                    const y = parseInt(draggedElement.style.top);
+                    const x = Math.round(parseInt(draggedElement.style.left));
+                    const y = Math.round(parseInt(draggedElement.style.top));
                     
+                    // Mostrar feedback visual
+                    draggedElement.style.borderColor = '#10b981';
+                    setTimeout(() => {{
+                        draggedElement.style.borderColor = contentores.find(c => c.id === id).cor;
+                    }}, 500);
+                    
+                    // Enviar para Streamlit
                     window.parent.postMessage({{
                         type: 'streamlit:setComponentValue',
                         value: {{ 
@@ -1837,6 +1844,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             y: y
                         }}
                     }}, '*');
+                    
+                    console.log(`Contentor ${{id}} movido para x:${{x}}, y:${{y}}`);
                     
                     draggedElement = null;
                     document.removeEventListener('mousemove', drag);
