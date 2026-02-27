@@ -1735,6 +1735,10 @@ if aba == "🗺️ Mapa dos Contentores":
                         background: #f8fafc;
                         padding: 6px 10px;
                         margin-bottom: 4px;
+                        position: sticky;
+                        top: 0;
+                        z-index: 80;
+                        backdrop-filter: blur(4px);
                     }
                     .map-toolbar-kpis {
                         display: flex;
@@ -1747,15 +1751,11 @@ if aba == "🗺️ Mapa dos Contentores":
                         color: #0f172a;
                     }
                     div[data-testid="stVerticalBlock"]:has(.map-toolbar-shell) {
-                        position: sticky;
-                        top: 0;
-                        z-index: 80;
-                        background: rgba(248, 250, 252, 0.96);
-                        border: 1px solid #e2e8f0;
-                        border-radius: 10px;
-                        padding: 6px 8px 8px;
-                        margin-bottom: 4px;
-                        backdrop-filter: blur(4px);
+                        background: transparent;
+                        border: none;
+                        border-radius: 0;
+                        padding: 0;
+                        margin: 0;
                     }
                 </style>
                 """,
