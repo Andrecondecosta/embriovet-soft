@@ -2002,9 +2002,9 @@ if aba == "🗺️ Mapa dos Contentores":
                 pass
 
             if st.session_state.get("move_feedback"):
-                st.success(st.session_state.pop("move_feedback"))
+                st.toast(st.session_state.pop("move_feedback"), icon="✅")
             if st.session_state.get("move_feedback_erro"):
-                st.error(st.session_state.pop("move_feedback_erro"))
+                st.toast(st.session_state.pop("move_feedback_erro"), icon="⚠️")
 
             mapa_html = """
             <style>
