@@ -27,6 +27,13 @@ from modules.ui_kit import (
     render_kpi_strip,
     safe_pick,
 )
+from modules.stock_reporting import (
+    filter_stock_view,
+    summarize_stock_by_owner,
+    stock_kpis,
+    filter_transfer_history,
+    filter_lot_transfer_history,
+)
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
