@@ -96,6 +96,2670 @@ except Exception as e:
     st.error(f"Erro de conexão com banco de dados: {e}")
     st.stop()
 
+@contextmanager
+def get_connection():
+    """Context manager para gestão segura de conexões"""
+    conn = None
+    try:
+        conn = connection_pool.getconn()
+        yield conn
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro na conexão: {e}")
+        raise
+    finally:
+        if conn:
+            connection_pool.putconn(conn)
+
+# ------------------------------------------------------------
+# 📥 Funções de carregamento de dados
+# ------------------------------------------------------------
+def carregar_proprietarios(apenas_ativos=False):
+    """Carrega lista de proprietarios do banco de dados
+    
+    Args:
+        apenas_ativos: Se True, retorna apenas proprietários ativos
+    """
+    try:
+        with get_connection() as conn:
+            query = "SELECT * FROM dono"
+            if apenas_ativos:
+                query += " WHERE ativo = TRUE"
+            query += " ORDER BY nome"
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar proprietarios: {e}")
+        st.error(f"Erro ao carregar proprietarios: {e}")
+        return pd.DataFrame()
+
+def atualizar_status_proprietarios():
+    """
+    Desativa automaticamente proprietários quando stock chega a 0.
+    NUNCA reativa automaticamente - controle manual após desativação.
+    """
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            # APENAS desativar proprietários que estão ATIVOS e têm stock = 0
+            # Nunca forçar ativação ou desativação se já está inativo
+            cur.execute("""
+                UPDATE dono SET ativo = FALSE
+                WHERE ativo = TRUE
+                AND id IN (
+                    SELECT d.id FROM dono d
+                    LEFT JOIN (
+                        SELECT dono_id, SUM(existencia_atual) as total_stock
+                        FROM estoque_dono
+                        GROUP BY dono_id
+                    ) s ON d.id = s.dono_id
+                    WHERE COALESCE(s.total_stock, 0) = 0
+                )
+            """)
+            
+            # NÃO ativar automaticamente - apenas controle manual!
+            # Removido: código que ativava automaticamente com stock > 0
+            
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar status: {e}")
+        return False
+
+def alternar_status_proprietario(proprietario_id):
+    """Alterna o status ativo/inativo de um proprietário"""
+    conn = None
+    cur = None
+    try:
+        # Pegar credenciais
+        db_name = os.getenv("DB_NAME", "embriovet")
+        db_user = os.getenv("DB_USER", "postgres")
+        db_pass = os.getenv("DB_PASSWORD", "123")
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        
+        logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
+        logger.info(f"🆔 Proprietário ID recebido: {proprietario_id} (tipo: {type(proprietario_id)})")
+        
+        # Converter ID para int
+        prop_id_int = int(proprietario_id)
+        logger.info(f"🆔 Proprietário ID convertido: {prop_id_int} (tipo: {type(prop_id_int)})")
+        
+        # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
+        conn = psycopg2.connect(
+            dbname=db_name,
+            user=db_user,
+            password=db_pass,
+            host=db_host,
+            port=db_port
+        )
+        
+        # FORÇAR AUTOCOMMIT - COMMIT IMEDIATO APÓS CADA COMANDO
+        conn.set_session(autocommit=True)
+        cur = conn.cursor()
+        
+        logger.info(f"✅ AUTOCOMMIT ativado")
+        
+        # Verificar o valor atual
+        sql_select = "SELECT ativo FROM dono WHERE id = %s"
+        logger.info(f"📋 SQL SELECT: {sql_select} com id={prop_id_int}")
+        cur.execute(sql_select, (prop_id_int,))
+        status_antes = cur.fetchone()
+        logger.info(f"📋 Status ANTES: {status_antes}")
+        
+        if not status_antes:
+            logger.error(f"❌ Proprietário com ID {prop_id_int} não encontrado!")
+            cur.close()
+            conn.close()
+            return None
+        
+        # Calcular novo valor
+        novo_valor = not status_antes[0]
+        logger.info(f"🔄 Novo valor calculado: {novo_valor} (tipo: {type(novo_valor)})")
+        
+        # UPDATE direto (SEM to_py)
+        sql_update = "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo"
+        logger.info(f"📝 SQL UPDATE: {sql_update}")
+        logger.info(f"📝 Parâmetros: ativo={novo_valor}, id={prop_id_int}")
+        
+        cur.execute(sql_update, (novo_valor, prop_id_int))
+        
+        resultado = cur.fetchone()
+        logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
+        
+        if resultado:
+            novo_status = resultado[0]
+            logger.info(f"✅ UPDATE executado com sucesso. Novo status: {novo_status}")
+            
+            # Verificar com SELECT
+            cur.execute("SELECT ativo FROM dono WHERE id = %s", (prop_id_int,))
+            status_verificacao = cur.fetchone()
+            logger.info(f"🔍 Verificação final: {status_verificacao}")
+            
+            # Verificar FORA da conexão Python
+            logger.info(f"⚠️ Execute no terminal: psql -U postgres -d embriovet -c \"SELECT id, nome, ativo FROM dono WHERE id={prop_id_int};\"")
+            
+            cur.close()
+            conn.close()
+            logger.info(f"🔒 Conexão fechada")
+            
+            return novo_status
+        else:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+            logger.error(f"❌ UPDATE não retornou resultado")
+            return None
+            
+    except Exception as e:
+        logger.error(f"💥 ERRO: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+        st.error(f"Erro: {e}")
+        return None
+
+def editar_proprietario(proprietario_id, dados):
+    """Edita informações do proprietário"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se já existe outro proprietário com este nome
+            cur.execute(
+                "SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s) AND id != %s", 
+                (to_py(dados.get('nome')), to_py(proprietario_id))
+            )
+            existe = cur.fetchone()
+            
+            if existe:
+                st.error(f"❌ Já existe outro proprietário com o nome '{dados.get('nome')}'")
+                return False
+            
+            cur.execute("""
+                UPDATE dono SET
+                    nome = %s,
+                    email = %s,
+                    telemovel = %s,
+                    nome_completo = %s,
+                    nif = %s,
+                    morada = %s,
+                    codigo_postal = %s,
+                    cidade = %s
+                WHERE id = %s
+            """, (
+                to_py(dados.get('nome')),
+                to_py(dados.get('email')),
+                to_py(dados.get('telemovel')),
+                to_py(dados.get('nome_completo')),
+                to_py(dados.get('nif')),
+                to_py(dados.get('morada')),
+                to_py(dados.get('codigo_postal')),
+                to_py(dados.get('cidade')),
+                to_py(proprietario_id)
+            ))
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário editado: ID {proprietario_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar proprietário: {e}")
+        return False
+
+def carregar_stock(apenas_ativos=True):
+    """Carrega stock completo com informações de proprietario
+    
+    Args:
+        apenas_ativos: Se True, retorna apenas stock de proprietários ativos
+    """
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT e.*, d.nome as proprietario_nome
+                FROM estoque_dono e
+                LEFT JOIN dono d ON e.dono_id = d.id
+                WHERE e.existencia_atual > 0
+            """
+            if apenas_ativos:
+                query += " AND d.ativo = TRUE"
+            query += " ORDER BY e.garanhao, e.id"
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar stock: {e}")
+        st.error(f"Erro ao carregar stock: {e}")
+        return pd.DataFrame()
+
+def carregar_inseminacoes():
+    """Carrega histórico de inseminações"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT i.*, d.nome as proprietario_nome
+                FROM inseminacoes i
+                LEFT JOIN dono d ON i.dono_id = d.id
+                ORDER BY i.data_inseminacao DESC
+            """
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar inseminações: {e}")
+        st.error(f"Erro ao carregar inseminações: {e}")
+        return pd.DataFrame()
+
+def carregar_transferencias():
+    """Carrega histórico de transferências"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT t.*, 
+                       e.garanhao,
+                       d1.nome as proprietario_origem,
+                       d2.nome as proprietario_destino
+                FROM transferencias t
+                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
+                LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
+                ORDER BY t.data_transferencia DESC
+            """
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar transferências: {e}")
+        return pd.DataFrame()
+
+def carregar_transferencias_externas():
+    """Carrega histórico de transferências externas (vendas/envios)"""
+    try:
+        with get_connection() as conn:
+            # Verificar se a tabela existe
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'transferencias_externas'
+                );
+            """)
+            tabela_existe = cur.fetchone()[0]
+            cur.close()
+            
+            if not tabela_existe:
+                logger.warning("Tabela transferencias_externas não existe")
+                return pd.DataFrame()
+            
+            query = """
+                SELECT te.*, 
+                       d.nome as proprietario_origem
+                FROM transferencias_externas te
+                LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+                ORDER BY te.data_transferencia DESC
+            """
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar transferências externas: {e}")
+        return pd.DataFrame()
+
+def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int, dados_transf_ext):
+    """Gera PDF com histórico completo do garanhão"""
+    try:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Estilo customizado
+        titulo_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.HexColor('#1f4788'),
+            spaceAfter=12,
+            alignment=1  # Center
+        )
+        
+        subtitulo_style = ParagraphStyle(
+            'CustomSubtitle',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#2e5c9a'),
+            spaceAfter=10
+        )
+        
+        # Título
+        elements.append(Paragraph(f"Relatório Completo: {garanhao_nome}", titulo_style))
+        elements.append(Paragraph(f"Gerado em: {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # STOCK
+        if not dados_stock.empty:
+            elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
+            
+            stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
+            for _, row in dados_stock.iterrows():
+                stock_data.append([
+                    str(row.get('proprietario_nome', 'N/A'))[:30],
+                    str(row.get('data_embriovet', 'N/A'))[:10],
+                    str(int(row.get('existencia_atual', 0))),
+                    f"{int(row.get('qualidade', 0))}%",
+                    str(row.get('local_armazenagem', 'N/A'))[:20]
+                ])
+            
+            t = Table(stock_data, colWidths=[4*cm, 3*cm, 2.5*cm, 2.5*cm, 4*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # INSEMINAÇÕES
+        if not dados_insem.empty:
+            elements.append(Paragraph("📝 Histórico de Inseminações", subtitulo_style))
+            
+            insem_data = [['Data', 'Égua', 'Proprietário', 'Palhetas']]
+            for _, row in dados_insem.iterrows():
+                insem_data.append([
+                    str(row.get('data_inseminacao', 'N/A'))[:10],
+                    str(row.get('egua', 'N/A'))[:25],
+                    str(row.get('proprietario_nome', 'N/A'))[:25],
+                    str(int(row.get('palhetas_gastas', 0)))
+                ])
+            
+            t = Table(insem_data, colWidths=[3*cm, 5*cm, 5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # TRANSFERÊNCIAS INTERNAS
+        if not dados_transf_int.empty:
+            elements.append(Paragraph("🔄 Transferências Internas", subtitulo_style))
+            
+            transf_data = [['Data', 'De', 'Para', 'Palhetas']]
+            for _, row in dados_transf_int.iterrows():
+                transf_data.append([
+                    str(row.get('data_transferencia', 'N/A'))[:10],
+                    str(row.get('proprietario_origem', 'N/A'))[:20],
+                    str(row.get('proprietario_destino', 'N/A'))[:20],
+                    str(int(row.get('quantidade', 0)))
+                ])
+            
+            t = Table(transf_data, colWidths=[3*cm, 4.5*cm, 4.5*cm, 3*cm])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 0.5*cm))
+        
+        # TRANSFERÊNCIAS EXTERNAS
+        if not dados_transf_ext.empty:
+            elements.append(Paragraph("📤 Transferências Externas (Vendas/Doações)", subtitulo_style))
+            
+            for _, row in dados_transf_ext.iterrows():
+                transf_ext_data = [['Data', 'De', 'Para', 'Palhetas', 'Tipo']]
+                transf_ext_data.append([
+                    str(row.get('data_transferencia', 'N/A'))[:10],
+                    str(row.get('proprietario_origem', 'N/A'))[:18],
+                    str(row.get('destinatario_externo', 'N/A'))[:18],
+                    str(int(row.get('quantidade', 0))),
+                    str(row.get('tipo', 'N/A'))[:15]
+                ])
+                
+                t = Table(transf_ext_data, colWidths=[2.5*cm, 3.5*cm, 3.5*cm, 2.5*cm, 3*cm])
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                elements.append(t)
+                
+                # Adicionar observações se existirem
+                obs = row.get('observacoes', '')
+                if obs and str(obs) != 'nan' and str(obs).strip():
+                    obs_style = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, leftIndent=10)
+                    elements.append(Paragraph(f"<b>Observações:</b> {str(obs)}", obs_style))
+                
+                elements.append(Spacer(1, 0.3*cm))
+        
+        # Gerar PDF
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar PDF: {e}")
+        return None
+
+def atualizar_proprietario_stock(stock_id, novo_dono_id):
+    """Atualiza o proprietario de um item de stock"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
+                (to_py(novo_dono_id), to_py(stock_id)),
+            )
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário atualizado: stock_id={stock_id}, novo_dono_id={novo_dono_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar proprietario: {e}")
+        st.error(f"Erro ao atualizar proprietario: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 💾 Funções de inserção
+# ------------------------------------------------------------
+def inserir_stock(dados):
+    """Insere novo stock no banco de dados"""
+    try:
+        if not dados.get("Garanhão"):
+            st.error("❌ Nome do garanhão é obrigatório")
+            return False
+        
+        if not dados.get("Contentor"):
+            st.error("❌ Contentor é obrigatório")
+            return False
+        
+        if not dados.get("Canister"):
+            st.error("❌ Canister é obrigatório")
+            return False
+        
+        if not dados.get("Andar"):
+            st.error("❌ Andar é obrigatório")
+            return False
+
+        palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
+        try:
+            palhetas_int = int(palhetas_val)
+        except Exception:
+            st.error("❌ Palhetas tem de ser numérico")
+            return False
+
+        if palhetas_int < 0:
+            st.error("❌ Número de palhetas não pode ser negativo")
+            return False
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Obter utilizador atual
+            username = st.session_state.get('username', 'desconhecido')
+
+            params = (
+                to_py(dados.get("Garanhão")),
+                to_py(dados.get("Proprietário")),
+                to_py(dados.get("Data")),
+                to_py(dados.get("Origem")),
+                to_py(dados.get("Palhetas")),
+                to_py(dados.get("Qualidade")),
+                to_py(dados.get("Concentração")),
+                to_py(dados.get("Motilidade")),
+                to_py(dados.get("Certificado")),
+                to_py(dados.get("Dose")),
+                to_py(dados.get("Observações")),
+                to_py(dados.get("Palhetas")),
+                to_py(dados.get("Palhetas")),
+                to_py(dados.get("Contentor")),
+                to_py(dados.get("Canister")),
+                to_py(dados.get("Andar")),
+                username
+            )
+
+            cur.execute(
+                """
+                INSERT INTO estoque_dono (
+                    garanhao, dono_id, data_embriovet, origem_externa,
+                    palhetas_produzidas, qualidade, concentracao, motilidade,
+                    certificado, dose, observacoes,
+                    quantidade_inicial, existencia_atual,
+                    contentor_id, canister, andar,
+                    criado_por, data_criacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id, garanhao
+                """,
+                params,
+            )
+            
+            # Obter ID e garanhão do stock inserido
+            result = cur.fetchone()
+            stock_id = result[0]
+            garanhao_nome = result[1]
+
+            conn.commit()
+            cur.close()
+            logger.info(f"Stock inserido: {dados.get('Garanhão')} (ID: {stock_id})")
+            
+            # Guardar informações para redirecionamento
+            st.session_state['ultimo_stock_id'] = stock_id
+            st.session_state['ultimo_garanhao'] = garanhao_nome
+            st.session_state['redirecionar_ver_stock'] = True
+            
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao inserir stock: {e}")
+        st.error(f"Erro ao inserir stock: {e}")
+        return False
+
+def registrar_inseminacao(registro):
+    """Registra uma inseminação e atualiza o stock"""
+    try:
+        palhetas_val = to_py(registro.get("palhetas")) or 0
+        try:
+            palhetas_int = int(palhetas_val)
+        except Exception:
+            st.error("❌ Número de palhetas deve ser numérico")
+            return False
+
+        if palhetas_int <= 0:
+            st.error("❌ Número de palhetas deve ser maior que zero")
+            return False
+
+        if not registro.get("egua"):
+            st.error("❌ Nome da égua é obrigatório")
+            return False
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+
+            cur.execute(
+                "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
+                (to_py(registro.get("stock_id")),),
+            )
+            result = cur.fetchone()
+
+            if not result:
+                st.error("❌ Estoque não encontrado")
+                return False
+
+            existencia_atual = result[0] or 0
+            try:
+                existencia_atual = int(existencia_atual)
+            except Exception:
+                existencia_atual = 0
+
+            if existencia_atual < palhetas_int:
+                st.error(f"❌ Estoque insuficiente! Disponível: {existencia_atual} palhetas")
+                return False
+
+            cur.execute(
+                """
+                INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    to_py(registro.get("garanhao")),
+                    to_py(registro.get("dono_id")),
+                    to_py(registro.get("data")),
+                    to_py(registro.get("egua")),
+                    to_py(registro.get("protocolo")),
+                    to_py(palhetas_int),
+                ),
+            )
+
+            cur.execute(
+                """
+                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+                """,
+                (to_py(palhetas_int), to_py(registro.get("stock_id"))),
+            )
+
+            conn.commit()
+            cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
+            logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao registrar inseminação: {e}")
+        st.error(f"Erro ao registrar inseminação: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 🔐 Funções de Autenticação e Utilizadores
+# ------------------------------------------------------------
+def criar_hash_password(password):
+    """Cria hash da password usando bcrypt"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verificar_password(password, password_hash):
+    """Verifica se a password corresponde ao hash"""
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        return False
+
+def autenticar_usuario(username, password):
+    """Autentica utilizador e retorna seus dados"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, username, nome_completo, password_hash, nivel, ativo
+                FROM usuarios
+                WHERE username = %s AND ativo = TRUE
+            """, (username,))
+            
+            resultado = cur.fetchone()
+            cur.close()
+            
+            if not resultado:
+                return None
+            
+            user_id, username, nome, pwd_hash, nivel, ativo = resultado
+            
+            # Verificar password
+            if verificar_password(password, pwd_hash):
+                # Atualizar last_login
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE usuarios SET last_login = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (user_id,))
+                conn.commit()
+                cur.close()
+                
+                return {
+                    'id': user_id,
+                    'username': username,
+                    'nome': nome,
+                    'nivel': nivel
+                }
+            
+            return None
+            
+    except Exception as e:
+        logger.error(f"Erro ao autenticar: {e}")
+        return None
+
+def carregar_usuarios():
+    """Carrega lista de utilizadores"""
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql_query("""
+                SELECT id, username, nome_completo, nivel, ativo, 
+                       created_at, last_login
+                FROM usuarios
+                ORDER BY nivel, nome_completo
+            """, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar utilizadores: {e}")
+        return pd.DataFrame()
+
+def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
+    """Adiciona novo utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se username já existe
+            cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
+            if cur.fetchone():
+                st.error("❌ Nome de utilizador já existe")
+                return False
+            
+            password_hash = criar_hash_password(password)
+            
+            cur.execute("""
+                INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, created_by)
+                VALUES (%s, %s, %s, %s, TRUE, %s)
+            """, (username, nome_completo, password_hash, nivel, created_by_id))
+            
+            conn.commit()
+            cur.close()
+            logger.info(f"Utilizador criado: {username} ({nivel})")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao adicionar utilizador: {e}")
+        st.error(f"Erro ao adicionar utilizador: {e}")
+        return False
+
+def alterar_password(user_id, nova_password):
+    """Altera password do utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            password_hash = criar_hash_password(nova_password)
+            cur.execute("""
+                UPDATE usuarios SET password_hash = %s
+                WHERE id = %s
+            """, (password_hash, user_id))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao alterar password: {e}")
+        return False
+
+def desativar_usuario(user_id):
+    """Desativa utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (user_id,))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao desativar utilizador: {e}")
+        return False
+
+def ativar_usuario(user_id):
+    """Ativa utilizador"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE usuarios SET ativo = TRUE WHERE id = %s", (user_id,))
+            conn.commit()
+            cur.close()
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao ativar utilizador: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 👥 Funções de Gestão de Proprietários
+# ------------------------------------------------------------
+def adicionar_proprietario(dados):
+    """Adiciona novo proprietário com todos os campos"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se já existe proprietário com este nome
+            cur.execute("SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s)", (to_py(dados.get('nome')),))
+            existe = cur.fetchone()
+            
+            if existe:
+                st.error(f"❌ Já existe um proprietário com o nome '{dados.get('nome')}'")
+                return None
+            
+            cur.execute(
+                """
+                INSERT INTO dono (nome, email, telemovel, nome_completo, nif, morada, codigo_postal, cidade, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                RETURNING id
+                """,
+                (
+                    to_py(dados.get('nome')),
+                    to_py(dados.get('email')),
+                    to_py(dados.get('telemovel')),
+                    to_py(dados.get('nome_completo')),
+                    to_py(dados.get('nif')),
+                    to_py(dados.get('morada')),
+                    to_py(dados.get('codigo_postal')),
+                    to_py(dados.get('cidade'))
+                ),
+            )
+            proprietario_id = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário adicionado: {dados.get('nome')}")
+            return proprietario_id
+    except Exception as e:
+        logger.error(f"Erro ao adicionar proprietário: {e}")
+        st.error(f"Erro ao adicionar proprietário: {e}")
+        return None
+
+def deletar_proprietario(proprietario_id):
+    """Deleta proprietário (apenas se não tiver stock)"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+
+            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (to_py(proprietario_id),))
+            count = cur.fetchone()[0] or 0
+
+            if count > 0:
+                st.error(f"❌ Não é possível deletar! Este proprietário tem {count} lotes de stock.")
+                return False
+
+            cur.execute("SELECT COUNT(*) FROM inseminacoes WHERE dono_id = %s", (to_py(proprietario_id),))
+            count_insem = cur.fetchone()[0] or 0
+
+            if count_insem > 0:
+                st.error(f"❌ Não é possível deletar! Este proprietário tem {count_insem} inseminações registadas.")
+                return False
+
+            cur.execute("DELETE FROM dono WHERE id = %s", (to_py(proprietario_id),))
+            conn.commit()
+            cur.close()
+            logger.info(f"Proprietário deletado: ID {proprietario_id}")
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao deletar proprietário: {e}")
+        st.error(f"Erro ao deletar proprietário: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 📝 Funções de Edição de Stock
+# ------------------------------------------------------------
+def editar_stock(stock_id, dados):
+    """Edita um lote de stock"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE estoque_dono SET
+                    garanhao = %s,
+                    dono_id = %s,
+                    data_embriovet = %s,
+                    origem_externa = %s,
+                    palhetas_produzidas = %s,
+                    qualidade = %s,
+                    concentracao = %s,
+                    motilidade = %s,
+                    certificado = %s,
+                    dose = %s,
+                    observacoes = %s,
+                    existencia_atual = %s,
+                    contentor_id = %s,
+                    canister = %s,
+                    andar = %s
+                WHERE id = %s
+                """,
+                (
+                    to_py(dados.get("garanhao")),
+                    to_py(dados.get("dono_id")),
+                    to_py(dados.get("data")),
+                    to_py(dados.get("origem")),
+                    to_py(dados.get("palhetas_produzidas")),
+                    to_py(dados.get("qualidade")),
+                    to_py(dados.get("concentracao")),
+                    to_py(dados.get("motilidade")),
+                    to_py(dados.get("certificado")),
+                    to_py(dados.get("dose")),
+                    to_py(dados.get("observacoes")),
+                    to_py(dados.get("existencia")),
+                    to_py(dados.get("contentor_id")),
+                    to_py(dados.get("canister")),
+                    to_py(dados.get("andar")),
+                    to_py(stock_id),
+                ),
+            )
+            conn.commit()
+            cur.close()
+            logger.info(f"Stock editado: ID {stock_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar stock: {e}")
+        st.error(f"Erro ao editar stock: {e}")
+        return False
+
+def deletar_stock(stock_id):
+    """Deleta um lote de stock"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
+            conn.commit()
+            cur.close()
+            logger.info(f"Stock deletado: ID {stock_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao deletar stock: {e}")
+        st.error(f"Erro ao deletar stock: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 🗺️ Funções de Gestão de Contentores
+# ------------------------------------------------------------
+
+def carregar_contentores(apenas_ativos=True):
+    """Carrega todos os contentores"""
+    try:
+        with get_connection() as conn:
+            query = "SELECT * FROM contentores"
+            if apenas_ativos:
+                query += " WHERE ativo = TRUE"
+            query += " ORDER BY codigo"
+            df = pd.read_sql_query(query, conn)
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao carregar contentores: {e}")
+        st.error(f"Erro ao carregar contentores: {e}")
+        return pd.DataFrame()
+
+def adicionar_contentor(dados):
+    """Adiciona novo contentor"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                to_py(dados.get('codigo')),
+                to_py(dados.get('descricao', '')),
+                to_py(dados.get('x', 100)),
+                to_py(dados.get('y', 100)),
+                to_py(dados.get('w', 150)),
+                to_py(dados.get('h', 150)),
+                True
+            ))
+            contentor_id = cur.fetchone()[0]
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor criado: {dados.get('codigo')} (ID: {contentor_id})")
+            return contentor_id
+    except Exception as e:
+        logger.error(f"Erro ao adicionar contentor: {e}")
+        st.error(f"Erro ao adicionar contentor: {e}")
+        return None
+
+def editar_contentor(contentor_id, dados):
+    """Edita um contentor existente"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE contentores 
+                SET codigo = %s, descricao = %s, x = %s, y = %s, w = %s, h = %s
+                WHERE id = %s
+            """, (
+                to_py(dados.get('codigo')),
+                to_py(dados.get('descricao')),
+                to_py(dados.get('x')),
+                to_py(dados.get('y')),
+                to_py(dados.get('w')),
+                to_py(dados.get('h')),
+                to_py(contentor_id)
+            ))
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor editado: ID {contentor_id}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao editar contentor: {e}")
+        st.error(f"Erro ao editar contentor: {e}")
+        return False
+
+def atualizar_posicao_contentor(contentor_id, x, y):
+    """Atualiza apenas a posição (x,y) de um contentor"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE contentores
+                SET x = %s, y = %s
+                WHERE id = %s
+            """, (to_py(x), to_py(y), to_py(contentor_id)))
+            conn.commit()
+            cur.close()
+            logger.info(f"Posição do contentor atualizada: ID {contentor_id} -> X={x}, Y={y}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar posição do contentor: {e}")
+        st.error(f"Erro ao guardar posição do contentor: {e}")
+        return False
+
+def deletar_contentor(contentor_id):
+    """Deleta um contentor apenas se não tiver stock associado"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Verificar se tem stock associado
+            cur.execute("""
+                SELECT COALESCE(SUM(existencia_atual), 0) as total
+                FROM estoque_dono
+                WHERE contentor_id = %s
+            """, (to_py(contentor_id),))
+            
+            total_stock = cur.fetchone()[0]
+            
+            if total_stock > 0:
+                st.error(f"❌ Não é possível eliminar: este contentor ainda tem sémen ({total_stock} palhetas).")
+                return False
+            
+            # Se não tem stock, pode deletar
+            cur.execute("DELETE FROM contentores WHERE id = %s", (to_py(contentor_id),))
+            conn.commit()
+            cur.close()
+            logger.info(f"Contentor deletado: ID {contentor_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao deletar contentor: {e}")
+        st.error(f"Erro ao deletar contentor: {e}")
+        return False
+
+def obter_stock_contentor(contentor_id):
+    """Obtém informações de stock de um contentor específico"""
+    try:
+        with get_connection() as conn:
+            query = """
+                SELECT 
+                    e.id,
+                    e.garanhao,
+                    d.nome as proprietario_nome,
+                    e.canister,
+                    e.andar,
+                    e.existencia_atual,
+                    e.qualidade,
+                    e.data_embriovet,
+                    e.origem_externa
+                FROM estoque_dono e
+                LEFT JOIN dono d ON e.dono_id = d.id
+                WHERE e.contentor_id = %s AND e.existencia_atual > 0
+                ORDER BY e.canister, e.andar, e.garanhao
+            """
+            df = pd.read_sql_query(query, conn, params=(contentor_id,))
+        return df
+    except Exception as e:
+        logger.error(f"Erro ao obter stock do contentor: {e}")
+        return pd.DataFrame()
+
+def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
+    """Aplica filtro de data em um DataFrame"""
+    if df.empty:
+        return df
+    
+    if coluna_data not in df.columns:
+        return df
+    
+    df_filtrado = df.copy()
+    
+    try:
+        # Converter coluna para datetime se necessário
+        if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
+            df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
+        
+        # Aplicar filtros
+        if data_inicio:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
+        
+        if data_fim:
+            df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
+        
+        return df_filtrado
+    except Exception as e:
+        logger.error(f"Erro ao aplicar filtro de data: {e}")
+        return df
+
+
+def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade):
+    """Transfere quantidade parcial de palhetas para outro proprietário"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Buscar dados do lote origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
+            
+            origem = cur.fetchone()
+            if not origem:
+                st.error("❌ Lote de origem não encontrado")
+                return False
+            
+            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
+             qual, conc, mot, local, cert, dose, obs) = origem
+            
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            
+            if quantidade_int <= 0:
+                st.error("❌ Quantidade deve ser maior que zero")
+                return False
+            
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+            
+            # Atualizar stock origem (diminuir)
+            cur.execute("""
+                UPDATE estoque_dono 
+                SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+            """, (quantidade_int, to_py(stock_origem_id)))
+            
+            # Verificar se já existe lote do destino com mesmo garanhão
+            cur.execute("""
+                SELECT id, existencia_atual 
+                FROM estoque_dono 
+                WHERE garanhao = %s AND dono_id = %s AND id != %s
+                LIMIT 1
+            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id)))
+            
+            lote_destino = cur.fetchone()
+            
+            if lote_destino:
+                # Já existe lote, adicionar palhetas
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade_int, lote_destino[0]))
+            else:
+                # Criar novo lote para o destino
+                cur.execute("""
+                    INSERT INTO estoque_dono (
+                        garanhao, dono_id, data_embriovet, origem_externa,
+                        palhetas_produzidas, qualidade, concentracao, motilidade,
+                        local_armazenagem, certificado, dose, observacoes,
+                        quantidade_inicial, existencia_atual
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
+                    quantidade_int, to_py(qual), to_py(conc), to_py(mot),
+                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
+                    quantidade_int, quantidade_int
+                ))
+            
+            # Registrar transferência na tabela de transferências
+            cur.execute("""
+                INSERT INTO transferencias (
+                    stock_id, proprietario_origem_id, proprietario_destino_id,
+                    quantidade, data_transferencia
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
+            
+            conn.commit()
+            cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
+            logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao transferir palhetas: {e}")
+        st.error(f"Erro ao transferir palhetas: {e}")
+        return False
+
+def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes=""):
+    """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Buscar dados do lote origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
+            
+            origem = cur.fetchone()
+            if not origem:
+                st.error("❌ Lote de origem não encontrado")
+                return False
+            
+            garanhao, prop_origem_id, exist_atual = origem
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            
+            if quantidade_int <= 0:
+                st.error("❌ Quantidade deve ser maior que zero")
+                return False
+            
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+            
+            # Atualizar stock origem (diminuir)
+            cur.execute("""
+                UPDATE estoque_dono 
+                SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+            """, (quantidade_int, to_py(stock_origem_id)))
+            
+            # Registrar transferência externa
+            cur.execute("""
+                INSERT INTO transferencias_externas (
+                    estoque_id, proprietario_origem_id, garanhao,
+                    destinatario_externo, quantidade, tipo, observacoes,
+                    data_transferencia
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (
+                to_py(stock_origem_id), 
+                to_py(prop_origem_id), 
+                to_py(garanhao),
+                to_py(destinatario_externo), 
+                quantidade_int,
+                to_py(tipo),
+                to_py(observacoes)
+            ))
+            
+            conn.commit()
+            cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
+            logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao transferir para externo: {e}")
+        st.error(f"Erro ao transferir para externo: {e}")
+        return False
+
+# ------------------------------------------------------------
+# 🖼️ Interface Streamlit
+# ------------------------------------------------------------
+st.set_page_config(
+    page_title=os.getenv("APP_TITLE", "Gestor Sémen - Embriovet"),
+    layout=os.getenv("APP_LAYOUT", "wide"),
+    page_icon="🐴",
+)
+
+# ------------------------------------------------------------
+# 🔐 Sistema de Login
+# ------------------------------------------------------------
+def mostrar_tela_login():
+    """Exibe tela de login"""
+    st.title("🔐 Login - Gestor de Sémen Embriovet")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("### Autenticação")
+        
+        with st.form("login_form"):
+            username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
+            password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
+            
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not username or not password:
+                    st.error("❌ Preencha todos os campos")
+                else:
+                    user = autenticar_usuario(username, password)
+                    if user:
+                        st.session_state['user'] = user
+                        st.success(f"✅ Bem-vindo, {user['nome']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Utilizador ou password incorretos")
+        
+        st.markdown("---")
+        st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
+
+def verificar_permissao(nivel_minimo):
+    """Verifica se o usuário tem permissão mínima necessária"""
+    if 'user' not in st.session_state:
+        return False
+    
+    user_nivel = st.session_state['user']['nivel']
+    
+    niveis = {
+        'Administrador': 3,
+        'Gestor': 2,
+        'Visualizador': 1
+    }
+    
+    return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
+
+# Verificar se está logado
+if 'user' not in st.session_state:
+    mostrar_tela_login()
+    st.stop()
+
+# Usuário logado - mostrar info no sidebar
+user = st.session_state['user']
+
+st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
+
+# Sidebar com info do utilizador
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"### 👤 {user['nome']}")
+st.sidebar.markdown(f"**Nível:** {user['nivel']}")
+
+if st.sidebar.button("🚪 Logout", width="stretch"):
+    del st.session_state['user']
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+# Menu lateral adaptado às permissões
+menu_options = ["🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+
+if verificar_permissao('Gestor'):
+    menu_options.insert(2, "➕ Adicionar Stock")
+    menu_options.insert(3, "📝 Registrar Inseminação")
+    menu_options.append("👥 Gestão de Proprietários")
+
+if verificar_permissao('Administrador'):
+    menu_options.append("⚙️ Gestão de Utilizadores")
+
+# Verificar se há redirecionamento pendente
+if 'aba_selecionada' in st.session_state:
+    idx_aba = menu_options.index(st.session_state['aba_selecionada']) if st.session_state['aba_selecionada'] in menu_options else 0
+    del st.session_state['aba_selecionada']
+else:
+    idx_aba = 0
+
+aba = st.sidebar.radio("Menu", menu_options, index=idx_aba)
+
+# ------------------------------------------------------------
+# 💬 Modal para adicionar proprietário
+# ------------------------------------------------------------
+@st.dialog("➕ Adicionar Novo Proprietário")
+def modal_adicionar_proprietario():
+    """Modal para adicionar novo proprietário rapidamente"""
+    novo_nome = st.text_input("Nome do Proprietário *", key="modal_novo_prop")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Adicionar", type="primary", use_container_width=True):
+            if not novo_nome:
+                st.error("❌ Nome é obrigatório")
+            else:
+                # Criar dados mínimos
+                dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
+                              'nome_completo': None, 'nif': None, 'morada': None,
+                              'codigo_postal': None, 'cidade': None}
+                prop_id = adicionar_proprietario(dados_novo)
+                if prop_id:
+                    st.session_state['novo_proprietario_id'] = prop_id
+                    st.session_state['novo_proprietario_nome'] = novo_nome
+                    st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
+                    st.rerun()
+    with col2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.rerun()
+
+# Carregar dados
+try:
+    proprietarios = carregar_proprietarios(apenas_ativos=True)  # Apenas ativos por padrão
+    stock = carregar_stock(apenas_ativos=True)  # Apenas de proprietários ativos
+    insem = carregar_inseminacoes()
+except Exception as e:
+    st.error(f"Erro ao carregar dados: {e}")
+    st.stop()
+
+# Limpar session state do novo proprietário após usá-lo (evita que fique selecionado sempre)
+if 'novo_proprietario_usado' in st.session_state:
+    if 'novo_proprietario_id' in st.session_state:
+        del st.session_state['novo_proprietario_id']
+    if 'novo_proprietario_nome' in st.session_state:
+        del st.session_state['novo_proprietario_nome']
+    del st.session_state['novo_proprietario_usado']
+
+if proprietarios.empty:
+    st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
+
+# ------------------------------------------------------------
+# 📦 Ver Stock
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# 🗺️ Mapa dos Contentores
+# ------------------------------------------------------------
+if aba == "🗺️ Mapa dos Contentores":
+    st.markdown("## Gestão de Contentores")
+    
+    # Carregar contentores
+    contentores_df = carregar_contentores()
+
+    if "mapa_modo_edicao" not in st.session_state:
+        st.session_state["mapa_modo_edicao"] = False
+
+    if "mapa_layout_reader_tick" not in st.session_state:
+        st.session_state["mapa_layout_reader_tick"] = 0
+
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        js_eval_disponivel = True
+    except Exception:
+        streamlit_js_eval = None
+        js_eval_disponivel = False
+
+    if not js_eval_disponivel:
+        st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
+
+    largura_viewport = None
+    if js_eval_disponivel:
+        largura_viewport = streamlit_js_eval(
+            js_expressions='window.innerWidth',
+            key='map_viewport_width',
+            want_output=True,
+        )
+
+    is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
+    modo_visualizacao = True
+
+    layout_pending_raw = None
+    if js_eval_disponivel:
+        layout_pending_raw = streamlit_js_eval(
+            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
+            key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
+            want_output=True,
+        )
+    
+    # Modal para adicionar contentor - design limpo
+    if st.session_state.get('modal_novo_contentor', False):
+        st.markdown("---")
+        st.markdown("### Adicionar Novo Contentor")
+        
+        with st.form("form_novo_contentor"):
+            col_form1, col_form2 = st.columns([1, 1])
+            
+            with col_form1:
+                codigo = st.text_input(
+                    "Código do Contentor *", 
+                    placeholder="Ex: CT-01, A1, EMB01",
+                    help="Identificador único alfanumérico"
+                )
+            
+            with col_form2:
+                descricao = st.text_input("Descrição (opcional)", placeholder="Localização ou notas")
+            
+            col_submit1, col_submit2 = st.columns([1, 1])
+            with col_submit1:
+                submitted = st.form_submit_button("Criar Contentor", use_container_width=True)
+            with col_submit2:
+                cancelar = st.form_submit_button("Cancelar", use_container_width=True)
+            
+            if cancelar:
+                st.session_state['modal_novo_contentor'] = False
+                st.rerun()
+            
+            if submitted:
+                if not codigo:
+                    st.error("Código é obrigatório")
+                else:
+                    if codigo in contentores_df['codigo'].values:
+                        st.error(f"Já existe um contentor com o código '{codigo}'")
+                    else:
+                        import random
+                        contentor_id = adicionar_contentor({
+                            'codigo': codigo,
+                            'descricao': descricao,
+                            'x': random.randint(100, 600),
+                            'y': random.randint(100, 350),
+                            'w': 90,
+                            'h': 90
+                        })
+                        if contentor_id:
+                            st.success(f"Contentor '{codigo}' criado com sucesso")
+                            st.session_state['modal_novo_contentor'] = False
+                            st.rerun()
+    
+    # Área do mapa
+    if contentores_df.empty:
+        st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
+    else:
+        if modo_visualizacao:
+            total_contentores = len(contentores_df)
+            total_palhetas_geral = 0
+            contentores_data = []
+
+            for _, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                total_palhetas_geral += total_palhetas
+
+                lotes = []
+                if not stock_contentor.empty:
+                    for _, lote in stock_contentor.iterrows():
+                        observacao = ""
+                        if isinstance(lote.get('qualidade'), str) and lote.get('qualidade'):
+                            observacao = lote.get('qualidade')
+                        elif isinstance(lote.get('origem_externa'), str) and lote.get('origem_externa'):
+                            observacao = lote.get('origem_externa')
+
+                        lotes.append({
+                            "garanhao": lote.get('garanhao') or "—",
+                            "proprietario": lote.get('proprietario_nome') or "—",
+                            "quantidade": int(lote.get('existencia_atual') or 0),
+                            "canister": int(lote.get('canister') or 0),
+                            "andar": int(lote.get('andar') or 0),
+                            "observacoes": observacao,
+                        })
+
+                contentores_data.append({
+                    "id": int(row['id']),
+                    "codigo": row['codigo'],
+                    "descricao": row['descricao'] or "",
+                    "x": int(row['x']),
+                    "y": int(row['y']),
+                    "w": max(80, int(row['w'])),
+                    "h": max(80, int(row['h'])),
+                    "palhetas": total_palhetas,
+                    "lotes": lotes,
+                })
+
+            criar_novo = False
+            ativar_edicao = False
+            cancelar_edicao = False
+            salvar_layout = False
+
+            if is_mobile:
+                st.caption("Mapa de localização física dos contentores. Toque num contentor para abrir o inventário.")
+                btn_m1, btn_m2 = st.columns(2)
+                with btn_m1:
+                    criar_novo = st.button("+ Novo Contentor", use_container_width=True)
+                with btn_m2:
+                    if st.session_state["mapa_modo_edicao"]:
+                        salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                    else:
+                        ativar_edicao = st.button("Editar mapa", use_container_width=True)
+
+                if st.session_state["mapa_modo_edicao"]:
+                    cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+            else:
+                col_desc, col_mapa = st.columns([1, 3], gap="large")
+                with col_desc:
+                    st.caption("Sistema de localização física e inventário de sémen equino")
+                    criar_novo = st.button("+ Novo Contentor", use_container_width=True)
+
+                    if st.session_state["mapa_modo_edicao"]:
+                        salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                        cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+                    else:
+                        ativar_edicao = st.button("Editar mapa", use_container_width=True)
+
+                with col_mapa:
+                    st.markdown("### Planta do Quarto de Armazenamento")
+
+            if criar_novo:
+                st.session_state['modal_novo_contentor'] = True
+                st.rerun()
+
+            if ativar_edicao:
+                st.session_state["mapa_modo_edicao"] = True
+                if js_eval_disponivel:
+                    streamlit_js_eval(
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
+                    )
+                st.rerun()
+
+            if cancelar_edicao:
+                st.session_state["mapa_modo_edicao"] = False
+                if js_eval_disponivel:
+                    streamlit_js_eval(
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
+                    )
+                st.rerun()
+
+            if salvar_layout:
+                atualizados = 0
+                if not js_eval_disponivel:
+                    st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
+                elif layout_pending_raw and layout_pending_raw != "null":
+                    try:
+                        layout_data = json.loads(layout_pending_raw)
+                        for _, row in contentores_df.iterrows():
+                            cid = str(int(row['id']))
+                            pos = layout_data.get(cid)
+                            if not isinstance(pos, dict):
+                                continue
+
+                            novo_x = int(pos.get("x", int(row['x'])))
+                            novo_y = int(pos.get("y", int(row['y'])))
+                            largura = max(1, int(row['w']))
+                            altura = max(1, int(row['h']))
+                            novo_x = max(0, min(novo_x, 900 - largura))
+                            novo_y = max(0, min(novo_y, 550 - altura))
+
+                            if novo_x != int(row['x']) or novo_y != int(row['y']):
+                                if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
+                                    atualizados += 1
+
+                        streamlit_js_eval(
+                            js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                            key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
+                        )
+                        st.session_state["mapa_modo_edicao"] = False
+
+                        if atualizados > 0:
+                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s).")
+                        else:
+                            st.info("Nenhuma alteração de posição para guardar.")
+                        st.rerun()
+                    except Exception as e:
+                        logger.error(f"Erro ao salvar layout do mapa: {e}")
+                        st.error("Falha ao salvar layout do mapa.")
+                else:
+                    st.info("Nenhuma alteração pendente para guardar.")
+
+            if st.session_state["mapa_modo_edicao"] and is_mobile:
+                st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
+
+            if st.session_state.get("move_feedback"):
+                st.success(st.session_state.pop("move_feedback"))
+            if st.session_state.get("move_feedback_erro"):
+                st.error(st.session_state.pop("move_feedback_erro"))
+
+            mapa_html = """
+            <style>
+                :root {
+                    --map-bg: #f4f6f8;
+                    --map-border: #cbd5e1;
+                    --card-bg: #f8fafc;
+                    --card-border: #475569;
+                    --text-main: #0f172a;
+                    --text-muted: #64748b;
+                }
+
+                #mapa-wrapper {
+                    position: relative;
+                    width: 100%;
+                    border: 1px solid var(--map-border);
+                    border-radius: 8px;
+                    background: var(--map-bg);
+                    padding: 10px;
+                    overflow: hidden;
+                    font-family: 'Courier New', monospace;
+                }
+
+                #mapa-area {
+                    position: relative;
+                    width: 100%;
+                    aspect-ratio: 900 / 550;
+                    border: 2px solid #64748b;
+                    background: #fff;
+                    background-image:
+                        linear-gradient(rgba(15,23,42,.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(15,23,42,.05) 1px, transparent 1px);
+                    background-size: 50px 50px;
+                    overflow: hidden;
+                }
+
+                .cont-box {
+                    position: absolute;
+                    border: 2px solid var(--card-border);
+                    background: var(--card-bg);
+                    color: var(--text-main);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    user-select: none;
+                    transition: box-shadow .2s ease, transform .2s ease;
+                }
+
+                .cont-box.clickable {
+                    cursor: pointer;
+                }
+
+                .cont-box.draggable {
+                    cursor: move;
+                }
+
+                .cont-box:hover {
+                    box-shadow: 0 8px 16px rgba(2, 6, 23, .14);
+                    transform: translateY(-1px);
+                    z-index: 50;
+                }
+
+                .cont-box.dragging {
+                    opacity: .9;
+                    z-index: 999;
+                }
+
+                .cont-codigo {
+                    font-size: 12px;
+                    font-weight: 700;
+                    margin-bottom: 3px;
+                }
+
+                .cont-qtd {
+                    font-size: 20px;
+                    font-weight: 800;
+                    line-height: 1;
+                }
+
+                .cont-label {
+                    font-size: 10px;
+                    color: var(--text-muted);
+                    text-transform: uppercase;
+                    letter-spacing: .3px;
+                }
+
+                #mapa-status {
+                    margin-top: 8px;
+                    font-size: 11px;
+                    color: var(--text-muted);
+                }
+
+                #inv-overlay {
+                    position: absolute;
+                    inset: 0;
+                    background: rgba(15, 23, 42, .28);
+                    display: none;
+                    z-index: 2000;
+                }
+
+                #inv-panel {
+                    position: absolute;
+                    top: 0;
+                    right: 0;
+                    width: 360px;
+                    height: 100%;
+                    background: #fff;
+                    border-left: 1px solid #d1d5db;
+                    padding: 14px;
+                    overflow-y: auto;
+                }
+
+                .mobile #inv-panel {
+                    width: 100%;
+                    border-left: none;
+                }
+
+                .inv-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                }
+
+                .inv-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #111827;
+                }
+
+                .inv-close {
+                    border: 1px solid #cbd5e1;
+                    background: #fff;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    cursor: pointer;
+                }
+
+                .inv-summary {
+                    font-size: 12px;
+                    color: #334155;
+                    margin-bottom: 10px;
+                }
+
+                .inv-lote {
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin-bottom: 8px;
+                    background: #f8fafc;
+                    font-size: 12px;
+                    line-height: 1.35;
+                }
+            </style>
+
+            <div id="mapa-wrapper" class="__MOBILE_CLASS__">
+                <div id="mapa-area"></div>
+                <div id="mapa-status">__STATUS_TEXT__</div>
+
+                <div id="inv-overlay">
+                    <div id="inv-panel"></div>
+                </div>
+            </div>
+
+            <script>
+                const contentores = __CONTENTORES_DATA__;
+                const isEditMode = __EDIT_MODE__;
+                const isMobile = __IS_MOBILE__;
+                const baseW = 900;
+                const baseH = 550;
+
+                const wrapper = document.getElementById('mapa-wrapper');
+                const mapaArea = document.getElementById('mapa-area');
+                const statusBar = document.getElementById('mapa-status');
+                const invOverlay = document.getElementById('inv-overlay');
+                const invPanel = document.getElementById('inv-panel');
+
+                let scale = 1;
+                let draggedEl = null;
+                let draggedMeta = null;
+                let offsetX = 0;
+                let offsetY = 0;
+                let moved = false;
+
+                function esc(v) {
+                    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    }[c]));
+                }
+
+                function computeScale() {
+                    const rect = mapaArea.getBoundingClientRect();
+                    scale = rect.width / baseW;
+                    if (!scale || scale <= 0) scale = 1;
+                }
+
+                function openInventory(cont) {
+                    const lotes = Array.isArray(cont.lotes) ? cont.lotes : [];
+                    const lotesHtml = lotes.length === 0
+                        ? '<div class="inv-lote">Sem lotes neste contentor.</div>'
+                        : lotes.map(l => `
+                            <div class="inv-lote">
+                                <b>Garanhão:</b> ${esc(l.garanhao)}<br/>
+                                <b>Proprietário:</b> ${esc(l.proprietario)}<br/>
+                                <b>Quantidade:</b> ${esc(l.quantidade)}<br/>
+                                <b>Canister:</b> ${esc(l.canister)} | <b>Andar:</b> ${esc(l.andar)}<br/>
+                                <b>Observações:</b> ${esc(l.observacoes || '—')}
+                            </div>
+                        `).join('');
+
+                    invPanel.innerHTML = `
+                        <div class="inv-head">
+                            <div class="inv-title">${esc(cont.codigo)}</div>
+                            <button class="inv-close" id="inv-close-btn">Fechar</button>
+                        </div>
+                        <div class="inv-summary">
+                            <b>Total de palhetas:</b> ${esc(cont.palhetas)}<br/>
+                            <b>Total de lotes:</b> ${esc(lotes.length)}
+                        </div>
+                        ${lotesHtml}
+                    `;
+
+                    invOverlay.style.display = 'block';
+                    const closeBtn = document.getElementById('inv-close-btn');
+                    if (closeBtn) closeBtn.addEventListener('click', closeInventory);
+                }
+
+                function closeInventory() {
+                    invOverlay.style.display = 'none';
+                }
+
+                invOverlay.addEventListener('click', (e) => {
+                    if (e.target === invOverlay) closeInventory();
+                });
+
+                function guardarPosicaoPendente(id, x, y) {
+                    try {
+                        const atual = JSON.parse(window.parent.localStorage.getItem('contentor_layout_pending') || '{}');
+                        atual[String(id)] = { x, y };
+                        window.parent.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                        statusBar.textContent = 'Alteração pendente. Clique em "Salvar layout".';
+                    } catch (err) {
+                        console.error('Erro ao guardar posição pendente:', err);
+                        statusBar.textContent = 'Falha ao guardar posição pendente.';
+                    }
+                }
+
+                function criarContentor(cont) {
+                    const div = document.createElement('div');
+                    div.className = `cont-box ${isEditMode ? 'draggable' : 'clickable'}`;
+                    div.id = `cont-${cont.id}`;
+
+                    const wPx = Math.max(40, Math.round(cont.w * scale));
+                    const hPx = Math.max(40, Math.round(cont.h * scale));
+                    const xPx = Math.round(cont.x * scale);
+                    const yPx = Math.round(cont.y * scale);
+
+                    div.style.width = wPx + 'px';
+                    div.style.height = hPx + 'px';
+                    div.style.left = xPx + 'px';
+                    div.style.top = yPx + 'px';
+
+                    div.innerHTML = `
+                        <div class="cont-codigo">${esc(cont.codigo)}</div>
+                        <div class="cont-qtd">${esc(cont.palhetas)}</div>
+                        <div class="cont-label">palhetas</div>
+                    `;
+
+                    div.addEventListener('mousedown', (e) => {
+                        if (!isEditMode) return;
+                        if (e.button !== 0) return;
+                        moved = false;
+                        draggedEl = div;
+                        draggedMeta = cont;
+                        draggedEl.classList.add('dragging');
+
+                        const rect = draggedEl.getBoundingClientRect();
+                        offsetX = e.clientX - rect.left;
+                        offsetY = e.clientY - rect.top;
+                        e.preventDefault();
+                    });
+
+                    div.addEventListener('click', () => {
+                        if (isEditMode) return;
+                        openInventory(cont);
+                    });
+
+                    mapaArea.appendChild(div);
+                }
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!draggedEl || !isEditMode) return;
+                    moved = true;
+
+                    const mapRect = mapaArea.getBoundingClientRect();
+                    let x = e.clientX - mapRect.left - offsetX;
+                    let y = e.clientY - mapRect.top - offsetY;
+
+                    const w = parseInt(draggedEl.style.width, 10);
+                    const h = parseInt(draggedEl.style.height, 10);
+                    x = Math.max(0, Math.min(x, mapRect.width - w));
+                    y = Math.max(0, Math.min(y, mapRect.height - h));
+
+                    draggedEl.style.left = Math.round(x) + 'px';
+                    draggedEl.style.top = Math.round(y) + 'px';
+                    statusBar.textContent = `Movendo... X=${Math.round(x / scale)} | Y=${Math.round(y / scale)}`;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!draggedEl || !isEditMode || !draggedMeta) return;
+
+                    const xPx = parseInt(draggedEl.style.left, 10);
+                    const yPx = parseInt(draggedEl.style.top, 10);
+                    const xCanon = Math.max(0, Math.min(Math.round(xPx / scale), baseW - draggedMeta.w));
+                    const yCanon = Math.max(0, Math.min(Math.round(yPx / scale), baseH - draggedMeta.h));
+
+                    draggedEl.classList.remove('dragging');
+                    draggedEl = null;
+
+                    if (moved) {
+                        guardarPosicaoPendente(draggedMeta.id, xCanon, yCanon);
+                    }
+
+                    draggedMeta = null;
+                });
+
+                computeScale();
+                contentores.forEach(criarContentor);
+
+                if (!isEditMode) {
+                    statusBar.textContent = 'Clique num contentor para ver o inventário.';
+                }
+            </script>
+            """
+
+            import streamlit.components.v1 as components
+            mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
+            mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
+            mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
+            mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
+            mapa_render = mapa_render.replace(
+                "__STATUS_TEXT__",
+                "Arraste os contentores e salve o layout." if st.session_state["mapa_modo_edicao"] else "Clique num contentor para ver inventário."
+            )
+
+            if is_mobile:
+                components.html(mapa_render, height=620)
+            else:
+                with col_mapa:
+                    components.html(mapa_render, height=620)
+
+            col_met1, col_met2 = st.columns(2)
+            with col_met1:
+                st.metric("Contentores", total_contentores)
+            with col_met2:
+                st.metric("Total Palhetas", int(total_palhetas_geral))
+            
+            # Mostrar lista de contentores abaixo do mapa
+            st.markdown("---")
+            st.markdown("### Inventário de Contentores")
+            
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                
+                # Design técnico limpo
+                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
+                    col_det1, col_det2, col_det3 = st.columns([2, 2, 1])
+                    
+                    with col_det1:
+                        st.markdown(f"**Código:** {row['codigo']}")
+                        st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
+                        st.markdown(f"**Posição:** X={row['x']}, Y={row['y']}")
+                    
+                    with col_det2:
+                        st.markdown(f"**Total Palhetas:** {int(total_palhetas)}")
+                        st.markdown(f"**Total Lotes:** {total_lotes}")
+                    
+                    with col_det3:
+                        if st.button("Editar", key=f"edit_{row['id']}", use_container_width=True):
+                            st.session_state[f'modal_editar_{row["id"]}'] = True
+                            st.rerun()
+                        
+                        if st.button("Apagar", key=f"del_{row['id']}", use_container_width=True):
+                            if deletar_contentor(row['id']):
+                                st.success(f"Contentor '{row['codigo']}' apagado")
+                                st.rerun()
+                    
+                    if not stock_contentor.empty:
+                        st.markdown("**Lotes:**")
+                        for canister in sorted(stock_contentor['canister'].unique()):
+                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                            for andar in sorted(stock_canister['andar'].unique()):
+                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                for _, lote in stock_andar.iterrows():
+                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
+                                    st.text(f"Can.{canister} / {andar}º | {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])}p | {ref}")
+                    
+                    # Modal edição
+                    if st.session_state.get(f'modal_editar_{row["id"]}', False):
+                        st.markdown("---")
+                        with st.form(f"form_editar_{row['id']}"):
+                            st.markdown("#### Editar Contentor")
+                            
+                            col_edit1, col_edit2 = st.columns(2)
+                            with col_edit1:
+                                novo_codigo = st.text_input("Código", value=row['codigo'])
+                            with col_edit2:
+                                nova_descricao = st.text_input("Descrição", value=row['descricao'] or '')
+                            
+                            col_btn_edit1, col_btn_edit2 = st.columns(2)
+                            with col_btn_edit1:
+                                salvar = st.form_submit_button("Salvar", use_container_width=True)
+                            with col_btn_edit2:
+                                cancelar_edit = st.form_submit_button("Cancelar", use_container_width=True)
+                            
+                            if cancelar_edit:
+                                st.session_state[f'modal_editar_{row["id"]}'] = False
+                                st.rerun()
+                            
+                            if salvar:
+                                if editar_contentor(row['id'], {
+                                    'codigo': novo_codigo,
+                                    'descricao': nova_descricao,
+                                    'x': row['x'],
+                                    'y': row['y'],
+                                    'w': row['w'],
+                                    'h': row['h']
+                                }):
+                                    st.success("Contentor atualizado")
+                                    st.session_state[f'modal_editar_{row["id"]}'] = False
+                                    st.rerun()
+        
+        else:
+            # MODO LISTA (mantido para compatibilidade)
+            st.markdown("### Lista de Contentores")
+            
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                
+                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
+                    st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
+                    st.markdown(f"**Total de palhetas:** {int(total_palhetas)}")
+                    st.markdown(f"**Total de lotes:** {total_lotes}")
+                    
+                    if not stock_contentor.empty:
+                        st.markdown("---")
+                        for canister in sorted(stock_contentor['canister'].unique()):
+                            st.markdown(f"**Canister {canister}:**")
+                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                            
+                            for andar in sorted(stock_canister['andar'].unique()):
+                                st.markdown(f"  *{andar}º Andar:*")
+                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                
+                                for _, lote in stock_andar.iterrows():
+                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
+                                    st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+
+    st.stop()
+
+# ------------------------------------------------------------
+# 📦 Ver Stock
+# ------------------------------------------------------------
+    st.header("🗺️ Mapa dos Contentores")
+    
+    # Carregar contentores
+    contentores_df = carregar_contentores()
+    
+    # Botões de ação
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([1, 1, 1, 3])
+    with col_btn1:
+        if st.button("➕ Novo Contentor", type="primary"):
+            st.session_state['modal_novo_contentor'] = True
+    
+    with col_btn2:
+        st.metric("Total", len(contentores_df))
+    
+    with col_btn3:
+        modo_visualizacao = st.toggle("🗺️ Mapa Visual", value=True, help="Alternar entre mapa visual e lista")
+    
+    # Modal para adicionar contentor
+    if st.session_state.get('modal_novo_contentor', False):
+        with st.form("form_novo_contentor"):
+            st.subheader("➕ Adicionar Contentor")
+            
+            codigo = st.text_input("Código do Contentor *", 
+                                  placeholder="Ex: CT-01, A1, EMB01",
+                                  help="Identificador único alfanumérico")
+            descricao = st.text_area("Descrição (opcional)")
+            
+            col_submit1, col_submit2 = st.columns(2)
+            with col_submit1:
+                submitted = st.form_submit_button("💾 Criar Contentor")
+            with col_submit2:
+                cancelar = st.form_submit_button("❌ Cancelar")
+            
+            if cancelar:
+                st.session_state['modal_novo_contentor'] = False
+                st.rerun()
+            
+            if submitted:
+                if not codigo:
+                    st.error("❌ Código é obrigatório")
+                else:
+                    # Verificar se código já existe
+                    if codigo in contentores_df['codigo'].values:
+                        st.error(f"❌ Já existe um contentor com o código '{codigo}'")
+                    else:
+                        # Posição aleatória inicial
+                        import random
+                        contentor_id = adicionar_contentor({
+                            'codigo': codigo,
+                            'descricao': descricao,
+                            'x': random.randint(50, 700),
+                            'y': random.randint(50, 400),
+                            'w': 90,  # Tamanho menor
+                            'h': 90   # Tamanho menor
+                        })
+                        if contentor_id:
+                            st.success(f"✅ Contentor '{codigo}' criado com sucesso!")
+                            st.session_state['modal_novo_contentor'] = False
+                            st.rerun()
+    
+    st.markdown("---")
+    
+    # Área do mapa
+    if contentores_df.empty:
+        st.info("📦 Nenhum contentor cadastrado. Clique em 'Novo Contentor' para começar.")
+    else:
+        if modo_visualizacao:
+            # MAPA VISUAL COM DRAG & DROP
+            st.subheader("🗺️ Layout do Quarto")
+            
+            # Preparar dados dos contentores para JavaScript
+            contentores_data = []
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                
+                # Determinar cor
+                if total_palhetas == 0:
+                    cor = "#10b981"  # Verde
+                elif total_palhetas < 50:
+                    cor = "#fbbf24"  # Amarelo
+                elif total_palhetas < 150:
+                    cor = "#fb923c"  # Laranja
+                else:
+                    cor = "#ef4444"  # Vermelho
+                
+                contentores_data.append({
+                    'id': int(row['id']),
+                    'codigo': row['codigo'],
+                    'x': int(row['x']),
+                    'y': int(row['y']),
+                    'w': int(row['w']),
+                    'h': int(row['h']),
+                    'palhetas': int(total_palhetas),
+                    'cor': cor
+                })
+            
+            # HTML/CSS/JS para o mapa interativo
+            mapa_html = f"""
+            <style>
+                #mapa-container {{
+                    position: relative;
+                    width: 100%;
+                    height: 600px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border: 3px solid #4a5568;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+                }}
+                
+                #mapa-quarto {{
+                    position: relative;
+                    width: 900px;
+                    height: 550px;
+                    margin: 25px auto;
+                    background: #f7fafc;
+                    border: 2px solid #2d3748;
+                    border-radius: 8px;
+                    transform-origin: center;
+                    box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                
+                .contentor {{
+                    position: absolute;
+                    background: white;
+                    border: 3px solid #2d3748;
+                    border-radius: 8px;
+                    cursor: move;
+                    user-select: none;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                    padding: 10px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }}
+                
+                .contentor:hover {{
+                    transform: scale(1.05);
+                    box-shadow: 0 8px 12px rgba(0,0,0,0.2);
+                    z-index: 1000;
+                }}
+                
+                .contentor.dragging {{
+                    opacity: 0.7;
+                    transform: rotate(3deg);
+                    z-index: 1001;
+                }}
+                
+                .contentor-codigo {{
+                    font-weight: bold;
+                    font-size: 14px;
+                    color: #1a202c;
+                    margin-bottom: 5px;
+                }}
+                
+                .contentor-palhetas {{
+                    font-size: 20px;
+                    font-weight: bold;
+                    margin: 5px 0;
+                }}
+                
+                .contentor-badge {{
+                    font-size: 11px;
+                    color: #4a5568;
+                    margin-top: 5px;
+                }}
+                
+                #zoom-controls {{
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    display: flex;
+                    gap: 5px;
+                    z-index: 100;
+                }}
+                
+                .zoom-btn {{
+                    width: 40px;
+                    height: 40px;
+                    background: white;
+                    border: 2px solid #2d3748;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 20px;
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    transition: all 0.2s;
+                }}
+                
+                .zoom-btn:hover {{
+                    background: #edf2f7;
+                    transform: scale(1.1);
+                }}
+                
+                #grid {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-image: 
+                        linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+                    background-size: 50px 50px;
+                    pointer-events: none;
+                }}
+            </style>
+            
+            <div id="mapa-container">
+                <div id="zoom-controls">
+                    <div class="zoom-btn" onclick="zoomIn()">+</div>
+                    <div class="zoom-btn" onclick="zoomOut()">−</div>
+                    <div class="zoom-btn" onclick="resetZoom()">⟲</div>
+                </div>
+                
+                <div id="mapa-quarto">
+                    <div id="grid"></div>
+                </div>
+            </div>
+            
+            <script>
+                let zoomLevel = 1;
+                const contentores = {contentores_data};
+                let draggedElement = null;
+                let offsetX, offsetY;
+                
+                // Criar contentores no mapa
+                const mapaQuarto = document.getElementById('mapa-quarto');
+                
+                contentores.forEach(cont => {{
+                    const div = document.createElement('div');
+                    div.className = 'contentor';
+                    div.id = 'contentor-' + cont.id;
+                    div.style.left = cont.x + 'px';
+                    div.style.top = cont.y + 'px';
+                    div.style.width = cont.w + 'px';
+                    div.style.height = cont.h + 'px';
+                    div.style.backgroundColor = cont.cor;
+                    div.style.borderColor = cont.cor;
+                    
+                    div.innerHTML = `
+                        <div class="contentor-codigo">${{cont.codigo}}</div>
+                        <div class="contentor-palhetas">${{cont.palhetas}}</div>
+                        <div class="contentor-badge">palhetas</div>
+                    `;
+                    
+                    // Drag & Drop
+                    div.addEventListener('mousedown', startDrag);
+                    div.addEventListener('click', (e) => {{
+                        if (!div.classList.contains('dragging')) {{
+                            window.parent.postMessage({{
+                                type: 'streamlit:setComponentValue',
+                                value: {{ contentor_id: cont.id }}
+                            }}, '*');
+                        }}
+                    }});
+                    
+                    mapaQuarto.appendChild(div);
+                }});
+                
+                function startDrag(e) {{
+                    if (e.button !== 0) return;
+                    
+                    draggedElement = e.currentTarget;
+                    draggedElement.classList.add('dragging');
+                    
+                    const rect = draggedElement.getBoundingClientRect();
+                    const parentRect = mapaQuarto.getBoundingClientRect();
+                    
+                    offsetX = e.clientX - rect.left;
+                    offsetY = e.clientY - rect.top;
+                    
+                    document.addEventListener('mousemove', drag);
+                    document.addEventListener('mouseup', stopDrag);
+                    
+                    e.preventDefault();
+                }}
+                
+                function drag(e) {{
+                    if (!draggedElement) return;
+                    
+                    const parentRect = mapaQuarto.getBoundingClientRect();
+                    let x = (e.clientX - parentRect.left - offsetX) / zoomLevel;
+                    let y = (e.clientY - parentRect.top - offsetY) / zoomLevel;
+                    
+                    // Limites
+                    x = Math.max(0, Math.min(x, 900 - parseInt(draggedElement.style.width)));
+                    y = Math.max(0, Math.min(y, 550 - parseInt(draggedElement.style.height)));
+                    
+                    draggedElement.style.left = x + 'px';
+                    draggedElement.style.top = y + 'px';
+                }}
+                
+                function stopDrag(e) {{
+                    if (!draggedElement) return;
+                    
+                    draggedElement.classList.remove('dragging');
+                    
+                    // Salvar nova posição
+                    const id = parseInt(draggedElement.id.replace('contentor-', ''));
+                    const x = Math.round(parseInt(draggedElement.style.left));
+                    const y = Math.round(parseInt(draggedElement.style.top));
+                    
+                    // Mostrar feedback visual
+                    draggedElement.style.borderColor = '#10b981';
+                    setTimeout(() => {{
+                        draggedElement.style.borderColor = contentores.find(c => c.id === id).cor;
+                    }}, 500);
+                    
+                    // Enviar para Streamlit
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        value: {{ 
+                            action: 'move',
+                            contentor_id: id,
+                            x: x,
+                            y: y
+                        }}
+                    }}, '*');
+                    
+                    console.log(`Contentor ${{id}} movido para x:${{x}}, y:${{y}}`);
+                    
+                    draggedElement = null;
+                    document.removeEventListener('mousemove', drag);
+                    document.removeEventListener('mouseup', stopDrag);
+                }}
+                
+                function zoomIn() {{
+                    zoomLevel = Math.min(zoomLevel + 0.2, 2);
+                    applyZoom();
+                }}
+                
+                function zoomOut() {{
+                    zoomLevel = Math.max(zoomLevel - 0.2, 0.5);
+                    applyZoom();
+                }}
+                
+                function resetZoom() {{
+                    zoomLevel = 1;
+                    applyZoom();
+                }}
+                
+                function applyZoom() {{
+                    mapaQuarto.style.transform = `scale(${{zoomLevel}})`;
+                }}
+            </script>
+            """
+            
+            # Renderizar mapa
+            import streamlit.components.v1 as components
+            result = components.html(mapa_html.replace('{contentores_data}', str(contentores_data)), height=650)
+            
+            # Processar cliques e movimentos
+            if result:
+                if isinstance(result, dict):
+                    if result.get('action') == 'move':
+                        # Atualizar posição do contentor
+                        contentor_id = result.get('contentor_id')
+                        x = result.get('x')
+                        y = result.get('y')
+                        
+                        if contentor_id and x is not None and y is not None:
+                            # Buscar contentor
+                            contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                            if not contentor_row.empty:
+                                contentor = contentor_row.iloc[0]
+                                sucesso = editar_contentor(contentor_id, {
+                                    'codigo': contentor['codigo'],
+                                    'descricao': contentor['descricao'],
+                                    'x': int(x),
+                                    'y': int(y),
+                                    'w': int(contentor['w']),
+                                    'h': int(contentor['h'])
+                                })
+                                if sucesso:
+                                    # Mostrar mensagem de sucesso temporária
+                                    st.toast(f"✅ Posição guardada: {contentor['codigo']}", icon="✅")
+                    elif 'contentor_id' in result:
+                        # Mostrar detalhes do contentor
+                        st.session_state['contentor_selecionado'] = result['contentor_id']
+                        st.rerun()
+            
+            # Detalhes do contentor selecionado
+            if 'contentor_selecionado' in st.session_state:
+                contentor_id = st.session_state['contentor_selecionado']
+                contentor = contentores_df[contentores_df['id'] == contentor_id].iloc[0]
+                stock_contentor = obter_stock_contentor(contentor_id)
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                
+                st.markdown("---")
+                st.subheader(f"📦 Detalhes: {contentor['codigo']}")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Palhetas", int(total_palhetas))
+                with col2:
+                    st.metric("Total Lotes", len(stock_contentor))
+                with col3:
+                    if st.button("❌ Fechar"):
+                        del st.session_state['contentor_selecionado']
+                        st.rerun()
+                
+                if not stock_contentor.empty:
+                    for canister in sorted(stock_contentor['canister'].unique()):
+                        st.markdown(f"**Canister {canister}:**")
+                        stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                        
+                        for andar in sorted(stock_canister['andar'].unique()):
+                            st.markdown(f"  *{andar}º Andar:*")
+                            stock_andar = stock_canister[stock_canister['andar'] == andar]
+                            
+                            for _, lote in stock_andar.iterrows():
+                                ref = lote['origem_externa'] or lote['data_embriovet'] or 'S/ ref'
+                                st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+        
+        else:
+            # MODO LISTA (código anterior)
+            st.subheader("Contentores Cadastrados (Modo Lista)")
+            
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                
+                if total_palhetas == 0:
+                    cor_badge = "🟢"
+                    status = "Vazio"
+                elif total_palhetas < 50:
+                    cor_badge = "🟡"
+                    status = "Baixa ocupação"
+                elif total_palhetas < 150:
+                    cor_badge = "🟠"
+                    status = "Média ocupação"
+                else:
+                    cor_badge = "🔴"
+                    status = "Alta ocupação"
+                
+                with st.expander(f"{cor_badge} **{row['codigo']}** - {total_palhetas} palhetas | {total_lotes} lotes | {status}"):
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.markdown(f"**Descrição:** {row['descricao'] or 'Sem descrição'}")
+                        st.markdown(f"**Total de palhetas:** {total_palhetas}")
+                        st.markdown(f"**Total de lotes:** {total_lotes}")
+                        
+                        if not stock_contentor.empty:
+                            st.markdown("---")
+                            st.markdown("**📦 Lotes dentro:**")
+                            
+                            for canister in sorted(stock_contentor['canister'].unique()):
+                                st.markdown(f"**Canister {canister}:**")
+                                stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                                
+                                for andar in sorted(stock_canister['andar'].unique()):
+                                    st.markdown(f"  *{andar}º Andar:*")
+                                    stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                    
+                                    for _, lote in stock_andar.iterrows():
+                                        ref = lote['origem_externa'] or lote['data_embriovet'] or 'S/ ref'
+                                        st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+                    
+                    with col2:
+                        st.markdown("**Ações:**")
+                        
+                        if st.button("✏️ Editar", key=f"edit_{row['id']}"):
+                            st.session_state[f'modal_editar_{row["id"]}'] = True
+                            st.rerun()
+                        
+                        if st.button("🗑️ Apagar", key=f"del_{row['id']}", type="secondary"):
+                            if deletar_contentor(row['id']):
+                                st.success(f"✅ Contentor '{row['codigo']}' apagado!")
+                                st.rerun()
+                    
+                    if st.session_state.get(f'modal_editar_{row["id"]}', False):
+                        with st.form(f"form_editar_{row['id']}"):
+                            st.subheader(f"✏️ Editar Contentor: {row['codigo']}")
+                            
+                            novo_codigo = st.text_input("Código", value=row['codigo'])
+                            nova_descricao = st.text_area("Descrição", value=row['descricao'] or '')
+                            
+                            col_edit1, col_edit2 = st.columns(2)
+                            with col_edit1:
+                                salvar = st.form_submit_button("💾 Salvar")
+                            with col_edit2:
+                                cancelar_edit = st.form_submit_button("❌ Cancelar")
+                            
+                            if cancelar_edit:
+                                st.session_state[f'modal_editar_{row["id"]}'] = False
+                                st.rerun()
+                            
+                            if salvar:
+                                if editar_contentor(row['id'], {
+                                    'codigo': novo_codigo,
+                                    'descricao': nova_descricao,
+                                    'x': row['x'],
+                                    'y': row['y'],
+                                    'w': row['w'],
+                                    'h': row['h']
+                                }):
+                                    st.success("✅ Contentor atualizado!")
+                                    st.session_state[f'modal_editar_{row["id"]}'] = False
+                                    st.rerun()
+
+# ------------------------------------------------------------
+# 📦 Ver Stock
+# ------------------------------------------------------------
+
 if aba == "📦 Ver Stock":
     st.header("📦 Estoque Atual por Garanhão e Proprietário")
 
