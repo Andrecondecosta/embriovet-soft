@@ -1557,6 +1557,9 @@ if aba == "🗺️ Mapa dos Contentores":
     if "mapa_salvar_layout_tentativas" not in st.session_state:
         st.session_state["mapa_salvar_layout_tentativas"] = 0
 
+    if "map_bridge_bootstrapped" not in st.session_state:
+        st.session_state["map_bridge_bootstrapped"] = False
+
     try:
         from streamlit_js_eval import streamlit_js_eval
         js_eval_disponivel = True
@@ -1567,7 +1570,9 @@ if aba == "🗺️ Mapa dos Contentores":
     if not js_eval_disponivel:
         st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
     else:
-        streamlit_js_eval(
+        bridge_boot = None
+        if not st.session_state.get("map_bridge_bootstrapped", False):
+            bridge_boot = streamlit_js_eval(
             js_expressions="""
                 (function(){
                     try {
@@ -1599,7 +1604,9 @@ if aba == "🗺️ Mapa dos Contentores":
             """,
             key="map_layout_bridge_bootstrap",
             want_output=True,
-        )
+            )
+        if bridge_boot is True:
+            st.session_state["map_bridge_bootstrapped"] = True
 
     if "map_largura_viewport" not in st.session_state:
         st.session_state["map_largura_viewport"] = None
