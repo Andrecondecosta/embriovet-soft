@@ -1717,6 +1717,9 @@ if aba == "🗺️ Mapa dos Contentores":
             st.markdown(
                 """
                 <style>
+                    .main .block-container {
+                        padding-top: 0.35rem !important;
+                    }
                     .map-tech-context {
                         font-size: 12px;
                         color: #64748b;
