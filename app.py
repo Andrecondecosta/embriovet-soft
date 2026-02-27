@@ -1842,9 +1842,19 @@ if aba == "🗺️ Mapa dos Contentores":
                             layout_data = layout_pending_raw
                         else:
                             layout_data = json.loads(str(layout_pending_raw))
+
+                        if isinstance(layout_data, dict) and "output" in layout_data and isinstance(layout_data["output"], dict):
+                            layout_data = layout_data["output"]
+
+                        atualizados_ids = []
                         for _, row in contentores_df.iterrows():
                             cid = str(int(row['id']))
                             pos = layout_data.get(cid)
+                            if pos is None:
+                                try:
+                                    pos = layout_data.get(int(cid))
+                                except Exception:
+                                    pos = None
                             if not isinstance(pos, dict):
                                 continue
 
@@ -1858,6 +1868,7 @@ if aba == "🗺️ Mapa dos Contentores":
                             if novo_x != int(row['x']) or novo_y != int(row['y']):
                                 if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
                                     atualizados += 1
+                                    atualizados_ids.append(cid)
 
                         streamlit_js_eval(
                             js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
@@ -1868,7 +1879,7 @@ if aba == "🗺️ Mapa dos Contentores":
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
 
                         if atualizados > 0:
-                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s).")
+                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s): {', '.join(atualizados_ids)}")
                         else:
                             st.info("Nenhuma alteração de posição para guardar.")
                         st.rerun()
