@@ -12,6 +12,7 @@ import bcrypt
 import hashlib
 import time
 import json
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -76,25 +77,42 @@ def to_py(v):
 # ------------------------------------------------------------
 # Pool de conexões
 # ------------------------------------------------------------
-try:
-    # Verificar se há DATABASE_URL (Render, Heroku, etc)
+def ensure_sslmode_require(url: str) -> str:
+    if not url:
+        return url
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    if "sslmode" not in qs:
+        qs["sslmode"] = ["require"]
+        parsed = parsed._replace(query=urlencode(qs, doseq=True))
+    return urlunparse(parsed)
+
+@st.cache_resource(show_spinner=False)
+def build_connection_pool():
     database_url = os.getenv("DATABASE_URL")
-    
+
     if database_url:
-        # Usar DATABASE_URL (produção)
-        connection_pool = psycopg2.pool.SimpleConnectionPool(1, 10, database_url)
-        logger.info("✅ Pool de conexões PostgreSQL criado com DATABASE_URL")
-    else:
-        # Usar variáveis individuais (desenvolvimento local)
-        connection_pool = psycopg2.pool.SimpleConnectionPool(
+        database_url = ensure_sslmode_require(database_url)
+        pool_obj = psycopg2.pool.SimpleConnectionPool(
             1, 10,
-            dbname=os.getenv("DB_NAME", "embriovet"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "123"),
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
+            dsn=database_url
         )
-        logger.info("✅ Pool de conexões PostgreSQL criado localmente")
+        logger.info("✅ Pool criado com DATABASE_URL (sslmode=require)")
+        return pool_obj
+
+    pool_obj = psycopg2.pool.SimpleConnectionPool(
+        1, 10,
+        dbname=os.getenv("DB_NAME", "embriovet"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "123"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+    )
+    logger.info("✅ Pool criado localmente")
+    return pool_obj
+
+try:
+    connection_pool = build_connection_pool()
 except Exception as e:
     logger.error(f"❌ Erro ao criar pool de conexões: {e}")
     st.error(f"Erro de conexão com banco de dados: {e}")
@@ -1557,6 +1575,9 @@ if aba == "🗺️ Mapa dos Contentores":
     if "mapa_salvar_layout_tentativas" not in st.session_state:
         st.session_state["mapa_salvar_layout_tentativas"] = 0
 
+    if "map_bridge_bootstrapped" not in st.session_state:
+        st.session_state["map_bridge_bootstrapped"] = False
+
     try:
         from streamlit_js_eval import streamlit_js_eval
         js_eval_disponivel = True
@@ -1567,7 +1588,9 @@ if aba == "🗺️ Mapa dos Contentores":
     if not js_eval_disponivel:
         st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
     else:
-        streamlit_js_eval(
+        bridge_boot = None
+        if not st.session_state.get("map_bridge_bootstrapped", False):
+            bridge_boot = streamlit_js_eval(
             js_expressions="""
                 (function(){
                     try {
@@ -1599,21 +1622,31 @@ if aba == "🗺️ Mapa dos Contentores":
             """,
             key="map_layout_bridge_bootstrap",
             want_output=True,
-        )
+            )
+        if bridge_boot is True:
+            st.session_state["map_bridge_bootstrapped"] = True
 
-    largura_viewport = None
-    if js_eval_disponivel:
-        largura_viewport = streamlit_js_eval(
+    if "map_largura_viewport" not in st.session_state:
+        st.session_state["map_largura_viewport"] = None
+
+    if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
+        largura_viewport_once = streamlit_js_eval(
             js_expressions='window.innerWidth',
-            key='map_viewport_width',
+            key='map_viewport_width_once',
             want_output=True,
         )
+        if largura_viewport_once is not None:
+            try:
+                st.session_state["map_largura_viewport"] = int(largura_viewport_once)
+            except Exception:
+                st.session_state["map_largura_viewport"] = 1200
 
+    largura_viewport = st.session_state.get("map_largura_viewport")
     is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
     modo_visualizacao = True
 
     layout_pending_raw = None
-    if js_eval_disponivel:
+    if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
         layout_pending_raw = streamlit_js_eval(
             js_expressions='window.localStorage.getItem("contentor_layout_pending")',
             key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
