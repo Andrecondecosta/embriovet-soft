@@ -2031,6 +2031,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 #mapa-wrapper.mobile {
                     padding: 4px;
                     border-radius: 6px;
+                    margin-bottom: 2px;
                 }
 
                 #mapa-area {
@@ -2125,6 +2126,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 .mobile #mapa-status {
                     margin-top: 4px;
                     font-size: 10px;
+                    line-height: 1.1;
                 }
 
                 #inv-overlay {
@@ -2413,13 +2415,12 @@ if aba == "🗺️ Mapa dos Contentores":
             )
 
             if is_mobile:
-                components.html(mapa_render, height=560)
+                components.html(mapa_render, height=355)
             else:
-                components.html(mapa_render, height=530)
+                components.html(mapa_render, height=505)
             
             # Mostrar lista de contentores abaixo do mapa
-            st.markdown("---")
-            st.markdown("### Inventário de Contentores")
+            st.markdown("<div class='inv-contentores-head'>Inventário de Contentores</div>", unsafe_allow_html=True)
             
             for idx, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
