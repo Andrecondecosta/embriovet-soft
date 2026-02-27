@@ -2089,10 +2089,27 @@ if aba == "🗺️ Mapa dos Contentores":
                     letter-spacing: .3px;
                 }
 
+                .mobile .cont-codigo {
+                    font-size: 11px;
+                }
+
+                .mobile .cont-qtd {
+                    font-size: 18px;
+                }
+
+                .mobile .cont-label {
+                    font-size: 9px;
+                }
+
                 #mapa-status {
                     margin-top: 8px;
                     font-size: 11px;
                     color: var(--text-muted);
+                }
+
+                .mobile #mapa-status {
+                    margin-top: 4px;
+                    font-size: 10px;
                 }
 
                 #inv-overlay {
