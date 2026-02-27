@@ -1624,8 +1624,6 @@ if aba == "🗺️ Mapa dos Contentores":
                             st.session_state['modal_novo_contentor'] = False
                             st.rerun()
     
-    st.markdown("---")
-    
     # Área do mapa
     if contentores_df.empty:
         st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
