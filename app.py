@@ -2132,16 +2132,20 @@ if aba == "🗺️ Mapa dos Contentores":
 
                 function guardarPosicaoPendente(id, x, y) {
                     try {
-                        let storageRef = window.localStorage;
                         try {
-                            if (window.parent && window.parent.localStorage) {
-                                storageRef = window.parent.localStorage;
+                            if (window.parent && window.parent.postMessage) {
+                                window.parent.postMessage({
+                                    type: 'CONTENTOR_LAYOUT_UPDATE',
+                                    id: id,
+                                    x: x,
+                                    y: y
+                                }, '*');
                             }
                         } catch (e) {}
 
-                        const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
+                        const atual = JSON.parse(window.localStorage.getItem('contentor_layout_pending') || '{}');
                         atual[String(id)] = { x, y };
-                        storageRef.setItem('contentor_layout_pending', JSON.stringify(atual));
+                        window.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
                         statusBar.textContent = 'Alteração pendente. Clique em "Salvar layout".';
                     } catch (err) {
                         console.error('Erro ao guardar posição pendente:', err);
