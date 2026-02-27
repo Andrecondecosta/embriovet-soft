@@ -20,8 +20,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
 
-# Suprimir avisos do pandas sobre conexões
-warnings.filterwarnings('ignore', category=UserWarning, module='pandas')
+# Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
+warnings.filterwarnings(
+    "ignore",
+    message="pandas only supports SQLAlchemy connectable*",
+    category=UserWarning,
+)
 
 # ------------------------------------------------------------
 # Configurar logging
