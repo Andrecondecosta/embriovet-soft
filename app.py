@@ -20,6 +20,13 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
+from modules.ui_kit import (
+    inject_reports_css,
+    inject_stock_css,
+    render_zone_title,
+    render_kpi_strip,
+    safe_pick,
+)
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
