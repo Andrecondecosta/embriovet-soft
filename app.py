@@ -1570,8 +1570,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             'descricao': descricao,
                             'x': random.randint(50, 700),
                             'y': random.randint(50, 400),
-                            'w': 120,
-                            'h': 120
+                            'w': 90,  # Tamanho menor
+                            'h': 90   # Tamanho menor
                         })
                         if contentor_id:
                             st.success(f"✅ Contentor '{codigo}' criado com sucesso!")
@@ -1825,9 +1825,16 @@ if aba == "🗺️ Mapa dos Contentores":
                     
                     // Salvar nova posição
                     const id = parseInt(draggedElement.id.replace('contentor-', ''));
-                    const x = parseInt(draggedElement.style.left);
-                    const y = parseInt(draggedElement.style.top);
+                    const x = Math.round(parseInt(draggedElement.style.left));
+                    const y = Math.round(parseInt(draggedElement.style.top));
                     
+                    // Mostrar feedback visual
+                    draggedElement.style.borderColor = '#10b981';
+                    setTimeout(() => {{
+                        draggedElement.style.borderColor = contentores.find(c => c.id === id).cor;
+                    }}, 500);
+                    
+                    // Enviar para Streamlit
                     window.parent.postMessage({{
                         type: 'streamlit:setComponentValue',
                         value: {{ 
@@ -1837,6 +1844,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             y: y
                         }}
                     }}, '*');
+                    
+                    console.log(`Contentor ${{id}} movido para x:${{x}}, y:${{y}}`);
                     
                     draggedElement = null;
                     document.removeEventListener('mousemove', drag);
@@ -1879,15 +1888,20 @@ if aba == "🗺️ Mapa dos Contentores":
                         
                         if contentor_id and x is not None and y is not None:
                             # Buscar contentor
-                            contentor = contentores_df[contentores_df['id'] == contentor_id].iloc[0]
-                            editar_contentor(contentor_id, {
-                                'codigo': contentor['codigo'],
-                                'descricao': contentor['descricao'],
-                                'x': x,
-                                'y': y,
-                                'w': contentor['w'],
-                                'h': contentor['h']
-                            })
+                            contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                            if not contentor_row.empty:
+                                contentor = contentor_row.iloc[0]
+                                sucesso = editar_contentor(contentor_id, {
+                                    'codigo': contentor['codigo'],
+                                    'descricao': contentor['descricao'],
+                                    'x': int(x),
+                                    'y': int(y),
+                                    'w': int(contentor['w']),
+                                    'h': int(contentor['h'])
+                                })
+                                if sucesso:
+                                    # Mostrar mensagem de sucesso temporária
+                                    st.toast(f"✅ Posição guardada: {contentor['codigo']}", icon="✅")
                     elif 'contentor_id' in result:
                         # Mostrar detalhes do contentor
                         st.session_state['contentor_selecionado'] = result['contentor_id']
