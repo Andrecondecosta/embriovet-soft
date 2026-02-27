@@ -1666,137 +1666,236 @@ if aba == "🗺️ Mapa dos Contentores":
     else:
         if modo_visualizacao:
             st.markdown("### Planta do Quarto de Armazenamento")
-            st.caption("Arraste os blocos no mapa e clique em **Guardar layout** para persistir as novas posições.")
+            st.caption("Arraste e solte os contentores. A posição é guardada automaticamente.")
 
-            from streamlit_elements import elements, dashboard, mui, sync
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stTextInput"]:has(input[aria-label="__map_sync_payload__"]) {
+                    position: absolute;
+                    left: -10000px;
+                    width: 1px;
+                    height: 1px;
+                    overflow: hidden;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            escala_px = 10
-            colunas_grid = 900 // escala_px
-            altura_linha = escala_px
+            st.text_input(
+                "__map_sync_payload__",
+                key="map_sync_payload",
+                label_visibility="collapsed",
+                on_change=processar_movimento_mapa_callback,
+            )
 
-            # Metadados para renderização dos cartões
-            contentores_meta = {}
+            if st.session_state.get("move_feedback"):
+                st.success(st.session_state.pop("move_feedback"))
+            if st.session_state.get("move_feedback_erro"):
+                st.error(st.session_state.pop("move_feedback_erro"))
+
+            contentores_data = []
             for _, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
                 total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                total_lotes = len(stock_contentor)
-                ocupacao = "Vazio" if total_palhetas == 0 else "Com stock"
-
-                contentores_meta[str(int(row['id']))] = {
+                contentores_data.append({
+                    "id": int(row['id']),
                     "codigo": row['codigo'],
-                    "palhetas": total_palhetas,
-                    "lotes": total_lotes,
-                    "ocupacao": ocupacao,
                     "x": int(row['x']),
                     "y": int(row['y']),
                     "w": max(80, int(row['w'])),
-                    "h": max(80, int(row['h']))
+                    "h": max(80, int(row['h'])),
+                    "palhetas": total_palhetas,
+                })
+
+            mapa_html = """
+            <style>
+                #mapa-wrapper {
+                    position: relative;
+                    width: 100%;
+                    height: 610px;
+                    background: #f4f6f8;
+                    border: 1px solid #d0d7de;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    font-family: 'Courier New', monospace;
+                }
+                #mapa-area {
+                    position: relative;
+                    width: 900px;
+                    height: 550px;
+                    margin: 20px auto;
+                    background: #ffffff;
+                    border: 2px solid #6b7280;
+                    background-image:
+                        linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+                    background-size: 50px 50px;
+                }
+                .cont-box {
+                    position: absolute;
+                    border: 2px solid #4b5563;
+                    background: #f8fafc;
+                    cursor: move;
+                    user-select: none;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    transition: box-shadow .15s ease, transform .15s ease;
+                }
+                .cont-box:hover {
+                    box-shadow: 0 4px 10px rgba(0,0,0,.12);
+                    transform: translateY(-1px);
+                    z-index: 100;
+                }
+                .cont-box.dragging {
+                    opacity: .85;
+                    box-shadow: 0 8px 18px rgba(0,0,0,.22);
+                    z-index: 999;
+                }
+                .cont-codigo {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #111827;
+                    margin-bottom: 4px;
+                }
+                .cont-qtd {
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: #111827;
+                    line-height: 1;
+                }
+                .cont-label {
+                    font-size: 10px;
+                    color: #6b7280;
+                    text-transform: uppercase;
+                    letter-spacing: .4px;
+                }
+                #mapa-status {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    padding: 8px 14px;
+                    border-top: 1px solid #d0d7de;
+                    background: #f9fafb;
+                    font-size: 11px;
+                    color: #4b5563;
+                }
+            </style>
+
+            <div id="mapa-wrapper">
+                <div id="mapa-area"></div>
+                <div id="mapa-status">Arraste os contentores para novas posições.</div>
+            </div>
+
+            <script>
+                const contentores = __CONTENTORES_DATA__;
+                const mapaArea = document.getElementById('mapa-area');
+                const statusBar = document.getElementById('mapa-status');
+                let draggedEl = null;
+                let offsetX = 0;
+                let offsetY = 0;
+
+                function setReactInputValue(input, value) {
+                    const prototype = window.parent.HTMLInputElement.prototype;
+                    const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+                    setter.call(input, value);
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-            ids_atuais = list(contentores_meta.keys())
-            layout_guardado = st.session_state.get("layout_contentores_mapa", [])
-
-            # Reconciliar layout do session_state com contentores atuais
-            layout_reconciliado = []
-            layout_indexado = {str(item.get("i")): item for item in layout_guardado if item.get("i") is not None}
-            for cid in ids_atuais:
-                meta = contentores_meta[cid]
-                item = layout_indexado.get(cid)
-                if item:
-                    novo_item = {
-                        "i": cid,
-                        "x": max(0, int(item.get("x", meta["x"] // escala_px))),
-                        "y": max(0, int(item.get("y", meta["y"] // escala_px))),
-                        "w": max(8, int(item.get("w", meta["w"] // escala_px))),
-                        "h": max(8, int(item.get("h", meta["h"] // escala_px))),
-                        "static": False,
+                function enviarMovimentoParaStreamlit(payload) {
+                    try {
+                        const parentDoc = window.parent.document;
+                        const syncInput = parentDoc.querySelector('input[aria-label="__map_sync_payload__"]');
+                        if (!syncInput) {
+                            statusBar.textContent = 'Canal de sincronização indisponível.';
+                            return;
+                        }
+                        setReactInputValue(syncInput, JSON.stringify(payload));
+                        statusBar.textContent = `Guardado: ${payload.codigo} (X=${payload.x}, Y=${payload.y})`;
+                    } catch (err) {
+                        console.error('Erro ao sincronizar movimento:', err);
+                        statusBar.textContent = 'Falha ao sincronizar posição.';
                     }
-                else:
-                    novo_item = {
-                        "i": cid,
-                        "x": max(0, meta["x"] // escala_px),
-                        "y": max(0, meta["y"] // escala_px),
-                        "w": max(8, meta["w"] // escala_px),
-                        "h": max(8, meta["h"] // escala_px),
-                        "static": False,
+                }
+
+                function criarContentor(cont) {
+                    const div = document.createElement('div');
+                    div.className = 'cont-box';
+                    div.id = `cont-${cont.id}`;
+                    div.style.left = cont.x + 'px';
+                    div.style.top = cont.y + 'px';
+                    div.style.width = cont.w + 'px';
+                    div.style.height = cont.h + 'px';
+
+                    div.innerHTML = `
+                        <div class="cont-codigo">${cont.codigo}</div>
+                        <div class="cont-qtd">${cont.palhetas}</div>
+                        <div class="cont-label">palhetas</div>
+                    `;
+
+                    div.addEventListener('mousedown', (e) => {
+                        if (e.button !== 0) return;
+                        draggedEl = div;
+                        draggedEl.classList.add('dragging');
+                        const rect = div.getBoundingClientRect();
+                        offsetX = e.clientX - rect.left;
+                        offsetY = e.clientY - rect.top;
+                        e.preventDefault();
+                    });
+
+                    mapaArea.appendChild(div);
+                }
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!draggedEl) return;
+                    const parentRect = mapaArea.getBoundingClientRect();
+                    let x = e.clientX - parentRect.left - offsetX;
+                    let y = e.clientY - parentRect.top - offsetY;
+
+                    x = Math.max(0, Math.min(x, 900 - parseInt(draggedEl.style.width, 10)));
+                    y = Math.max(0, Math.min(y, 550 - parseInt(draggedEl.style.height, 10)));
+
+                    draggedEl.style.left = Math.round(x) + 'px';
+                    draggedEl.style.top = Math.round(y) + 'px';
+                    statusBar.textContent = `Movendo... X=${Math.round(x)} | Y=${Math.round(y)}`;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!draggedEl) return;
+
+                    const id = parseInt(draggedEl.id.replace('cont-', ''), 10);
+                    const x = parseInt(draggedEl.style.left, 10);
+                    const y = parseInt(draggedEl.style.top, 10);
+                    const cont = contentores.find(c => c.id === id);
+
+                    draggedEl.classList.remove('dragging');
+                    draggedEl = null;
+
+                    if (cont) {
+                        enviarMovimentoParaStreamlit({
+                            token: `${id}-${Date.now()}`,
+                            id,
+                            codigo: cont.codigo,
+                            x,
+                            y,
+                        });
                     }
-                layout_reconciliado.append(novo_item)
+                });
 
-            st.session_state["layout_contentores_mapa"] = layout_reconciliado
+                contentores.forEach(criarContentor);
+            </script>
+            """
 
-            with elements("mapa_contentores_dashboard"):
-                with dashboard.Grid(
-                    st.session_state["layout_contentores_mapa"],
-                    cols={
-                        "lg": colunas_grid,
-                        "md": colunas_grid,
-                        "sm": colunas_grid,
-                        "xs": colunas_grid,
-                        "xxs": colunas_grid,
-                    },
-                    rowHeight=altura_linha,
-                    compactType=None,
-                    isDraggable=True,
-                    isResizable=False,
-                    margin=[8, 8],
-                    containerPadding=[8, 8],
-                    onLayoutChange=sync("layout_contentores_mapa"),
-                ):
-                    for cid in ids_atuais:
-                        meta = contentores_meta[cid]
-                        with mui.Paper(
-                            key=cid,
-                            elevation=1,
-                            sx={
-                                "height": "100%",
-                                "width": "100%",
-                                "display": "flex",
-                                "flexDirection": "column",
-                                "justifyContent": "center",
-                                "alignItems": "center",
-                                "border": "1px solid #cbd5e1",
-                                "borderRadius": "6px",
-                                "background": "#f8fafc",
-                                "color": "#0f172a",
-                                "cursor": "grab",
-                            },
-                        ):
-                            mui.Typography(meta["codigo"], sx={"fontSize": "0.85rem", "fontWeight": 700, "lineHeight": 1.2})
-                            mui.Typography(str(meta["palhetas"]), sx={"fontSize": "1.4rem", "fontWeight": 800, "lineHeight": 1.1})
-                            mui.Typography("palhetas", sx={"fontSize": "0.7rem", "opacity": 0.75})
-
-            col_layout_1, col_layout_2 = st.columns([2, 1])
-            with col_layout_1:
-                if st.button("Guardar layout", type="primary", use_container_width=True):
-                    layout_atual = st.session_state.get("layout_contentores_mapa", [])
-                    contentores_lookup = {str(int(row['id'])): row for _, row in contentores_df.iterrows()}
-                    total_atualizados = 0
-
-                    for item in layout_atual:
-                        cid = str(item.get("i"))
-                        row = contentores_lookup.get(cid)
-                        if row is None:
-                            continue
-
-                        novo_x = max(0, int(item.get("x", 0)) * escala_px)
-                        novo_y = max(0, int(item.get("y", 0)) * escala_px)
-
-                        if novo_x != int(row['x']) or novo_y != int(row['y']):
-                            if atualizar_posicao_contentor(int(cid), novo_x, novo_y):
-                                total_atualizados += 1
-
-                    if total_atualizados > 0:
-                        st.success(f"Layout guardado com sucesso. {total_atualizados} contentor(es) atualizado(s).")
-                        st.rerun()
-                    else:
-                        st.info("Nenhuma alteração de posição para guardar.")
-
-            with col_layout_2:
-                if st.button("Recarregar mapa", use_container_width=True):
-                    st.session_state.pop("layout_contentores_mapa", None)
-                    st.rerun()
-
-            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            import streamlit.components.v1 as components
+            components.html(
+                mapa_html.replace("__CONTENTORES_DATA__", str(contentores_data)),
+                height=640,
+            )
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
