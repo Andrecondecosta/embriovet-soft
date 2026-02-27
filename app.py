@@ -11,9 +11,7 @@ import datetime as dt
 import bcrypt
 import hashlib
 import time
-import json
 from io import BytesIO
-from urllib.parse import unquote
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
