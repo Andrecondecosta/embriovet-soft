@@ -1764,11 +1764,15 @@ if aba == "🗺️ Mapa dos Contentores":
                             padding-right: 0 !important;
                             padding-top: 0.1rem !important;
                         }
+                        div[data-testid="stHeadingWithActionElements"] {
+                            margin-bottom: 0.1rem !important;
+                            padding-bottom: 0 !important;
+                        }
                         div[data-testid="stAppViewContainer"] h1 {
-                            font-size: 2.15rem !important;
-                            line-height: 1.08 !important;
+                            font-size: 1.72rem !important;
+                            line-height: 1.03 !important;
                             margin-top: 0 !important;
-                            margin-bottom: 0.35rem !important;
+                            margin-bottom: 0.1rem !important;
                         }
                         div[data-testid="stHorizontalBlock"] {
                             gap: 0.35rem !important;
@@ -1779,6 +1783,19 @@ if aba == "🗺️ Mapa dos Contentores":
                             padding-top: 0.3rem !important;
                             padding-bottom: 0.3rem !important;
                         }
+                    }
+                    div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_js_eval"]) {
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                    }
+                    iframe[title*="streamlit_js_eval"] {
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        border: 0 !important;
+                        margin: 0 !important;
                     }
                     .map-tech-context {
                         font-size: 12px;
@@ -2289,7 +2306,7 @@ if aba == "🗺️ Mapa dos Contentores":
                             }
                         } catch (e) {}
 
-                        statusBar.textContent = `Alteração pendente (${storageHint}). Clique em "Salvar layout".`;
+                        statusBar.textContent = 'Alteração pendente.';
                     } catch (err) {
                         console.error('Erro ao guardar posição pendente:', err);
                         statusBar.textContent = 'Falha ao guardar posição pendente.';
