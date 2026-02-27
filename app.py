@@ -1652,7 +1652,7 @@ if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
 # ------------------------------------------------------------
-# Router de páginas (Fase 2 da modularização)
+# Router de páginas (Fase 3 da modularização)
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
     run_map_page({**globals(), **locals()})
