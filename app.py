@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------
 # Carregar variáveis de ambiente
 # ------------------------------------------------------------
-load_dotenv()
+load_dotenv("/app/.env", override=True)
 
 # ------------------------------------------------------------
 # Helpers: converter tipos numpy/pandas -> tipos Python (psycopg2 friendly)
@@ -106,7 +106,7 @@ def ensure_sslmode_require(url: str) -> str:
 
 @st.cache_resource(show_spinner=False)
 def build_connection_pool():
-    database_url = os.getenv("DATABASE_URL")
+    database_url = (os.getenv("DATABASE_URL") or "").strip()
 
     if database_url:
         database_url = ensure_sslmode_require(database_url)
