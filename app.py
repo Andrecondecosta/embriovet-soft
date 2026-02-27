@@ -11,6 +11,7 @@ import datetime as dt
 import bcrypt
 import hashlib
 import time
+import json
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -1118,6 +1119,25 @@ def editar_contentor(contentor_id, dados):
         st.error(f"Erro ao editar contentor: {e}")
         return False
 
+def atualizar_posicao_contentor(contentor_id, x, y):
+    """Atualiza apenas a posição (x,y) de um contentor"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE contentores
+                SET x = %s, y = %s
+                WHERE id = %s
+            """, (to_py(x), to_py(y), to_py(contentor_id)))
+            conn.commit()
+            cur.close()
+            logger.info(f"Posição do contentor atualizada: ID {contentor_id} -> X={x}, Y={y}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar posição do contentor: {e}")
+        st.error(f"Erro ao guardar posição do contentor: {e}")
+        return False
+
 def deletar_contentor(contentor_id):
     """Deleta um contentor apenas se não tiver stock associado"""
     try:
@@ -1389,7 +1409,7 @@ def mostrar_tela_login():
             username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
             password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
             
             if submitted:
                 if not username or not password:
@@ -1518,6 +1538,452 @@ if proprietarios.empty:
 # 🗺️ Mapa dos Contentores
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
+    st.markdown("## Gestão de Contentores")
+    st.markdown("Sistema de localização física e inventário de sémen equino")
+    
+    # Carregar contentores
+    contentores_df = carregar_contentores()
+
+    # Barra de ações - design limpo
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([2, 2, 2, 6])
+    with col_btn1:
+        if st.button("+ Novo Contentor", type="primary", use_container_width=True):
+            st.session_state['modal_novo_contentor'] = True
+    
+    with col_btn2:
+        total_contentores = len(contentores_df)
+        total_palhetas = 0
+        if not contentores_df.empty:
+            for _, row in contentores_df.iterrows():
+                stock_cont = obter_stock_contentor(row['id'])
+                if not stock_cont.empty:
+                    total_palhetas += stock_cont['existencia_atual'].sum()
+        st.metric("Contentores", total_contentores, label_visibility="visible")
+    
+    with col_btn3:
+        st.metric("Total Palhetas", int(total_palhetas), label_visibility="visible")
+    
+    with col_btn4:
+        modo_visualizacao = st.toggle("Vista: Mapa", value=True, help="Alternar entre mapa e lista")
+    
+    # Modal para adicionar contentor - design limpo
+    if st.session_state.get('modal_novo_contentor', False):
+        st.markdown("---")
+        st.markdown("### Adicionar Novo Contentor")
+        
+        with st.form("form_novo_contentor"):
+            col_form1, col_form2 = st.columns([1, 1])
+            
+            with col_form1:
+                codigo = st.text_input(
+                    "Código do Contentor *", 
+                    placeholder="Ex: CT-01, A1, EMB01",
+                    help="Identificador único alfanumérico"
+                )
+            
+            with col_form2:
+                descricao = st.text_input("Descrição (opcional)", placeholder="Localização ou notas")
+            
+            col_submit1, col_submit2 = st.columns([1, 1])
+            with col_submit1:
+                submitted = st.form_submit_button("Criar Contentor", use_container_width=True)
+            with col_submit2:
+                cancelar = st.form_submit_button("Cancelar", use_container_width=True)
+            
+            if cancelar:
+                st.session_state['modal_novo_contentor'] = False
+                st.rerun()
+            
+            if submitted:
+                if not codigo:
+                    st.error("Código é obrigatório")
+                else:
+                    if codigo in contentores_df['codigo'].values:
+                        st.error(f"Já existe um contentor com o código '{codigo}'")
+                    else:
+                        import random
+                        contentor_id = adicionar_contentor({
+                            'codigo': codigo,
+                            'descricao': descricao,
+                            'x': random.randint(100, 600),
+                            'y': random.randint(100, 350),
+                            'w': 90,
+                            'h': 90
+                        })
+                        if contentor_id:
+                            st.success(f"Contentor '{codigo}' criado com sucesso")
+                            st.session_state['modal_novo_contentor'] = False
+                            st.rerun()
+    
+    st.markdown("---")
+    
+    # Área do mapa
+    if contentores_df.empty:
+        st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
+    else:
+        if modo_visualizacao:
+            st.markdown("### Planta do Quarto de Armazenamento")
+            st.caption("Arraste e solte os contentores. A posição é guardada automaticamente.")
+
+            from streamlit_js_eval import streamlit_js_eval
+
+            if "mapa_sync_tick" not in st.session_state:
+                st.session_state["mapa_sync_tick"] = 0
+
+            sync_clicked = st.button(
+                "Sincronizar mapa",
+                key="mapa_sync_rerun_btn",
+                help="Atualiza posições arrastadas no mapa"
+            )
+            if sync_clicked:
+                st.session_state["mapa_sync_tick"] += 1
+
+            movimento_raw = streamlit_js_eval(
+                js_expressions='window.localStorage.getItem("contentor_move")',
+                key=f"mapa_contentor_move_reader_{st.session_state['mapa_sync_tick']}",
+                want_output=True,
+            )
+
+            if movimento_raw and movimento_raw != "null":
+                try:
+                    movimento = json.loads(movimento_raw)
+                    token = movimento.get("token")
+                    contentor_id = int(movimento.get("id"))
+                    x = int(movimento.get("x"))
+                    y = int(movimento.get("y"))
+
+                    if token != st.session_state.get("map_move_token_processado"):
+                        contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                        if not contentor_row.empty:
+                            contentor = contentor_row.iloc[0]
+                            largura = max(1, int(contentor['w']))
+                            altura = max(1, int(contentor['h']))
+                            x = max(0, min(x, 900 - largura))
+                            y = max(0, min(y, 550 - altura))
+
+                            if atualizar_posicao_contentor(contentor_id, x, y):
+                                st.session_state["move_feedback"] = f"Posição guardada: {contentor['codigo']} (X={x}, Y={y})"
+
+                        st.session_state["map_move_token_processado"] = token
+                except Exception as e:
+                    logger.error(f"Erro ao processar movimento do mapa: {e}")
+                    st.session_state["move_feedback_erro"] = "Falha ao guardar posição do contentor."
+
+                streamlit_js_eval(
+                    js_expressions='window.localStorage.removeItem("contentor_move")',
+                    key=f"mapa_contentor_move_clear_{int(time.time() * 1000)}"
+                )
+                st.rerun()
+
+            if st.session_state.get("move_feedback"):
+                st.success(st.session_state.pop("move_feedback"))
+            if st.session_state.get("move_feedback_erro"):
+                st.error(st.session_state.pop("move_feedback_erro"))
+
+            contentores_data = []
+            for _, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                contentores_data.append({
+                    "id": int(row['id']),
+                    "codigo": row['codigo'],
+                    "x": int(row['x']),
+                    "y": int(row['y']),
+                    "w": max(80, int(row['w'])),
+                    "h": max(80, int(row['h'])),
+                    "palhetas": total_palhetas,
+                })
+
+            mapa_html = """
+            <style>
+                #mapa-wrapper {
+                    position: relative;
+                    width: 100%;
+                    height: 610px;
+                    background: #f4f6f8;
+                    border: 1px solid #d0d7de;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    font-family: 'Courier New', monospace;
+                }
+                #mapa-area {
+                    position: relative;
+                    width: 900px;
+                    height: 550px;
+                    margin: 20px auto;
+                    background: #ffffff;
+                    border: 2px solid #6b7280;
+                    background-image:
+                        linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+                    background-size: 50px 50px;
+                }
+                .cont-box {
+                    position: absolute;
+                    border: 2px solid #4b5563;
+                    background: #f8fafc;
+                    cursor: move;
+                    user-select: none;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    transition: box-shadow .15s ease, transform .15s ease;
+                }
+                .cont-box:hover {
+                    box-shadow: 0 4px 10px rgba(0,0,0,.12);
+                    transform: translateY(-1px);
+                    z-index: 100;
+                }
+                .cont-box.dragging {
+                    opacity: .85;
+                    box-shadow: 0 8px 18px rgba(0,0,0,.22);
+                    z-index: 999;
+                }
+                .cont-codigo {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #111827;
+                    margin-bottom: 4px;
+                }
+                .cont-qtd {
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: #111827;
+                    line-height: 1;
+                }
+                .cont-label {
+                    font-size: 10px;
+                    color: #6b7280;
+                    text-transform: uppercase;
+                    letter-spacing: .4px;
+                }
+                #mapa-status {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    padding: 8px 14px;
+                    border-top: 1px solid #d0d7de;
+                    background: #f9fafb;
+                    font-size: 11px;
+                    color: #4b5563;
+                }
+            </style>
+
+            <div id="mapa-wrapper">
+                <div id="mapa-area"></div>
+                <div id="mapa-status">Arraste os contentores para novas posições.</div>
+            </div>
+
+            <script>
+                const contentores = __CONTENTORES_DATA__;
+                const mapaArea = document.getElementById('mapa-area');
+                const statusBar = document.getElementById('mapa-status');
+                let draggedEl = null;
+                let offsetX = 0;
+                let offsetY = 0;
+
+                function guardarMovimentoNoBrowser(payload) {
+                    try {
+                        window.parent.localStorage.setItem('contentor_move', JSON.stringify(payload));
+                        const syncButton = Array.from(window.parent.document.querySelectorAll('button')).find(
+                            btn => btn.innerText && btn.innerText.trim() === 'Sincronizar mapa'
+                        );
+                        if (syncButton) {
+                            syncButton.click();
+                        }
+                        statusBar.textContent = `Guardado: ${payload.codigo} (X=${payload.x}, Y=${payload.y})`;
+                    } catch (err) {
+                        console.error('Erro ao gravar movimento no localStorage:', err);
+                        statusBar.textContent = 'Falha ao gravar movimento local.';
+                    }
+                }
+
+                function criarContentor(cont) {
+                    const div = document.createElement('div');
+                    div.className = 'cont-box';
+                    div.id = `cont-${cont.id}`;
+                    div.style.left = cont.x + 'px';
+                    div.style.top = cont.y + 'px';
+                    div.style.width = cont.w + 'px';
+                    div.style.height = cont.h + 'px';
+
+                    div.innerHTML = `
+                        <div class="cont-codigo">${cont.codigo}</div>
+                        <div class="cont-qtd">${cont.palhetas}</div>
+                        <div class="cont-label">palhetas</div>
+                    `;
+
+                    div.addEventListener('mousedown', (e) => {
+                        if (e.button !== 0) return;
+                        draggedEl = div;
+                        draggedEl.classList.add('dragging');
+                        const rect = div.getBoundingClientRect();
+                        offsetX = e.clientX - rect.left;
+                        offsetY = e.clientY - rect.top;
+                        e.preventDefault();
+                    });
+
+                    mapaArea.appendChild(div);
+                }
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!draggedEl) return;
+                    const parentRect = mapaArea.getBoundingClientRect();
+                    let x = e.clientX - parentRect.left - offsetX;
+                    let y = e.clientY - parentRect.top - offsetY;
+
+                    x = Math.max(0, Math.min(x, 900 - parseInt(draggedEl.style.width, 10)));
+                    y = Math.max(0, Math.min(y, 550 - parseInt(draggedEl.style.height, 10)));
+
+                    draggedEl.style.left = Math.round(x) + 'px';
+                    draggedEl.style.top = Math.round(y) + 'px';
+                    statusBar.textContent = `Movendo... X=${Math.round(x)} | Y=${Math.round(y)}`;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!draggedEl) return;
+
+                    const id = parseInt(draggedEl.id.replace('cont-', ''), 10);
+                    const x = parseInt(draggedEl.style.left, 10);
+                    const y = parseInt(draggedEl.style.top, 10);
+                    const cont = contentores.find(c => c.id === id);
+
+                    draggedEl.classList.remove('dragging');
+                    draggedEl = null;
+
+                    if (cont) {
+                        guardarMovimentoNoBrowser({
+                            token: `${id}-${Date.now()}`,
+                            id,
+                            codigo: cont.codigo,
+                            x,
+                            y,
+                        });
+                    }
+                });
+
+                contentores.forEach(criarContentor);
+            </script>
+            """
+
+            import streamlit.components.v1 as components
+            components.html(
+                mapa_html.replace("__CONTENTORES_DATA__", str(contentores_data)),
+                height=640,
+            )
+            
+            # Mostrar lista de contentores abaixo do mapa
+            st.markdown("---")
+            st.markdown("### Inventário de Contentores")
+            
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                
+                # Design técnico limpo
+                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
+                    col_det1, col_det2, col_det3 = st.columns([2, 2, 1])
+                    
+                    with col_det1:
+                        st.markdown(f"**Código:** {row['codigo']}")
+                        st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
+                        st.markdown(f"**Posição:** X={row['x']}, Y={row['y']}")
+                    
+                    with col_det2:
+                        st.markdown(f"**Total Palhetas:** {int(total_palhetas)}")
+                        st.markdown(f"**Total Lotes:** {total_lotes}")
+                    
+                    with col_det3:
+                        if st.button("Editar", key=f"edit_{row['id']}", use_container_width=True):
+                            st.session_state[f'modal_editar_{row["id"]}'] = True
+                            st.rerun()
+                        
+                        if st.button("Apagar", key=f"del_{row['id']}", use_container_width=True):
+                            if deletar_contentor(row['id']):
+                                st.success(f"Contentor '{row['codigo']}' apagado")
+                                st.rerun()
+                    
+                    if not stock_contentor.empty:
+                        st.markdown("**Lotes:**")
+                        for canister in sorted(stock_contentor['canister'].unique()):
+                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                            for andar in sorted(stock_canister['andar'].unique()):
+                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                for _, lote in stock_andar.iterrows():
+                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
+                                    st.text(f"Can.{canister} / {andar}º | {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])}p | {ref}")
+                    
+                    # Modal edição
+                    if st.session_state.get(f'modal_editar_{row["id"]}', False):
+                        st.markdown("---")
+                        with st.form(f"form_editar_{row['id']}"):
+                            st.markdown("#### Editar Contentor")
+                            
+                            col_edit1, col_edit2 = st.columns(2)
+                            with col_edit1:
+                                novo_codigo = st.text_input("Código", value=row['codigo'])
+                            with col_edit2:
+                                nova_descricao = st.text_input("Descrição", value=row['descricao'] or '')
+                            
+                            col_btn_edit1, col_btn_edit2 = st.columns(2)
+                            with col_btn_edit1:
+                                salvar = st.form_submit_button("Salvar", use_container_width=True)
+                            with col_btn_edit2:
+                                cancelar_edit = st.form_submit_button("Cancelar", use_container_width=True)
+                            
+                            if cancelar_edit:
+                                st.session_state[f'modal_editar_{row["id"]}'] = False
+                                st.rerun()
+                            
+                            if salvar:
+                                if editar_contentor(row['id'], {
+                                    'codigo': novo_codigo,
+                                    'descricao': nova_descricao,
+                                    'x': row['x'],
+                                    'y': row['y'],
+                                    'w': row['w'],
+                                    'h': row['h']
+                                }):
+                                    st.success("Contentor atualizado")
+                                    st.session_state[f'modal_editar_{row["id"]}'] = False
+                                    st.rerun()
+        
+        else:
+            # MODO LISTA (mantido para compatibilidade)
+            st.markdown("### Lista de Contentores")
+            
+            for idx, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                
+                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
+                    st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
+                    st.markdown(f"**Total de palhetas:** {int(total_palhetas)}")
+                    st.markdown(f"**Total de lotes:** {total_lotes}")
+                    
+                    if not stock_contentor.empty:
+                        st.markdown("---")
+                        for canister in sorted(stock_contentor['canister'].unique()):
+                            st.markdown(f"**Canister {canister}:**")
+                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                            
+                            for andar in sorted(stock_canister['andar'].unique()):
+                                st.markdown(f"  *{andar}º Andar:*")
+                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                
+                                for _, lote in stock_andar.iterrows():
+                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
+                                    st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+
+    st.stop()
+
+# ------------------------------------------------------------
+# 📦 Ver Stock
+# ------------------------------------------------------------
     st.header("🗺️ Mapa dos Contentores")
     
     # Carregar contentores
