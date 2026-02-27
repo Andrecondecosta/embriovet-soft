@@ -1760,8 +1760,8 @@ if aba == "🗺️ Mapa dos Contentores":
                     }
                     @media (max-width: 900px) {
                         .main .block-container {
-                            padding-left: 0.35rem !important;
-                            padding-right: 0.35rem !important;
+                            padding-left: 0 !important;
+                            padding-right: 0 !important;
                         }
                     }
                     .map-tech-context {
