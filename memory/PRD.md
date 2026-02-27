@@ -42,6 +42,15 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Novo módulo `/app/modules/ui_kit.py` para CSS/helper UI reutilizáveis
   - Novo módulo `/app/modules/stock_reporting.py` para filtros/sumarização de stock e histórico técnico
   - `app.py` atualizado para consumir helpers modulares (base para fase 2)
+- Continuação executada (next action + future/backlog):
+  - Regra de segurança de exclusão de contentor reforçada na UI: botão “Apagar” desativado quando há stock > 0 + tooltip/caption explicativos, mantendo validação SQL no backend.
+  - Novos relatórios adicionados em **Relatórios → Contentor / Localização** com:
+    - filtros por garanhão, proprietário, canister e andar
+    - KPIs técnicos de ocupação/contexto
+    - tabela densa de lotes por localização física
+    - histórico físico do sémen (entradas + transferências internas/externas quando disponíveis)
+    - exportação CSV no topo da zona de resultados
+  - Modularização avançada com novo módulo `/app/modules/stock_reporting.py` aplicado no `Ver Stock` (filtros, KPIs e histórico técnico)
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
@@ -49,6 +58,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Evidências: `/app/test_reports/iteration_3.json`, `/app/test_reports/iteration_4.json`, `/app/test_reports/iteration_5.json`
 - Reestruturação UX de Relatórios validada com **PASS 100% frontend**: `/app/test_reports/iteration_10.json`
 - Ver Stock UX + modularização fase 1 validados com **PASS 100% frontend**: `/app/test_reports/iteration_11.json`
+- Iteração seguinte (novas features) validada por code review do testing agent com app bloqueada por BD indisponível no ambiente de teste: `/app/test_reports/iteration_12.json`
 
 ## Backlog priorizado
 ### P0
@@ -60,3 +70,4 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 ### P2
 - Teste aprofundado da regra de segurança de exclusão de contentor com stock > 0
 - Refatorar `app.py` em módulos menores (DB/UI/relatórios) — **Fase 1 concluída**, pendente Fase 2 (extração de páginas completas)
+- Concluir Fase 2: extrair páginas completas (Mapa, Ver Stock, Relatórios) para módulos dedicados com roteamento enxuto no `app.py`
