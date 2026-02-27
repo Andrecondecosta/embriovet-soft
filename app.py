@@ -1820,6 +1820,33 @@ elif aba == "📝 Registrar Inseminação":
                 letter-spacing: .04em;
                 margin: .2rem 0;
             }
+            .insem-summary-bar {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                background: #eef2f7;
+                border: 1px solid #e2e8f0;
+                padding: 8px 12px;
+                border-radius: 8px;
+                font-size: .78rem;
+                color: #1f2937;
+            }
+            .insem-summary-item {
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                font-weight: 600;
+            }
+            .insem-summary-label {
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                font-size: .68rem;
+                color: #64748b;
+            }
+            .insem-summary-value {
+                font-size: .9rem;
+                color: #0f172a;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2139,6 +2166,23 @@ elif aba == "📝 Registrar Inseminação":
                 total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
                 st.markdown(f"<div class='insem-lote-main'>Total: {total_palhetas} palhetas</div>", unsafe_allow_html=True)
 
+        total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
+        total_linhas = sum(1 for v in linhas.values() if int(v.get("qty", 0)) > 0)
+        st.markdown(
+            f"""
+            <div class='insem-summary-bar'>
+                <div class='insem-summary-item'>
+                    <span class='insem-summary-label'>Total palhetas</span>
+                    <span class='insem-summary-value'>{total_palhetas}</span>
+                </div>
+                <div class='insem-summary-item'>
+                    <span class='insem-summary-label'>Lotes</span>
+                    <span class='insem-summary-value'>{total_linhas}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown("---")
         if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", use_container_width=True):
             linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
