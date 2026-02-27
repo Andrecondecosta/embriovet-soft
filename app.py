@@ -1888,15 +1888,21 @@ if aba == "🗺️ Mapa dos Contentores":
                         
                         if contentor_id and x is not None and y is not None:
                             # Buscar contentor
-                            contentor = contentores_df[contentores_df['id'] == contentor_id].iloc[0]
-                            editar_contentor(contentor_id, {
-                                'codigo': contentor['codigo'],
-                                'descricao': contentor['descricao'],
-                                'x': x,
-                                'y': y,
-                                'w': contentor['w'],
-                                'h': contentor['h']
-                            })
+                            contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                            if not contentor_row.empty:
+                                contentor = contentor_row.iloc[0]
+                                sucesso = editar_contentor(contentor_id, {
+                                    'codigo': contentor['codigo'],
+                                    'descricao': contentor['descricao'],
+                                    'x': int(x),
+                                    'y': int(y),
+                                    'w': int(contentor['w']),
+                                    'h': int(contentor['h'])
+                                })
+                                if sucesso:
+                                    st.success(f"✅ Posição do contentor '{contentor['codigo']}' guardada: x={x}, y={y}", icon="✅")
+                                    time.sleep(1)
+                                    st.rerun()
                     elif 'contentor_id' in result:
                         # Mostrar detalhes do contentor
                         st.session_state['contentor_selecionado'] = result['contentor_id']
