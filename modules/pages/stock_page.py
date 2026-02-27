@@ -1,8 +1,446 @@
-# Auto-extracted page module
-
-PAGE_CODE = '    st.header("Estoque Atual")\n    inject_stock_css()\n    inject_reports_css()\n\n    if not stock.empty:\n        garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())\n\n        # Verificar se há redirecionamento de stock recém-adicionado\n        filtro_default = None\n        stock_id_expandir = None\n\n        if \'redirecionar_ver_stock\' in st.session_state:\n            if \'ultimo_garanhao\' in st.session_state:\n                filtro_default = st.session_state[\'ultimo_garanhao\']\n                stock_id_expandir = st.session_state.get(\'ultimo_stock_id\')\n            # Limpar flags\n            del st.session_state[\'redirecionar_ver_stock\']\n            if \'ultimo_garanhao\' in st.session_state:\n                del st.session_state[\'ultimo_garanhao\']\n            if \'ultimo_stock_id\' in st.session_state:\n                del st.session_state[\'ultimo_stock_id\']\n\n        # Definir índice do selectbox\n        if filtro_default and filtro_default in garanhaos_disponiveis:\n            idx_default = garanhaos_disponiveis.index(filtro_default)\n        else:\n            idx_default = 0\n\n        render_zone_title("Zona de seleção", "stock-zone-title")\n        filtro = st.selectbox("Garanhão", garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")\n\n        render_zone_title("Zona de filtros", "stock-zone-title")\n        with st.expander("Filtros de consulta", expanded=False):\n            f1, f2, f3 = st.columns(3)\n            with f1:\n                filtro_props = st.multiselect(\n                    "Proprietários",\n                    sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),\n                    key="stock_filter_props",\n                )\n            with f2:\n                min_palhetas = st.number_input("Mín. palhetas", min_value=0, value=0, step=1, key="stock_filter_min")\n            with f3:\n                mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")\n\n        stock_filtrado = filter_stock_view(\n            stock,\n            garanhao=filtro,\n            owner_filters=filtro_props,\n            min_palhetas=min_palhetas,\n            include_zero=mostrar_sem_stock,\n        )\n\n        transf_hist_all = carregar_transferencias()\n        transf_ext_hist_all = carregar_transferencias_externas()\n\n        render_zone_title("Zona de resultados", "stock-zone-title")\n        render_kpi_strip(stock_kpis(stock_filtrado, to_py))\n\n        resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)\n        if not resumo_por_proprietario.empty:\n            st.dataframe(\n                resumo_por_proprietario,\n                use_container_width=True,\n                hide_index=True,\n                height=220,\n            )\n\n        with st.expander("Histórico técnico de transferências do garanhão", expanded=False):\n            transf_hist, transf_ext_hist = filter_transfer_history(\n                transf_hist_all,\n                transf_ext_hist_all,\n                garanhao=filtro,\n                owner_filters=filtro_props,\n            )\n\n            cexp1, cexp2 = st.columns(2)\n            with cexp1:\n                if not transf_hist.empty:\n                    csv_ti = safe_pick(transf_hist, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"])\n                    st.download_button(\n                        "CSV Internas",\n                        csv_ti.to_csv(index=False).encode("utf-8"),\n                        f"transferencias_internas_{filtro}.csv",\n                        "text/csv",\n                        key=f"stock_hist_ti_{filtro}",\n                        use_container_width=True,\n                    )\n            with cexp2:\n                if not transf_ext_hist.empty:\n                    csv_te = safe_pick(transf_ext_hist, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"])\n                    st.download_button(\n                        "CSV Externas",\n                        csv_te.to_csv(index=False).encode("utf-8"),\n                        f"transferencias_externas_{filtro}.csv",\n                        "text/csv",\n                        key=f"stock_hist_te_{filtro}",\n                        use_container_width=True,\n                    )\n\n            if not transf_hist.empty:\n                ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)\n                ex_ti.columns = ["Data", "De", "Para", "Palhetas"]\n                st.dataframe(ex_ti, use_container_width=True, hide_index=True, height=220)\n            if not transf_ext_hist.empty:\n                ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)\n                ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]\n                st.dataframe(ex_te, use_container_width=True, hide_index=True, height=220)\n\n            if transf_hist.empty and transf_ext_hist.empty:\n                st.info("Sem transferências para o filtro atual.")\n\n        st.markdown("<div class=\'stock-table-head\'>Lotes Detalhados</div>", unsafe_allow_html=True)\n\n        if stock_filtrado.empty:\n            st.info("Sem lotes para o filtro atual.")\n\n        proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))\n\n        for _, row in stock_filtrado.iterrows():\n            existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)\n            referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"\n            proprietario_nome = row.get("proprietario_nome", "Sem proprietario")\n\n            # Verificar se é o lote recém-adicionado para abrir automaticamente\n            expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False\n\n            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas", expanded=expanded):\n\n                # Tabs: Mostrar conforme permissões\n                if verificar_permissao(\'Administrador\'):\n                    # Admin vê tudo: Detalhes, Editar, Transferir\n                    tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])\n                elif verificar_permissao(\'Gestor\'):\n                    # Gestor vê: Detalhes, Transferir (sem Editar)\n                    tab1, tab3 = st.tabs(["📋 Detalhes", "🔄 Transferir"])\n                    tab2 = None\n                else:\n                    # Visualizador vê apenas: Detalhes\n                    tab1 = st.tabs(["📋 Detalhes"])[0]\n                    tab2 = None\n                    tab3 = None\n\n                # TAB 1: Detalhes\n                with tab1:\n                    col1, col2 = st.columns(2)\n                    with col1:\n                        st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")\n\n                        # Localização estruturada\n                        if row.get(\'contentor_id\'):\n                            try:\n                                contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row[\'contentor_id\'])}"\n                                with get_connection() as conn:\n                                    contentor_df = pd.read_sql_query(contentor_query, conn)\n                                    if not contentor_df.empty:\n                                        contentor_codigo = contentor_df.iloc[0][\'codigo\']\n                                        canister_num = row.get(\'canister\', \'N/A\')\n                                        andar_num = row.get(\'andar\', \'N/A\')\n                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")\n                                    else:\n                                        st.markdown(f"**📍 Localização:** N/A")\n                            except Exception:\n                                st.markdown(f"**📍 Localização:** N/A")\n                        else:\n                            st.markdown(f"**📍 Localização:** N/A")\n\n                        st.markdown(f"**📜 Certificado:** {row.get(\'certificado\') or \'N/A\'}")\n                        st.markdown(f"**✨ Qualidade:** {row.get(\'qualidade\') or 0}%")\n                    with col2:\n                        st.markdown(f"**🔬 Concentração:** {row.get(\'concentracao\') or 0} milhões/mL")\n                        st.markdown(f"**⚡ Motilidade:** {row.get(\'motilidade\') or 0}%")\n                        st.markdown(f"**💊 Dose:** {row.get(\'dose\') or \'N/A\'}")\n                        if row.get("observacoes"):\n                            st.markdown(f"**📝 Observações:** {row.get(\'observacoes\')}")\n\n                    # Informações de auditoria\n                    st.markdown("---")\n                    audit_col1, audit_col2 = st.columns(2)\n                    with audit_col1:\n                        if row.get("data_criacao"):\n                            from datetime import datetime\n                            try:\n                                data_criacao = row.get("data_criacao")\n                                if isinstance(data_criacao, str):\n                                    data_criacao = datetime.fromisoformat(data_criacao.replace(\'Z\', \'+00:00\'))\n                                st.markdown(f"**📅 Criado em:** {data_criacao.strftime(\'%d/%m/%Y %H:%M\')}")\n                            except Exception:\n                                st.markdown(f"**📅 Criado em:** {row.get(\'data_criacao\')}")\n                    with audit_col2:\n                        if row.get("criado_por"):\n                            st.markdown(f"**👤 Criado por:** {row.get(\'criado_por\')}")\n\n                    with st.expander("Histórico técnico deste lote", expanded=False):\n                        lote_transf_int, lote_transf_ext = filter_lot_transfer_history(\n                            transf_hist_all,\n                            transf_ext_hist_all,\n                            garanhao=row.get("garanhao"),\n                            owner_name=proprietario_nome,\n                        )\n\n                        if not lote_transf_int.empty:\n                            ex_int = safe_pick(\n                                lote_transf_int,\n                                ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"],\n                            ).sort_values("data_transferencia", ascending=False)\n                            ex_int.columns = ["Data", "De", "Para", "Palhetas"]\n                            st.dataframe(ex_int, use_container_width=True, hide_index=True, height=180)\n\n                        if not lote_transf_ext.empty:\n                            ex_ext = safe_pick(\n                                lote_transf_ext,\n                                ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"],\n                            ).sort_values("data_transferencia", ascending=False)\n                            ex_ext.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_ext.columns)]\n                            st.dataframe(ex_ext, use_container_width=True, hide_index=True, height=180)\n\n                        if lote_transf_int.empty and lote_transf_ext.empty:\n                            st.info("Sem histórico técnico de transferências para este lote.")\n\n                # TAB 2: Editar (Apenas Admin)\n                if tab2 is not None:\n                    with tab2:\n                        st.markdown("### ✏️ Editar Stock")\n\n                        # Botão + para adicionar proprietário\n                        if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row[\'id\']}", help="Adicionar novo proprietário"):\n                            modal_adicionar_proprietario()\n\n                        # Carregar contentores para edição\n                        contentores_df_edit = carregar_contentores()\n\n                        with st.form(key=f"edit_form_{row[\'id\']}"):\n                            edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))\n\n                            # Proprietário\n                            prop_atual = row.get("dono_id")\n                            idx_prop = 0\n\n                            # Se acabou de adicionar um proprietário novo, selecionar ele\n                            if \'novo_proprietario_id\' in st.session_state:\n                                if st.session_state[\'novo_proprietario_id\'] in proprietarios["id"].values:\n                                    idx_prop = list(proprietarios["id"]).index(st.session_state[\'novo_proprietario_id\'])\n                            elif prop_atual in proprietarios["id"].values:\n                                idx_prop = list(proprietarios["id"]).index(prop_atual)\n\n                            edit_proprietario = st.selectbox(\n                                "Proprietário",\n                                options=proprietarios["id"].tolist(),\n                                format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),\n                                index=idx_prop,\n                                key=f"edit_prop_{row[\'id\']}"\n                            )\n\n                            col1, col2 = st.columns(2)\n                            with col1:\n                                edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")\n                                edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")\n                                edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))\n                                edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)\n                                edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))\n\n                            with col2:\n                                edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))\n                                edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))\n                                edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)\n                                edit_dose = st.text_input("Dose", value=row.get("dose") or "")\n\n                            st.markdown("---")\n                            st.subheader("📍 Localização Física")\n\n                            if not contentores_df_edit.empty:\n                                col_loc1, col_loc2, col_loc3 = st.columns(3)\n\n                                # Contentor atual\n                                contentor_atual_id = row.get("contentor_id")\n                                idx_contentor = 0\n                                if contentor_atual_id and contentor_atual_id in contentores_df_edit["id"].values:\n                                    idx_contentor = list(contentores_df_edit["id"]).index(contentor_atual_id)\n\n                                with col_loc1:\n                                    edit_contentor_codigo = st.selectbox(\n                                        "Contentor *",\n                                        options=contentores_df_edit["codigo"].tolist(),\n                                        index=idx_contentor,\n                                        key=f"edit_cont_{row[\'id\']}"\n                                    )\n                                    edit_contentor_id = int(contentores_df_edit.loc[contentores_df_edit["codigo"] == edit_contentor_codigo, "id"].iloc[0])\n\n                                with col_loc2:\n                                    canister_atual = row.get("canister", 1)\n                                    edit_canister = st.selectbox(\n                                        "Canister *",\n                                        options=list(range(1, 11)),\n                                        index=canister_atual - 1 if canister_atual else 0,\n                                        key=f"edit_can_{row[\'id\']}"\n                                    )\n\n                                with col_loc3:\n                                    andar_atual = row.get("andar", 1)\n                                    edit_andar = st.radio(\n                                        "Andar *",\n                                        options=[1, 2],\n                                        format_func=lambda x: f"{x}º",\n                                        horizontal=True,\n                                        index=andar_atual - 1 if andar_atual else 0,\n                                        key=f"edit_and_{row[\'id\']}"\n                                    )\n                            else:\n                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")\n                                edit_contentor_id = None\n                                edit_canister = 1\n                                edit_andar = 1\n\n                            edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")\n\n                            submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")\n\n                            if submit_edit:\n                                if editar_stock(row["id"], {\n                                    "garanhao": edit_garanhao,\n                                    "dono_id": edit_proprietario,\n                                    "data": edit_data,\n                                    "origem": edit_origem,\n                                    "palhetas_produzidas": edit_palhetas,\n                                    "qualidade": edit_qualidade,\n                                    "concentracao": edit_concentracao,\n                                    "motilidade": edit_motilidade,\n                                    "contentor_id": edit_contentor_id,\n                                    "canister": edit_canister,\n                                    "andar": edit_andar,\n                                    "certificado": edit_certificado,\n                                    "dose": edit_dose,\n                                    "observacoes": edit_obs,\n                                    "existencia": edit_existencia\n                                }):\n                                    st.success("✅ Stock atualizado com sucesso!")\n                                    # Marcar que usou\n                                    if \'novo_proprietario_id\' in st.session_state:\n                                        st.session_state[\'novo_proprietario_usado\'] = True\n                                    st.rerun()\n\n                # TAB 3: Transferir (Gestor e Admin apenas)\n                if tab3 is not None:\n                    with tab3:\n                        st.markdown("### 🔄 Transferir Palhetas")\n\n                        # Escolher tipo de transferência\n                        tipo_transf = st.radio(\n                            "Tipo de Transferência:",\n                            ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],\n                            key=f"tipo_transf_{row[\'id\']}"\n                        )\n\n                        if tipo_transf.startswith("🔄"):\n                            # TRANSFERÊNCIA INTERNA\n                            st.info("Transferir para outro proprietário cadastrado no sistema")\n\n                            # Botão + para adicionar proprietário\n                            if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row[\'id\']}", help="Adicionar novo proprietário"):\n                                modal_adicionar_proprietario()\n\n                            col1, col2 = st.columns(2)\n                            with col1:\n                                if not proprietarios.empty:\n                                    ids = proprietarios["id"].tolist()\n\n                                    # Se acabou de adicionar, selecionar o novo\n                                    idx_transf = 0\n                                    if \'novo_proprietario_id\' in st.session_state:\n                                        if st.session_state[\'novo_proprietario_id\'] in ids:\n                                            idx_transf = ids.index(st.session_state[\'novo_proprietario_id\'])\n\n                                    novo_proprietario = st.selectbox(\n                                        "Para qual proprietário?",\n                                        options=ids,\n                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),\n                                        index=idx_transf,\n                                        key=f"transf_select_{row[\'id\']}",\n                                    )\n\n                            with col2:\n                                qtd_transferir = st.number_input(\n                                    "Quantidade de palhetas",\n                                    min_value=1,\n                                    max_value=max(existencia, 1),\n                                    value=max(min(existencia, 1), 1),\n                                    key=f"transf_qtd_{row[\'id\']}"\n                                )\n\n                            if st.button("🔄 Transferir Internamente", key=f"btn_transf_{row[\'id\']}", type="primary"):\n                                if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):\n                                    st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, \'Desconhecido\')}!")\n                                    # Marcar que usou\n                                    if \'novo_proprietario_id\' in st.session_state:\n                                        st.session_state[\'novo_proprietario_usado\'] = True\n                                    st.rerun()\n\n                        else:\n                            # TRANSFERÊNCIA EXTERNA\n                            st.warning("⚠️ Esta operação retira o sêmen do stock (venda/envio)")\n\n                            col1, col2 = st.columns(2)\n                            with col1:\n                                destinatario_ext = st.text_input(\n                                    "Nome do Comprador/Destinatário *",\n                                    placeholder="Ex: João Silva, Fazenda XYZ",\n                                    key=f"dest_ext_{row[\'id\']}"\n                                )\n                                tipo_saida = st.selectbox(\n                                    "Tipo de Saída",\n                                    ["Venda", "Doação", "Exportação", "Outro"],\n                                    key=f"tipo_saida_{row[\'id\']}"\n                                )\n\n                            with col2:\n                                qtd_transferir_ext = st.number_input(\n                                    "Quantidade de palhetas",\n                                    min_value=1,\n                                    max_value=max(existencia, 1),\n                                    value=max(min(existencia, 1), 1),\n                                    key=f"transf_qtd_ext_{row[\'id\']}"\n                                )\n                                obs_ext = st.text_area(\n                                    "Observações",\n                                    placeholder="Ex: Valor, forma de pagamento, contato...",\n                                    key=f"obs_ext_{row[\'id\']}",\n                                    height=80\n                                )\n\n                            if st.button("📤 Enviar para Externo", key=f"btn_transf_ext_{row[\'id\']}", type="primary"):\n                                if not destinatario_ext:\n                                    st.error("❌ Nome do destinatário é obrigatório")\n                                elif transferir_palhetas_externo(row["id"], destinatario_ext, qtd_transferir_ext, tipo_saida, obs_ext):\n                                    st.success(f"✅ {qtd_transferir_ext} palhetas enviadas para {destinatario_ext} ({tipo_saida})")\n                                    st.rerun()\n    else:\n        st.info("ℹ️ Nenhum stock cadastrado.")\n\n# ------------------------------------------------------------\n# ➕ Adicionar Stock\n# ------------------------------------------------------------\nelif aba == "➕ Adicionar Stock":\n    st.header("➕ Inserir novo stock com Proprietário")\n\n    if proprietarios.empty:\n        st.warning("⚠️ Nenhum proprietário cadastrado.")\n        if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):\n            modal_adicionar_proprietario()\n    else:\n        # Carregar contentores\n        contentores_df = carregar_contentores()\n\n        if contentores_df.empty:\n            st.warning("⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.")\n        else:\n            # Botão + fora do form\n            if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):\n                modal_adicionar_proprietario()\n\n            with st.form("novo_stock"):\n                garanhao = st.text_input("Garanhão *", help="Nome obrigatório")\n\n                # Verificar se há proprietário recém-adicionado\n                if \'novo_proprietario_id\' in st.session_state:\n                    idx_default = list(proprietarios["id"]).index(st.session_state[\'novo_proprietario_id\'])\n                else:\n                    idx_default = 0\n\n                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)\n\n                dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])\n\n                col1, col2 = st.columns(2)\n                with col1:\n                    data = st.text_input("Data de Produção")\n                    origem = st.text_input("Origem Externa / Referência")\n                    palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)\n                    qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)\n                    concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)\n\n                with col2:\n                    motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)\n                    certificado = st.selectbox("Certificado?", ["Sim", "Não"])\n                    dose = st.text_input("Dose")\n\n                st.markdown("---")\n                st.subheader("📍 Localização Física")\n\n                col_loc1, col_loc2, col_loc3 = st.columns(3)\n                with col_loc1:\n                    contentor_selecionado = st.selectbox(\n                        "Contentor *",\n                        options=contentores_df["codigo"].tolist(),\n                        help="Selecione o contentor onde o sémen será armazenado"\n                    )\n                    contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])\n\n                with col_loc2:\n                    canister = st.selectbox(\n                        "Canister *",\n                        options=list(range(1, 11)),\n                        help="Número do canister (1-10)"\n                    )\n\n                with col_loc3:\n                    andar = st.radio(\n                        "Andar *",\n                        options=[1, 2],\n                        format_func=lambda x: f"{x}º",\n                        horizontal=True,\n                        help="Nível dentro do canister"\n                    )\n\n                observacoes = st.text_area("Observações", help="Informações adicionais (opcional)")\n                submitted = st.form_submit_button("💾 Salvar")\n\n                if submitted:\n                    palhetas_int = int(to_py(palhetas) or 0)\n\n                    if not garanhao:\n                        st.error("❌ Nome do garanhão é obrigatório")\n                    elif palhetas_int <= 0:\n                        st.error("❌ Número de palhetas deve ser maior que zero")\n                    else:\n                        ok = inserir_stock(\n                            {\n                                "Garanhão": garanhao,\n                                "Proprietário": dono_id,\n                                "Data": data,\n                                "Origem": origem,\n                                "Palhetas": palhetas_int,\n                                "Qualidade": int(to_py(qualidade) or 0),\n                                "Concentração": int(to_py(concentracao) or 0),\n                                "Motilidade": int(to_py(motilidade) or 0),\n                                "Certificado": certificado,\n                                "Dose": dose,\n                                "Contentor": contentor_id,\n                                "Canister": canister,\n                                "Andar": andar,\n                                "Observações": observacoes,\n                            }\n                        )\n                        if ok:\n                            st.success("✅ Stock adicionado com sucesso!")\n                            # Marcar que usou o proprietário\n                            if \'novo_proprietario_id\' in st.session_state:\n                                st.session_state[\'novo_proprietario_usado\'] = True\n                            # Mudar aba para Ver Stock\n                            st.session_state[\'aba_selecionada\'] = "📦 Ver Stock"\n                            st.rerun()\n\n# ------------------------------------------------------------\n# 📝 Registrar Inseminação\n# ------------------------------------------------------------\n'
-
+# Typed page module (Fase 3)
 
 def run_stock_page(ctx: dict):
-    local_ctx = dict(ctx)
-    exec(PAGE_CODE, local_ctx, local_ctx)
+    globals().update(ctx)
+    st.header("Estoque Atual")
+    inject_stock_css()
+    inject_reports_css()
+
+    if not stock.empty:
+        garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
+
+        # Verificar se há redirecionamento de stock recém-adicionado
+        filtro_default = None
+        stock_id_expandir = None
+
+        if 'redirecionar_ver_stock' in st.session_state:
+            if 'ultimo_garanhao' in st.session_state:
+                filtro_default = st.session_state['ultimo_garanhao']
+                stock_id_expandir = st.session_state.get('ultimo_stock_id')
+            # Limpar flags
+            del st.session_state['redirecionar_ver_stock']
+            if 'ultimo_garanhao' in st.session_state:
+                del st.session_state['ultimo_garanhao']
+            if 'ultimo_stock_id' in st.session_state:
+                del st.session_state['ultimo_stock_id']
+
+        # Definir índice do selectbox
+        if filtro_default and filtro_default in garanhaos_disponiveis:
+            idx_default = garanhaos_disponiveis.index(filtro_default)
+        else:
+            idx_default = 0
+
+        render_zone_title("Zona de seleção", "stock-zone-title")
+        filtro = st.selectbox("Garanhão", garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
+
+        render_zone_title("Zona de filtros", "stock-zone-title")
+        with st.expander("Filtros de consulta", expanded=False):
+            f1, f2, f3 = st.columns(3)
+            with f1:
+                filtro_props = st.multiselect(
+                    "Proprietários",
+                    sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),
+                    key="stock_filter_props",
+                )
+            with f2:
+                min_palhetas = st.number_input("Mín. palhetas", min_value=0, value=0, step=1, key="stock_filter_min")
+            with f3:
+                mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")
+
+        stock_filtrado = filter_stock_view(
+            stock,
+            garanhao=filtro,
+            owner_filters=filtro_props,
+            min_palhetas=min_palhetas,
+            include_zero=mostrar_sem_stock,
+        )
+
+        transf_hist_all = carregar_transferencias()
+        transf_ext_hist_all = carregar_transferencias_externas()
+
+        render_zone_title("Zona de resultados", "stock-zone-title")
+        render_kpi_strip(stock_kpis(stock_filtrado, to_py))
+
+        resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
+        if not resumo_por_proprietario.empty:
+            st.dataframe(
+                resumo_por_proprietario,
+                use_container_width=True,
+                hide_index=True,
+                height=220,
+            )
+
+        with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
+            transf_hist, transf_ext_hist = filter_transfer_history(
+                transf_hist_all,
+                transf_ext_hist_all,
+                garanhao=filtro,
+                owner_filters=filtro_props,
+            )
+
+            cexp1, cexp2 = st.columns(2)
+            with cexp1:
+                if not transf_hist.empty:
+                    csv_ti = safe_pick(transf_hist, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"])
+                    st.download_button(
+                        "CSV Internas",
+                        csv_ti.to_csv(index=False).encode("utf-8"),
+                        f"transferencias_internas_{filtro}.csv",
+                        "text/csv",
+                        key=f"stock_hist_ti_{filtro}",
+                        use_container_width=True,
+                    )
+            with cexp2:
+                if not transf_ext_hist.empty:
+                    csv_te = safe_pick(transf_ext_hist, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"])
+                    st.download_button(
+                        "CSV Externas",
+                        csv_te.to_csv(index=False).encode("utf-8"),
+                        f"transferencias_externas_{filtro}.csv",
+                        "text/csv",
+                        key=f"stock_hist_te_{filtro}",
+                        use_container_width=True,
+                    )
+
+            if not transf_hist.empty:
+                ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)
+                ex_ti.columns = ["Data", "De", "Para", "Palhetas"]
+                st.dataframe(ex_ti, use_container_width=True, hide_index=True, height=220)
+            if not transf_ext_hist.empty:
+                ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)
+                ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]
+                st.dataframe(ex_te, use_container_width=True, hide_index=True, height=220)
+
+            if transf_hist.empty and transf_ext_hist.empty:
+                st.info("Sem transferências para o filtro atual.")
+
+        st.markdown("<div class='stock-table-head'>Lotes Detalhados</div>", unsafe_allow_html=True)
+
+        if stock_filtrado.empty:
+            st.info("Sem lotes para o filtro atual.")
+
+        proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
+
+        for _, row in stock_filtrado.iterrows():
+            existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
+            referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
+            proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+
+            # Verificar se é o lote recém-adicionado para abrir automaticamente
+            expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False
+
+            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas", expanded=expanded):
+
+                # Tabs: Mostrar conforme permissões
+                if verificar_permissao('Administrador'):
+                    # Admin vê tudo: Detalhes, Editar, Transferir
+                    tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
+                elif verificar_permissao('Gestor'):
+                    # Gestor vê: Detalhes, Transferir (sem Editar)
+                    tab1, tab3 = st.tabs(["📋 Detalhes", "🔄 Transferir"])
+                    tab2 = None
+                else:
+                    # Visualizador vê apenas: Detalhes
+                    tab1 = st.tabs(["📋 Detalhes"])[0]
+                    tab2 = None
+                    tab3 = None
+
+                # TAB 1: Detalhes
+                with tab1:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
+
+                        # Localização estruturada
+                        if row.get('contentor_id'):
+                            try:
+                                contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
+                                with get_connection() as conn:
+                                    contentor_df = pd.read_sql_query(contentor_query, conn)
+                                    if not contentor_df.empty:
+                                        contentor_codigo = contentor_df.iloc[0]['codigo']
+                                        canister_num = row.get('canister', 'N/A')
+                                        andar_num = row.get('andar', 'N/A')
+                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")
+                                    else:
+                                        st.markdown(f"**📍 Localização:** N/A")
+                            except Exception:
+                                st.markdown(f"**📍 Localização:** N/A")
+                        else:
+                            st.markdown(f"**📍 Localização:** N/A")
+
+                        st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
+                        st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
+                    with col2:
+                        st.markdown(f"**🔬 Concentração:** {row.get('concentracao') or 0} milhões/mL")
+                        st.markdown(f"**⚡ Motilidade:** {row.get('motilidade') or 0}%")
+                        st.markdown(f"**💊 Dose:** {row.get('dose') or 'N/A'}")
+                        if row.get("observacoes"):
+                            st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
+
+                    # Informações de auditoria
+                    st.markdown("---")
+                    audit_col1, audit_col2 = st.columns(2)
+                    with audit_col1:
+                        if row.get("data_criacao"):
+                            from datetime import datetime
+                            try:
+                                data_criacao = row.get("data_criacao")
+                                if isinstance(data_criacao, str):
+                                    data_criacao = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
+                                st.markdown(f"**📅 Criado em:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
+                            except Exception:
+                                st.markdown(f"**📅 Criado em:** {row.get('data_criacao')}")
+                    with audit_col2:
+                        if row.get("criado_por"):
+                            st.markdown(f"**👤 Criado por:** {row.get('criado_por')}")
+
+                    with st.expander("Histórico técnico deste lote", expanded=False):
+                        lote_transf_int, lote_transf_ext = filter_lot_transfer_history(
+                            transf_hist_all,
+                            transf_ext_hist_all,
+                            garanhao=row.get("garanhao"),
+                            owner_name=proprietario_nome,
+                        )
+
+                        if not lote_transf_int.empty:
+                            ex_int = safe_pick(
+                                lote_transf_int,
+                                ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"],
+                            ).sort_values("data_transferencia", ascending=False)
+                            ex_int.columns = ["Data", "De", "Para", "Palhetas"]
+                            st.dataframe(ex_int, use_container_width=True, hide_index=True, height=180)
+
+                        if not lote_transf_ext.empty:
+                            ex_ext = safe_pick(
+                                lote_transf_ext,
+                                ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"],
+                            ).sort_values("data_transferencia", ascending=False)
+                            ex_ext.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_ext.columns)]
+                            st.dataframe(ex_ext, use_container_width=True, hide_index=True, height=180)
+
+                        if lote_transf_int.empty and lote_transf_ext.empty:
+                            st.info("Sem histórico técnico de transferências para este lote.")
+
+                # TAB 2: Editar (Apenas Admin)
+                if tab2 is not None:
+                    with tab2:
+                        st.markdown("### ✏️ Editar Stock")
+
+                        # Botão + para adicionar proprietário
+                        if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
+                            modal_adicionar_proprietario()
+
+                        # Carregar contentores para edição
+                        contentores_df_edit = carregar_contentores()
+
+                        with st.form(key=f"edit_form_{row['id']}"):
+                            edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
+
+                            # Proprietário
+                            prop_atual = row.get("dono_id")
+                            idx_prop = 0
+
+                            # Se acabou de adicionar um proprietário novo, selecionar ele
+                            if 'novo_proprietario_id' in st.session_state:
+                                if st.session_state['novo_proprietario_id'] in proprietarios["id"].values:
+                                    idx_prop = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+                            elif prop_atual in proprietarios["id"].values:
+                                idx_prop = list(proprietarios["id"]).index(prop_atual)
+
+                            edit_proprietario = st.selectbox(
+                                "Proprietário",
+                                options=proprietarios["id"].tolist(),
+                                format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                index=idx_prop,
+                                key=f"edit_prop_{row['id']}"
+                            )
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
+                                edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
+                                edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
+                                edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
+                                edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+
+                            with col2:
+                                edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
+                                edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
+                                edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
+                                edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+
+                            st.markdown("---")
+                            st.subheader("📍 Localização Física")
+
+                            if not contentores_df_edit.empty:
+                                col_loc1, col_loc2, col_loc3 = st.columns(3)
+
+                                # Contentor atual
+                                contentor_atual_id = row.get("contentor_id")
+                                idx_contentor = 0
+                                if contentor_atual_id and contentor_atual_id in contentores_df_edit["id"].values:
+                                    idx_contentor = list(contentores_df_edit["id"]).index(contentor_atual_id)
+
+                                with col_loc1:
+                                    edit_contentor_codigo = st.selectbox(
+                                        "Contentor *",
+                                        options=contentores_df_edit["codigo"].tolist(),
+                                        index=idx_contentor,
+                                        key=f"edit_cont_{row['id']}"
+                                    )
+                                    edit_contentor_id = int(contentores_df_edit.loc[contentores_df_edit["codigo"] == edit_contentor_codigo, "id"].iloc[0])
+
+                                with col_loc2:
+                                    canister_atual = row.get("canister", 1)
+                                    edit_canister = st.selectbox(
+                                        "Canister *",
+                                        options=list(range(1, 11)),
+                                        index=canister_atual - 1 if canister_atual else 0,
+                                        key=f"edit_can_{row['id']}"
+                                    )
+
+                                with col_loc3:
+                                    andar_atual = row.get("andar", 1)
+                                    edit_andar = st.radio(
+                                        "Andar *",
+                                        options=[1, 2],
+                                        format_func=lambda x: f"{x}º",
+                                        horizontal=True,
+                                        index=andar_atual - 1 if andar_atual else 0,
+                                        key=f"edit_and_{row['id']}"
+                                    )
+                            else:
+                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")
+                                edit_contentor_id = None
+                                edit_canister = 1
+                                edit_andar = 1
+
+                            edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
+
+                            submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
+
+                            if submit_edit:
+                                if editar_stock(row["id"], {
+                                    "garanhao": edit_garanhao,
+                                    "dono_id": edit_proprietario,
+                                    "data": edit_data,
+                                    "origem": edit_origem,
+                                    "palhetas_produzidas": edit_palhetas,
+                                    "qualidade": edit_qualidade,
+                                    "concentracao": edit_concentracao,
+                                    "motilidade": edit_motilidade,
+                                    "contentor_id": edit_contentor_id,
+                                    "canister": edit_canister,
+                                    "andar": edit_andar,
+                                    "certificado": edit_certificado,
+                                    "dose": edit_dose,
+                                    "observacoes": edit_obs,
+                                    "existencia": edit_existencia
+                                }):
+                                    st.success("✅ Stock atualizado com sucesso!")
+                                    # Marcar que usou
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        st.session_state['novo_proprietario_usado'] = True
+                                    st.rerun()
+
+                # TAB 3: Transferir (Gestor e Admin apenas)
+                if tab3 is not None:
+                    with tab3:
+                        st.markdown("### 🔄 Transferir Palhetas")
+
+                        # Escolher tipo de transferência
+                        tipo_transf = st.radio(
+                            "Tipo de Transferência:",
+                            ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],
+                            key=f"tipo_transf_{row['id']}"
+                        )
+
+                        if tipo_transf.startswith("🔄"):
+                            # TRANSFERÊNCIA INTERNA
+                            st.info("Transferir para outro proprietário cadastrado no sistema")
+
+                            # Botão + para adicionar proprietário
+                            if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                                modal_adicionar_proprietario()
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if not proprietarios.empty:
+                                    ids = proprietarios["id"].tolist()
+
+                                    # Se acabou de adicionar, selecionar o novo
+                                    idx_transf = 0
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        if st.session_state['novo_proprietario_id'] in ids:
+                                            idx_transf = ids.index(st.session_state['novo_proprietario_id'])
+
+                                    novo_proprietario = st.selectbox(
+                                        "Para qual proprietário?",
+                                        options=ids,
+                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                        index=idx_transf,
+                                        key=f"transf_select_{row['id']}",
+                                    )
+
+                            with col2:
+                                qtd_transferir = st.number_input(
+                                    "Quantidade de palhetas",
+                                    min_value=1,
+                                    max_value=max(existencia, 1),
+                                    value=max(min(existencia, 1), 1),
+                                    key=f"transf_qtd_{row['id']}"
+                                )
+
+                            if st.button("🔄 Transferir Internamente", key=f"btn_transf_{row['id']}", type="primary"):
+                                if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
+                                    st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
+                                    # Marcar que usou
+                                    if 'novo_proprietario_id' in st.session_state:
+                                        st.session_state['novo_proprietario_usado'] = True
+                                    st.rerun()
+
+                        else:
+                            # TRANSFERÊNCIA EXTERNA
+                            st.warning("⚠️ Esta operação retira o sêmen do stock (venda/envio)")
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                destinatario_ext = st.text_input(
+                                    "Nome do Comprador/Destinatário *",
+                                    placeholder="Ex: João Silva, Fazenda XYZ",
+                                    key=f"dest_ext_{row['id']}"
+                                )
+                                tipo_saida = st.selectbox(
+                                    "Tipo de Saída",
+                                    ["Venda", "Doação", "Exportação", "Outro"],
+                                    key=f"tipo_saida_{row['id']}"
+                                )
+
+                            with col2:
+                                qtd_transferir_ext = st.number_input(
+                                    "Quantidade de palhetas",
+                                    min_value=1,
+                                    max_value=max(existencia, 1),
+                                    value=max(min(existencia, 1), 1),
+                                    key=f"transf_qtd_ext_{row['id']}"
+                                )
+                                obs_ext = st.text_area(
+                                    "Observações",
+                                    placeholder="Ex: Valor, forma de pagamento, contato...",
+                                    key=f"obs_ext_{row['id']}",
+                                    height=80
+                                )
+
+                            if st.button("📤 Enviar para Externo", key=f"btn_transf_ext_{row['id']}", type="primary"):
+                                if not destinatario_ext:
+                                    st.error("❌ Nome do destinatário é obrigatório")
+                                elif transferir_palhetas_externo(row["id"], destinatario_ext, qtd_transferir_ext, tipo_saida, obs_ext):
+                                    st.success(f"✅ {qtd_transferir_ext} palhetas enviadas para {destinatario_ext} ({tipo_saida})")
+                                    st.rerun()
+    else:
+        st.info("ℹ️ Nenhum stock cadastrado.")
+
+# ------------------------------------------------------------
+# ➕ Adicionar Stock
+# ------------------------------------------------------------
