@@ -1539,32 +1539,41 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
     st.markdown("## Gestão de Contentores")
-    st.markdown("Sistema de localização física e inventário de sémen equino")
     
     # Carregar contentores
     contentores_df = carregar_contentores()
 
-    # Barra de ações - design limpo
-    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([2, 2, 2, 6])
-    with col_btn1:
-        if st.button("+ Novo Contentor", type="primary", use_container_width=True):
-            st.session_state['modal_novo_contentor'] = True
-    
-    with col_btn2:
-        total_contentores = len(contentores_df)
-        total_palhetas = 0
-        if not contentores_df.empty:
-            for _, row in contentores_df.iterrows():
-                stock_cont = obter_stock_contentor(row['id'])
-                if not stock_cont.empty:
-                    total_palhetas += stock_cont['existencia_atual'].sum()
-        st.metric("Contentores", total_contentores, label_visibility="visible")
-    
-    with col_btn3:
-        st.metric("Total Palhetas", int(total_palhetas), label_visibility="visible")
-    
-    with col_btn4:
-        modo_visualizacao = st.toggle("Vista: Mapa", value=True, help="Alternar entre mapa e lista")
+    if "mapa_modo_edicao" not in st.session_state:
+        st.session_state["mapa_modo_edicao"] = False
+
+    if "mapa_layout_reader_tick" not in st.session_state:
+        st.session_state["mapa_layout_reader_tick"] = 0
+
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        js_eval_disponivel = True
+    except Exception:
+        streamlit_js_eval = None
+        js_eval_disponivel = False
+
+    largura_viewport = None
+    if js_eval_disponivel:
+        largura_viewport = streamlit_js_eval(
+            js_expressions='window.innerWidth',
+            key='map_viewport_width',
+            want_output=True,
+        )
+
+    is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
+    modo_visualizacao = True
+
+    layout_pending_raw = None
+    if js_eval_disponivel:
+        layout_pending_raw = streamlit_js_eval(
+            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
+            key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
+            want_output=True,
+        )
     
     # Modal para adicionar contentor - design limpo
     if st.session_state.get('modal_novo_contentor', False):
