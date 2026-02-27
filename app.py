@@ -1650,7 +1650,7 @@ if aba == "🗺️ Mapa dos Contentores":
     if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
         layout_pending_raw = streamlit_js_eval(
             js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
-            key=f"map_layout_pending_reader_{st.session_state.get('mapa_salvar_layout_tentativas', 0)}",
+            key="map_layout_pending_reader",
             want_output=True,
         )
     
