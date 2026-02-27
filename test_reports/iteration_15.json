@@ -1,0 +1,138 @@
+{
+  "summary": "Code review of 'Registrar Inseminação' module completed. CRITICAL BLOCKER: PostgreSQL not available (localhost:5432 connection refused). Dynamic/UI testing not possible. Code review verified all requested features are implemented correctly in code.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "Database Connection",
+        "issue": "PostgreSQL not running on localhost:5432 - dynamic testing not possible",
+        "priority": "CRITICAL - BLOCKER"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "app.py",
+        "issues": [
+          "Deprecation warning: use_container_width=True should be replaced with width='stretch' (Streamlit deprecating after 2025-12-31)"
+        ]
+      }
+    ]
+  },
+  "features_verified_by_code_review": {
+    "feature_1_modal_selecionar_lotes": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3295-3403",
+      "description": "@st.dialog('Selecionar lotes', width='large') implemented correctly",
+      "details": [
+        "Modal opens via 'Selecionar lotes' button (line 3412)",
+        "Filter by garanhão (selectbox line 3302)",
+        "Filter by proprietário (selectbox line 3307 with 'Todos' option)",
+        "Sorts by data_embriovet descending (line 3318)"
+      ]
+    },
+    "feature_2_modal_dense_lines": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3341-3363",
+      "description": "Dense lines showing ref/localização/motilidade/dose/disponível with +/- controls",
+      "details": [
+        "6-column layout: ref, local, motilidade, dose, disponível, +/-/valor controls",
+        "lote_ref() shows origem_externa or data_embriovet (line 3257-3258)",
+        "lote_local() shows contentor/canister/andar (line 3260-3266)",
+        "Motilidade displayed as 'M X%' (line 3347)",
+        "Dose displayed as 'D X' (line 3349)",
+        "Disponível shows 'Disp X' accounting for already selected qty (line 3333, 3351)",
+        "+/- buttons with proper disable states (lines 3355-3363)"
+      ]
+    },
+    "feature_3_usar_button": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3367-3400",
+      "description": "Usar button adds only lots with qty > 0 and closes modal",
+      "details": [
+        "Validates qty > 0 before adding (line 3372)",
+        "Warning if no lot selected with qty > 0 (lines 3375-3377)",
+        "Merges with existing lines (sums qty) without duplicating (lines 3388-3396)",
+        "Clears modal quantities after use (line 3398)",
+        "st.rerun() closes modal (line 3400)"
+      ]
+    },
+    "feature_4_main_page_lines": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3415-3472",
+      "description": "Main page shows insemination lines with edit/remove capabilities",
+      "details": [
+        "Lines display ref, local, proprietario, disponivel (lines 3429-3430)",
+        "Qty edit via +/- buttons (lines 3437-3466)",
+        "Qty edit via number_input (lines 3446-3461)",
+        "Remove button (✕) deletes line (lines 3468-3471)",
+        "Max validation enforced in number_input (line 3449)"
+      ]
+    },
+    "feature_5_add_line_merges": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3388-3396",
+      "description": "Adding line reopens modal and sums existing lot without duplicating",
+      "details": [
+        "'Adicionar linha' button calls abrir_modal_lotes() (lines 3476-3477)",
+        "Modal considers existing qty when calculating 'restante' (line 3332-3333)",
+        "If lot already in linhas, qty is summed (line 3391)",
+        "If new lot, creates new entry (lines 3392-3396)"
+      ]
+    },
+    "feature_6_stock_validation": {
+      "status": "VERIFIED",
+      "location": "app.py lines 3383-3386 (frontend), lines 823-837 (backend)",
+      "description": "Stock validation enforced at UI and DB level",
+      "details": [
+        "Frontend: Prevents adding more than max_disponivel (line 3384-3386)",
+        "Frontend: number_input max_value set to max_disp (line 3449)",
+        "Frontend: + button disabled when qty >= max_disp (line 3463)",
+        "Backend: FOR UPDATE lock prevents race conditions (line 824)",
+        "Backend: Validates existencia >= palhetas (lines 833-837)"
+      ]
+    },
+    "feature_7_registrar_inseminacao_multiplas": {
+      "status": "VERIFIED",
+      "location": "app.py lines 798-877",
+      "description": "Multiple insemination registration in single transaction",
+      "details": [
+        "Validates egua required (lines 801-803)",
+        "Validates at least one registro (lines 805-807)",
+        "Uses FOR UPDATE to lock rows (line 824)",
+        "Validates stock availability per lot (lines 833-837)",
+        "Inserts into inseminacoes table (lines 843-856)",
+        "Updates estoque_dono (lines 858-865)",
+        "Single commit for atomicity (line 867)",
+        "Updates proprietarios status (line 870)"
+      ]
+    }
+  },
+  "critical_code_review_comments": [
+    "All 7 requested features are implemented correctly in code",
+    "Transaction handling is proper with FOR UPDATE lock for concurrency safety",
+    "UI properly validates stock limits both in modal and main page",
+    "Mobile responsiveness: Streamlit columns may compress on mobile but no explicit mobile-specific styling found",
+    "No data-testid attributes on insemination module elements - testing relies on Streamlit's internal structure"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_15.json"],
+  "action_items": [
+    "BLOCKER: PostgreSQL database not available - UI testing cannot be performed",
+    "SUGGESTION: Configure DATABASE_URL environment variable for remote PostgreSQL or start local PostgreSQL service",
+    "MINOR: Replace deprecated use_container_width=True with width='stretch' before 2025-12-31 deadline"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Database not available",
+    "frontend": "N/A - Database blocking app load (shows error on page)"
+  },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "N/A - Cannot seed without database",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "PostgreSQL database still unavailable (localhost:5432 connection refused). Code review confirms all 7 features for 'Registrar Inseminação' module are implemented correctly. To test dynamically, need DATABASE_URL configured for remote PostgreSQL or local PostgreSQL service started. Streamlit app is running on port 8501 but shows database connection error.",
+  "rca_of_issue": "Environment blocker: PostgreSQL service is not running in the container. The .env file configures localhost:5432 but no PostgreSQL process exists. This is an infrastructure issue, not a code issue. Solution: Either start PostgreSQL service or configure DATABASE_URL for remote database."
+}
