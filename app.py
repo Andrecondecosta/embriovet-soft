@@ -2171,13 +2171,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 components.html(mapa_render, height=620)
             else:
                 with col_mapa:
-                    components.html(mapa_render, height=620)
-
-            col_met1, col_met2 = st.columns(2)
-            with col_met1:
-                st.metric("Contentores", total_contentores)
-            with col_met2:
-                st.metric("Total Palhetas", int(total_palhetas_geral))
+                    components.html(mapa_render, height=640)
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
