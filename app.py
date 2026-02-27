@@ -1869,6 +1869,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 #mapa-area {
                     position: relative;
                     width: min(100%, 720px);
+                    margin: 0 auto;
                     aspect-ratio: 900 / 550;
                     border: 2px solid #64748b;
                     background: #fff;
