@@ -1995,38 +1995,34 @@ elif aba == "📝 Registrar Inseminação":
 
             b1, b2 = st.columns([2, 1])
             with b1:
-                if st.button("Usar", type="primary", key="insem_modal_usar", use_container_width=True):
-                    selecionados = []
-                    for _, row in modal_df.iterrows():
-                        sid = int(row.get("id"))
-                        qty = int(st.session_state.get("insem_modal_qtd", {}).get(str(sid), 0) or 0)
-                        if qty > 0:
-                            selecionados.append((lote_payload(row), qty))
+                if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", use_container_width=True):
+                    selecionados_ids = []
+                    for key, val in st.session_state.items():
+                        if key.startswith("insem_modal_sel_") and val:
+                            try:
+                                selecionados_ids.append(int(key.split("insem_modal_sel_")[-1]))
+                            except Exception:
+                                continue
 
-                    if not selecionados:
-                        st.warning("Selecione pelo menos um lote com quantidade maior que zero.")
+                    if not selecionados_ids:
+                        st.warning("Selecione pelo menos um lote.")
+                        return
+
+                    selecionados_df = stock_disponivel[stock_disponivel["id"].isin(selecionados_ids)].copy()
+                    if selecionados_df.empty:
+                        st.warning("Nenhum lote selecionado disponível.")
                         return
 
                     linhas = st.session_state["insem_linhas"]
-                    for lote, qtd_add in selecionados:
+                    for _, row in selecionados_df.iterrows():
+                        lote = lote_payload(row)
                         sid = str(lote["stock_id"])
-                        qtd_existente = int(linhas.get(sid, {}).get("qty", 0))
-                        nova_qtd = qtd_existente + qtd_add
-                        if nova_qtd > lote["max_disponivel"]:
-                            st.error(f"Quantidade excede o disponível para {lote['ref']}")
-                            return
-
-                    for lote, qtd_add in selecionados:
-                        sid = str(lote["stock_id"])
-                        if sid in linhas:
-                            linhas[sid]["qty"] = int(linhas[sid]["qty"]) + qtd_add
-                        else:
+                        if sid not in linhas:
                             linhas[sid] = {
                                 **lote,
-                                "qty": int(qtd_add),
+                                "qty": 1,
                             }
 
-                    limpar_qtd_modal(lote_ids)
                     st.session_state["insem_linhas"] = linhas
                     st.rerun()
             with b2:
