@@ -1777,7 +1777,7 @@ if aba == "🗺️ Mapa dos Contentores":
 
                 function guardarMovimentoNoBrowser(payload) {
                     try {
-                        window.localStorage.setItem('contentor_move', JSON.stringify(payload));
+                        window.parent.localStorage.setItem('contentor_move', JSON.stringify(payload));
                         const syncButton = Array.from(window.parent.document.querySelectorAll('button')).find(
                             btn => btn.innerText && btn.innerText.trim() === 'Sincronizar mapa'
                         );
