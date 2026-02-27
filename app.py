@@ -2278,15 +2278,12 @@ if aba == "🗺️ Mapa dos Contentores":
                 function guardarPosicaoPendente(id, x, y) {
                     try {
                         let storageRef = window.localStorage;
-                        let storageHint = 'local';
                         try {
                             if (window.parent && window.parent.localStorage) {
                                 storageRef = window.parent.localStorage;
-                                storageHint = 'parent';
                             }
                         } catch (e) {
                             storageRef = window.localStorage;
-                            storageHint = 'local';
                         }
 
                         const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
