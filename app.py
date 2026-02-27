@@ -1120,6 +1120,25 @@ def editar_contentor(contentor_id, dados):
         st.error(f"Erro ao editar contentor: {e}")
         return False
 
+def atualizar_posicao_contentor(contentor_id, x, y):
+    """Atualiza apenas a posição (x,y) de um contentor"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE contentores
+                SET x = %s, y = %s
+                WHERE id = %s
+            """, (to_py(x), to_py(y), to_py(contentor_id)))
+            conn.commit()
+            cur.close()
+            logger.info(f"Posição do contentor atualizada: ID {contentor_id} -> X={x}, Y={y}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar posição do contentor: {e}")
+        st.error(f"Erro ao guardar posição do contentor: {e}")
+        return False
+
 def deletar_contentor(contentor_id):
     """Deleta um contentor apenas se não tiver stock associado"""
     try:
