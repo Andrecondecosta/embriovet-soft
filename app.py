@@ -1787,10 +1787,16 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.rerun()
 
             if salvar_layout:
-                atualizados = 0
                 if not js_eval_disponivel:
                     st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
-                elif layout_pending_raw and layout_pending_raw != "null":
+                else:
+                    st.session_state["mapa_salvar_layout_pendente"] = True
+                    st.session_state["mapa_layout_reader_tick"] += 1
+                    st.rerun()
+
+            if st.session_state.get("mapa_salvar_layout_pendente", False):
+                atualizados = 0
+                if layout_pending_raw and layout_pending_raw != "null":
                     try:
                         layout_data = json.loads(layout_pending_raw)
                         for _, row in contentores_df.iterrows():
@@ -1815,6 +1821,7 @@ if aba == "🗺️ Mapa dos Contentores":
                             key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
                         )
                         st.session_state["mapa_modo_edicao"] = False
+                        st.session_state["mapa_salvar_layout_pendente"] = False
 
                         if atualizados > 0:
                             st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s).")
@@ -1822,9 +1829,11 @@ if aba == "🗺️ Mapa dos Contentores":
                             st.info("Nenhuma alteração de posição para guardar.")
                         st.rerun()
                     except Exception as e:
+                        st.session_state["mapa_salvar_layout_pendente"] = False
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
                         st.error("Falha ao salvar layout do mapa.")
                 else:
+                    st.session_state["mapa_salvar_layout_pendente"] = False
                     st.info("Nenhuma alteração pendente para guardar.")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
