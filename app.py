@@ -1570,8 +1570,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             'descricao': descricao,
                             'x': random.randint(50, 700),
                             'y': random.randint(50, 400),
-                            'w': 120,
-                            'h': 120
+                            'w': 90,  # Tamanho menor
+                            'h': 90   # Tamanho menor
                         })
                         if contentor_id:
                             st.success(f"✅ Contentor '{codigo}' criado com sucesso!")
