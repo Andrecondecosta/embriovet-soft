@@ -1838,7 +1838,10 @@ if aba == "🗺️ Mapa dos Contentores":
                 atualizados = 0
                 if layout_pending_raw and layout_pending_raw != "null":
                     try:
-                        layout_data = json.loads(layout_pending_raw)
+                        if isinstance(layout_pending_raw, dict):
+                            layout_data = layout_pending_raw
+                        else:
+                            layout_data = json.loads(str(layout_pending_raw))
                         for _, row in contentores_df.iterrows():
                             cid = str(int(row['id']))
                             pos = layout_data.get(cid)
