@@ -1627,11 +1627,20 @@ if aba == "🗺️ Mapa dos Contentores":
 
             from streamlit_js_eval import streamlit_js_eval
 
-            st.button("Sincronizar mapa", key="mapa_sync_rerun_btn", help="Atualiza posições arrastadas no mapa")
+            if "mapa_sync_tick" not in st.session_state:
+                st.session_state["mapa_sync_tick"] = 0
+
+            sync_clicked = st.button(
+                "Sincronizar mapa",
+                key="mapa_sync_rerun_btn",
+                help="Atualiza posições arrastadas no mapa"
+            )
+            if sync_clicked:
+                st.session_state["mapa_sync_tick"] += 1
 
             movimento_raw = streamlit_js_eval(
                 js_expressions='window.localStorage.getItem("contentor_move")',
-                key='mapa_contentor_move_reader',
+                key=f"mapa_contentor_move_reader_{st.session_state['mapa_sync_tick']}",
                 want_output=True,
             )
 
