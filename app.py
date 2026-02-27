@@ -1970,6 +1970,18 @@ elif aba == "📝 Registrar Inseminação":
 
             st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
 
+            header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+            with header_cols[0]:
+                st.markdown("<div class='insem-modal-head'>Lote</div>", unsafe_allow_html=True)
+            with header_cols[1]:
+                st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
+            with header_cols[2]:
+                st.markdown("<div class='insem-modal-head'>Motilidade / Dose</div>", unsafe_allow_html=True)
+            with header_cols[3]:
+                st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
+            with header_cols[4]:
+                st.markdown("<div class='insem-modal-head'>Selecionar</div>", unsafe_allow_html=True)
+
             for _, row in modal_df.iterrows():
                 lote = lote_payload(row)
                 sid = lote["stock_id"]
