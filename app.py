@@ -1931,22 +1931,18 @@ if aba == "🗺️ Mapa dos Contentores":
                             st.info("Nenhuma alteração de posição para guardar.")
                         st.rerun()
                     except Exception as e:
-                        tentativas = int(st.session_state.get("mapa_salvar_layout_tentativas", 0))
-                        if tentativas < 2:
-                            st.session_state["mapa_salvar_layout_tentativas"] = tentativas + 1
-                            st.rerun()
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
                         st.error("Falha ao salvar layout do mapa.")
                 else:
-                    tentativas = int(st.session_state.get("mapa_salvar_layout_tentativas", 0))
-                    if tentativas < 2:
-                        st.session_state["mapa_salvar_layout_tentativas"] = tentativas + 1
-                        st.rerun()
-                    st.session_state["mapa_salvar_layout_pendente"] = False
-                    st.session_state["mapa_salvar_layout_tentativas"] = 0
-                    st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
+                    st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
+                    if st.session_state["mapa_salvar_layout_tentativas"] > 4:
+                        st.session_state["mapa_salvar_layout_pendente"] = False
+                        st.session_state["mapa_salvar_layout_tentativas"] = 0
+                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
+                    else:
+                        st.info("A capturar posições do mapa... aguarde um instante.")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
                 st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
