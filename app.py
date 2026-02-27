@@ -1762,6 +1762,22 @@ if aba == "🗺️ Mapa dos Contentores":
                         .main .block-container {
                             padding-left: 0 !important;
                             padding-right: 0 !important;
+                            padding-top: 0.1rem !important;
+                        }
+                        div[data-testid="stAppViewContainer"] h1 {
+                            font-size: 2.15rem !important;
+                            line-height: 1.08 !important;
+                            margin-top: 0 !important;
+                            margin-bottom: 0.35rem !important;
+                        }
+                        div[data-testid="stHorizontalBlock"] {
+                            gap: 0.35rem !important;
+                        }
+                        div[data-testid="stButton"] > button {
+                            min-height: 2.35rem !important;
+                            font-size: 0.95rem !important;
+                            padding-top: 0.3rem !important;
+                            padding-bottom: 0.3rem !important;
                         }
                     }
                     .map-tech-context {
@@ -1793,6 +1809,23 @@ if aba == "🗺️ Mapa dos Contentores":
                         align-items: center;
                         font-size: 11px;
                         color: #475569;
+                    }
+                    @media (max-width: 900px) {
+                        .map-tech-context {
+                            font-size: 10px;
+                            line-height: 1.2;
+                            margin-bottom: 1px;
+                        }
+                        .map-toolbar-shell {
+                            padding: 4px 7px;
+                            margin-bottom: 2px;
+                            border-radius: 6px;
+                        }
+                        .map-toolbar-kpis {
+                            font-size: 10px;
+                            gap: 6px;
+                            flex-wrap: wrap;
+                        }
                     }
                     .map-toolbar-kpis b {
                         color: #0f172a;
