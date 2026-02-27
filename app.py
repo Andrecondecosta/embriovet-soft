@@ -1538,7 +1538,7 @@ if proprietarios.empty:
 # 🗺️ Mapa dos Contentores
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
-    st.markdown("## Gestão de Contentores")
+    st.markdown("<h2 style='margin:0 0 2px 0; line-height:1.15;'>Gestão de Contentores</h2>", unsafe_allow_html=True)
     
     # Carregar contentores
     contentores_df = carregar_contentores()
@@ -1548,6 +1548,9 @@ if aba == "🗺️ Mapa dos Contentores":
 
     if "mapa_layout_reader_tick" not in st.session_state:
         st.session_state["mapa_layout_reader_tick"] = 0
+
+    if "mapa_salvar_layout_pendente" not in st.session_state:
+        st.session_state["mapa_salvar_layout_pendente"] = False
 
     try:
         from streamlit_js_eval import streamlit_js_eval
