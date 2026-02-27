@@ -1827,6 +1827,8 @@ elif aba == "📝 Registrar Inseminação":
 
     if "insem_linhas" not in st.session_state:
         st.session_state["insem_linhas"] = {}
+    if "insem_modal_qtd" not in st.session_state:
+        st.session_state["insem_modal_qtd"] = {}
     if "insem_garanhao_modal" not in st.session_state:
         st.session_state["insem_garanhao_modal"] = None
     if "insem_prop_modal" not in st.session_state:
@@ -1859,9 +1861,70 @@ elif aba == "📝 Registrar Inseminação":
 
     def limpar_qtd_modal(ids_validos):
         for sid in ids_validos:
-            key = f"insem_modal_qtd_{sid}"
-            if key in st.session_state:
-                st.session_state[key] = 0
+            st.session_state["insem_modal_qtd"].pop(str(sid), None)
+
+    def inc_modal_qtd(lote_id, max_disponivel):
+        sid = str(lote_id)
+        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
+        if atual < int(max_disponivel):
+            st.session_state["insem_modal_qtd"][sid] = atual + 1
+
+    def dec_modal_qtd(lote_id):
+        sid = str(lote_id)
+        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
+        novo = max(0, atual - 1)
+        if novo == 0:
+            st.session_state["insem_modal_qtd"].pop(sid, None)
+        else:
+            st.session_state["insem_modal_qtd"][sid] = novo
+
+    def inc_linha_qtd(lote_id, max_disponivel):
+        sid = str(lote_id)
+        linhas = st.session_state["insem_linhas"]
+        if sid not in linhas:
+            return
+        atual = int(linhas[sid].get("qty", 0) or 0)
+        novo = min(int(max_disponivel), atual + 1)
+        linhas[sid]["qty"] = novo
+        st.session_state["insem_linhas"] = linhas
+        st.session_state[f"insem_line_input_{sid}"] = novo
+
+    def dec_linha_qtd(lote_id):
+        sid = str(lote_id)
+        linhas = st.session_state["insem_linhas"]
+        if sid not in linhas:
+            return
+        atual = int(linhas[sid].get("qty", 0) or 0)
+        novo = max(0, atual - 1)
+        if novo == 0:
+            linhas.pop(sid, None)
+            st.session_state.pop(f"insem_line_input_{sid}", None)
+        else:
+            linhas[sid]["qty"] = novo
+            st.session_state[f"insem_line_input_{sid}"] = novo
+        st.session_state["insem_linhas"] = linhas
+
+    def remover_linha(lote_id):
+        sid = str(lote_id)
+        linhas = st.session_state["insem_linhas"]
+        linhas.pop(sid, None)
+        st.session_state["insem_linhas"] = linhas
+        st.session_state.pop(f"insem_line_input_{sid}", None)
+
+    def sync_linha_input(lote_id, max_disponivel):
+        sid = str(lote_id)
+        linhas = st.session_state["insem_linhas"]
+        if sid not in linhas:
+            return
+        raw = int(st.session_state.get(f"insem_line_input_{sid}", 0) or 0)
+        novo = max(0, min(int(max_disponivel), raw))
+        if novo == 0:
+            linhas.pop(sid, None)
+            st.session_state.pop(f"insem_line_input_{sid}", None)
+        else:
+            linhas[sid]["qty"] = novo
+            st.session_state[f"insem_line_input_{sid}"] = novo
+        st.session_state["insem_linhas"] = linhas
 
     stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
     if stock_disponivel.empty:
@@ -1910,11 +1973,11 @@ elif aba == "📝 Registrar Inseminação":
                 existente = st.session_state["insem_linhas"].get(str(sid), {}).get("qty", 0)
                 restante = max(0, lote["max_disponivel"] - int(existente))
 
-                q_key = f"insem_modal_qtd_{sid}"
-                if q_key not in st.session_state:
-                    st.session_state[q_key] = 0
-                if st.session_state[q_key] > restante:
-                    st.session_state[q_key] = restante
+                q_key = str(sid)
+                if q_key not in st.session_state["insem_modal_qtd"]:
+                    st.session_state["insem_modal_qtd"][q_key] = 0
+                if st.session_state["insem_modal_qtd"][q_key] > restante:
+                    st.session_state["insem_modal_qtd"][q_key] = restante
 
                 row_cols = st.columns([2.2, 1.6, 0.9, 0.8, 0.9, 1.8])
                 with row_cols[0]:
@@ -1930,15 +1993,28 @@ elif aba == "📝 Registrar Inseminação":
                 with row_cols[5]:
                     q1, q2, q3 = st.columns([1, 1, 1])
                     with q1:
-                        if st.button("-", key=f"insem_mod_minus_{sid}", use_container_width=True, disabled=st.session_state[q_key] <= 0):
-                            st.session_state[q_key] = max(0, int(st.session_state[q_key]) - 1)
-                            st.rerun()
+                        st.button(
+                            "-",
+                            key=f"insem_mod_minus_{sid}",
+                            use_container_width=True,
+                            disabled=st.session_state["insem_modal_qtd"][q_key] <= 0,
+                            on_click=dec_modal_qtd,
+                            args=(sid,),
+                        )
                     with q2:
-                        st.markdown(f"<div style='text-align:center; padding-top:.35rem; font-size:.9rem;'>{int(st.session_state[q_key])}</div>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='text-align:center; padding-top:.35rem; font-size:.9rem;'>{int(st.session_state['insem_modal_qtd'][q_key])}</div>",
+                            unsafe_allow_html=True,
+                        )
                     with q3:
-                        if st.button("+", key=f"insem_mod_plus_{sid}", use_container_width=True, disabled=int(st.session_state[q_key]) >= restante):
-                            st.session_state[q_key] = min(restante, int(st.session_state[q_key]) + 1)
-                            st.rerun()
+                        st.button(
+                            "+",
+                            key=f"insem_mod_plus_{sid}",
+                            use_container_width=True,
+                            disabled=int(st.session_state["insem_modal_qtd"][q_key]) >= restante,
+                            on_click=inc_modal_qtd,
+                            args=(sid, restante),
+                        )
 
             b1, b2 = st.columns([2, 1])
             with b1:
@@ -1946,7 +2022,7 @@ elif aba == "📝 Registrar Inseminação":
                     selecionados = []
                     for _, row in modal_df.iterrows():
                         sid = int(row.get("id"))
-                        qty = int(st.session_state.get(f"insem_modal_qtd_{sid}", 0) or 0)
+                        qty = int(st.session_state.get("insem_modal_qtd", {}).get(str(sid), 0) or 0)
                         if qty > 0:
                             selecionados.append((lote_payload(row), qty))
 
@@ -2012,41 +2088,49 @@ elif aba == "📝 Registrar Inseminação":
                 with l3:
                     q1, q2, q3 = st.columns([1, 2, 1])
                     with q1:
-                        if st.button("-", key=f"insem_line_minus_{sid}", use_container_width=True):
-                            novo = max(0, qtd - 1)
-                            if novo == 0:
-                                del linhas[sid]
-                            else:
-                                linhas[sid]["qty"] = novo
-                            st.session_state["insem_linhas"] = linhas
-                            st.rerun()
+                        st.button(
+                            "-",
+                            key=f"insem_line_minus_{sid}",
+                            use_container_width=True,
+                            on_click=dec_linha_qtd,
+                            args=(sid,),
+                        )
                     with q2:
+                        input_key = f"insem_line_input_{sid}"
+                        if input_key not in st.session_state:
+                            st.session_state[input_key] = qtd
+                        if st.session_state[input_key] != qtd:
+                            st.session_state[input_key] = qtd
                         novo_qtd = st.number_input(
                             "Qtd",
                             min_value=0,
                             max_value=max(max_disp, 0),
-                            value=qtd,
+                            value=int(st.session_state[input_key]),
                             step=1,
-                            key=f"insem_line_input_{sid}",
+                            key=input_key,
                             label_visibility="collapsed",
+                            on_change=sync_linha_input,
+                            args=(sid, max_disp),
                         )
                         if int(novo_qtd) != qtd:
-                            if int(novo_qtd) == 0:
-                                del linhas[sid]
-                            else:
-                                linhas[sid]["qty"] = int(novo_qtd)
-                            st.session_state["insem_linhas"] = linhas
-                            st.rerun()
+                            sync_linha_input(sid, max_disp)
                     with q3:
-                        if st.button("+", key=f"insem_line_plus_{sid}", use_container_width=True, disabled=qtd >= max_disp):
-                            linhas[sid]["qty"] = min(max_disp, qtd + 1)
-                            st.session_state["insem_linhas"] = linhas
-                            st.rerun()
+                        st.button(
+                            "+",
+                            key=f"insem_line_plus_{sid}",
+                            use_container_width=True,
+                            disabled=qtd >= max_disp,
+                            on_click=inc_linha_qtd,
+                            args=(sid, max_disp),
+                        )
                 with l4:
-                    if st.button("✕", key=f"insem_line_remove_{sid}", use_container_width=True):
-                        del linhas[sid]
-                        st.session_state["insem_linhas"] = linhas
-                        st.rerun()
+                    st.button(
+                        "✕",
+                        key=f"insem_line_remove_{sid}",
+                        use_container_width=True,
+                        on_click=remover_linha,
+                        args=(sid,),
+                    )
                 st.markdown("</div>", unsafe_allow_html=True)
 
             badd1, badd2 = st.columns([2, 2])
