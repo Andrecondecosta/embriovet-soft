@@ -1864,7 +1864,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.session_state["mapa_modo_edicao"] = True
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
                     )
                 st.session_state["mapa_layout_cache"] = {}
@@ -1874,7 +1874,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.session_state["mapa_modo_edicao"] = False
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                     )
                 st.session_state["mapa_layout_cache"] = {}
@@ -1913,7 +1913,7 @@ if aba == "🗺️ Mapa dos Contentores":
                                     atualizados_ids.append(cid)
 
                         streamlit_js_eval(
-                            js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                             key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
                         )
                         st.session_state["mapa_layout_cache"] = {}
