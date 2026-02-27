@@ -2089,7 +2089,7 @@ elif aba == "📥 Importar Sémen":
     else:
         total_linhas = len(preview_df)
         total_erros = 0 if erros_df.empty else len(erros_df)
-        total_validas = total_linhas - total_erros
+        total_validas = max(0, total_linhas - total_erros)
         render_kpi_strip([
             ("Linhas", total_linhas),
             ("Válidas", total_validas),
