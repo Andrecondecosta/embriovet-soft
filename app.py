@@ -1883,31 +1883,11 @@ if aba == "🗺️ Mapa dos Contentores":
                 if not js_eval_disponivel:
                     st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
                 else:
-                    st.session_state["mapa_salvar_layout_pendente"] = True
-                    st.session_state["mapa_salvar_layout_tentativas"] = 0
-                    st.session_state["mapa_layout_reader_tick"] += 1
-                    st.rerun()
-
-            if st.session_state.get("mapa_salvar_layout_pendente", False):
-                atualizados = 0
-                if layout_pending_raw and layout_pending_raw != "null":
                     try:
-                        if isinstance(layout_pending_raw, dict):
-                            layout_data = layout_pending_raw
-                        else:
-                            layout_data = json.loads(str(layout_pending_raw))
-
-                        if isinstance(layout_data, dict) and "output" in layout_data:
-                            output_value = layout_data.get("output")
-                            if isinstance(output_value, dict):
-                                layout_data = output_value
-                            elif isinstance(output_value, str) and output_value.strip():
-                                try:
-                                    layout_data = json.loads(output_value)
-                                except Exception:
-                                    layout_data = {}
-
+                        layout_data = st.session_state.get("mapa_layout_cache", {})
+                        atualizados = 0
                         atualizados_ids = []
+
                         for _, row in contentores_df.iterrows():
                             cid = str(int(row['id']))
                             pos = layout_data.get(cid)
@@ -1935,9 +1915,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                             key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
                         )
+                        st.session_state["mapa_layout_cache"] = {}
                         st.session_state["mapa_modo_edicao"] = False
-                        st.session_state["mapa_salvar_layout_pendente"] = False
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
 
                         if atualizados > 0:
                             st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s): {', '.join(atualizados_ids)}")
@@ -1945,19 +1924,8 @@ if aba == "🗺️ Mapa dos Contentores":
                             st.info("Nenhuma alteração de posição para guardar.")
                         st.rerun()
                     except Exception as e:
-                        st.session_state["mapa_salvar_layout_pendente"] = False
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
                         st.error("Falha ao salvar layout do mapa.")
-                else:
-                    tentativas = int(st.session_state.get("mapa_salvar_layout_tentativas", 0))
-                    if tentativas < 2:
-                        st.session_state["mapa_salvar_layout_tentativas"] = tentativas + 1
-                        st.rerun()
-                    else:
-                        st.session_state["mapa_salvar_layout_pendente"] = False
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
                 st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
