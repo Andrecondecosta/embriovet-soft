@@ -3205,82 +3205,305 @@ elif aba == "➕ Adicionar Stock":
 # 📝 Registrar Inseminação
 # ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
-    st.header("📝 Registrar uso de Sémen")
+    st.header("Registrar Inseminação")
 
-    if stock.empty:
-        st.warning("⚠️ Nenhum stock disponível.")
+    st.markdown(
+        """
+        <style>
+            .insem-zone-title {
+                font-size: .78rem;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                color: #64748b;
+                margin: .2rem 0 .35rem 0;
+                font-weight: 700;
+            }
+            .insem-line {
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #f8fafc;
+                padding: 6px 8px;
+                margin-bottom: 6px;
+            }
+            .insem-lote-main {
+                font-size: .9rem;
+                font-weight: 600;
+                color: #0f172a;
+            }
+            .insem-lote-sub {
+                font-size: .76rem;
+                color: #64748b;
+                margin-top: 2px;
+            }
+            .insem-modal-head {
+                font-size: .75rem;
+                text-transform: uppercase;
+                color: #64748b;
+                letter-spacing: .04em;
+                margin: .2rem 0;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if "insem_linhas" not in st.session_state:
+        st.session_state["insem_linhas"] = {}
+    if "insem_garanhao_modal" not in st.session_state:
+        st.session_state["insem_garanhao_modal"] = None
+    if "insem_prop_modal" not in st.session_state:
+        st.session_state["insem_prop_modal"] = "Todos"
+
+    def lote_ref(row):
+        return row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
+
+    def lote_local(row):
+        contentor = row.get("contentor_codigo") or row.get("local_armazenagem") or "SEM-CONTENTOR"
+        can = row.get("canister")
+        andr = row.get("andar")
+        if pd.notna(can) and pd.notna(andr):
+            return f"{contentor} / C{int(can)} / A{int(andr)}"
+        return str(contentor)
+
+    def lote_payload(row):
+        return {
+            "stock_id": int(row.get("id")),
+            "garanhao": row.get("garanhao"),
+            "dono_id": to_py(row.get("dono_id")),
+            "proprietario_nome": row.get("proprietario_nome") or "—",
+            "ref": lote_ref(row),
+            "local": lote_local(row),
+            "motilidade": int(to_py(row.get("motilidade")) or 0),
+            "dose": to_py(row.get("dose")) or "—",
+            "protocolo": row.get("data_embriovet") or row.get("origem_externa") or "N/A",
+            "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
+        }
+
+    def limpar_qtd_modal(ids_validos):
+        for sid in ids_validos:
+            key = f"insem_modal_qtd_{sid}"
+            if key in st.session_state:
+                st.session_state[key] = 0
+
+    stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
+    if stock_disponivel.empty:
+        st.warning("Nenhum lote disponível para inseminação.")
     else:
-        stock_disponivel = stock[stock["existencia_atual"] > 0]
+        if st.session_state["insem_garanhao_modal"] is None:
+            st.session_state["insem_garanhao_modal"] = sorted(stock_disponivel["garanhao"].dropna().unique())[0]
 
-        if stock_disponivel.empty:
-            st.warning("⚠️ Todo o stock está esgotado.")
+        @st.dialog("Selecionar lotes", width="large")
+        def abrir_modal_lotes():
+            st.markdown("<div class='insem-modal-head'>Filtros</div>", unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                gar_opts = sorted(stock_disponivel["garanhao"].dropna().unique())
+                idx_g = gar_opts.index(st.session_state["insem_garanhao_modal"]) if st.session_state["insem_garanhao_modal"] in gar_opts else 0
+                gar_sel = st.selectbox("Garanhão", gar_opts, index=idx_g, key="insem_modal_garanhao")
+            with c2:
+                base_prop = stock_disponivel[stock_disponivel["garanhao"] == gar_sel]
+                prop_opts = ["Todos"] + sorted(base_prop["proprietario_nome"].dropna().unique())
+                idx_p = prop_opts.index(st.session_state.get("insem_prop_modal", "Todos")) if st.session_state.get("insem_prop_modal", "Todos") in prop_opts else 0
+                prop_sel = st.selectbox("Proprietário", prop_opts, index=idx_p, key="insem_modal_prop")
+
+            st.session_state["insem_garanhao_modal"] = gar_sel
+            st.session_state["insem_prop_modal"] = prop_sel
+
+            modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
+            if prop_sel != "Todos":
+                modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
+
+            if "data_embriovet" in modal_df.columns:
+                modal_df["_ord"] = pd.to_datetime(modal_df["data_embriovet"], errors="coerce")
+                modal_df = modal_df.sort_values("_ord", ascending=False)
+
+            if modal_df.empty:
+                st.info("Sem lotes para os filtros selecionados.")
+                return
+
+            st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
+
+            lote_ids = []
+            for _, row in modal_df.iterrows():
+                lote = lote_payload(row)
+                sid = lote["stock_id"]
+                lote_ids.append(sid)
+
+                existente = st.session_state["insem_linhas"].get(str(sid), {}).get("qty", 0)
+                restante = max(0, lote["max_disponivel"] - int(existente))
+
+                q_key = f"insem_modal_qtd_{sid}"
+                if q_key not in st.session_state:
+                    st.session_state[q_key] = 0
+                if st.session_state[q_key] > restante:
+                    st.session_state[q_key] = restante
+
+                row_cols = st.columns([2.2, 1.6, 0.9, 0.8, 0.9, 1.8])
+                with row_cols[0]:
+                    st.caption(f"{lote['ref']}")
+                with row_cols[1]:
+                    st.caption(lote["local"])
+                with row_cols[2]:
+                    st.caption(f"M {lote['motilidade']}%")
+                with row_cols[3]:
+                    st.caption(f"D {lote['dose']}")
+                with row_cols[4]:
+                    st.caption(f"Disp {restante}")
+                with row_cols[5]:
+                    q1, q2, q3 = st.columns([1, 1, 1])
+                    with q1:
+                        if st.button("-", key=f"insem_mod_minus_{sid}", use_container_width=True, disabled=st.session_state[q_key] <= 0):
+                            st.session_state[q_key] = max(0, int(st.session_state[q_key]) - 1)
+                            st.rerun()
+                    with q2:
+                        st.markdown(f"<div style='text-align:center; padding-top:.35rem; font-size:.9rem;'>{int(st.session_state[q_key])}</div>", unsafe_allow_html=True)
+                    with q3:
+                        if st.button("+", key=f"insem_mod_plus_{sid}", use_container_width=True, disabled=int(st.session_state[q_key]) >= restante):
+                            st.session_state[q_key] = min(restante, int(st.session_state[q_key]) + 1)
+                            st.rerun()
+
+            b1, b2 = st.columns([2, 1])
+            with b1:
+                if st.button("Usar", type="primary", key="insem_modal_usar", use_container_width=True):
+                    selecionados = []
+                    for _, row in modal_df.iterrows():
+                        sid = int(row.get("id"))
+                        qty = int(st.session_state.get(f"insem_modal_qtd_{sid}", 0) or 0)
+                        if qty > 0:
+                            selecionados.append((lote_payload(row), qty))
+
+                    if not selecionados:
+                        st.warning("Selecione pelo menos um lote com quantidade maior que zero.")
+                        return
+
+                    linhas = st.session_state["insem_linhas"]
+                    for lote, qtd_add in selecionados:
+                        sid = str(lote["stock_id"])
+                        qtd_existente = int(linhas.get(sid, {}).get("qty", 0))
+                        nova_qtd = qtd_existente + qtd_add
+                        if nova_qtd > lote["max_disponivel"]:
+                            st.error(f"Quantidade excede o disponível para {lote['ref']}")
+                            return
+
+                    for lote, qtd_add in selecionados:
+                        sid = str(lote["stock_id"])
+                        if sid in linhas:
+                            linhas[sid]["qty"] = int(linhas[sid]["qty"]) + qtd_add
+                        else:
+                            linhas[sid] = {
+                                **lote,
+                                "qty": int(qtd_add),
+                            }
+
+                    limpar_qtd_modal(lote_ids)
+                    st.session_state["insem_linhas"] = linhas
+                    st.rerun()
+            with b2:
+                if st.button("Fechar", key="insem_modal_cancelar", use_container_width=True):
+                    st.rerun()
+
+        render_zone_title("Zona de seleção", "insem-zone-title")
+        csel1, csel2, csel3 = st.columns([2, 2, 1.5])
+        with csel1:
+            data_insem = st.date_input("Data da inseminação", key="insem_data")
+        with csel2:
+            egua = st.text_input("Égua *", key="insem_egua")
+        with csel3:
+            if st.button("Selecionar lotes", key="insem_btn_open_modal", use_container_width=True):
+                abrir_modal_lotes()
+
+        render_zone_title("Linhas da inseminação", "insem-zone-title")
+        linhas = st.session_state["insem_linhas"]
+
+        if not linhas:
+            st.info("Nenhum lote selecionado. Clique em 'Selecionar lotes'.")
         else:
-            garanhao = st.selectbox("Garanhão", sorted(stock_disponivel["garanhao"].unique()))
-            stocks_filtrados = stock_disponivel[stock_disponivel["garanhao"] == garanhao]
+            for sid in list(linhas.keys()):
+                linha = linhas[sid]
+                max_disp = int(linha.get("max_disponivel", 0))
+                qtd = int(linha.get("qty", 0))
 
-            if len(stocks_filtrados) > 0:
-                st.markdown("### 📊 Sémen Disponível por Proprietário")
-                resumo = stocks_filtrados.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
-                cols = st.columns(max(1, len(resumo)))
-                for idx, (_, row) in enumerate(resumo.iterrows()):
-                    with cols[idx]:
-                        st.metric(f"👤 {row['proprietario_nome']}", f"{int(to_py(row['existencia_atual']) or 0)} palhetas")
-                st.markdown("---")
+                st.markdown("<div class='insem-line'>", unsafe_allow_html=True)
+                l1, l2, l3, l4 = st.columns([3.2, 1.2, 2.4, 0.8])
+                with l1:
+                    st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
+                with l2:
+                    st.markdown(f"<div class='insem-lote-sub'>Qtd atual</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='insem-lote-main'>{qtd}</div>", unsafe_allow_html=True)
+                with l3:
+                    q1, q2, q3 = st.columns([1, 2, 1])
+                    with q1:
+                        if st.button("-", key=f"insem_line_minus_{sid}", use_container_width=True):
+                            novo = max(0, qtd - 1)
+                            if novo == 0:
+                                del linhas[sid]
+                            else:
+                                linhas[sid]["qty"] = novo
+                            st.session_state["insem_linhas"] = linhas
+                            st.rerun()
+                    with q2:
+                        novo_qtd = st.number_input(
+                            "Qtd",
+                            min_value=0,
+                            max_value=max(max_disp, 0),
+                            value=qtd,
+                            step=1,
+                            key=f"insem_line_input_{sid}",
+                            label_visibility="collapsed",
+                        )
+                        if int(novo_qtd) != qtd:
+                            if int(novo_qtd) == 0:
+                                del linhas[sid]
+                            else:
+                                linhas[sid]["qty"] = int(novo_qtd)
+                            st.session_state["insem_linhas"] = linhas
+                            st.rerun()
+                    with q3:
+                        if st.button("+", key=f"insem_line_plus_{sid}", use_container_width=True, disabled=qtd >= max_disp):
+                            linhas[sid]["qty"] = min(max_disp, qtd + 1)
+                            st.session_state["insem_linhas"] = linhas
+                            st.rerun()
+                with l4:
+                    if st.button("✕", key=f"insem_line_remove_{sid}", use_container_width=True):
+                        del linhas[sid]
+                        st.session_state["insem_linhas"] = linhas
+                        st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown("### 🎯 Selecionar Lote (DE QUAL PROPRIETÁRIO)")
-            lote_opcoes = {}
-            for _, row in stocks_filtrados.iterrows():
-                ref = row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
-                proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
-                existencia = int(to_py(row.get("existencia_atual")) or 0)
-                local = row.get("local_armazenagem", "N/A")
-                lote_opcoes[row["id"]] = f"👤 {proprietario_nome} | 📦 {ref} | 📍 {local} ({existencia} palhetas)"
+            badd1, badd2 = st.columns([2, 2])
+            with badd1:
+                if st.button("Adicionar linha", key="insem_btn_add_line", use_container_width=True):
+                    abrir_modal_lotes()
+            with badd2:
+                total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
+                st.markdown(f"<div class='insem-lote-main'>Total: {total_palhetas} palhetas</div>", unsafe_allow_html=True)
 
-            stock_id = st.selectbox(
-                "Selecionar lote de qual proprietario usar:",
-                options=list(lote_opcoes.keys()),
-                format_func=lambda x: lote_opcoes[x],
-                help="Escolha de qual proprietario você quer usar o sémen",
-            )
-
-            lote_selecionado = stocks_filtrados[stocks_filtrados["id"] == stock_id].iloc[0]
-            proprietario_nome = lote_selecionado.get("proprietario_nome", "Desconhecido")
-            max_palhetas = int(to_py(lote_selecionado.get("existencia_atual")) or 0)
-
-            st.info(f"🎯 Você vai usar sémen **do {proprietario_nome}** | Disponível: **{max_palhetas} palhetas**")
-
-            col1, col2 = st.columns(2)
-            with col1:
-                data = st.date_input("Data de Inseminação")
-                egua = st.text_input("Égua *", help="Nome obrigatório")
-            with col2:
-                protocolo = lote_selecionado.get("data_embriovet") or lote_selecionado.get("origem_externa") or "N/A"
-                palhetas = st.number_input("Palhetas utilizadas", min_value=1, max_value=max(max_palhetas, 1), value=min(max_palhetas, 1) if max_palhetas > 0 else 1)
-
-            if st.button("📝 Registrar Inseminação", type="primary", key="btn_registrar_insem"):
-                palhetas_int = int(to_py(palhetas) or 0)
-                if not egua:
-                    st.error("❌ Nome da égua é obrigatório")
-                elif palhetas_int <= 0:
-                    st.error("❌ Número de palhetas deve ser maior que zero")
-                elif palhetas_int > max_palhetas:
-                    st.error(f"❌ Estoque insuficiente! Disponível: {max_palhetas} palhetas")
-                else:
-                    ok = registrar_inseminacao(
+        st.markdown("---")
+        if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", use_container_width=True):
+            linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
+            if not linhas_finais:
+                st.error("Selecione pelo menos uma linha de lote.")
+            elif not egua:
+                st.error("Nome da égua é obrigatório.")
+            else:
+                registros = []
+                for l in linhas_finais:
+                    registros.append(
                         {
-                            "garanhao": garanhao,
-                            "dono_id": to_py(lote_selecionado.get("dono_id")),
-                            "data": data,
-                            "egua": egua,
-                            "protocolo": protocolo,
-                            "palhetas": palhetas_int,
-                            "stock_id": stock_id,
+                            "garanhao": l.get("garanhao"),
+                            "dono_id": l.get("dono_id"),
+                            "protocolo": l.get("protocolo"),
+                            "palhetas": int(l.get("qty", 0)),
+                            "stock_id": int(l.get("stock_id")),
                         }
                     )
-                    if ok:
-                        st.success(f"✅ Inseminação registrada! Usado sémen do **{proprietario_nome}** ({palhetas_int} palhetas)")
-                        st.balloons()
-                        st.rerun()
+
+                ok = registrar_inseminacao_multiplas(registros, data_insem, egua)
+                if ok:
+                    st.success("Inseminação registrada com sucesso.")
+                    st.session_state["insem_linhas"] = {}
+                    st.rerun()
 
 # ------------------------------------------------------------
 # 📈 Relatórios
