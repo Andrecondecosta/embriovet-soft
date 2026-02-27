@@ -1544,6 +1544,41 @@ if aba == "🗺️ Mapa dos Contentores":
     
     # Carregar contentores
     contentores_df = carregar_contentores()
+
+    # Processar callback de movimento vindo do mapa (query param enviado pelo JS)
+    movimento_raw = st.query_params.get("contentor_move")
+    if movimento_raw:
+        try:
+            movimento = json.loads(unquote(movimento_raw))
+            token = movimento.get("token")
+            contentor_id = int(movimento.get("id"))
+            x = int(movimento.get("x"))
+            y = int(movimento.get("y"))
+
+            if token != st.session_state.get("ultimo_move_token"):
+                contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                if not contentor_row.empty:
+                    contentor = contentor_row.iloc[0]
+                    largura = max(1, int(contentor['w']))
+                    altura = max(1, int(contentor['h']))
+                    x = max(0, min(x, 900 - largura))
+                    y = max(0, min(y, 550 - altura))
+
+                    if atualizar_posicao_contentor(contentor_id, x, y):
+                        st.session_state["ultimo_move_token"] = token
+                        st.session_state["move_feedback"] = f"Posição guardada: {contentor['codigo']} (X={x}, Y={y})"
+        except Exception as e:
+            logger.error(f"Erro ao processar movimento do contentor: {e}")
+            st.session_state["move_feedback_erro"] = "Não foi possível processar o movimento recebido do mapa."
+
+        if "contentor_move" in st.query_params:
+            del st.query_params["contentor_move"]
+        st.rerun()
+
+    if st.session_state.get("move_feedback"):
+        st.success(st.session_state.pop("move_feedback"))
+    if st.session_state.get("move_feedback_erro"):
+        st.error(st.session_state.pop("move_feedback_erro"))
     
     # Barra de ações - design limpo
     col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([2, 2, 2, 6])
