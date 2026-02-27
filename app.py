@@ -1539,32 +1539,44 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
     st.markdown("## Gestão de Contentores")
-    st.markdown("Sistema de localização física e inventário de sémen equino")
     
     # Carregar contentores
     contentores_df = carregar_contentores()
 
-    # Barra de ações - design limpo
-    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns([2, 2, 2, 6])
-    with col_btn1:
-        if st.button("+ Novo Contentor", type="primary", use_container_width=True):
-            st.session_state['modal_novo_contentor'] = True
-    
-    with col_btn2:
-        total_contentores = len(contentores_df)
-        total_palhetas = 0
-        if not contentores_df.empty:
-            for _, row in contentores_df.iterrows():
-                stock_cont = obter_stock_contentor(row['id'])
-                if not stock_cont.empty:
-                    total_palhetas += stock_cont['existencia_atual'].sum()
-        st.metric("Contentores", total_contentores, label_visibility="visible")
-    
-    with col_btn3:
-        st.metric("Total Palhetas", int(total_palhetas), label_visibility="visible")
-    
-    with col_btn4:
-        modo_visualizacao = st.toggle("Vista: Mapa", value=True, help="Alternar entre mapa e lista")
+    if "mapa_modo_edicao" not in st.session_state:
+        st.session_state["mapa_modo_edicao"] = False
+
+    if "mapa_layout_reader_tick" not in st.session_state:
+        st.session_state["mapa_layout_reader_tick"] = 0
+
+    try:
+        from streamlit_js_eval import streamlit_js_eval
+        js_eval_disponivel = True
+    except Exception:
+        streamlit_js_eval = None
+        js_eval_disponivel = False
+
+    if not js_eval_disponivel:
+        st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
+
+    largura_viewport = None
+    if js_eval_disponivel:
+        largura_viewport = streamlit_js_eval(
+            js_expressions='window.innerWidth',
+            key='map_viewport_width',
+            want_output=True,
+        )
+
+    is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
+    modo_visualizacao = True
+
+    layout_pending_raw = None
+    if js_eval_disponivel:
+        layout_pending_raw = streamlit_js_eval(
+            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
+            key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
+            want_output=True,
+        )
     
     # Modal para adicionar contentor - design limpo
     if st.session_state.get('modal_novo_contentor', False):
@@ -1615,264 +1627,514 @@ if aba == "🗺️ Mapa dos Contentores":
                             st.session_state['modal_novo_contentor'] = False
                             st.rerun()
     
-    st.markdown("---")
-    
     # Área do mapa
     if contentores_df.empty:
         st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
     else:
         if modo_visualizacao:
-            st.markdown("### Planta do Quarto de Armazenamento")
-            st.caption("Arraste e solte os contentores. A posição é guardada automaticamente.")
+            total_contentores = len(contentores_df)
+            total_palhetas_geral = 0
+            contentores_data = []
 
-            from streamlit_js_eval import streamlit_js_eval
+            for _, row in contentores_df.iterrows():
+                stock_contentor = obter_stock_contentor(row['id'])
+                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                total_palhetas_geral += total_palhetas
 
-            if "mapa_sync_tick" not in st.session_state:
-                st.session_state["mapa_sync_tick"] = 0
+                lotes = []
+                if not stock_contentor.empty:
+                    for _, lote in stock_contentor.iterrows():
+                        observacao = ""
+                        if isinstance(lote.get('qualidade'), str) and lote.get('qualidade'):
+                            observacao = lote.get('qualidade')
+                        elif isinstance(lote.get('origem_externa'), str) and lote.get('origem_externa'):
+                            observacao = lote.get('origem_externa')
 
-            sync_clicked = st.button(
-                "Sincronizar mapa",
-                key="mapa_sync_rerun_btn",
-                help="Atualiza posições arrastadas no mapa"
-            )
-            if sync_clicked:
-                st.session_state["mapa_sync_tick"] += 1
+                        lotes.append({
+                            "garanhao": lote.get('garanhao') or "—",
+                            "proprietario": lote.get('proprietario_nome') or "—",
+                            "quantidade": int(lote.get('existencia_atual') or 0),
+                            "canister": int(lote.get('canister') or 0),
+                            "andar": int(lote.get('andar') or 0),
+                            "observacoes": observacao,
+                        })
 
-            movimento_raw = streamlit_js_eval(
-                js_expressions='window.localStorage.getItem("contentor_move")',
-                key=f"mapa_contentor_move_reader_{st.session_state['mapa_sync_tick']}",
-                want_output=True,
-            )
+                contentores_data.append({
+                    "id": int(row['id']),
+                    "codigo": row['codigo'],
+                    "descricao": row['descricao'] or "",
+                    "x": int(row['x']),
+                    "y": int(row['y']),
+                    "w": max(80, int(row['w'])),
+                    "h": max(80, int(row['h'])),
+                    "palhetas": total_palhetas,
+                    "lotes": lotes,
+                })
 
-            if movimento_raw and movimento_raw != "null":
-                try:
-                    movimento = json.loads(movimento_raw)
-                    token = movimento.get("token")
-                    contentor_id = int(movimento.get("id"))
-                    x = int(movimento.get("x"))
-                    y = int(movimento.get("y"))
+            criar_novo = False
+            ativar_edicao = False
+            cancelar_edicao = False
+            salvar_layout = False
 
-                    if token != st.session_state.get("map_move_token_processado"):
-                        contentor_row = contentores_df[contentores_df['id'] == contentor_id]
-                        if not contentor_row.empty:
-                            contentor = contentor_row.iloc[0]
-                            largura = max(1, int(contentor['w']))
-                            altura = max(1, int(contentor['h']))
-                            x = max(0, min(x, 900 - largura))
-                            y = max(0, min(y, 550 - altura))
+            if is_mobile:
+                st.caption("Mapa de localização física dos contentores. Toque num contentor para abrir o inventário.")
+                btn_m1, btn_m2 = st.columns(2)
+                with btn_m1:
+                    criar_novo = st.button("+ Novo Contentor", use_container_width=True)
+                with btn_m2:
+                    if st.session_state["mapa_modo_edicao"]:
+                        salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                    else:
+                        ativar_edicao = st.button("Editar mapa", use_container_width=True)
 
-                            if atualizar_posicao_contentor(contentor_id, x, y):
-                                st.session_state["move_feedback"] = f"Posição guardada: {contentor['codigo']} (X={x}, Y={y})"
+                if st.session_state["mapa_modo_edicao"]:
+                    cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+            else:
+                col_desc, col_mapa = st.columns([1, 3], gap="large")
+                with col_desc:
+                    st.caption("Sistema de localização física e inventário de sémen equino")
+                    criar_novo = st.button("+ Novo Contentor", use_container_width=True)
 
-                        st.session_state["map_move_token_processado"] = token
-                except Exception as e:
-                    logger.error(f"Erro ao processar movimento do mapa: {e}")
-                    st.session_state["move_feedback_erro"] = "Falha ao guardar posição do contentor."
+                    if st.session_state["mapa_modo_edicao"]:
+                        salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                        cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+                    else:
+                        ativar_edicao = st.button("Editar mapa", use_container_width=True)
 
-                streamlit_js_eval(
-                    js_expressions='window.localStorage.removeItem("contentor_move")',
-                    key=f"mapa_contentor_move_clear_{int(time.time() * 1000)}"
-                )
+                with col_mapa:
+                    st.markdown("### Planta do Quarto de Armazenamento")
+
+            if criar_novo:
+                st.session_state['modal_novo_contentor'] = True
                 st.rerun()
+
+            if ativar_edicao:
+                st.session_state["mapa_modo_edicao"] = True
+                if js_eval_disponivel:
+                    streamlit_js_eval(
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
+                    )
+                st.rerun()
+
+            if cancelar_edicao:
+                st.session_state["mapa_modo_edicao"] = False
+                if js_eval_disponivel:
+                    streamlit_js_eval(
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
+                    )
+                st.rerun()
+
+            if salvar_layout:
+                atualizados = 0
+                if not js_eval_disponivel:
+                    st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
+                elif layout_pending_raw and layout_pending_raw != "null":
+                    try:
+                        layout_data = json.loads(layout_pending_raw)
+                        for _, row in contentores_df.iterrows():
+                            cid = str(int(row['id']))
+                            pos = layout_data.get(cid)
+                            if not isinstance(pos, dict):
+                                continue
+
+                            novo_x = int(pos.get("x", int(row['x'])))
+                            novo_y = int(pos.get("y", int(row['y'])))
+                            largura = max(1, int(row['w']))
+                            altura = max(1, int(row['h']))
+                            novo_x = max(0, min(novo_x, 900 - largura))
+                            novo_y = max(0, min(novo_y, 550 - altura))
+
+                            if novo_x != int(row['x']) or novo_y != int(row['y']):
+                                if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
+                                    atualizados += 1
+
+                        streamlit_js_eval(
+                            js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                            key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
+                        )
+                        st.session_state["mapa_modo_edicao"] = False
+
+                        if atualizados > 0:
+                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s).")
+                        else:
+                            st.info("Nenhuma alteração de posição para guardar.")
+                        st.rerun()
+                    except Exception as e:
+                        logger.error(f"Erro ao salvar layout do mapa: {e}")
+                        st.error("Falha ao salvar layout do mapa.")
+                else:
+                    st.info("Nenhuma alteração pendente para guardar.")
+
+            if st.session_state["mapa_modo_edicao"] and is_mobile:
+                st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
 
             if st.session_state.get("move_feedback"):
                 st.success(st.session_state.pop("move_feedback"))
             if st.session_state.get("move_feedback_erro"):
                 st.error(st.session_state.pop("move_feedback_erro"))
 
-            contentores_data = []
-            for _, row in contentores_df.iterrows():
-                stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                contentores_data.append({
-                    "id": int(row['id']),
-                    "codigo": row['codigo'],
-                    "x": int(row['x']),
-                    "y": int(row['y']),
-                    "w": max(80, int(row['w'])),
-                    "h": max(80, int(row['h'])),
-                    "palhetas": total_palhetas,
-                })
-
             mapa_html = """
             <style>
+                :root {
+                    --map-bg: #f4f6f8;
+                    --map-border: #cbd5e1;
+                    --card-bg: #f8fafc;
+                    --card-border: #475569;
+                    --text-main: #0f172a;
+                    --text-muted: #64748b;
+                }
+
                 #mapa-wrapper {
                     position: relative;
                     width: 100%;
-                    height: 610px;
-                    background: #f4f6f8;
-                    border: 1px solid #d0d7de;
-                    border-radius: 6px;
+                    border: 1px solid var(--map-border);
+                    border-radius: 8px;
+                    background: var(--map-bg);
+                    padding: 10px;
                     overflow: hidden;
                     font-family: 'Courier New', monospace;
                 }
+
                 #mapa-area {
                     position: relative;
-                    width: 900px;
-                    height: 550px;
-                    margin: 20px auto;
-                    background: #ffffff;
-                    border: 2px solid #6b7280;
+                    width: 100%;
+                    aspect-ratio: 900 / 550;
+                    border: 2px solid #64748b;
+                    background: #fff;
                     background-image:
-                        linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+                        linear-gradient(rgba(15,23,42,.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(15,23,42,.05) 1px, transparent 1px);
                     background-size: 50px 50px;
+                    overflow: hidden;
                 }
+
                 .cont-box {
                     position: absolute;
-                    border: 2px solid #4b5563;
-                    background: #f8fafc;
-                    cursor: move;
-                    user-select: none;
+                    border: 2px solid var(--card-border);
+                    background: var(--card-bg);
+                    color: var(--text-main);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    transition: box-shadow .15s ease, transform .15s ease;
+                    user-select: none;
+                    transition: box-shadow .2s ease, transform .2s ease;
                 }
+
+                .cont-box.clickable {
+                    cursor: pointer;
+                }
+
+                .cont-box.draggable {
+                    cursor: move;
+                }
+
                 .cont-box:hover {
-                    box-shadow: 0 4px 10px rgba(0,0,0,.12);
+                    box-shadow: 0 8px 16px rgba(2, 6, 23, .14);
                     transform: translateY(-1px);
-                    z-index: 100;
+                    z-index: 50;
                 }
+
                 .cont-box.dragging {
-                    opacity: .85;
-                    box-shadow: 0 8px 18px rgba(0,0,0,.22);
+                    opacity: .9;
                     z-index: 999;
                 }
+
                 .cont-codigo {
-                    font-size: 13px;
+                    font-size: 12px;
                     font-weight: 700;
-                    color: #111827;
-                    margin-bottom: 4px;
+                    margin-bottom: 3px;
                 }
+
                 .cont-qtd {
-                    font-size: 22px;
-                    font-weight: 700;
-                    color: #111827;
+                    font-size: 20px;
+                    font-weight: 800;
                     line-height: 1;
                 }
+
                 .cont-label {
                     font-size: 10px;
-                    color: #6b7280;
+                    color: var(--text-muted);
                     text-transform: uppercase;
-                    letter-spacing: .4px;
+                    letter-spacing: .3px;
                 }
+
                 #mapa-status {
-                    position: absolute;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    padding: 8px 14px;
-                    border-top: 1px solid #d0d7de;
-                    background: #f9fafb;
+                    margin-top: 8px;
                     font-size: 11px;
-                    color: #4b5563;
+                    color: var(--text-muted);
+                }
+
+                #inv-overlay {
+                    position: absolute;
+                    inset: 0;
+                    background: rgba(15, 23, 42, .28);
+                    display: none;
+                    z-index: 2000;
+                }
+
+                #inv-panel {
+                    position: absolute;
+                    top: 0;
+                    right: 0;
+                    width: 360px;
+                    height: 100%;
+                    background: #fff;
+                    border-left: 1px solid #d1d5db;
+                    padding: 14px;
+                    overflow-y: auto;
+                }
+
+                .mobile #inv-panel {
+                    width: 100%;
+                    border-left: none;
+                }
+
+                .inv-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                }
+
+                .inv-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #111827;
+                }
+
+                .inv-close {
+                    border: 1px solid #cbd5e1;
+                    background: #fff;
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    cursor: pointer;
+                }
+
+                .inv-summary {
+                    font-size: 12px;
+                    color: #334155;
+                    margin-bottom: 10px;
+                }
+
+                .inv-lote {
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin-bottom: 8px;
+                    background: #f8fafc;
+                    font-size: 12px;
+                    line-height: 1.35;
                 }
             </style>
 
-            <div id="mapa-wrapper">
+            <div id="mapa-wrapper" class="__MOBILE_CLASS__">
                 <div id="mapa-area"></div>
-                <div id="mapa-status">Arraste os contentores para novas posições.</div>
+                <div id="mapa-status">__STATUS_TEXT__</div>
+
+                <div id="inv-overlay">
+                    <div id="inv-panel"></div>
+                </div>
             </div>
 
             <script>
                 const contentores = __CONTENTORES_DATA__;
+                const isEditMode = __EDIT_MODE__;
+                const isMobile = __IS_MOBILE__;
+                const baseW = 900;
+                const baseH = 550;
+
+                const wrapper = document.getElementById('mapa-wrapper');
                 const mapaArea = document.getElementById('mapa-area');
                 const statusBar = document.getElementById('mapa-status');
+                const invOverlay = document.getElementById('inv-overlay');
+                const invPanel = document.getElementById('inv-panel');
+
+                let scale = 1;
                 let draggedEl = null;
+                let draggedMeta = null;
                 let offsetX = 0;
                 let offsetY = 0;
+                let moved = false;
 
-                function guardarMovimentoNoBrowser(payload) {
+                function esc(v) {
+                    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    }[c]));
+                }
+
+                function computeScale() {
+                    const rect = mapaArea.getBoundingClientRect();
+                    scale = rect.width / baseW;
+                    if (!scale || scale <= 0) scale = 1;
+                }
+
+                function openInventory(cont) {
+                    const lotes = Array.isArray(cont.lotes) ? cont.lotes : [];
+                    const lotesHtml = lotes.length === 0
+                        ? '<div class="inv-lote">Sem lotes neste contentor.</div>'
+                        : lotes.map(l => `
+                            <div class="inv-lote">
+                                <b>Garanhão:</b> ${esc(l.garanhao)}<br/>
+                                <b>Proprietário:</b> ${esc(l.proprietario)}<br/>
+                                <b>Quantidade:</b> ${esc(l.quantidade)}<br/>
+                                <b>Canister:</b> ${esc(l.canister)} | <b>Andar:</b> ${esc(l.andar)}<br/>
+                                <b>Observações:</b> ${esc(l.observacoes || '—')}
+                            </div>
+                        `).join('');
+
+                    invPanel.innerHTML = `
+                        <div class="inv-head">
+                            <div class="inv-title">${esc(cont.codigo)}</div>
+                            <button class="inv-close" id="inv-close-btn">Fechar</button>
+                        </div>
+                        <div class="inv-summary">
+                            <b>Total de palhetas:</b> ${esc(cont.palhetas)}<br/>
+                            <b>Total de lotes:</b> ${esc(lotes.length)}
+                        </div>
+                        ${lotesHtml}
+                    `;
+
+                    invOverlay.style.display = 'block';
+                    const closeBtn = document.getElementById('inv-close-btn');
+                    if (closeBtn) closeBtn.addEventListener('click', closeInventory);
+                }
+
+                function closeInventory() {
+                    invOverlay.style.display = 'none';
+                }
+
+                invOverlay.addEventListener('click', (e) => {
+                    if (e.target === invOverlay) closeInventory();
+                });
+
+                function guardarPosicaoPendente(id, x, y) {
                     try {
-                        window.parent.localStorage.setItem('contentor_move', JSON.stringify(payload));
-                        const syncButton = Array.from(window.parent.document.querySelectorAll('button')).find(
-                            btn => btn.innerText && btn.innerText.trim() === 'Sincronizar mapa'
-                        );
-                        if (syncButton) {
-                            syncButton.click();
-                        }
-                        statusBar.textContent = `Guardado: ${payload.codigo} (X=${payload.x}, Y=${payload.y})`;
+                        const atual = JSON.parse(window.parent.localStorage.getItem('contentor_layout_pending') || '{}');
+                        atual[String(id)] = { x, y };
+                        window.parent.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                        statusBar.textContent = 'Alteração pendente. Clique em "Salvar layout".';
                     } catch (err) {
-                        console.error('Erro ao gravar movimento no localStorage:', err);
-                        statusBar.textContent = 'Falha ao gravar movimento local.';
+                        console.error('Erro ao guardar posição pendente:', err);
+                        statusBar.textContent = 'Falha ao guardar posição pendente.';
                     }
                 }
 
                 function criarContentor(cont) {
                     const div = document.createElement('div');
-                    div.className = 'cont-box';
+                    div.className = `cont-box ${isEditMode ? 'draggable' : 'clickable'}`;
                     div.id = `cont-${cont.id}`;
-                    div.style.left = cont.x + 'px';
-                    div.style.top = cont.y + 'px';
-                    div.style.width = cont.w + 'px';
-                    div.style.height = cont.h + 'px';
+
+                    const wPx = Math.max(40, Math.round(cont.w * scale));
+                    const hPx = Math.max(40, Math.round(cont.h * scale));
+                    const xPx = Math.round(cont.x * scale);
+                    const yPx = Math.round(cont.y * scale);
+
+                    div.style.width = wPx + 'px';
+                    div.style.height = hPx + 'px';
+                    div.style.left = xPx + 'px';
+                    div.style.top = yPx + 'px';
 
                     div.innerHTML = `
-                        <div class="cont-codigo">${cont.codigo}</div>
-                        <div class="cont-qtd">${cont.palhetas}</div>
+                        <div class="cont-codigo">${esc(cont.codigo)}</div>
+                        <div class="cont-qtd">${esc(cont.palhetas)}</div>
                         <div class="cont-label">palhetas</div>
                     `;
 
                     div.addEventListener('mousedown', (e) => {
+                        if (!isEditMode) return;
                         if (e.button !== 0) return;
+                        moved = false;
                         draggedEl = div;
+                        draggedMeta = cont;
                         draggedEl.classList.add('dragging');
-                        const rect = div.getBoundingClientRect();
+
+                        const rect = draggedEl.getBoundingClientRect();
                         offsetX = e.clientX - rect.left;
                         offsetY = e.clientY - rect.top;
                         e.preventDefault();
+                    });
+
+                    div.addEventListener('click', () => {
+                        if (isEditMode) return;
+                        openInventory(cont);
                     });
 
                     mapaArea.appendChild(div);
                 }
 
                 document.addEventListener('mousemove', (e) => {
-                    if (!draggedEl) return;
-                    const parentRect = mapaArea.getBoundingClientRect();
-                    let x = e.clientX - parentRect.left - offsetX;
-                    let y = e.clientY - parentRect.top - offsetY;
+                    if (!draggedEl || !isEditMode) return;
+                    moved = true;
 
-                    x = Math.max(0, Math.min(x, 900 - parseInt(draggedEl.style.width, 10)));
-                    y = Math.max(0, Math.min(y, 550 - parseInt(draggedEl.style.height, 10)));
+                    const mapRect = mapaArea.getBoundingClientRect();
+                    let x = e.clientX - mapRect.left - offsetX;
+                    let y = e.clientY - mapRect.top - offsetY;
+
+                    const w = parseInt(draggedEl.style.width, 10);
+                    const h = parseInt(draggedEl.style.height, 10);
+                    x = Math.max(0, Math.min(x, mapRect.width - w));
+                    y = Math.max(0, Math.min(y, mapRect.height - h));
 
                     draggedEl.style.left = Math.round(x) + 'px';
                     draggedEl.style.top = Math.round(y) + 'px';
-                    statusBar.textContent = `Movendo... X=${Math.round(x)} | Y=${Math.round(y)}`;
+                    statusBar.textContent = `Movendo... X=${Math.round(x / scale)} | Y=${Math.round(y / scale)}`;
                 });
 
                 document.addEventListener('mouseup', () => {
-                    if (!draggedEl) return;
+                    if (!draggedEl || !isEditMode || !draggedMeta) return;
 
-                    const id = parseInt(draggedEl.id.replace('cont-', ''), 10);
-                    const x = parseInt(draggedEl.style.left, 10);
-                    const y = parseInt(draggedEl.style.top, 10);
-                    const cont = contentores.find(c => c.id === id);
+                    const xPx = parseInt(draggedEl.style.left, 10);
+                    const yPx = parseInt(draggedEl.style.top, 10);
+                    const xCanon = Math.max(0, Math.min(Math.round(xPx / scale), baseW - draggedMeta.w));
+                    const yCanon = Math.max(0, Math.min(Math.round(yPx / scale), baseH - draggedMeta.h));
 
                     draggedEl.classList.remove('dragging');
                     draggedEl = null;
 
-                    if (cont) {
-                        guardarMovimentoNoBrowser({
-                            token: `${id}-${Date.now()}`,
-                            id,
-                            codigo: cont.codigo,
-                            x,
-                            y,
-                        });
+                    if (moved) {
+                        guardarPosicaoPendente(draggedMeta.id, xCanon, yCanon);
                     }
+
+                    draggedMeta = null;
                 });
 
+                computeScale();
                 contentores.forEach(criarContentor);
+
+                if (!isEditMode) {
+                    statusBar.textContent = 'Clique num contentor para ver o inventário.';
+                }
             </script>
             """
 
             import streamlit.components.v1 as components
-            components.html(
-                mapa_html.replace("__CONTENTORES_DATA__", str(contentores_data)),
-                height=640,
+            mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
+            mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
+            mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
+            mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
+            mapa_render = mapa_render.replace(
+                "__STATUS_TEXT__",
+                "Arraste os contentores e salve o layout." if st.session_state["mapa_modo_edicao"] else "Clique num contentor para ver inventário."
             )
+
+            if is_mobile:
+                components.html(mapa_render, height=620)
+            else:
+                with col_mapa:
+                    components.html(mapa_render, height=620)
+
+            col_met1, col_met2 = st.columns(2)
+            with col_met1:
+                st.metric("Contentores", total_contentores)
+            with col_met2:
+                st.metric("Total Palhetas", int(total_palhetas_geral))
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
