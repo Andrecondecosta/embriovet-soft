@@ -19,11 +19,17 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Layout mobile: empilhado vertical, painel de inventário adaptado e botões de toque
 - Resiliência adicionada: fallback amigável quando `streamlit-js-eval` não estiver instalado
 - Dependência: `streamlit-js-eval==1.0.0`
+- Ajuste de prioridade visual do mapa:
+  - toolbar compacta (ações principais) junto ao topo da área do mapa
+  - indicadores discretos de `contentores` e `palhetas` em estilo técnico (inline, sem cards grandes)
+  - redução de espaço vertical acima do mapa
+  - layout desktop com maior área para o mapa (`[1,5]`) e mobile empilhado
+- Higiene técnica: removido bloco morto/duplicado do mapa após `st.stop()` no `app.py`
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
-- Novo ciclo (iteration_4): validação funcional bloqueada por ambiente sem PostgreSQL (`localhost:5432` indisponível), mas code review confirmou implementação dos novos comportamentos
-- Evidências: `/app/test_reports/iteration_3.json`, `/app/test_reports/iteration_4.json`
+- Novos ciclos (iteration_4 e iteration_5): validação funcional bloqueada por ambiente sem PostgreSQL (`localhost:5432` indisponível), mas code review confirmou implementação das melhorias de interação e organização visual
+- Evidências: `/app/test_reports/iteration_3.json`, `/app/test_reports/iteration_4.json`, `/app/test_reports/iteration_5.json`
 
 ## Backlog priorizado
 ### P0
@@ -35,4 +41,3 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 ### P2
 - Teste aprofundado da regra de segurança de exclusão de contentor com stock > 0
 - Refatorar `app.py` em módulos menores (DB/UI/relatórios)
-- Limpar bloco de código morto/duplicado após `st.stop()` no mapa (ação de higiene técnica)
