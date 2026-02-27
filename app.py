@@ -1854,8 +1854,6 @@ elif aba == "📝 Registrar Inseminação":
 
     if "insem_linhas" not in st.session_state:
         st.session_state["insem_linhas"] = {}
-    if "insem_modal_qtd" not in st.session_state:
-        st.session_state["insem_modal_qtd"] = {}
     if "insem_garanhao_modal" not in st.session_state:
         st.session_state["insem_garanhao_modal"] = None
     if "insem_prop_modal" not in st.session_state:
