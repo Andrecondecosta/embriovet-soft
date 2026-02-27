@@ -1873,10 +1873,8 @@ if aba == "🗺️ Mapa dos Contentores":
                     `;
                     
                     div.addEventListener('mousedown', startDrag);
-                    div.addEventListener('click', (e) => {{
+                    div.addEventListener('click', () => {{
                         if (!isDragging) {{
-                            // Salvar ID no localStorage para ser lido pelo Streamlit
-                            localStorage.setItem('contentor_click', cont.id);
                             infoText.textContent = `Contentor ${{cont.codigo}} selecionado`;
                         }}
                     }});
@@ -1884,6 +1882,19 @@ if aba == "🗺️ Mapa dos Contentores":
                     mapaQuarto.appendChild(div);
                 }});
                 
+                function guardarPosicaoNoBackend(id, x, y) {{
+                    const token = `${{id}}-${{Date.now()}}`;
+                    const payload = encodeURIComponent(JSON.stringify({{ id, x, y, token }}));
+                    try {{
+                        const parentUrl = new URL(window.parent.location.href);
+                        parentUrl.searchParams.set('contentor_move', payload);
+                        window.parent.location.href = parentUrl.toString();
+                    }} catch (error) {{
+                        console.error('Erro ao enviar posição para o Streamlit:', error);
+                        infoText.textContent = 'Falha ao guardar posição. Tente novamente.';
+                    }}
+                }}
+
                 function startDrag(e) {{
                     if (e.button !== 0) return;
                     
@@ -1928,25 +1939,20 @@ if aba == "🗺️ Mapa dos Contentores":
                     const x = Math.round(parseInt(draggedElement.style.left));
                     const y = Math.round(parseInt(draggedElement.style.top));
                     
-                    // Salvar no localStorage para o Streamlit ler
-                    localStorage.setItem('contentor_move', JSON.stringify({{
-                        id: id,
-                        x: x,
-                        y: y
-                    }}));
-                    
                     draggedElement.style.borderColor = '#28a745';
                     setTimeout(() => {{
                         draggedElement.style.borderColor = '#6c757d';
                     }}, 800);
                     
-                    infoText.textContent = `Contentor movido. Posição guardada: X=${{x}}, Y=${{y}}`;
+                    infoText.textContent = `A guardar posição: X=${{x}}, Y=${{y}}...`;
                     
                     draggedElement = null;
                     document.removeEventListener('mousemove', drag);
                     document.removeEventListener('mouseup', stopDrag);
                     
                     setTimeout(() => {{ isDragging = false; }}, 100);
+
+                    guardarPosicaoNoBackend(id, x, y);
                 }}
                 
                 function zoomIn() {{
@@ -1974,11 +1980,8 @@ if aba == "🗺️ Mapa dos Contentores":
             # Renderizar mapa
             import streamlit.components.v1 as components
             components.html(mapa_html.replace('{contentores_data}', str(contentores_data)), height=650)
-            
-            # Processar movimento via localStorage (workaround para bug do components.html)
-            if st.button("↻ Atualizar Posições", help="Clique após mover contentores para guardar"):
-                # Tentar ler do localStorage via JavaScript injection
-                st.info("Posições atualizadas. Recarregue a página se necessário.")
+
+            st.caption("Ao soltar um contentor, a nova posição é guardada automaticamente.")
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
