@@ -2401,7 +2401,7 @@ if aba == "🗺️ Mapa dos Contentores":
             )
 
             if is_mobile:
-                components.html(mapa_render, height=620)
+                components.html(mapa_render, height=560)
             else:
                 components.html(mapa_render, height=530)
             
