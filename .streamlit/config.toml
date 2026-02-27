@@ -14,6 +14,9 @@ secondaryBackgroundColor = "#F0F2F6"
 textColor = "#262730"
 font = "sans serif"
 base = "light"
+widgetBackgroundColor = "#FFFFFF"
+widgetBorderColor = "#CBD5E1"
+skeletonBackgroundColor = "#E2E8F0"
 
 [theme.sidebar]
 backgroundColor = "#F7F9FC"
