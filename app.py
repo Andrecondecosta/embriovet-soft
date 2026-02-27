@@ -34,6 +34,9 @@ from modules.stock_reporting import (
     filter_transfer_history,
     filter_lot_transfer_history,
 )
+from modules.pages.map_page import run_map_page
+from modules.pages.stock_page import run_stock_page
+from modules.pages.reports_page import run_reports_page
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
@@ -1565,6 +1568,21 @@ if 'novo_proprietario_usado' in st.session_state:
 
 if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
+
+# ------------------------------------------------------------
+# Router de páginas (Fase 2 da modularização)
+# ------------------------------------------------------------
+if aba == "🗺️ Mapa dos Contentores":
+    run_map_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "📦 Ver Stock":
+    run_stock_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "📈 Relatórios":
+    run_reports_page({**globals(), **locals()})
+    st.stop()
 
 # ------------------------------------------------------------
 # 📦 Ver Stock
