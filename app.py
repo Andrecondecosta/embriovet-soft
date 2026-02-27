@@ -2458,11 +2458,20 @@ if aba == "🗺️ Mapa dos Contentores":
                         if st.button("Editar", key=f"edit_{row['id']}", use_container_width=True):
                             st.session_state[f'modal_editar_{row["id"]}'] = True
                             st.rerun()
-                        
-                        if st.button("Apagar", key=f"del_{row['id']}", use_container_width=True):
+
+                        pode_apagar = int(total_palhetas) == 0
+                        if st.button(
+                            "Apagar",
+                            key=f"del_{row['id']}",
+                            use_container_width=True,
+                            disabled=not pode_apagar,
+                            help="Só é possível apagar quando o contentor não tem stock"
+                        ):
                             if deletar_contentor(row['id']):
                                 st.success(f"Contentor '{row['codigo']}' apagado")
                                 st.rerun()
+                        if not pode_apagar:
+                            st.caption("Apagar bloqueado: contentor com stock")
                     
                     if not stock_contentor.empty:
                         st.markdown("**Lotes:**")
