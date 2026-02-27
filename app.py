@@ -1689,6 +1689,11 @@ if aba == "🗺️ Mapa dos Contentores":
                         margin-top: 0;
                         margin-bottom: 2px;
                     }
+                    .map-tech-context-inline {
+                        font-size: 11px;
+                        color: #64748b;
+                        opacity: 0.95;
+                    }
                     .map-toolbar-shell {
                         border: 1px solid #d1d5db;
                         border-radius: 8px;
@@ -1742,9 +1747,8 @@ if aba == "🗺️ Mapa dos Contentores":
                         if st.session_state["mapa_modo_edicao"]:
                             cancelar_edicao = st.button("Cancelar", use_container_width=True)
                 else:
-                    st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
                     st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
+                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
                         unsafe_allow_html=True,
                     )
                     bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
