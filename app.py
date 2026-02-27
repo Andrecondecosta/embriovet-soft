@@ -1683,7 +1683,13 @@ if aba == "🗺️ Mapa dos Contentores":
             with elements("mapa_contentores_dashboard"):
                 with dashboard.Grid(
                     st.session_state["layout_contentores_mapa"],
-                    cols=colunas_grid,
+                    cols={
+                        "lg": colunas_grid,
+                        "md": colunas_grid,
+                        "sm": colunas_grid,
+                        "xs": colunas_grid,
+                        "xxs": colunas_grid,
+                    },
                     rowHeight=altura_linha,
                     compactType=None,
                     isDraggable=True,
