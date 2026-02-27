@@ -1658,330 +1658,132 @@ if aba == "🗺️ Mapa dos Contentores":
         st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
     else:
         if modo_visualizacao:
-            # MAPA VISUAL - DESIGN TÉCNICO PROFISSIONAL
             st.markdown("### Planta do Quarto de Armazenamento")
-            
-            # Preparar dados
-            contentores_data = []
-            for idx, row in contentores_df.iterrows():
+            st.caption("Arraste os blocos no mapa e clique em **Guardar layout** para persistir as novas posições.")
+
+            from streamlit_elements import elements, dashboard, mui, sync
+
+            escala_px = 10
+            colunas_grid = 900 // escala_px
+            altura_linha = escala_px
+
+            # Metadados para renderização dos cartões
+            contentores_meta = {}
+            for _, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
-                
-                contentores_data.append({
-                    'id': int(row['id']),
-                    'codigo': row['codigo'],
-                    'descricao': row['descricao'] or '',
-                    'x': int(row['x']),
-                    'y': int(row['y']),
-                    'w': int(row['w']),
-                    'h': int(row['h']),
-                    'palhetas': int(total_palhetas),
-                    'lotes': len(stock_contentor)
-                })
-            
-            # HTML/CSS/JS - DESIGN TÉCNICO PROFISSIONAL
-            mapa_html = f"""
-            <style>
-                * {{
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }}
-                
-                #mapa-container {{
-                    position: relative;
-                    width: 100%;
-                    height: 600px;
-                    background: #f8f9fa;
-                    border: 1px solid #dee2e6;
-                    border-radius: 4px;
-                    overflow: hidden;
-                }}
-                
-                #mapa-quarto {{
-                    position: relative;
-                    width: 900px;
-                    height: 550px;
-                    margin: 25px auto;
-                    background: #ffffff;
-                    border: 2px solid #495057;
-                    transform-origin: center;
-                }}
-                
-                .contentor {{
-                    position: absolute;
-                    background: #ffffff;
-                    border: 2px solid #6c757d;
-                    cursor: move;
-                    user-select: none;
-                    font-family: 'Courier New', monospace;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-                    transition: box-shadow 0.15s;
-                }}
-                
-                .contentor:hover {{
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                    border-color: #495057;
-                    z-index: 100;
-                }}
-                
-                .contentor.dragging {{
-                    opacity: 0.8;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                    z-index: 1000;
-                }}
-                
-                .contentor-header {{
-                    background: #e9ecef;
-                    padding: 6px 8px;
-                    border-bottom: 1px solid #dee2e6;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #212529;
-                    text-align: center;
-                    letter-spacing: 0.5px;
-                }}
-                
-                .contentor-body {{
-                    padding: 8px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    height: calc(100% - 28px);
-                }}
-                
-                .contentor-valor {{
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: #212529;
-                    margin: 2px 0;
-                }}
-                
-                .contentor-label {{
-                    font-size: 10px;
-                    color: #6c757d;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                
-                #zoom-controls {{
-                    position: absolute;
-                    top: 15px;
-                    right: 15px;
-                    display: flex;
-                    gap: 8px;
-                    z-index: 100;
-                }}
-                
-                .zoom-btn {{
-                    width: 36px;
-                    height: 36px;
-                    background: #ffffff;
-                    border: 1px solid #dee2e6;
-                    cursor: pointer;
-                    font-size: 16px;
-                    font-weight: 600;
-                    color: #495057;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.15s;
-                }}
-                
-                .zoom-btn:hover {{
-                    background: #e9ecef;
-                    border-color: #adb5bd;
-                }}
-                
-                .zoom-btn:active {{
-                    background: #dee2e6;
-                }}
-                
-                #grid {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-image: 
-                        linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
-                    background-size: 50px 50px;
-                    pointer-events: none;
-                }}
-                
-                #info-bar {{
-                    position: absolute;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    background: #f8f9fa;
-                    border-top: 1px solid #dee2e6;
-                    padding: 8px 16px;
-                    font-size: 11px;
-                    color: #6c757d;
-                    font-family: 'Courier New', monospace;
-                    display: flex;
-                    justify-content: space-between;
-                }}
-            </style>
-            
-            <div id="mapa-container">
-                <div id="zoom-controls">
-                    <div class="zoom-btn" onclick="zoomIn()">+</div>
-                    <div class="zoom-btn" onclick="zoomOut()">−</div>
-                    <div class="zoom-btn" onclick="resetZoom()">⊙</div>
-                </div>
-                
-                <div id="mapa-quarto">
-                    <div id="grid"></div>
-                </div>
-                
-                <div id="info-bar">
-                    <span id="info-text">Arraste os contentores para organizar o layout</span>
-                    <span id="zoom-text">Zoom: 100%</span>
-                </div>
-            </div>
-            
-            <script>
-                let zoomLevel = 1;
-                const contentores = {contentores_data};
-                let draggedElement = null;
-                let offsetX, offsetY;
-                let isDragging = false;
-                
-                const mapaQuarto = document.getElementById('mapa-quarto');
-                const infoText = document.getElementById('info-text');
-                const zoomText = document.getElementById('zoom-text');
-                
-                contentores.forEach(cont => {{
-                    const div = document.createElement('div');
-                    div.className = 'contentor';
-                    div.id = 'contentor-' + cont.id;
-                    div.style.left = cont.x + 'px';
-                    div.style.top = cont.y + 'px';
-                    div.style.width = cont.w + 'px';
-                    div.style.height = cont.h + 'px';
-                    
-                    div.innerHTML = `
-                        <div class="contentor-header">${{cont.codigo}}</div>
-                        <div class="contentor-body">
-                            <div class="contentor-valor">${{cont.palhetas}}</div>
-                            <div class="contentor-label">palhetas</div>
-                        </div>
-                    `;
-                    
-                    div.addEventListener('mousedown', startDrag);
-                    div.addEventListener('click', () => {{
-                        if (!isDragging) {{
-                            infoText.textContent = `Contentor ${{cont.codigo}} selecionado`;
-                        }}
-                    }});
-                    
-                    mapaQuarto.appendChild(div);
-                }});
-                
-                function guardarPosicaoNoBackend(id, x, y) {{
-                    const token = `${{id}}-${{Date.now()}}`;
-                    const payload = encodeURIComponent(JSON.stringify({{ id, x, y, token }}));
-                    try {{
-                        const parentUrl = new URL(window.parent.location.href);
-                        parentUrl.searchParams.set('contentor_move', payload);
-                        window.parent.location.href = parentUrl.toString();
-                    }} catch (error) {{
-                        console.error('Erro ao enviar posição para o Streamlit:', error);
-                        infoText.textContent = 'Falha ao guardar posição. Tente novamente.';
-                    }}
-                }}
+                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                total_lotes = len(stock_contentor)
+                ocupacao = "Vazio" if total_palhetas == 0 else "Com stock"
 
-                function startDrag(e) {{
-                    if (e.button !== 0) return;
-                    
-                    isDragging = true;
-                    draggedElement = e.currentTarget;
-                    draggedElement.classList.add('dragging');
-                    
-                    const rect = draggedElement.getBoundingClientRect();
-                    const parentRect = mapaQuarto.getBoundingClientRect();
-                    
-                    offsetX = e.clientX - rect.left;
-                    offsetY = e.clientY - rect.top;
-                    
-                    document.addEventListener('mousemove', drag);
-                    document.addEventListener('mouseup', stopDrag);
-                    
-                    e.preventDefault();
-                }}
-                
-                function drag(e) {{
-                    if (!draggedElement) return;
-                    
-                    const parentRect = mapaQuarto.getBoundingClientRect();
-                    let x = (e.clientX - parentRect.left - offsetX) / zoomLevel;
-                    let y = (e.clientY - parentRect.top - offsetY) / zoomLevel;
-                    
-                    x = Math.max(0, Math.min(x, 900 - parseInt(draggedElement.style.width)));
-                    y = Math.max(0, Math.min(y, 550 - parseInt(draggedElement.style.height)));
-                    
-                    draggedElement.style.left = x + 'px';
-                    draggedElement.style.top = y + 'px';
-                    
-                    infoText.textContent = `Posição: X=${{Math.round(x)}}, Y=${{Math.round(y)}}`;
-                }}
-                
-                function stopDrag(e) {{
-                    if (!draggedElement) return;
-                    
-                    draggedElement.classList.remove('dragging');
-                    
-                    const id = parseInt(draggedElement.id.replace('contentor-', ''));
-                    const x = Math.round(parseInt(draggedElement.style.left));
-                    const y = Math.round(parseInt(draggedElement.style.top));
-                    
-                    draggedElement.style.borderColor = '#28a745';
-                    setTimeout(() => {{
-                        draggedElement.style.borderColor = '#6c757d';
-                    }}, 800);
-                    
-                    infoText.textContent = `A guardar posição: X=${{x}}, Y=${{y}}...`;
-                    
-                    draggedElement = null;
-                    document.removeEventListener('mousemove', drag);
-                    document.removeEventListener('mouseup', stopDrag);
-                    
-                    setTimeout(() => {{ isDragging = false; }}, 100);
+                contentores_meta[str(int(row['id']))] = {
+                    "codigo": row['codigo'],
+                    "palhetas": total_palhetas,
+                    "lotes": total_lotes,
+                    "ocupacao": ocupacao,
+                    "x": int(row['x']),
+                    "y": int(row['y']),
+                    "w": max(80, int(row['w'])),
+                    "h": max(80, int(row['h']))
+                }
 
-                    guardarPosicaoNoBackend(id, x, y);
-                }}
-                
-                function zoomIn() {{
-                    zoomLevel = Math.min(zoomLevel + 0.2, 2);
-                    applyZoom();
-                }}
-                
-                function zoomOut() {{
-                    zoomLevel = Math.max(zoomLevel - 0.2, 0.5);
-                    applyZoom();
-                }}
-                
-                function resetZoom() {{
-                    zoomLevel = 1;
-                    applyZoom();
-                }}
-                
-                function applyZoom() {{
-                    mapaQuarto.style.transform = `scale(${{zoomLevel}})`;
-                    zoomText.textContent = `Zoom: ${{Math.round(zoomLevel * 100)}}%`;
-                }}
-            </script>
-            """
-            
-            # Renderizar mapa
-            import streamlit.components.v1 as components
-            components.html(mapa_html.replace('{contentores_data}', str(contentores_data)), height=650)
+            ids_atuais = list(contentores_meta.keys())
+            layout_guardado = st.session_state.get("layout_contentores_mapa", [])
 
-            st.caption("Ao soltar um contentor, a nova posição é guardada automaticamente.")
+            # Reconciliar layout do session_state com contentores atuais
+            layout_reconciliado = []
+            layout_indexado = {str(item.get("i")): item for item in layout_guardado if item.get("i") is not None}
+            for cid in ids_atuais:
+                meta = contentores_meta[cid]
+                item = layout_indexado.get(cid)
+                if item:
+                    novo_item = {
+                        "i": cid,
+                        "x": max(0, int(item.get("x", meta["x"] // escala_px))),
+                        "y": max(0, int(item.get("y", meta["y"] // escala_px))),
+                        "w": max(8, int(item.get("w", meta["w"] // escala_px))),
+                        "h": max(8, int(item.get("h", meta["h"] // escala_px))),
+                        "static": False,
+                    }
+                else:
+                    novo_item = {
+                        "i": cid,
+                        "x": max(0, meta["x"] // escala_px),
+                        "y": max(0, meta["y"] // escala_px),
+                        "w": max(8, meta["w"] // escala_px),
+                        "h": max(8, meta["h"] // escala_px),
+                        "static": False,
+                    }
+                layout_reconciliado.append(novo_item)
+
+            st.session_state["layout_contentores_mapa"] = layout_reconciliado
+
+            with elements("mapa_contentores_dashboard"):
+                with dashboard.Grid(
+                    st.session_state["layout_contentores_mapa"],
+                    cols=colunas_grid,
+                    rowHeight=altura_linha,
+                    compactType=None,
+                    isDraggable=True,
+                    isResizable=False,
+                    margin=[8, 8],
+                    containerPadding=[8, 8],
+                    onLayoutChange=sync("layout_contentores_mapa"),
+                ):
+                    for cid in ids_atuais:
+                        meta = contentores_meta[cid]
+                        with mui.Paper(
+                            key=cid,
+                            elevation=1,
+                            sx={
+                                "height": "100%",
+                                "width": "100%",
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "justifyContent": "center",
+                                "alignItems": "center",
+                                "border": "1px solid #cbd5e1",
+                                "borderRadius": "6px",
+                                "background": "#f8fafc",
+                                "color": "#0f172a",
+                                "cursor": "grab",
+                            },
+                        ):
+                            mui.Typography(meta["codigo"], sx={"fontSize": "0.85rem", "fontWeight": 700, "lineHeight": 1.2})
+                            mui.Typography(str(meta["palhetas"]), sx={"fontSize": "1.4rem", "fontWeight": 800, "lineHeight": 1.1})
+                            mui.Typography("palhetas", sx={"fontSize": "0.7rem", "opacity": 0.75})
+
+            col_layout_1, col_layout_2 = st.columns([2, 1])
+            with col_layout_1:
+                if st.button("Guardar layout", type="primary", use_container_width=True):
+                    layout_atual = st.session_state.get("layout_contentores_mapa", [])
+                    contentores_lookup = {str(int(row['id'])): row for _, row in contentores_df.iterrows()}
+                    total_atualizados = 0
+
+                    for item in layout_atual:
+                        cid = str(item.get("i"))
+                        row = contentores_lookup.get(cid)
+                        if row is None:
+                            continue
+
+                        novo_x = max(0, int(item.get("x", 0)) * escala_px)
+                        novo_y = max(0, int(item.get("y", 0)) * escala_px)
+
+                        if novo_x != int(row['x']) or novo_y != int(row['y']):
+                            if atualizar_posicao_contentor(int(cid), novo_x, novo_y):
+                                total_atualizados += 1
+
+                    if total_atualizados > 0:
+                        st.success(f"Layout guardado com sucesso. {total_atualizados} contentor(es) atualizado(s).")
+                        st.rerun()
+                    else:
+                        st.info("Nenhuma alteração de posição para guardar.")
+
+            with col_layout_2:
+                if st.button("Recarregar mapa", use_container_width=True):
+                    st.session_state.pop("layout_contentores_mapa", None)
+                    st.rerun()
+
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
