@@ -1,0 +1,89 @@
+{
+  "summary": "Frontend testing of Streamlit 'Mapa dos Contentores' page after streamlit-elements implementation. CRITICAL BUG PERSISTS: Drag-and-drop position persistence still NOT working due to streamlit-elements sync() callback incompatibility with Streamlit 1.53+",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Drag-and-drop map",
+        "issue": "Position persistence FAILS - the sync() callback from streamlit-elements is NOT syncing layout changes to session_state. Visual drag works but clicking 'Guardar layout' shows 'Nenhuma alteração de posição para guardar' even after dragging",
+        "selector": "iframe .react-grid-item",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Contentor drag -> session_state sync -> Guardar layout -> DB persistence",
+        "issue": "streamlit-elements onLayoutChange=sync('layout_contentores_mapa') callback is broken in Streamlit 1.53.1. The callback does not fire or update session_state. This is a known library incompatibility issue since Streamlit 1.34+",
+        "affected_selectors": ["iframe", ".react-grid-item", "onLayoutChange callback"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Mapa dos Contentores",
+        "issues": ["Design is professional/technical - PASS", "No block duplication - PASS (2 contentores shown correctly)", "Grid layout working - PASS", "Metrics displayed correctly - PASS", "No iframe sandbox SecurityError - PASS (previous bug fixed)"]
+      }
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "CRITICAL: The streamlit-elements library (v0.1.0) has broken callbacks since Streamlit 1.34+. The sync() function does NOT update session_state when onLayoutChange fires.",
+    "Option 1: DOWNGRADE Streamlit to <1.34 (e.g., 1.32.x) where streamlit-elements worked correctly",
+    "Option 2: Implement manual persistence using st.components.v1.html with postMessage API to communicate position changes to parent",
+    "Option 3: Use a different draggable grid library like streamlit-aggrid or implement custom native Streamlit solution",
+    "Option 4: Fork streamlit-elements and fix the callback issue for newer Streamlit versions",
+    "APPLIED FIX (did not work): Modified /root/.venv/lib/python3.11/site-packages/streamlit_elements/core/callback.py to change import from 'components' to 'custom_component as components' - this alone was insufficient"
+  ],
+  "critical_code_review_comments": [
+    "Line 1699 in app.py: onLayoutChange=sync('layout_contentores_mapa') - this callback is not firing due to library incompatibility",
+    "The streamlit-elements library is no longer maintained (last update was 2023) and has known issues with Streamlit 1.34+",
+    "Current Streamlit version is 1.53.1 which is incompatible with streamlit-elements callbacks"
+  ],
+  "updated_files": [
+    "/root/.venv/lib/python3.11/site-packages/streamlit_elements/core/callback.py (attempted fix)"
+  ],
+  "success_rate": {
+    "backend": "N/A (Streamlit app, no separate backend)",
+    "frontend": "70% - visual features work, persistence does not"
+  },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "CT-TEMP (110 palhetas), CT-TEST-001 (0 palhetas) contentores exist",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The drag-and-drop visual is working. The streamlit-elements Grid renders correctly inside iframe. The issue is sync() callback not updating session_state. Verified with Playwright: dragged item moves visually from x=556 to x=699, but session_state.layout_contentores_mapa is NOT updated, causing 'Guardar layout' to report 'Nenhuma alteração'. Main agent needs to either downgrade Streamlit or use alternative approach.",
+  "rca_of_the_issue": {
+    "root_cause": "streamlit-elements library (v0.1.0) callback mechanism is incompatible with Streamlit 1.34+ due to changes in how Streamlit handles custom component callbacks. The sync() function relies on internal Streamlit APIs that changed.",
+    "error_behavior": "No explicit error - the drag works visually but onLayoutChange callback silently fails to update session_state",
+    "reproduction_steps": [
+      "1. Login with admin/admin123",
+      "2. Navigate to 'Mapa dos Contentores' (default page)",
+      "3. Drag CT-TEMP contentor to a new position",
+      "4. Observe: block moves visually",
+      "5. Click 'Guardar layout'",
+      "6. See message: 'Nenhuma alteração de posição para guardar'",
+      "7. Reload page - position is back to original"
+    ],
+    "mitigation_options": [
+      "Downgrade Streamlit to 1.32.x",
+      "Use different library (streamlit-aggrid, react-grid-layout via st.components)",
+      "Implement manual callback using postMessage/custom component"
+    ]
+  },
+  "features_tested": {
+    "mapa_contentores_visual": "PASS - Professional design, grid layout, no duplication",
+    "drag_and_drop_visual": "PASS - Contentors can be dragged visually in iframe",
+    "drag_and_drop_persistence": "FAIL - Position NOT persisted due to sync() callback failure",
+    "criar_contentor": "PASS - Button present and visible",
+    "guardar_layout_button": "PASS - Button visible and clickable",
+    "recarregar_mapa_button": "PASS - Button visible",
+    "login_logout": "PASS - Authentication working",
+    "no_iframe_sandbox_error": "PASS - Previous SecurityError is FIXED (no allow-top-navigation error)"
+  },
+  "library_versions": {
+    "streamlit": "1.53.1",
+    "streamlit-elements": "0.1.0",
+    "incompatibility_note": "streamlit-elements callbacks broken since Streamlit 1.34"
+  }
+}
