@@ -34,6 +34,9 @@ from modules.stock_reporting import (
     filter_transfer_history,
     filter_lot_transfer_history,
 )
+from modules.pages.map_page import run_map_page
+from modules.pages.stock_page import run_stock_page
+from modules.pages.reports_page import run_reports_page
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
