@@ -1982,26 +1982,24 @@ if aba == "🗺️ Mapa dos Contentores":
                         st.session_state["mapa_modo_edicao"] = False
 
                         if atualizados > 0:
-                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s): {', '.join(atualizados_ids)}")
+                            st.toast(f"Layout guardado ({atualizados} contentor(es))", icon="✅")
                         else:
-                            st.info("Nenhuma alteração de posição para guardar.")
+                            st.toast("Sem alterações para guardar", icon="ℹ️")
                         st.rerun()
                     except Exception as e:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
-                        st.error("Falha ao salvar layout do mapa.")
+                        st.toast("Falha ao salvar layout", icon="❌")
                 else:
                     st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
                     if st.session_state["mapa_salvar_layout_tentativas"] > 4:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
-                    else:
-                        st.info("A capturar posições do mapa... aguarde um instante.")
+                        st.toast("Não foi possível ler as posições alteradas", icon="⚠️")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
-                st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
+                pass
 
             if st.session_state.get("move_feedback"):
                 st.success(st.session_state.pop("move_feedback"))
