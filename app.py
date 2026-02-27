@@ -3194,11 +3194,12 @@ elif aba == "📈 Relatórios":
     transf = carregar_transferencias()
     transf_ext = carregar_transferencias_externas()
     proprietarios = carregar_proprietarios()
+    contentores_rel = carregar_contentores()
 
     render_zone_title("Zona de seleção")
     modo_relatorio = st.radio(
         "Tipo de análise",
-        ["Garanhão", "Proprietário", "Histórico Geral"],
+        ["Garanhão", "Proprietário", "Contentor / Localização", "Histórico Geral"],
         horizontal=True,
         key="relatorio_modo_radio",
         label_visibility="collapsed",
@@ -3206,6 +3207,7 @@ elif aba == "📈 Relatórios":
 
     garanhao_sel = None
     prop_sel = None
+    contentor_sel = None
     tipo_hist = None
 
     if modo_relatorio == "Garanhão":
@@ -3226,6 +3228,16 @@ elif aba == "📈 Relatórios":
                 proprietarios["id"].tolist(),
                 format_func=lambda x: proprietarios[proprietarios["id"] == x]["nome"].values[0],
                 key="rel_prop_select_main",
+            )
+    elif modo_relatorio == "Contentor / Localização":
+        if contentores_rel.empty:
+            st.warning("Sem contentores cadastrados.")
+        else:
+            contentor_sel = st.selectbox(
+                "Selecionar contentor",
+                contentores_rel["id"].tolist(),
+                format_func=lambda x: f"{contentores_rel[contentores_rel['id'] == x]['codigo'].values[0]}",
+                key="rel_contentor_select_main",
             )
     else:
         tipo_hist = st.radio(
@@ -3283,6 +3295,34 @@ elif aba == "📈 Relatórios":
                         ["Resumo", "Stock", "Inseminações", "Transferências"],
                         default=["Resumo", "Stock", "Inseminações", "Transferências"],
                         key="rel_prop_f_sec",
+                    )
+        elif modo_relatorio == "Contentor / Localização" and contentor_sel:
+            base_c = stock[stock["contentor_id"] == contentor_sel] if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
+            with st.container():
+                f1, f2, f3, f4 = st.columns(4)
+                with f1:
+                    filtros["gar"] = st.multiselect(
+                        "Garanhões",
+                        sorted(base_c["garanhao"].dropna().unique()) if not base_c.empty else [],
+                        key="rel_cont_f_gar",
+                    )
+                with f2:
+                    filtros["prop"] = st.multiselect(
+                        "Proprietários",
+                        sorted(base_c["proprietario_nome"].dropna().unique()) if not base_c.empty else [],
+                        key="rel_cont_f_prop",
+                    )
+                with f3:
+                    filtros["can"] = st.multiselect(
+                        "Canister",
+                        sorted(base_c["canister"].dropna().unique()) if (not base_c.empty and "canister" in base_c.columns) else [],
+                        key="rel_cont_f_can",
+                    )
+                with f4:
+                    filtros["and"] = st.multiselect(
+                        "Andar",
+                        sorted(base_c["andar"].dropna().unique()) if (not base_c.empty and "andar" in base_c.columns) else [],
+                        key="rel_cont_f_and",
                     )
         elif modo_relatorio == "Histórico Geral" and tipo_hist:
             if tipo_hist == "Inseminações" and not insem.empty:
@@ -3437,6 +3477,117 @@ elif aba == "📈 Relatórios":
                 ex = safe_pick(transf_ext_p, ["data_transferencia", "garanhao", "destinatario_externo", "quantidade", "tipo", "observacoes"]).sort_values("data_transferencia", ascending=False)
                 ex.columns = ["Data", "Garanhão", "Para", "Palhetas", "Tipo", "Observações"][:len(ex.columns)]
                 st.dataframe(ex, use_container_width=True, hide_index=True, height=300)
+
+    elif modo_relatorio == "Contentor / Localização" and contentor_sel:
+        cont_info = contentores_rel[contentores_rel["id"] == contentor_sel].iloc[0]
+        dados_c = stock[stock["contentor_id"] == contentor_sel].copy() if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
+
+        if filtros.get("gar"):
+            dados_c = dados_c[dados_c["garanhao"].isin(filtros["gar"])] if not dados_c.empty else dados_c
+        if filtros.get("prop"):
+            dados_c = dados_c[dados_c["proprietario_nome"].isin(filtros["prop"])] if not dados_c.empty else dados_c
+        if filtros.get("can") and "canister" in dados_c.columns:
+            dados_c = dados_c[dados_c["canister"].isin(filtros["can"])]
+        if filtros.get("and") and "andar" in dados_c.columns:
+            dados_c = dados_c[dados_c["andar"].isin(filtros["and"])]
+
+        head_l, head_r = st.columns([6, 2])
+        with head_l:
+            st.markdown(
+                f"<div class='reports-results-head'><strong>Contentor:</strong> {cont_info['codigo']}  |  <strong>Descrição:</strong> {cont_info.get('descricao') or '—'}</div>",
+                unsafe_allow_html=True,
+            )
+        with head_r:
+            csv = safe_pick(
+                dados_c,
+                ["proprietario_nome", "garanhao", "existencia_atual", "canister", "andar", "data_embriovet", "data_criacao", "criado_por"],
+            )
+            st.download_button(
+                "CSV",
+                csv.to_csv(index=False).encode("utf-8"),
+                f"contentor_{cont_info['codigo']}.csv",
+                "text/csv",
+                use_container_width=True,
+                key=f"rel_cont_csv_{contentor_sel}",
+            )
+
+        canisters_utilizados = dados_c["canister"].nunique() if (not dados_c.empty and "canister" in dados_c.columns) else 0
+        render_kpi_strip([
+            ("lotes", len(dados_c)),
+            ("palhetas", int(to_py(dados_c["existencia_atual"].sum()) or 0) if not dados_c.empty else 0),
+            ("garanhões", dados_c["garanhao"].nunique() if not dados_c.empty else 0),
+            ("proprietários", dados_c["proprietario_nome"].nunique() if not dados_c.empty else 0),
+            ("canisters usados", canisters_utilizados),
+        ])
+
+        if not dados_c.empty and "canister" in dados_c.columns and "andar" in dados_c.columns:
+            ocupacao = dados_c.groupby(["canister", "andar"])["existencia_atual"].sum().reset_index()
+            ocupacao.columns = ["Canister", "Andar", "Palhetas"]
+            st.dataframe(ocupacao.sort_values(["Canister", "Andar"]), use_container_width=True, hide_index=True, height=220)
+
+        if dados_c.empty:
+            st.info("Sem stock para este contentor nos filtros atuais.")
+        else:
+            ex = safe_pick(
+                dados_c,
+                ["proprietario_nome", "garanhao", "existencia_atual", "canister", "andar", "data_embriovet", "data_criacao", "criado_por", "origem_externa"],
+            )
+            col_names = ["Proprietário", "Garanhão", "Stock", "Canister", "Andar", "Data Embriovet", "Data Criação", "Criado Por", "Ref. Externa"]
+            ex.columns = col_names[:len(ex.columns)]
+            st.dataframe(ex, use_container_width=True, hide_index=True, height=420)
+
+        st.markdown("<div class='reports-results-head'><strong>Histórico físico do sémen</strong></div>", unsafe_allow_html=True)
+        hist_rows = []
+        if not dados_c.empty:
+            for _, r in dados_c.iterrows():
+                hist_rows.append({
+                    "Data": r.get("data_criacao") or r.get("data_embriovet"),
+                    "Evento": "Entrada em stock/contentor",
+                    "Garanhão": r.get("garanhao"),
+                    "Proprietário": r.get("proprietario_nome"),
+                    "Canister": r.get("canister"),
+                    "Andar": r.get("andar"),
+                    "Qtd": r.get("existencia_atual"),
+                    "Origem": r.get("origem_externa") or "—",
+                })
+
+            if not transf.empty and "estoque_id" in transf.columns and "id" in dados_c.columns:
+                ids_lote = set(dados_c["id"].tolist())
+                transf_c = transf[transf["estoque_id"].isin(ids_lote)].copy()
+                for _, t in transf_c.iterrows():
+                    hist_rows.append({
+                        "Data": t.get("data_transferencia"),
+                        "Evento": "Transferência interna",
+                        "Garanhão": t.get("garanhao"),
+                        "Proprietário": f"{t.get('proprietario_origem')} → {t.get('proprietario_destino')}",
+                        "Canister": "—",
+                        "Andar": "—",
+                        "Qtd": t.get("quantidade"),
+                        "Origem": "Interna",
+                    })
+
+            if not transf_ext.empty and "estoque_id" in transf_ext.columns and "id" in dados_c.columns:
+                ids_lote = set(dados_c["id"].tolist())
+                transf_ec = transf_ext[transf_ext["estoque_id"].isin(ids_lote)].copy()
+                for _, t in transf_ec.iterrows():
+                    hist_rows.append({
+                        "Data": t.get("data_transferencia"),
+                        "Evento": "Transferência externa",
+                        "Garanhão": t.get("garanhao"),
+                        "Proprietário": t.get("proprietario_origem"),
+                        "Canister": "—",
+                        "Andar": "—",
+                        "Qtd": t.get("quantidade"),
+                        "Origem": t.get("destinatario_externo") or "Externa",
+                    })
+
+        hist_df = pd.DataFrame(hist_rows)
+        if hist_df.empty:
+            st.info("Sem histórico físico disponível para os filtros atuais.")
+        else:
+            if "Data" in hist_df.columns:
+                hist_df = hist_df.sort_values("Data", ascending=False)
+            st.dataframe(hist_df, use_container_width=True, hide_index=True, height=320)
 
     elif modo_relatorio == "Histórico Geral" and tipo_hist:
         head_l, head_r = st.columns([6, 2])
