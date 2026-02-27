@@ -1900,9 +1900,8 @@ if aba == "🗺️ Mapa dos Contentores":
                                     'h': int(contentor['h'])
                                 })
                                 if sucesso:
-                                    st.success(f"✅ Posição do contentor '{contentor['codigo']}' guardada: x={x}, y={y}", icon="✅")
-                                    time.sleep(1)
-                                    st.rerun()
+                                    # Mostrar mensagem de sucesso temporária
+                                    st.toast(f"✅ Posição guardada: {contentor['codigo']}", icon="✅")
                     elif 'contentor_id' in result:
                         # Mostrar detalhes do contentor
                         st.session_state['contentor_selecionado'] = result['contentor_id']
