@@ -1813,15 +1813,15 @@ if aba == "🗺️ Mapa dos Contentores":
 
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button("Adicionar", use_container_width=True)
+                        criar_novo = st.button("Adicionar", key="map_add_btn_mobile", use_container_width=True)
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar", type="primary", use_container_width=True)
+                            salvar_layout = st.button("Salvar", key="map_save_btn_mobile", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button("Editar mapa", use_container_width=True)
+                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_mobile", use_container_width=True)
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar", use_container_width=True)
+                            cancelar_edicao = st.button("Cancelar", key="map_cancel_btn_mobile", use_container_width=True)
                 else:
                     st.markdown(
                         f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
@@ -1829,15 +1829,15 @@ if aba == "🗺️ Mapa dos Contentores":
                     )
                     bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
                     with bar_btn1:
-                        criar_novo = st.button("Adicionar contentor", use_container_width=True)
+                        criar_novo = st.button("Adicionar contentor", key="map_add_btn_desktop", use_container_width=True)
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                            salvar_layout = st.button("Salvar layout", key="map_save_btn_desktop", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button("Editar mapa", use_container_width=True)
+                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_desktop", use_container_width=True)
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+                            cancelar_edicao = st.button("Cancelar edição", key="map_cancel_btn_desktop", use_container_width=True)
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -1869,11 +1869,13 @@ if aba == "🗺️ Mapa dos Contentores":
                 if not js_eval_disponivel:
                     st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
                 else:
+                    logger.info("Salvar layout acionado pelo utilizador")
                     st.session_state["mapa_salvar_layout_pendente"] = True
                     st.session_state["mapa_salvar_layout_tentativas"] = 0
                     st.rerun()
 
             if st.session_state.get("mapa_salvar_layout_pendente", False):
+                logger.info(f"Processando save pendente (tentativa={st.session_state.get('mapa_salvar_layout_tentativas', 0)})")
                 if layout_pending_raw and layout_pending_raw != "null":
                     try:
                         layout_data = layout_pending_raw if isinstance(layout_pending_raw, dict) else json.loads(str(layout_pending_raw))
