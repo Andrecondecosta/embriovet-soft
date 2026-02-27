@@ -403,7 +403,7 @@ def carregar_transferencias():
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
                 FROM transferencias t
-                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                LEFT JOIN estoque_dono e ON t.stock_id = e.id
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
