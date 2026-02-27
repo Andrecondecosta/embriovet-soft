@@ -1,0 +1,78 @@
+{
+  "summary": "Frontend testing BLOCKED by PostgreSQL unavailability. All 3 requested features VERIFIED by detailed code review: (1) Title/toolbar spacing removed - no separate heading exists before toolbar, (2) Save layout persistence - complete flow from JS drag→localStorage→Python→PostgreSQL, (3) No regression in edit/normal modes - CSS class toggle + event handler guards correct.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PostgreSQL Connection",
+        "issue": "PostgreSQL NOT INSTALLED. Connection refused at localhost:5432. App shows 'Erro de conexão com banco de dados' and calls st.stop() at line 97, blocking all UI testing.",
+        "priority": "BLOCKER"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "code_review_findings": {
+    "feature_1_title_toolbar_spacing": {
+      "status": "VERIFIED PASS",
+      "evidence": "Lines 1540-1800 - No st.header(), st.title(), or st.markdown('<h2...') before the map-toolbar-shell. Toolbar starts directly with CSS container.",
+      "implementation": "Title/heading was removed entirely from the Mapa tab"
+    },
+    "feature_2_save_layout_persistence": {
+      "status": "VERIFIED PASS",
+      "flow": {
+        "step_1_js_drag": "Lines 2217-2233: mouseup event calls guardarPosicaoPendente() with canonical x,y coordinates",
+        "step_2_js_storage": "Lines 2133-2153: guardarPosicaoPendente() stores {id: {x, y}} in localStorage + postMessage fallback",
+        "step_3_bridge_listener": "Lines 1566-1598: Bootstrap listener receives CONTENTOR_LAYOUT_UPDATE messages, stores in localStorage",
+        "step_4_read_storage": "Lines 1611-1617: streamlit_js_eval reads 'contentor_layout_pending' from localStorage",
+        "step_5_save_btn_handler": "Lines 1825-1832: Button click triggers mapa_salvar_layout_pendente flow",
+        "step_6_persist_db": "Lines 1834-1883: Parses JSON, calls atualizar_posicao_contentor() for each changed container",
+        "step_7_sql_update": "Lines 1122-1139: UPDATE contentores SET x=%s, y=%s WHERE id=%s"
+      }
+    },
+    "feature_3_edit_normal_mode_no_regression": {
+      "status": "VERIFIED PASS",
+      "evidence": {
+        "css_class_toggle": "Line 2158: className = `cont-box ${isEditMode ? 'draggable' : 'clickable'}`",
+        "click_guard": "Lines 2191-2194: if (isEditMode) return; - blocks click in edit mode",
+        "drag_guard": "Lines 2177-2189: if (!isEditMode) return; - blocks drag in normal mode",
+        "button_toggle": "Lines 1793-1799: Correct UI shows Salvar/Cancelar in edit mode, Editar mapa in normal mode"
+      }
+    }
+  },
+  "critical_code_review_comments": [
+    "✅ Title spacing fixed by complete removal of heading element",
+    "✅ Save layout uses dual-path storage (postMessage for iframe + direct localStorage)",
+    "✅ Edit/Normal modes properly isolated via CSS class and JS guards",
+    "⚠️ PostgreSQL BLOCKER prevents functional UI verification"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_8.json"],
+  "action_items": [
+    "CRITICAL: PostgreSQL must be installed/configured for functional testing",
+    "VISUAL TEST: Once DB available, verify container drag-and-save workflow visually"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "BLOCKED - PostgreSQL not installed",
+    "frontend": "CODE REVIEW ONLY - All 3 features verified in code"
+  },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "N/A - Database not accessible",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "PostgreSQL is NOT INSTALLED (8th iteration with same blocker). Code review confirms all 3 requested features: (1) No title/heading before toolbar in Mapa tab, (2) Complete localStorage→Python→PostgreSQL flow for layout persistence, (3) Edit/Normal mode guards via CSS + JS. CANNOT do functional UI testing without PostgreSQL.",
+  "environment_blocker": {
+    "issue": "PostgreSQL not installed in environment",
+    "error_message": "connection to server at 'localhost' (127.0.0.1), port 5432 failed: Connection refused",
+    "resolution": "Install PostgreSQL locally OR configure DATABASE_URL environment variable to external PostgreSQL instance",
+    "app_behavior": "App calls st.stop() at line 97 when connection pool creation fails, blocking all UI"
+  },
+  "features_verified_by_code_review": {
+    "espaco_titulo_toolbar_removido": "PASS - No heading exists before toolbar",
+    "salvar_layout_persiste_posicoes": "PASS - Complete JS→localStorage→Python→PostgreSQL flow",
+    "sem_regressao_modo_editar_normal": "PASS - CSS + JS guards isolate modes correctly"
+  }
+}

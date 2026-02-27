@@ -1538,8 +1538,6 @@ if proprietarios.empty:
 # 🗺️ Mapa dos Contentores
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
-    st.markdown("<h2 style='margin:0 0 2px 0; line-height:1.15;'>Gestão de Contentores</h2>", unsafe_allow_html=True)
-    
     # Carregar contentores
     contentores_df = carregar_contentores()
 
@@ -1552,6 +1550,9 @@ if aba == "🗺️ Mapa dos Contentores":
     if "mapa_salvar_layout_pendente" not in st.session_state:
         st.session_state["mapa_salvar_layout_pendente"] = False
 
+    if "mapa_salvar_layout_tentativas" not in st.session_state:
+        st.session_state["mapa_salvar_layout_tentativas"] = 0
+
     try:
         from streamlit_js_eval import streamlit_js_eval
         js_eval_disponivel = True
@@ -1561,6 +1562,40 @@ if aba == "🗺️ Mapa dos Contentores":
 
     if not js_eval_disponivel:
         st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
+    else:
+        streamlit_js_eval(
+            js_expressions="""
+                (function(){
+                    try {
+                        if (!window.__contentorLayoutBridgeInstalled) {
+                            window.__contentorLayoutBridgeInstalled = true;
+                            window.addEventListener('message', function(event){
+                                var data = event && event.data ? event.data : null;
+                                if (!data || typeof data !== 'object') return;
+
+                                if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
+                                    try {
+                                        var atual = JSON.parse(window.localStorage.getItem('contentor_layout_pending') || '{}');
+                                        atual[String(data.id)] = {
+                                            x: parseInt(data.x, 10) || 0,
+                                            y: parseInt(data.y, 10) || 0
+                                        };
+                                        window.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                                    } catch (e) {}
+                                }
+
+                                if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
+                                    try { window.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
+                                }
+                            });
+                        }
+                    } catch (e) {}
+                    return true;
+                })()
+            """,
+            key="map_layout_bridge_bootstrap",
+            want_output=True,
+        )
 
     largura_viewport = None
     if js_eval_disponivel:
@@ -1576,7 +1611,7 @@ if aba == "🗺️ Mapa dos Contentores":
     layout_pending_raw = None
     if js_eval_disponivel:
         layout_pending_raw = streamlit_js_eval(
-            js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
+            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
             key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
             want_output=True,
         )
@@ -1700,6 +1735,10 @@ if aba == "🗺️ Mapa dos Contentores":
                         background: #f8fafc;
                         padding: 6px 10px;
                         margin-bottom: 4px;
+                        position: sticky;
+                        top: 0;
+                        z-index: 80;
+                        backdrop-filter: blur(4px);
                     }
                     .map-toolbar-kpis {
                         display: flex;
@@ -1712,15 +1751,11 @@ if aba == "🗺️ Mapa dos Contentores":
                         color: #0f172a;
                     }
                     div[data-testid="stVerticalBlock"]:has(.map-toolbar-shell) {
-                        position: sticky;
-                        top: 0;
-                        z-index: 80;
-                        background: rgba(248, 250, 252, 0.96);
-                        border: 1px solid #e2e8f0;
-                        border-radius: 10px;
-                        padding: 6px 8px 8px;
-                        margin-bottom: 4px;
-                        backdrop-filter: blur(4px);
+                        background: transparent;
+                        border: none;
+                        border-radius: 0;
+                        padding: 0;
+                        margin: 0;
                     }
                 </style>
                 """,
@@ -1771,18 +1806,20 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.session_state["mapa_modo_edicao"] = True
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                         key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
                     )
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
                 st.rerun()
 
             if cancelar_edicao:
                 st.session_state["mapa_modo_edicao"] = False
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
+                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                         key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                     )
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
                 st.rerun()
 
             if salvar_layout:
@@ -1790,6 +1827,7 @@ if aba == "🗺️ Mapa dos Contentores":
                     st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
                 else:
                     st.session_state["mapa_salvar_layout_pendente"] = True
+                    st.session_state["mapa_salvar_layout_tentativas"] = 0
                     st.session_state["mapa_layout_reader_tick"] += 1
                     st.rerun()
 
@@ -1816,11 +1854,12 @@ if aba == "🗺️ Mapa dos Contentores":
                                     atualizados += 1
 
                         streamlit_js_eval(
-                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
+                            js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                             key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
                         )
                         st.session_state["mapa_modo_edicao"] = False
                         st.session_state["mapa_salvar_layout_pendente"] = False
+                        st.session_state["mapa_salvar_layout_tentativas"] = 0
 
                         if atualizados > 0:
                             st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s).")
@@ -1829,11 +1868,19 @@ if aba == "🗺️ Mapa dos Contentores":
                         st.rerun()
                     except Exception as e:
                         st.session_state["mapa_salvar_layout_pendente"] = False
+                        st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
                         st.error("Falha ao salvar layout do mapa.")
                 else:
-                    st.session_state["mapa_salvar_layout_pendente"] = False
-                    st.info("Nenhuma alteração pendente para guardar.")
+                    tentativas = int(st.session_state.get("mapa_salvar_layout_tentativas", 0))
+                    if tentativas < 2:
+                        st.session_state["mapa_salvar_layout_tentativas"] = tentativas + 1
+                        st.session_state["mapa_layout_reader_tick"] += 1
+                        st.rerun()
+                    else:
+                        st.session_state["mapa_salvar_layout_pendente"] = False
+                        st.session_state["mapa_salvar_layout_tentativas"] = 0
+                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
                 st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
@@ -2085,16 +2132,20 @@ if aba == "🗺️ Mapa dos Contentores":
 
                 function guardarPosicaoPendente(id, x, y) {
                     try {
-                        let storageRef = window.localStorage;
                         try {
-                            if (window.parent && window.parent.localStorage) {
-                                storageRef = window.parent.localStorage;
+                            if (window.parent && window.parent.postMessage) {
+                                window.parent.postMessage({
+                                    type: 'CONTENTOR_LAYOUT_UPDATE',
+                                    id: id,
+                                    x: x,
+                                    y: y
+                                }, '*');
                             }
                         } catch (e) {}
 
-                        const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
+                        const atual = JSON.parse(window.localStorage.getItem('contentor_layout_pending') || '{}');
                         atual[String(id)] = { x, y };
-                        storageRef.setItem('contentor_layout_pending', JSON.stringify(atual));
+                        window.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
                         statusBar.textContent = 'Alteração pendente. Clique em "Salvar layout".';
                     } catch (err) {
                         console.error('Erro ao guardar posição pendente:', err);
