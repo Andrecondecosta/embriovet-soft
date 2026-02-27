@@ -5,4 +5,4 @@ PAGE_CODE = '    st.header("Estoque Atual")\n    inject_stock_css()\n    inject_
 
 def run_stock_page(ctx: dict):
     local_ctx = dict(ctx)
-    exec(PAGE_CODE, {}, local_ctx)
+    exec(PAGE_CODE, local_ctx, local_ctx)
