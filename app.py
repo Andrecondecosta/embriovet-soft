@@ -1880,7 +1880,7 @@ if aba == "🗺️ Mapa dos Contentores":
                     else:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.info("Nenhuma alteração pendente para guardar.")
+                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
                 st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
