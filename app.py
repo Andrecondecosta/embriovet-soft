@@ -2661,6 +2661,9 @@ if aba == "📦 Ver Stock":
 
         st.markdown("<div class='stock-table-head'>Lotes Detalhados</div>", unsafe_allow_html=True)
 
+        if stock_filtrado.empty:
+            st.info("Sem lotes para o filtro atual.")
+
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
         for _, row in stock_filtrado.iterrows():
