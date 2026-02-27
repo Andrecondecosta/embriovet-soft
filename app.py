@@ -1717,6 +1717,9 @@ if aba == "🗺️ Mapa dos Contentores":
             st.markdown(
                 """
                 <style>
+                    .main .block-container {
+                        padding-top: 0.35rem !important;
+                    }
                     .map-tech-context {
                         font-size: 12px;
                         color: #64748b;
@@ -2074,6 +2077,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 let offsetX = 0;
                 let offsetY = 0;
                 let moved = false;
+                let lastPersistAt = 0;
 
                 function esc(v) {
                     return String(v ?? '').replace(/[&<>"']/g, (c) => ({
@@ -2212,6 +2216,14 @@ if aba == "🗺️ Mapa dos Contentores":
                     draggedEl.style.left = Math.round(x) + 'px';
                     draggedEl.style.top = Math.round(y) + 'px';
                     statusBar.textContent = `Movendo... X=${Math.round(x / scale)} | Y=${Math.round(y / scale)}`;
+
+                    const now = Date.now();
+                    if (draggedMeta && (now - lastPersistAt) > 180) {
+                        const xCanonLive = Math.max(0, Math.min(Math.round(x / scale), baseW - draggedMeta.w));
+                        const yCanonLive = Math.max(0, Math.min(Math.round(y / scale), baseH - draggedMeta.h));
+                        guardarPosicaoPendente(draggedMeta.id, xCanonLive, yCanonLive);
+                        lastPersistAt = now;
+                    }
                 });
 
                 document.addEventListener('mouseup', () => {
@@ -2225,9 +2237,7 @@ if aba == "🗺️ Mapa dos Contentores":
                     draggedEl.classList.remove('dragging');
                     draggedEl = null;
 
-                    if (moved) {
-                        guardarPosicaoPendente(draggedMeta.id, xCanon, yCanon);
-                    }
+                    guardarPosicaoPendente(draggedMeta.id, xCanon, yCanon);
 
                     draggedMeta = null;
                 });
