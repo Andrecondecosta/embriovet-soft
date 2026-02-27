@@ -1576,7 +1576,7 @@ if aba == "🗺️ Mapa dos Contentores":
     layout_pending_raw = None
     if js_eval_disponivel:
         layout_pending_raw = streamlit_js_eval(
-            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
+            js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
             key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
             want_output=True,
         )
@@ -1687,17 +1687,19 @@ if aba == "🗺️ Mapa dos Contentores":
                         color: #64748b;
                         line-height: 1.45;
                         margin-top: 0;
-                        margin-bottom: 4px;
+                        margin-bottom: 2px;
                     }
-                    .map-toolbar-sticky-marker {
-                        height: 0;
+                    .map-tech-context-inline {
+                        font-size: 11px;
+                        color: #64748b;
+                        opacity: 0.95;
                     }
                     .map-toolbar-shell {
                         border: 1px solid #d1d5db;
                         border-radius: 8px;
                         background: #f8fafc;
                         padding: 6px 10px;
-                        margin-bottom: 6px;
+                        margin-bottom: 4px;
                     }
                     .map-toolbar-kpis {
                         display: flex;
@@ -1709,15 +1711,15 @@ if aba == "🗺️ Mapa dos Contentores":
                     .map-toolbar-kpis b {
                         color: #0f172a;
                     }
-                    div[data-testid="stVerticalBlock"]:has(.map-toolbar-sticky-marker) {
+                    div[data-testid="stVerticalBlock"]:has(.map-toolbar-shell) {
                         position: sticky;
-                        top: 0.4rem;
+                        top: 0;
                         z-index: 80;
                         background: rgba(248, 250, 252, 0.96);
                         border: 1px solid #e2e8f0;
                         border-radius: 10px;
                         padding: 6px 8px 8px;
-                        margin-bottom: 8px;
+                        margin-bottom: 4px;
                         backdrop-filter: blur(4px);
                     }
                 </style>
@@ -1726,8 +1728,6 @@ if aba == "🗺️ Mapa dos Contentores":
             )
 
             with st.container():
-                st.markdown("<div class='map-toolbar-sticky-marker'></div>", unsafe_allow_html=True)
-
                 if is_mobile:
                     st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
                     st.markdown(
@@ -1747,9 +1747,8 @@ if aba == "🗺️ Mapa dos Contentores":
                         if st.session_state["mapa_modo_edicao"]:
                             cancelar_edicao = st.button("Cancelar", use_container_width=True)
                 else:
-                    st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
                     st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
+                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
                         unsafe_allow_html=True,
                     )
                     bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
@@ -1772,7 +1771,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.session_state["mapa_modo_edicao"] = True
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
                     )
                 st.rerun()
@@ -1781,7 +1780,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 st.session_state["mapa_modo_edicao"] = False
                 if js_eval_disponivel:
                     streamlit_js_eval(
-                        js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                     )
                 st.rerun()
@@ -1817,7 +1816,7 @@ if aba == "🗺️ Mapa dos Contentores":
                                     atualizados += 1
 
                         streamlit_js_eval(
-                            js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
+                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                             key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
                         )
                         st.session_state["mapa_modo_edicao"] = False
@@ -2086,9 +2085,16 @@ if aba == "🗺️ Mapa dos Contentores":
 
                 function guardarPosicaoPendente(id, x, y) {
                     try {
-                        const atual = JSON.parse(window.parent.localStorage.getItem('contentor_layout_pending') || '{}');
+                        let storageRef = window.localStorage;
+                        try {
+                            if (window.parent && window.parent.localStorage) {
+                                storageRef = window.parent.localStorage;
+                            }
+                        } catch (e) {}
+
+                        const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
                         atual[String(id)] = { x, y };
-                        window.parent.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                        storageRef.setItem('contentor_layout_pending', JSON.stringify(atual));
                         statusBar.textContent = 'Alteração pendente. Clique em "Salvar layout".';
                     } catch (err) {
                         console.error('Erro ao guardar posição pendente:', err);
