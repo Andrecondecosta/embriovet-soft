@@ -2732,6 +2732,33 @@ if aba == "📦 Ver Stock":
                     with audit_col2:
                         if row.get("criado_por"):
                             st.markdown(f"**👤 Criado por:** {row.get('criado_por')}")
+
+                    with st.expander("Histórico técnico deste lote", expanded=False):
+                        lote_transf_int, lote_transf_ext = filter_lot_transfer_history(
+                            transf_hist_all,
+                            transf_ext_hist_all,
+                            garanhao=row.get("garanhao"),
+                            owner_name=proprietario_nome,
+                        )
+
+                        if not lote_transf_int.empty:
+                            ex_int = safe_pick(
+                                lote_transf_int,
+                                ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"],
+                            ).sort_values("data_transferencia", ascending=False)
+                            ex_int.columns = ["Data", "De", "Para", "Palhetas"]
+                            st.dataframe(ex_int, use_container_width=True, hide_index=True, height=180)
+
+                        if not lote_transf_ext.empty:
+                            ex_ext = safe_pick(
+                                lote_transf_ext,
+                                ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"],
+                            ).sort_values("data_transferencia", ascending=False)
+                            ex_ext.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_ext.columns)]
+                            st.dataframe(ex_ext, use_container_width=True, hide_index=True, height=180)
+
+                        if lote_transf_int.empty and lote_transf_ext.empty:
+                            st.info("Sem histórico técnico de transferências para este lote.")
                 
                 # TAB 2: Editar (Apenas Admin)
                 if tab2 is not None:
