@@ -1588,7 +1588,8 @@ menu_options = ["🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatór
 
 if verificar_permissao('Gestor'):
     menu_options.insert(2, "➕ Adicionar Stock")
-    menu_options.insert(3, "📝 Registrar Inseminação")
+    menu_options.insert(3, "📥 Importar Sémen")
+    menu_options.insert(4, "📝 Registrar Inseminação")
     menu_options.append("👥 Gestão de Proprietários")
 
 if verificar_permissao('Administrador'):
