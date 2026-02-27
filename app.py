@@ -1850,7 +1850,8 @@ if aba == "🗺️ Mapa dos Contentores":
                         js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
                     )
-                st.session_state["mapa_layout_cache"] = {}
+                st.session_state["mapa_salvar_layout_pendente"] = False
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
                 st.rerun()
 
             if cancelar_edicao:
@@ -1860,7 +1861,8 @@ if aba == "🗺️ Mapa dos Contentores":
                         js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
                         key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                     )
-                st.session_state["mapa_layout_cache"] = {}
+                st.session_state["mapa_salvar_layout_pendente"] = False
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
                 st.rerun()
 
             if salvar_layout:
