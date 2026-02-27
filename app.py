@@ -1601,24 +1601,24 @@ if aba == "🗺️ Mapa dos Contentores":
             want_output=True,
         )
 
-    largura_viewport = None
-    if js_eval_disponivel:
-        largura_viewport = streamlit_js_eval(
+    if "map_largura_viewport" not in st.session_state:
+        st.session_state["map_largura_viewport"] = None
+
+    if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
+        largura_viewport_once = streamlit_js_eval(
             js_expressions='window.innerWidth',
-            key='map_viewport_width',
+            key='map_viewport_width_once',
             want_output=True,
         )
+        if largura_viewport_once is not None:
+            try:
+                st.session_state["map_largura_viewport"] = int(largura_viewport_once)
+            except Exception:
+                st.session_state["map_largura_viewport"] = 1200
 
+    largura_viewport = st.session_state.get("map_largura_viewport")
     is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
     modo_visualizacao = True
-
-    layout_pending_raw = None
-    if js_eval_disponivel:
-        layout_pending_raw = streamlit_js_eval(
-            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
-            key=f"map_layout_pending_reader_{st.session_state['mapa_layout_reader_tick']}",
-            want_output=True,
-        )
     
     # Modal para adicionar contentor - design limpo
     if st.session_state.get('modal_novo_contentor', False):
