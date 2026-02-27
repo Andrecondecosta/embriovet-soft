@@ -3075,51 +3075,7 @@ elif aba == "📝 Registrar Inseminação":
 # ------------------------------------------------------------
 elif aba == "📈 Relatórios":
     st.header("Relatórios")
-
-    st.markdown(
-        """
-        <style>
-            .reports-zone-title {
-                font-size: 0.78rem;
-                text-transform: uppercase;
-                letter-spacing: .05em;
-                color: #64748b;
-                margin: 0.25rem 0 0.35rem 0;
-                font-weight: 700;
-            }
-            .reports-kpi-strip {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-                margin: 0.35rem 0 0.6rem 0;
-            }
-            .reports-kpi-item {
-                border: 1px solid #dbe4ee;
-                background: #f8fafc;
-                color: #334155;
-                border-radius: 8px;
-                padding: 4px 9px;
-                font-size: 0.78rem;
-                white-space: nowrap;
-            }
-            .reports-kpi-item b { color: #0f172a; }
-            .reports-results-head {
-                margin-top: 0.2rem;
-                margin-bottom: 0.15rem;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    def render_kpi_strip(items):
-        content = "".join([f"<div class='reports-kpi-item'><b>{valor}</b> {nome}</div>" for nome, valor in items])
-        st.markdown(f"<div class='reports-kpi-strip'>{content}</div>", unsafe_allow_html=True)
-
-    def safe_pick(df, cols):
-        if df.empty:
-            return df
-        return df[[c for c in cols if c in df.columns]].copy()
+    inject_reports_css()
 
     stock = carregar_stock()
     insem = carregar_inseminacoes()
@@ -3127,7 +3083,7 @@ elif aba == "📈 Relatórios":
     transf_ext = carregar_transferencias_externas()
     proprietarios = carregar_proprietarios()
 
-    st.markdown("<div class='reports-zone-title'>Zona de seleção</div>", unsafe_allow_html=True)
+    render_zone_title("Zona de seleção")
     modo_relatorio = st.radio(
         "Tipo de análise",
         ["Garanhão", "Proprietário", "Histórico Geral"],
@@ -3168,7 +3124,7 @@ elif aba == "📈 Relatórios":
             label_visibility="collapsed",
         )
 
-    st.markdown("<div class='reports-zone-title'>Zona de filtros</div>", unsafe_allow_html=True)
+    render_zone_title("Zona de filtros")
     with st.expander("Filtros de análise", expanded=False):
         c1, c2, c3 = st.columns([1.2, 1.1, 1.1])
         with c1:
@@ -3238,7 +3194,7 @@ elif aba == "📈 Relatórios":
         if not transf_ext.empty:
             transf_ext = aplicar_filtro_data(transf_ext, "data_transferencia", data_inicio, data_fim)
 
-    st.markdown("<div class='reports-zone-title'>Zona de resultados</div>", unsafe_allow_html=True)
+    render_zone_title("Zona de resultados")
 
     if modo_relatorio == "Garanhão" and garanhao_sel:
         dados_g = stock[stock["garanhao"] == garanhao_sel] if not stock.empty else pd.DataFrame()
