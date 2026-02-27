@@ -2031,6 +2031,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 #mapa-wrapper.mobile {
                     padding: 4px;
                     border-radius: 6px;
+                    margin-bottom: 2px;
                 }
 
                 #mapa-area {
@@ -2125,6 +2126,7 @@ if aba == "🗺️ Mapa dos Contentores":
                 .mobile #mapa-status {
                     margin-top: 4px;
                     font-size: 10px;
+                    line-height: 1.1;
                 }
 
                 #inv-overlay {
