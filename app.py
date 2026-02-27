@@ -1782,6 +1782,417 @@ elif aba == "➕ Adicionar Stock":
                             st.rerun()
 
 # ------------------------------------------------------------
+# 📥 Importar Sémen
+# ------------------------------------------------------------
+elif aba == "📥 Importar Sémen":
+    st.header("Importar Sémen")
+
+    st.markdown(
+        """
+        <style>
+            .import-zone-title {
+                font-size: .78rem;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                color: #64748b;
+                margin: .2rem 0 .35rem 0;
+                font-weight: 700;
+            }
+            .import-toolbar {
+                border: 1px solid #dbe4ee;
+                border-radius: 8px;
+                background: #f8fafc;
+                padding: 6px 8px;
+                margin-bottom: 6px;
+            }
+            .import-hint {
+                font-size: .78rem;
+                color: #475569;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    template_cols = [
+        "garanhao",
+        "data_embriovet/ref",
+        "existencia_atual",
+        "dose",
+        "motilidade",
+        "proprietario_nome",
+        "contentor_codigo",
+        "canister",
+        "andar",
+        "observacoes",
+        "certificado",
+        "qualidade",
+    ]
+
+    template_df = pd.DataFrame(columns=template_cols)
+
+    def gerar_template_xlsx():
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            template_df.to_excel(writer, index=False, sheet_name="importar_semen")
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    def gerar_template_csv():
+        return template_df.to_csv(index=False).encode("utf-8")
+
+    def normalizar_coluna(nome):
+        base = str(nome).strip().lower()
+        base = unicodedata.normalize("NFKD", base).encode("ascii", "ignore").decode()
+        base = base.replace("/", "_").replace("-", "_").replace(" ", "_")
+        return base
+
+    alias_map = {
+        "garanhao": "garanhao",
+        "garanhao": "garanhao",
+        "data_embriovet_ref": "data_ref",
+        "data_embriovet": "data_ref",
+        "ref": "data_ref",
+        "data": "data_ref",
+        "existencia_atual": "existencia_atual",
+        "existencia": "existencia_atual",
+        "palhetas": "existencia_atual",
+        "dose": "dose",
+        "motilidade": "motilidade",
+        "proprietario_nome": "proprietario_nome",
+        "proprietario": "proprietario_nome",
+        "dono": "proprietario_nome",
+        "contentor_codigo": "contentor_codigo",
+        "contentor": "contentor_codigo",
+        "canister": "canister",
+        "andar": "andar",
+        "observacoes": "observacoes",
+        "observacoes": "observacoes",
+        "certificado": "certificado",
+        "qualidade": "qualidade",
+    }
+
+    required_cols = [
+        "garanhao",
+        "data_ref",
+        "existencia_atual",
+        "dose",
+        "motilidade",
+        "proprietario_nome",
+        "contentor_codigo",
+        "canister",
+        "andar",
+    ]
+
+    render_zone_title("Contexto / Ajuda", "import-zone-title")
+    ctx1, ctx2 = st.columns([3, 1.5])
+    with ctx1:
+        st.markdown(
+            "<div class='import-hint'>Carregue o ficheiro, valide e só depois importe. Use o template para manter as colunas corretas.</div>",
+            unsafe_allow_html=True,
+        )
+    with ctx2:
+        st.download_button(
+            "Descarregar template (XLSX)",
+            data=gerar_template_xlsx(),
+            file_name="template_importar_semen.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+        st.download_button(
+            "Descarregar template (CSV)",
+            data=gerar_template_csv(),
+            file_name="template_importar_semen.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    render_zone_title("Upload + Preview", "import-zone-title")
+    st.markdown("<div class='import-toolbar'>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Carregar ficheiro (XLSX ou CSV)", type=["xlsx", "csv"])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    preview_df = pd.DataFrame()
+    erros_df = pd.DataFrame()
+    linhas_validas = []
+
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.lower().endswith(".csv"):
+                raw_df = pd.read_csv(uploaded_file)
+            else:
+                raw_df = pd.read_excel(uploaded_file)
+        except Exception as e:
+            st.error(f"Erro ao ler o ficheiro: {e}")
+            raw_df = pd.DataFrame()
+
+        if raw_df.empty:
+            st.warning("O ficheiro está vazio ou não pôde ser lido.")
+        else:
+            col_map = {}
+            for col in raw_df.columns:
+                key = alias_map.get(normalizar_coluna(col))
+                if key and key not in col_map:
+                    col_map[key] = col
+
+            missing = [col for col in required_cols if col not in col_map]
+            if missing:
+                st.error(f"Colunas obrigatórias em falta: {', '.join(missing)}")
+            else:
+                norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
+                norm_df["__row"] = raw_df.index + 2
+                for opt in ["observacoes", "certificado", "qualidade"]:
+                    if opt not in norm_df.columns:
+                        norm_df[opt] = ""
+
+                preview_cols = [
+                    "garanhao",
+                    "data_ref",
+                    "existencia_atual",
+                    "dose",
+                    "motilidade",
+                    "proprietario_nome",
+                    "contentor_codigo",
+                    "canister",
+                    "andar",
+                    "observacoes",
+                    "certificado",
+                    "qualidade",
+                ]
+                preview_df = norm_df[preview_cols].copy()
+                preview_df = preview_df.rename(columns={"data_ref": "data_embriovet/ref"})
+
+                contentores_df = carregar_contentores()
+                contentor_map = {
+                    str(cod).strip().upper(): int(cid)
+                    for cod, cid in zip(contentores_df.get("codigo", []), contentores_df.get("id", []))
+                }
+
+                erros = []
+                for _, row in norm_df.iterrows():
+                    linha = int(row["__row"])
+                    row_errors = []
+
+                    garanhao = str(row.get("garanhao", "")).strip()
+                    if not garanhao or garanhao.lower() == "nan":
+                        row_errors.append("Garanhão obrigatório")
+
+                    prop_nome = str(row.get("proprietario_nome", "")).strip()
+                    if not prop_nome or prop_nome.lower() == "nan":
+                        row_errors.append("Proprietário obrigatório")
+
+                    data_ref = str(row.get("data_ref", "")).strip()
+                    if not data_ref or data_ref.lower() == "nan":
+                        row_errors.append("Data/Ref obrigatória")
+
+                    try:
+                        palhetas = int(float(row.get("existencia_atual", 0)))
+                        if palhetas <= 0:
+                            row_errors.append("Existência atual deve ser > 0")
+                    except Exception:
+                        row_errors.append("Existência atual inválida")
+                        palhetas = None
+
+                    dose = ""
+                    if not pd.isna(row.get("dose")):
+                        dose = str(row.get("dose")).strip()
+
+                    try:
+                        motilidade = int(float(row.get("motilidade", 0)))
+                        if motilidade < 0 or motilidade > 100:
+                            row_errors.append("Motilidade deve estar entre 0 e 100")
+                    except Exception:
+                        row_errors.append("Motilidade inválida")
+                        motilidade = None
+
+                    cont_code = str(row.get("contentor_codigo", "")).strip()
+                    cont_key = cont_code.upper()
+                    if not cont_code or cont_code.lower() == "nan":
+                        row_errors.append("Contentor obrigatório")
+                    elif cont_key not in contentor_map:
+                        row_errors.append("Contentor inexistente")
+
+                    try:
+                        canister = int(float(row.get("canister", 0)))
+                        if canister < 1 or canister > 10:
+                            row_errors.append("Canister deve ser 1-10")
+                    except Exception:
+                        row_errors.append("Canister inválido")
+                        canister = None
+
+                    try:
+                        andar = int(float(row.get("andar", 0)))
+                        if andar not in [1, 2]:
+                            row_errors.append("Andar deve ser 1 ou 2")
+                    except Exception:
+                        row_errors.append("Andar inválido")
+                        andar = None
+
+                    observacoes = ""
+                    if not pd.isna(row.get("observacoes")):
+                        observacoes = str(row.get("observacoes")).strip()
+
+                    certificado = None
+                    if not pd.isna(row.get("certificado")):
+                        certificado = str(row.get("certificado")).strip()
+
+                    qualidade = None
+                    if not pd.isna(row.get("qualidade")):
+                        try:
+                            qualidade = int(float(row.get("qualidade")))
+                        except Exception:
+                            row_errors.append("Qualidade inválida")
+
+                    data_embriovet = None
+                    origem_externa = None
+                    if data_ref and data_ref.lower() != "nan":
+                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=True)
+                        if pd.isna(parsed):
+                            origem_externa = data_ref
+                        else:
+                            data_embriovet = parsed.date()
+
+                    if row_errors:
+                        erros.append({"linha": linha, "erro": "; ".join(row_errors)})
+                    else:
+                        linhas_validas.append(
+                            {
+                                "linha": linha,
+                                "garanhao": garanhao,
+                                "proprietario_nome": prop_nome,
+                                "data_embriovet": data_embriovet,
+                                "origem_externa": origem_externa,
+                                "existencia_atual": palhetas,
+                                "dose": dose or None,
+                                "motilidade": motilidade,
+                                "contentor_id": contentor_map.get(cont_key),
+                                "contentor_codigo": cont_code,
+                                "canister": canister,
+                                "andar": andar,
+                                "observacoes": observacoes or None,
+                                "certificado": certificado or None,
+                                "qualidade": qualidade,
+                            }
+                        )
+
+                erros_df = pd.DataFrame(erros)
+
+    if not preview_df.empty:
+        st.dataframe(preview_df, use_container_width=True, height=260, hide_index=True)
+
+    render_zone_title("Validação + Ação", "import-zone-title")
+    if uploaded_file is None:
+        st.info("Carregue um ficheiro para validar.")
+    else:
+        total_linhas = len(preview_df)
+        total_erros = 0 if erros_df.empty else len(erros_df)
+        total_validas = total_linhas - total_erros
+        render_kpi_strip([
+            ("Linhas", total_linhas),
+            ("Válidas", total_validas),
+            ("Com erros", total_erros),
+        ])
+
+        if erros_df.empty:
+            st.success("Validação concluída sem erros.")
+        else:
+            st.warning("Foram encontrados erros. Corrija antes de importar.")
+            st.dataframe(erros_df, use_container_width=True, height=200, hide_index=True)
+
+        def executar_importacao(linhas):
+            report_rows = []
+            try:
+                with get_connection() as conn:
+                    cur = conn.cursor()
+                    props_df = carregar_proprietarios(apenas_ativos=False)
+                    prop_map = {
+                        str(nome).strip().lower(): int(pid)
+                        for pid, nome in zip(props_df.get("id", []), props_df.get("nome", []))
+                    }
+                    criado_por = st.session_state.get("user", {}).get("username", "importacao")
+
+                    for linha in linhas:
+                        nome_prop = linha["proprietario_nome"].strip()
+                        prop_key = nome_prop.lower()
+                        if prop_key not in prop_map:
+                            cur.execute(
+                                "INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id",
+                                (to_py(nome_prop),),
+                            )
+                            prop_id = cur.fetchone()[0]
+                            prop_map[prop_key] = prop_id
+                        else:
+                            prop_id = prop_map[prop_key]
+
+                        cur.execute(
+                            """
+                            INSERT INTO estoque_dono (
+                                garanhao, dono_id, data_embriovet, origem_externa,
+                                palhetas_produzidas, qualidade, concentracao, motilidade,
+                                certificado, dose, observacoes,
+                                quantidade_inicial, existencia_atual,
+                                contentor_id, canister, andar,
+                                criado_por, data_criacao
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                            RETURNING id
+                            """,
+                            (
+                                to_py(linha.get("garanhao")),
+                                to_py(prop_id),
+                                to_py(linha.get("data_embriovet")),
+                                to_py(linha.get("origem_externa")),
+                                to_py(linha.get("existencia_atual")),
+                                to_py(linha.get("qualidade")),
+                                None,
+                                to_py(linha.get("motilidade")),
+                                to_py(linha.get("certificado")),
+                                to_py(linha.get("dose")),
+                                to_py(linha.get("observacoes")),
+                                to_py(linha.get("existencia_atual")),
+                                to_py(linha.get("existencia_atual")),
+                                to_py(linha.get("contentor_id")),
+                                to_py(linha.get("canister")),
+                                to_py(linha.get("andar")),
+                                to_py(criado_por),
+                            ),
+                        )
+                        stock_id = cur.fetchone()[0]
+                        report_rows.append({
+                            "linha": linha.get("linha"),
+                            "status": "Importado",
+                            "stock_id": stock_id,
+                            "mensagem": "",
+                        })
+
+                    conn.commit()
+                    cur.close()
+                return True, pd.DataFrame(report_rows), None
+            except Exception as e:
+                logger.error(f"Erro ao importar: {e}")
+                return False, pd.DataFrame(report_rows), str(e)
+
+        importar_disabled = not erros_df.empty or not linhas_validas
+        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
+            ok, report_df, err_msg = executar_importacao(linhas_validas)
+            if ok:
+                st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
+                st.session_state["import_report"] = report_df
+            else:
+                st.error(f"Importação falhou. {err_msg}")
+                if not report_df.empty:
+                    st.session_state["import_report"] = report_df
+
+        if "import_report" in st.session_state and not st.session_state["import_report"].empty:
+            report_csv = st.session_state["import_report"].to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Descarregar relatório de importação",
+                data=report_csv,
+                file_name="relatorio_importacao.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+# ------------------------------------------------------------
 # 📝 Registrar Inseminação
 # ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
