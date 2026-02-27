@@ -1726,26 +1726,22 @@ if aba == "🗺️ Mapa dos Contentores":
                     if st.session_state["mapa_modo_edicao"]:
                         cancelar_edicao = st.button("Cancelar", use_container_width=True)
             else:
-                col_desc, col_mapa = st.columns([1, 5], gap="medium")
-                with col_desc:
-                    st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
-
-                with col_mapa:
-                    st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-                    bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
-                    with bar_btn1:
-                        criar_novo = st.button("Adicionar contentor", use_container_width=True)
-                    with bar_btn2:
-                        if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
-                        else:
-                            ativar_edicao = st.button("Editar mapa", use_container_width=True)
-                    with bar_btn3:
-                        if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
+                st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
+                    unsafe_allow_html=True,
+                )
+                bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
+                with bar_btn1:
+                    criar_novo = st.button("Adicionar contentor", use_container_width=True)
+                with bar_btn2:
+                    if st.session_state["mapa_modo_edicao"]:
+                        salvar_layout = st.button("Salvar layout", type="primary", use_container_width=True)
+                    else:
+                        ativar_edicao = st.button("Editar mapa", use_container_width=True)
+                with bar_btn3:
+                    if st.session_state["mapa_modo_edicao"]:
+                        cancelar_edicao = st.button("Cancelar edição", use_container_width=True)
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -1842,7 +1838,7 @@ if aba == "🗺️ Mapa dos Contentores":
 
                 #mapa-area {
                     position: relative;
-                    width: 100%;
+                    width: min(100%, 780px);
                     aspect-ratio: 900 / 550;
                     border: 2px solid #64748b;
                     background: #fff;
@@ -2170,8 +2166,7 @@ if aba == "🗺️ Mapa dos Contentores":
             if is_mobile:
                 components.html(mapa_render, height=620)
             else:
-                with col_mapa:
-                    components.html(mapa_render, height=640)
+                components.html(mapa_render, height=560)
             
             # Mostrar lista de contentores abaixo do mapa
             st.markdown("---")
