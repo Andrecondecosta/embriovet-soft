@@ -1866,7 +1866,7 @@ if aba == "🗺️ Mapa dos Contentores":
                         js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                         key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
                     )
-                st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.session_state["mapa_layout_cache"] = {}
                 st.rerun()
 
             if cancelar_edicao:
@@ -1876,7 +1876,7 @@ if aba == "🗺️ Mapa dos Contentores":
                         js_expressions='window.localStorage.removeItem("contentor_layout_pending")',
                         key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                     )
-                st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.session_state["mapa_layout_cache"] = {}
                 st.rerun()
 
             if salvar_layout:
