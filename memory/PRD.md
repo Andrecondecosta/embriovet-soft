@@ -25,11 +25,19 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - redução de espaço vertical acima do mapa
   - layout desktop com maior área para o mapa (`[1,5]`) e mobile empilhado
 - Higiene técnica: removido bloco morto/duplicado do mapa após `st.stop()` no `app.py`
+- Reestruturação UX completa da página **Relatórios** (mantendo lógica):
+  - Navegação principal compacta por rádio horizontal (`Garanhão | Proprietário | Histórico Geral`)
+  - Estrutura explícita em 3 zonas: **seleção**, **filtros** (colapsados por defeito), **resultados**
+  - Exportações (CSV/PDF) posicionadas no topo da zona de resultados
+  - Métricas em faixa técnica discreta (sem visual de dashboard)
+  - Tabelas mais densas e consistentes para foco em análise
+  - Base pronta para expansão de relatórios por contentor/localização/ocupação
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
 - Novos ciclos (iteration_4 e iteration_5): validação funcional bloqueada por ambiente sem PostgreSQL (`localhost:5432` indisponível), mas code review confirmou implementação das melhorias de interação e organização visual
 - Evidências: `/app/test_reports/iteration_3.json`, `/app/test_reports/iteration_4.json`, `/app/test_reports/iteration_5.json`
+- Reestruturação UX de Relatórios validada com **PASS 100% frontend**: `/app/test_reports/iteration_10.json`
 
 ## Backlog priorizado
 ### P0
