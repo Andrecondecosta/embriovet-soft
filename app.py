@@ -1556,6 +1556,9 @@ if aba == "🗺️ Mapa dos Contentores":
         streamlit_js_eval = None
         js_eval_disponivel = False
 
+    if not js_eval_disponivel:
+        st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
+
     largura_viewport = None
     if js_eval_disponivel:
         largura_viewport = streamlit_js_eval(
