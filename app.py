@@ -1668,27 +1668,43 @@ if aba == "🗺️ Mapa dos Contentores":
             st.markdown("### Planta do Quarto de Armazenamento")
             st.caption("Arraste e solte os contentores. A posição é guardada automaticamente.")
 
-            st.markdown(
-                """
-                <style>
-                div[data-testid="stTextInput"]:has(input[aria-label="__map_sync_payload__"]) {
-                    position: absolute;
-                    left: -10000px;
-                    width: 1px;
-                    height: 1px;
-                    overflow: hidden;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True,
+            from streamlit_js_eval import streamlit_js_eval
+
+            movimento_raw = streamlit_js_eval(
+                js_expressions='window.localStorage.getItem("contentor_move")',
+                key='mapa_contentor_move_reader'
             )
 
-            st.text_input(
-                "__map_sync_payload__",
-                key="map_sync_payload",
-                label_visibility="collapsed",
-                on_change=processar_movimento_mapa_callback,
-            )
+            if movimento_raw and movimento_raw != "null":
+                try:
+                    movimento = json.loads(movimento_raw)
+                    token = movimento.get("token")
+                    contentor_id = int(movimento.get("id"))
+                    x = int(movimento.get("x"))
+                    y = int(movimento.get("y"))
+
+                    if token != st.session_state.get("map_move_token_processado"):
+                        contentor_row = contentores_df[contentores_df['id'] == contentor_id]
+                        if not contentor_row.empty:
+                            contentor = contentor_row.iloc[0]
+                            largura = max(1, int(contentor['w']))
+                            altura = max(1, int(contentor['h']))
+                            x = max(0, min(x, 900 - largura))
+                            y = max(0, min(y, 550 - altura))
+
+                            if atualizar_posicao_contentor(contentor_id, x, y):
+                                st.session_state["move_feedback"] = f"Posição guardada: {contentor['codigo']} (X={x}, Y={y})"
+
+                        st.session_state["map_move_token_processado"] = token
+                except Exception as e:
+                    logger.error(f"Erro ao processar movimento do mapa: {e}")
+                    st.session_state["move_feedback_erro"] = "Falha ao guardar posição do contentor."
+
+                streamlit_js_eval(
+                    js_expressions='window.localStorage.removeItem("contentor_move")',
+                    key=f"mapa_contentor_move_clear_{int(time.time() * 1000)}"
+                )
+                st.rerun()
 
             if st.session_state.get("move_feedback"):
                 st.success(st.session_state.pop("move_feedback"))
@@ -1799,27 +1815,13 @@ if aba == "🗺️ Mapa dos Contentores":
                 let offsetX = 0;
                 let offsetY = 0;
 
-                function setReactInputValue(input, value) {
-                    const prototype = window.parent.HTMLInputElement.prototype;
-                    const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
-                    setter.call(input, value);
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-
-                function enviarMovimentoParaStreamlit(payload) {
+                function guardarMovimentoNoBrowser(payload) {
                     try {
-                        const parentDoc = window.parent.document;
-                        const syncInput = parentDoc.querySelector('input[aria-label="__map_sync_payload__"]');
-                        if (!syncInput) {
-                            statusBar.textContent = 'Canal de sincronização indisponível.';
-                            return;
-                        }
-                        setReactInputValue(syncInput, JSON.stringify(payload));
+                        window.localStorage.setItem('contentor_move', JSON.stringify(payload));
                         statusBar.textContent = `Guardado: ${payload.codigo} (X=${payload.x}, Y=${payload.y})`;
                     } catch (err) {
-                        console.error('Erro ao sincronizar movimento:', err);
-                        statusBar.textContent = 'Falha ao sincronizar posição.';
+                        console.error('Erro ao gravar movimento no localStorage:', err);
+                        statusBar.textContent = 'Falha ao gravar movimento local.';
                     }
                 }
 
@@ -1877,7 +1879,7 @@ if aba == "🗺️ Mapa dos Contentores":
                     draggedEl = null;
 
                     if (cont) {
-                        enviarMovimentoParaStreamlit({
+                        guardarMovimentoNoBrowser({
                             token: `${id}-${Date.now()}`,
                             id,
                             codigo: cont.codigo,
