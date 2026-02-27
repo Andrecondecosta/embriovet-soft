@@ -1970,57 +1970,28 @@ elif aba == "📝 Registrar Inseminação":
 
             st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
 
-            lote_ids = []
             for _, row in modal_df.iterrows():
                 lote = lote_payload(row)
                 sid = lote["stock_id"]
-                lote_ids.append(sid)
 
-                existente = st.session_state["insem_linhas"].get(str(sid), {}).get("qty", 0)
-                restante = max(0, lote["max_disponivel"] - int(existente))
-
-                q_key = str(sid)
-                if q_key not in st.session_state["insem_modal_qtd"]:
-                    st.session_state["insem_modal_qtd"][q_key] = 0
-                if st.session_state["insem_modal_qtd"][q_key] > restante:
-                    st.session_state["insem_modal_qtd"][q_key] = restante
-
-                row_cols = st.columns([2.2, 1.6, 0.9, 0.8, 0.9, 1.8])
+                row_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
                 with row_cols[0]:
                     st.caption(f"{lote['ref']}")
                 with row_cols[1]:
                     st.caption(lote["local"])
                 with row_cols[2]:
-                    st.caption(f"M {lote['motilidade']}%")
+                    st.caption(f"M {lote['motilidade']}% · D {lote['dose']}")
                 with row_cols[3]:
-                    st.caption(f"D {lote['dose']}")
+                    st.caption(f"Disp {lote['max_disponivel']}")
                 with row_cols[4]:
-                    st.caption(f"Disp {restante}")
-                with row_cols[5]:
-                    q1, q2, q3 = st.columns([1, 1, 1])
-                    with q1:
-                        st.button(
-                            "-",
-                            key=f"insem_mod_minus_{sid}",
-                            use_container_width=True,
-                            disabled=st.session_state["insem_modal_qtd"][q_key] <= 0,
-                            on_click=dec_modal_qtd,
-                            args=(sid,),
-                        )
-                    with q2:
-                        st.markdown(
-                            f"<div style='text-align:center; padding-top:.35rem; font-size:.9rem;'>{int(st.session_state['insem_modal_qtd'][q_key])}</div>",
-                            unsafe_allow_html=True,
-                        )
-                    with q3:
-                        st.button(
-                            "+",
-                            key=f"insem_mod_plus_{sid}",
-                            use_container_width=True,
-                            disabled=int(st.session_state["insem_modal_qtd"][q_key]) >= restante,
-                            on_click=inc_modal_qtd,
-                            args=(sid, restante),
-                        )
+                    sel_key = f"insem_modal_sel_{sid}"
+                    default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["insem_linhas"])
+                    st.checkbox(
+                        "Selecionar",
+                        key=sel_key,
+                        value=default_checked,
+                        label_visibility="collapsed",
+                    )
 
             b1, b2 = st.columns([2, 1])
             with b1:
