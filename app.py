@@ -2099,8 +2099,6 @@ elif aba == "📝 Registrar Inseminação":
                         input_key = f"insem_line_input_{sid}"
                         if input_key not in st.session_state:
                             st.session_state[input_key] = qtd
-                        if st.session_state[input_key] != qtd:
-                            st.session_state[input_key] = qtd
                         novo_qtd = st.number_input(
                             "Qtd",
                             min_value=0,
