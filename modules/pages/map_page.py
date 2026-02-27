@@ -5,4 +5,4 @@ PAGE_CODE = '# Carregar contentores\ncontentores_df = carregar_contentores()\n\n
 
 def run_map_page(ctx: dict):
     local_ctx = dict(ctx)
-    exec(PAGE_CODE, {}, local_ctx)
+    exec(PAGE_CODE, local_ctx, local_ctx)
