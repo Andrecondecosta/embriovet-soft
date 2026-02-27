@@ -1,0 +1,113 @@
+{
+  "summary": "Static code review of container deletion security and new Container/Location reports mode. **BLOCKER: PostgreSQL database not running (connection refused on localhost:5432)**. Dynamic testing not possible. All 6 requested features verified through code review.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "Database Connection",
+        "issue": "PostgreSQL not installed/running on localhost:5432. App shows error on load: 'connection to server at localhost, port 5432 failed: Connection refused'",
+        "priority": "CRITICAL - BLOCKER"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "General",
+        "issues": [
+          "Streamlit deprecation warnings: use_container_width parameter should be replaced with width='stretch' before 2025-12-31"
+        ]
+      }
+    ]
+  },
+  "features_verified_by_code_review": {
+    "feature_1_delete_container_button_disabled_with_stock": {
+      "status": "CODE_VERIFIED",
+      "lines": "2462-2474, 1177-1206",
+      "implementation": [
+        "UX: pode_apagar = int(total_palhetas) == 0 - checks stock count",
+        "UX: st.button disabled=not pode_apagar - disables button when stock > 0",
+        "UX: help tooltip explains why disabled",
+        "UX: st.caption shows 'Apagar bloqueado: contentor com stock' when blocked",
+        "Backend: deletar_contentor() has SQL validation checking SUM(existencia_atual) before delete"
+      ]
+    },
+    "feature_2_new_reports_mode_container_location": {
+      "status": "CODE_VERIFIED",
+      "lines": "3200-3241",
+      "implementation": [
+        "Radio button with 'Contentor / Localização' option added",
+        "Contentor selectbox with format_func showing container code",
+        "Proper warning when no containers registered"
+      ]
+    },
+    "feature_3_filters_by_garanhao_proprietario_canister_andar": {
+      "status": "CODE_VERIFIED",
+      "lines": "3299-3326",
+      "implementation": [
+        "4-column layout with multiselect filters",
+        "Filter 1: Garanhões (garanhao column)",
+        "Filter 2: Proprietários (proprietario_nome column)",
+        "Filter 3: Canister (canister column)",
+        "Filter 4: Andar (andar column)",
+        "All with proper null handling via dropna().unique()"
+      ]
+    },
+    "feature_4_kpis_occupancy_and_dense_table": {
+      "status": "CODE_VERIFIED",
+      "lines": "3514-3537",
+      "implementation": [
+        "KPI strip: lotes, palhetas, garanhões, proprietários, canisters usados",
+        "Occupancy table grouped by (canister, andar) with palhetas sum",
+        "Dense table with columns: Proprietário, Garanhão, Stock, Canister, Andar, Data Embriovet, Data Criação, Criado Por, Ref. Externa",
+        "CSV download button for container data"
+      ]
+    },
+    "feature_5_physical_history_in_container_mode": {
+      "status": "CODE_VERIFIED",
+      "lines": "3539-3590",
+      "implementation": [
+        "Section title: 'Histórico físico do sémen'",
+        "Includes stock entry events (data_criacao or data_embriovet)",
+        "Includes internal transfers from transf table",
+        "Includes external transfers from transf_ext table",
+        "Sorted by date descending",
+        "Shows: Data, Evento, Garanhão, Proprietário, Canister, Andar, Qtd, Origem"
+      ]
+    },
+    "feature_6_no_regression_other_modes": {
+      "status": "CODE_VERIFIED",
+      "lines": "3351-3413 (Garanhão), 3415-3479 (Proprietário), 3592+ (Histórico Geral)",
+      "implementation": [
+        "Garanhão mode: unchanged from iteration_11",
+        "Proprietário mode: unchanged from iteration_11",
+        "Histórico Geral mode: unchanged from iteration_11"
+      ]
+    }
+  },
+  "test_report_links": ["/app/test_reports/iteration_12.json"],
+  "action_items": [
+    "CRITICAL: Setup PostgreSQL database or configure DATABASE_URL environment variable to enable dynamic testing",
+    "Minor: Replace use_container_width=True with width='stretch' throughout app.py (Streamlit deprecation)"
+  ],
+  "critical_code_review_comments": [
+    "✅ Delete container security: Double validation (UX disabled button + backend SQL check)",
+    "✅ Filter implementation: Proper column existence checks before filtering",
+    "✅ KPI strip uses render_kpi_strip from ui_kit.py module",
+    "✅ Physical history correctly joins stock entries with transfer tables",
+    "⚠️ Streamlit deprecation: use_container_width parameter usage throughout file"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Database not available",
+    "frontend": "N/A - Database blocking app load"
+  },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "N/A - Database not available",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PostgreSQL database connection is BLOCKED (localhost:5432 connection refused). Static code review verified all 6 features are implemented correctly in app.py. To test dynamically: 1) Install PostgreSQL, or 2) Configure DATABASE_URL env var for remote DB. App uses psycopg2 connection pool. All UI changes for Container/Location reports mode are in place: filters at lines 3299-3326, KPIs at 3514-3521, dense table at 3531-3537, physical history at 3539-3590. Delete button security at lines 2462-2474.",
+  "rca_of_issue": "PostgreSQL database not configured in this environment. The app.py expects either DATABASE_URL env var or local PostgreSQL on localhost:5432. Neither is available, causing connection pool creation to fail at app startup (line 128-133)."
+}
