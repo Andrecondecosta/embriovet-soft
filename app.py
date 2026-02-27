@@ -1980,6 +1980,11 @@ if aba == "🗺️ Mapa dos Contentores":
                     font-family: 'Courier New', monospace;
                 }
 
+                #mapa-wrapper.mobile {
+                    padding: 4px;
+                    border-radius: 6px;
+                }
+
                 #mapa-area {
                     position: relative;
                     width: min(100%, 720px);
@@ -1992,6 +1997,12 @@ if aba == "🗺️ Mapa dos Contentores":
                         linear-gradient(90deg, rgba(15,23,42,.05) 1px, transparent 1px);
                     background-size: 50px 50px;
                     overflow: hidden;
+                }
+
+                #mapa-wrapper.mobile #mapa-area {
+                    width: 100%;
+                    max-width: 100%;
+                    margin: 0;
                 }
 
                 .cont-box {
