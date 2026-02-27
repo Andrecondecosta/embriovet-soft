@@ -2585,50 +2585,36 @@ if aba == "📦 Ver Stock":
             with f3:
                 mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")
 
-        stock_filtrado = stock[stock["garanhao"] == filtro].copy()
-        if filtro_props:
-            stock_filtrado = stock_filtrado[stock_filtrado["proprietario_nome"].isin(filtro_props)]
-        if min_palhetas > 0:
-            stock_filtrado = stock_filtrado[(stock_filtrado["existencia_atual"].fillna(0)) >= min_palhetas]
-        if not mostrar_sem_stock:
-            stock_filtrado = stock_filtrado[(stock_filtrado["existencia_atual"].fillna(0)) > 0]
+        stock_filtrado = filter_stock_view(
+            stock,
+            garanhao=filtro,
+            owner_filters=filtro_props,
+            min_palhetas=min_palhetas,
+            include_zero=mostrar_sem_stock,
+        )
+
+        transf_hist_all = carregar_transferencias()
+        transf_ext_hist_all = carregar_transferencias_externas()
 
         render_zone_title("Zona de resultados", "stock-zone-title")
-        render_kpi_strip([
-            ("lotes", len(stock_filtrado)),
-            ("palhetas", int(to_py(stock_filtrado["existencia_atual"].sum()) or 0) if not stock_filtrado.empty else 0),
-            ("proprietários", stock_filtrado["proprietario_nome"].nunique() if not stock_filtrado.empty else 0),
-            ("qualidade média", f"{round(float(to_py(stock_filtrado['qualidade'].mean()) or 0), 1)}%" if not stock_filtrado.empty else "0%"),
-        ])
+        render_kpi_strip(stock_kpis(stock_filtrado, to_py))
 
-        resumo_por_proprietario = (
-            stock_filtrado.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
-            if not stock_filtrado.empty else pd.DataFrame(columns=["proprietario_nome", "existencia_atual"])
-        )
+        resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
         if not resumo_por_proprietario.empty:
-            resumo_por_proprietario.columns = ["Proprietário", "Total Palhetas"]
             st.dataframe(
-                resumo_por_proprietario.sort_values("Total Palhetas", ascending=False),
+                resumo_por_proprietario,
                 use_container_width=True,
                 hide_index=True,
                 height=220,
             )
 
         with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
-            transf_hist = carregar_transferencias()
-            transf_ext_hist = carregar_transferencias_externas()
-
-            transf_hist = transf_hist[transf_hist["garanhao"] == filtro] if not transf_hist.empty else transf_hist
-            transf_ext_hist = transf_ext_hist[transf_ext_hist["garanhao"] == filtro] if not transf_ext_hist.empty else transf_ext_hist
-
-            if filtro_props:
-                if not transf_hist.empty:
-                    transf_hist = transf_hist[
-                        (transf_hist["proprietario_origem"].isin(filtro_props)) |
-                        (transf_hist["proprietario_destino"].isin(filtro_props))
-                    ]
-                if not transf_ext_hist.empty:
-                    transf_ext_hist = transf_ext_hist[transf_ext_hist["proprietario_origem"].isin(filtro_props)]
+            transf_hist, transf_ext_hist = filter_transfer_history(
+                transf_hist_all,
+                transf_ext_hist_all,
+                garanhao=filtro,
+                owner_filters=filtro_props,
+            )
 
             cexp1, cexp2 = st.columns(2)
             with cexp1:
