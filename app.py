@@ -1138,6 +1138,49 @@ def atualizar_posicao_contentor(contentor_id, x, y):
         st.error(f"Erro ao guardar posição do contentor: {e}")
         return False
 
+def processar_movimento_mapa_callback():
+    """Processa payload enviado pelo iframe do mapa para persistir posição"""
+    payload_raw = st.session_state.get("map_sync_payload", "")
+
+    if not payload_raw:
+        return
+
+    if payload_raw == st.session_state.get("map_sync_payload_processado"):
+        st.session_state["map_sync_payload"] = ""
+        return
+
+    try:
+        payload = json.loads(payload_raw)
+        token = payload.get("token")
+        contentor_id = int(payload.get("id"))
+        x = int(payload.get("x"))
+        y = int(payload.get("y"))
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT codigo, w, h FROM contentores WHERE id = %s", (to_py(contentor_id),))
+            row = cur.fetchone()
+            cur.close()
+
+        if row is None:
+            st.session_state["move_feedback_erro"] = "Contentor não encontrado para guardar posição."
+        else:
+            codigo, w, h = row
+            largura = max(1, int(w))
+            altura = max(1, int(h))
+            x = max(0, min(x, 900 - largura))
+            y = max(0, min(y, 550 - altura))
+
+            if atualizar_posicao_contentor(contentor_id, x, y):
+                st.session_state["move_feedback"] = f"Posição guardada: {codigo} (X={x}, Y={y})"
+
+        st.session_state["map_sync_payload_processado"] = token or payload_raw
+    except Exception as e:
+        logger.error(f"Erro ao processar callback do mapa: {e}")
+        st.session_state["move_feedback_erro"] = "Falha ao processar movimentação do contentor."
+    finally:
+        st.session_state["map_sync_payload"] = ""
+
 def deletar_contentor(contentor_id):
     """Deleta um contentor apenas se não tiver stock associado"""
     try:
