@@ -1825,6 +1825,33 @@ elif aba == "📝 Registrar Inseminação":
                 letter-spacing: .04em;
                 margin: .2rem 0;
             }
+            .insem-summary-bar {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                background: #eef2f7;
+                border: 1px solid #e2e8f0;
+                padding: 8px 12px;
+                border-radius: 8px;
+                font-size: .78rem;
+                color: #1f2937;
+            }
+            .insem-summary-item {
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                font-weight: 600;
+            }
+            .insem-summary-label {
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                font-size: .68rem;
+                color: #64748b;
+            }
+            .insem-summary-value {
+                font-size: .9rem;
+                color: #0f172a;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1832,8 +1859,6 @@ elif aba == "📝 Registrar Inseminação":
 
     if "insem_linhas" not in st.session_state:
         st.session_state["insem_linhas"] = {}
-    if "insem_modal_qtd" not in st.session_state:
-        st.session_state["insem_modal_qtd"] = {}
     if "insem_garanhao_modal" not in st.session_state:
         st.session_state["insem_garanhao_modal"] = None
     if "insem_prop_modal" not in st.session_state:
@@ -1863,25 +1888,6 @@ elif aba == "📝 Registrar Inseminação":
             "protocolo": row.get("data_embriovet") or row.get("origem_externa") or "N/A",
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
         }
-
-    def limpar_qtd_modal(ids_validos):
-        for sid in ids_validos:
-            st.session_state["insem_modal_qtd"].pop(str(sid), None)
-
-    def inc_modal_qtd(lote_id, max_disponivel):
-        sid = str(lote_id)
-        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
-        if atual < int(max_disponivel):
-            st.session_state["insem_modal_qtd"][sid] = atual + 1
-
-    def dec_modal_qtd(lote_id):
-        sid = str(lote_id)
-        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
-        novo = max(0, atual - 1)
-        if novo == 0:
-            st.session_state["insem_modal_qtd"].pop(sid, None)
-        else:
-            st.session_state["insem_modal_qtd"][sid] = novo
 
     def inc_linha_qtd(lote_id, max_disponivel):
         sid = str(lote_id)
@@ -1969,92 +1975,71 @@ elif aba == "📝 Registrar Inseminação":
 
             st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
 
-            lote_ids = []
+            header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+            with header_cols[0]:
+                st.markdown("<div class='insem-modal-head'>Lote</div>", unsafe_allow_html=True)
+            with header_cols[1]:
+                st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
+            with header_cols[2]:
+                st.markdown("<div class='insem-modal-head'>Motilidade / Dose</div>", unsafe_allow_html=True)
+            with header_cols[3]:
+                st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
+            with header_cols[4]:
+                st.markdown("<div class='insem-modal-head'>Selecionar</div>", unsafe_allow_html=True)
+
             for _, row in modal_df.iterrows():
                 lote = lote_payload(row)
                 sid = lote["stock_id"]
-                lote_ids.append(sid)
 
-                existente = st.session_state["insem_linhas"].get(str(sid), {}).get("qty", 0)
-                restante = max(0, lote["max_disponivel"] - int(existente))
-
-                q_key = str(sid)
-                if q_key not in st.session_state["insem_modal_qtd"]:
-                    st.session_state["insem_modal_qtd"][q_key] = 0
-                if st.session_state["insem_modal_qtd"][q_key] > restante:
-                    st.session_state["insem_modal_qtd"][q_key] = restante
-
-                row_cols = st.columns([2.2, 1.6, 0.9, 0.8, 0.9, 1.8])
+                row_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
                 with row_cols[0]:
                     st.caption(f"{lote['ref']}")
                 with row_cols[1]:
                     st.caption(lote["local"])
                 with row_cols[2]:
-                    st.caption(f"M {lote['motilidade']}%")
+                    st.caption(f"M {lote['motilidade']}% · D {lote['dose']}")
                 with row_cols[3]:
-                    st.caption(f"D {lote['dose']}")
+                    st.caption(f"Disp {lote['max_disponivel']}")
                 with row_cols[4]:
-                    st.caption(f"Disp {restante}")
-                with row_cols[5]:
-                    q1, q2, q3 = st.columns([1, 1, 1])
-                    with q1:
-                        st.button(
-                            "-",
-                            key=f"insem_mod_minus_{sid}",
-                            use_container_width=True,
-                            disabled=st.session_state["insem_modal_qtd"][q_key] <= 0,
-                            on_click=dec_modal_qtd,
-                            args=(sid,),
-                        )
-                    with q2:
-                        st.markdown(
-                            f"<div style='text-align:center; padding-top:.35rem; font-size:.9rem;'>{int(st.session_state['insem_modal_qtd'][q_key])}</div>",
-                            unsafe_allow_html=True,
-                        )
-                    with q3:
-                        st.button(
-                            "+",
-                            key=f"insem_mod_plus_{sid}",
-                            use_container_width=True,
-                            disabled=int(st.session_state["insem_modal_qtd"][q_key]) >= restante,
-                            on_click=inc_modal_qtd,
-                            args=(sid, restante),
-                        )
+                    sel_key = f"insem_modal_sel_{sid}"
+                    default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["insem_linhas"])
+                    st.checkbox(
+                        "Selecionar",
+                        key=sel_key,
+                        value=default_checked,
+                        label_visibility="collapsed",
+                    )
 
             b1, b2 = st.columns([2, 1])
             with b1:
-                if st.button("Usar", type="primary", key="insem_modal_usar", use_container_width=True):
-                    selecionados = []
-                    for _, row in modal_df.iterrows():
-                        sid = int(row.get("id"))
-                        qty = int(st.session_state.get("insem_modal_qtd", {}).get(str(sid), 0) or 0)
-                        if qty > 0:
-                            selecionados.append((lote_payload(row), qty))
+                if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", use_container_width=True):
+                    selecionados_ids = []
+                    for key, val in st.session_state.items():
+                        if key.startswith("insem_modal_sel_") and val:
+                            try:
+                                selecionados_ids.append(int(key.split("insem_modal_sel_")[-1]))
+                            except Exception:
+                                continue
 
-                    if not selecionados:
-                        st.warning("Selecione pelo menos um lote com quantidade maior que zero.")
+                    if not selecionados_ids:
+                        st.warning("Selecione pelo menos um lote.")
+                        return
+
+                    selecionados_df = stock_disponivel[stock_disponivel["id"].isin(selecionados_ids)].copy()
+                    if selecionados_df.empty:
+                        st.warning("Nenhum lote selecionado disponível.")
                         return
 
                     linhas = st.session_state["insem_linhas"]
-                    for lote, qtd_add in selecionados:
+                    for _, row in selecionados_df.iterrows():
+                        lote = lote_payload(row)
                         sid = str(lote["stock_id"])
-                        qtd_existente = int(linhas.get(sid, {}).get("qty", 0))
-                        nova_qtd = qtd_existente + qtd_add
-                        if nova_qtd > lote["max_disponivel"]:
-                            st.error(f"Quantidade excede o disponível para {lote['ref']}")
-                            return
-
-                    for lote, qtd_add in selecionados:
-                        sid = str(lote["stock_id"])
-                        if sid in linhas:
-                            linhas[sid]["qty"] = int(linhas[sid]["qty"]) + qtd_add
-                        else:
+                        if sid not in linhas:
                             linhas[sid] = {
                                 **lote,
-                                "qty": int(qtd_add),
+                                "qty": 1,
                             }
 
-                    limpar_qtd_modal(lote_ids)
                     st.session_state["insem_linhas"] = linhas
                     st.rerun()
             with b2:
@@ -2144,6 +2129,23 @@ elif aba == "📝 Registrar Inseminação":
                 total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
                 st.markdown(f"<div class='insem-lote-main'>Total: {total_palhetas} palhetas</div>", unsafe_allow_html=True)
 
+        total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
+        total_linhas = sum(1 for v in linhas.values() if int(v.get("qty", 0)) > 0)
+        st.markdown(
+            f"""
+            <div class='insem-summary-bar'>
+                <div class='insem-summary-item'>
+                    <span class='insem-summary-label'>Total palhetas</span>
+                    <span class='insem-summary-value'>{total_palhetas}</span>
+                </div>
+                <div class='insem-summary-item'>
+                    <span class='insem-summary-label'>Lotes</span>
+                    <span class='insem-summary-value'>{total_linhas}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown("---")
         if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", use_container_width=True):
             linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
