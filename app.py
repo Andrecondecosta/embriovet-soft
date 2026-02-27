@@ -1764,11 +1764,15 @@ if aba == "🗺️ Mapa dos Contentores":
                             padding-right: 0 !important;
                             padding-top: 0.1rem !important;
                         }
+                        div[data-testid="stHeadingWithActionElements"] {
+                            margin-bottom: 0.1rem !important;
+                            padding-bottom: 0 !important;
+                        }
                         div[data-testid="stAppViewContainer"] h1 {
-                            font-size: 2.15rem !important;
-                            line-height: 1.08 !important;
+                            font-size: 1.72rem !important;
+                            line-height: 1.03 !important;
                             margin-top: 0 !important;
-                            margin-bottom: 0.35rem !important;
+                            margin-bottom: 0.1rem !important;
                         }
                         div[data-testid="stHorizontalBlock"] {
                             gap: 0.35rem !important;
@@ -1779,6 +1783,19 @@ if aba == "🗺️ Mapa dos Contentores":
                             padding-top: 0.3rem !important;
                             padding-bottom: 0.3rem !important;
                         }
+                    }
+                    div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_js_eval"]) {
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                    }
+                    iframe[title*="streamlit_js_eval"] {
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        border: 0 !important;
+                        margin: 0 !important;
                     }
                     .map-tech-context {
                         font-size: 12px;
@@ -1965,31 +1982,29 @@ if aba == "🗺️ Mapa dos Contentores":
                         st.session_state["mapa_modo_edicao"] = False
 
                         if atualizados > 0:
-                            st.success(f"Layout guardado com sucesso. {atualizados} contentor(es) atualizado(s): {', '.join(atualizados_ids)}")
+                            st.toast(f"Layout guardado ({atualizados} contentor(es))", icon="✅")
                         else:
-                            st.info("Nenhuma alteração de posição para guardar.")
+                            st.toast("Sem alterações para guardar", icon="ℹ️")
                         st.rerun()
                     except Exception as e:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
-                        st.error("Falha ao salvar layout do mapa.")
+                        st.toast("Falha ao salvar layout", icon="❌")
                 else:
                     st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
                     if st.session_state["mapa_salvar_layout_tentativas"] > 4:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.error("Não foi possível ler as posições alteradas do navegador. Tente mover novamente e clicar em Salvar layout.")
-                    else:
-                        st.info("A capturar posições do mapa... aguarde um instante.")
+                        st.toast("Não foi possível ler as posições alteradas", icon="⚠️")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
-                st.warning("No telemóvel, o arrastar pode ser menos preciso. Recomenda-se desktop para reorganização fina.")
+                pass
 
             if st.session_state.get("move_feedback"):
-                st.success(st.session_state.pop("move_feedback"))
+                st.toast(st.session_state.pop("move_feedback"), icon="✅")
             if st.session_state.get("move_feedback_erro"):
-                st.error(st.session_state.pop("move_feedback_erro"))
+                st.toast(st.session_state.pop("move_feedback_erro"), icon="⚠️")
 
             mapa_html = """
             <style>
@@ -2263,15 +2278,12 @@ if aba == "🗺️ Mapa dos Contentores":
                 function guardarPosicaoPendente(id, x, y) {
                     try {
                         let storageRef = window.localStorage;
-                        let storageHint = 'local';
                         try {
                             if (window.parent && window.parent.localStorage) {
                                 storageRef = window.parent.localStorage;
-                                storageHint = 'parent';
                             }
                         } catch (e) {
                             storageRef = window.localStorage;
-                            storageHint = 'local';
                         }
 
                         const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
@@ -2289,7 +2301,7 @@ if aba == "🗺️ Mapa dos Contentores":
                             }
                         } catch (e) {}
 
-                        statusBar.textContent = `Alteração pendente (${storageHint}). Clique em "Salvar layout".`;
+                        statusBar.textContent = 'Alteração pendente.';
                     } catch (err) {
                         console.error('Erro ao guardar posição pendente:', err);
                         statusBar.textContent = 'Falha ao guardar posição pendente.';
