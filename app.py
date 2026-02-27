@@ -1570,6 +1570,21 @@ if proprietarios.empty:
     st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
 
 # ------------------------------------------------------------
+# Router de páginas (Fase 2 da modularização)
+# ------------------------------------------------------------
+if aba == "🗺️ Mapa dos Contentores":
+    run_map_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "📦 Ver Stock":
+    run_stock_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "📈 Relatórios":
+    run_reports_page({**globals(), **locals()})
+    st.stop()
+
+# ------------------------------------------------------------
 # 📦 Ver Stock
 # ------------------------------------------------------------
 
