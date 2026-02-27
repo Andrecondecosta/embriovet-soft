@@ -1938,6 +1938,9 @@ elif aba == "📥 Importar Sémen":
             missing = [col for col in required_cols if col not in col_map]
             if missing:
                 st.error(f"Colunas obrigatórias em falta: {', '.join(missing)}")
+                erros_df = pd.DataFrame([
+                    {"linha": "-", "erro": f"Colunas obrigatórias em falta: {', '.join(missing)}"}
+                ])
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
                 norm_df["__row"] = raw_df.index + 2
