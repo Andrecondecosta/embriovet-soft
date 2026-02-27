@@ -1884,25 +1884,6 @@ elif aba == "📝 Registrar Inseminação":
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
         }
 
-    def limpar_qtd_modal(ids_validos):
-        for sid in ids_validos:
-            st.session_state["insem_modal_qtd"].pop(str(sid), None)
-
-    def inc_modal_qtd(lote_id, max_disponivel):
-        sid = str(lote_id)
-        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
-        if atual < int(max_disponivel):
-            st.session_state["insem_modal_qtd"][sid] = atual + 1
-
-    def dec_modal_qtd(lote_id):
-        sid = str(lote_id)
-        atual = int(st.session_state["insem_modal_qtd"].get(sid, 0) or 0)
-        novo = max(0, atual - 1)
-        if novo == 0:
-            st.session_state["insem_modal_qtd"].pop(sid, None)
-        else:
-            st.session_state["insem_modal_qtd"][sid] = novo
-
     def inc_linha_qtd(lote_id, max_disponivel):
         sid = str(lote_id)
         linhas = st.session_state["insem_linhas"]
