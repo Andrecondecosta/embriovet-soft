@@ -1,0 +1,58 @@
+{
+  "summary": "Frontend testing of Streamlit 'Mapa dos Contentores' page. Professional design is working correctly without block duplication. CRITICAL BUG: Drag-and-drop position persistence is broken due to iframe sandbox security restrictions.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PostgreSQL setup", "issue": "PostgreSQL was not running in test env - had to install and configure manually"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Drag-and-drop map", "issue": "Position persistence fails due to iframe sandbox restrictions - JavaScript cannot navigate parent window to set 'contentor_move' query param", "selector": "iframe containing .contentor elements", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Contentor drag-and-drop -> position save to DB", "issue": "SecurityError: The frame attempting navigation of the top-level window is sandboxed. guardarPosicaoNoBackend() fails with 'allow-top-navigation' not set.", "affected_selectors": ["iframe", ".contentor", "contentor_move query param"]}
+    ],
+    "design_issues": [
+      {"screen": "Mapa dos Contentores", "issues": ["Design is professional/technical - PASS", "No block duplication - PASS", "Grid layout working - PASS"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_1.json"],
+  "action_items": [
+    "CRITICAL: Fix iframe sandbox issue for drag-and-drop position persistence. The st.components.html() iframe cannot navigate parent window. Options: 1) Use st.markdown with st.components.v1.html and pass allow_navigation=True if supported, 2) Use Streamlit's st.experimental_rerun with session_state instead of query_params, 3) Use postMessage API to communicate between iframe and parent",
+    "Alternative approach: Instead of URL navigation, use window.parent.postMessage() to send position updates, then handle them in Streamlit via st.experimental_get_query_params alternative"
+  ],
+  "critical_code_review_comments": [
+    "Line 1888-1895 in app.py: guardarPosicaoNoBackend() uses window.parent.location.href = parentUrl.toString() which fails due to iframe sandbox restrictions",
+    "The st.components.html() creates a sandboxed iframe without 'allow-top-navigation' permission",
+    "Workaround needed: Use alternative mechanism like st.session_state with hidden Streamlit elements or postMessage API"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (PostgreSQL setup required)", "frontend": "80%"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Created CT-TEST-001 contentor for testing purposes",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PostgreSQL 15 was installed and started manually. Database embriovet created with tables from SQL scripts. Password for admin user was regenerated. The critical issue is iframe sandbox preventing drag-and-drop persistence - visual drag works but position not saved to DB.",
+  "rca_of_the_issue": {
+    "root_cause": "Streamlit's st.components.html() creates an iframe with sandbox attribute that does not include 'allow-top-navigation'. When JavaScript inside the iframe tries to navigate the parent window (window.parent.location.href = ...), it throws SecurityError.",
+    "error_message": "SecurityError: Failed to set the 'href' property on 'Location': The current window does not have permission to navigate the target frame to 'http://localhost:8501/?contentor_move=...'",
+    "reproduction_steps": [
+      "1. Login with admin/admin123",
+      "2. Navigate to 'Mapa dos Contentores'",
+      "3. Drag any contentor block to a new position",
+      "4. Observe browser console - SecurityError is logged",
+      "5. Position is NOT persisted to database"
+    ],
+    "mitigation": "Need to use alternative communication mechanism between iframe and parent. Options: 1) Streamlit's st.session_state with hidden elements, 2) postMessage API, 3) Custom Streamlit component with proper permissions"
+  },
+  "features_tested": {
+    "mapa_contentores_visual": "PASS - Professional design, grid layout, no duplication",
+    "drag_and_drop_visual": "PASS - Contentors can be dragged visually",
+    "drag_and_drop_persistence": "FAIL - Position NOT saved to database due to iframe sandbox",
+    "criar_contentor": "PASS - New contentors created and saved to DB",
+    "ver_stock": "PASS - Stock page displays correctly with filters",
+    "login_logout": "PASS - Authentication working",
+    "editar_apagar_buttons": "VISIBLE - Buttons present but click handling needs Streamlit form submit"
+  }
+}
