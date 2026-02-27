@@ -2088,6 +2088,8 @@ if aba == "🗺️ Mapa dos Contentores":
                                     ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
                                     st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
 
+    st.stop()
+
 # ------------------------------------------------------------
 # 📦 Ver Stock
 # ------------------------------------------------------------
