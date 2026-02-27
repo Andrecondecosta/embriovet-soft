@@ -12,6 +12,7 @@ import bcrypt
 import hashlib
 import time
 import json
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -76,25 +77,42 @@ def to_py(v):
 # ------------------------------------------------------------
 # Pool de conexões
 # ------------------------------------------------------------
-try:
-    # Verificar se há DATABASE_URL (Render, Heroku, etc)
+def ensure_sslmode_require(url: str) -> str:
+    if not url:
+        return url
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    if "sslmode" not in qs:
+        qs["sslmode"] = ["require"]
+        parsed = parsed._replace(query=urlencode(qs, doseq=True))
+    return urlunparse(parsed)
+
+@st.cache_resource(show_spinner=False)
+def build_connection_pool():
     database_url = os.getenv("DATABASE_URL")
-    
+
     if database_url:
-        # Usar DATABASE_URL (produção)
-        connection_pool = psycopg2.pool.SimpleConnectionPool(1, 10, database_url)
-        logger.info("✅ Pool de conexões PostgreSQL criado com DATABASE_URL")
-    else:
-        # Usar variáveis individuais (desenvolvimento local)
-        connection_pool = psycopg2.pool.SimpleConnectionPool(
+        database_url = ensure_sslmode_require(database_url)
+        pool_obj = psycopg2.pool.SimpleConnectionPool(
             1, 10,
-            dbname=os.getenv("DB_NAME", "embriovet"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "123"),
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
+            dsn=database_url
         )
-        logger.info("✅ Pool de conexões PostgreSQL criado localmente")
+        logger.info("✅ Pool criado com DATABASE_URL (sslmode=require)")
+        return pool_obj
+
+    pool_obj = psycopg2.pool.SimpleConnectionPool(
+        1, 10,
+        dbname=os.getenv("DB_NAME", "embriovet"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "123"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+    )
+    logger.info("✅ Pool criado localmente")
+    return pool_obj
+
+try:
+    connection_pool = build_connection_pool()
 except Exception as e:
     logger.error(f"❌ Erro ao criar pool de conexões: {e}")
     st.error(f"Erro de conexão com banco de dados: {e}")
