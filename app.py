@@ -1408,7 +1408,7 @@ def mostrar_tela_login():
             username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
             password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
             
             if submitted:
                 if not username or not password:
