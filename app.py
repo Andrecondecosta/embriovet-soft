@@ -1594,25 +1594,26 @@ if aba == "🗺️ Mapa dos Contentores":
             js_expressions="""
                 (function(){
                     try {
-                        if (!window.__contentorLayoutBridgeInstalled) {
-                            window.__contentorLayoutBridgeInstalled = true;
-                            window.addEventListener('message', function(event){
+                        var targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                        if (!targetWin.__contentorLayoutBridgeInstalled) {
+                            targetWin.__contentorLayoutBridgeInstalled = true;
+                            targetWin.addEventListener('message', function(event){
                                 var data = event && event.data ? event.data : null;
                                 if (!data || typeof data !== 'object') return;
 
                                 if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
                                     try {
-                                        var atual = JSON.parse(window.localStorage.getItem('contentor_layout_pending') || '{}');
+                                        var atual = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
                                         atual[String(data.id)] = {
                                             x: parseInt(data.x, 10) || 0,
                                             y: parseInt(data.y, 10) || 0
                                         };
-                                        window.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                                        targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
                                     } catch (e) {}
                                 }
 
                                 if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
-                                    try { window.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
+                                    try { targetWin.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
                                 }
                             });
                         }
@@ -1650,7 +1651,7 @@ if aba == "🗺️ Mapa dos Contentores":
 
     if js_eval_disponivel:
         layout_live_raw = streamlit_js_eval(
-            js_expressions='window.localStorage.getItem("contentor_layout_pending")',
+            js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
             key='map_layout_live_reader',
             want_output=True,
         )
