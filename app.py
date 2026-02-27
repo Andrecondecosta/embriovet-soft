@@ -1667,6 +1667,10 @@ if aba == "📈 Relatórios":
     run_reports_page({**globals(), **locals()})
     st.stop()
 
+if aba == "📝 Registrar Inseminação":
+    run_insemination_page({**globals(), **locals()})
+    st.stop()
+
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
