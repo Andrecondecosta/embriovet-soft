@@ -1880,8 +1880,15 @@ if aba == "🗺️ Mapa dos Contentores":
                         else:
                             layout_data = json.loads(str(layout_pending_raw))
 
-                        if isinstance(layout_data, dict) and "output" in layout_data and isinstance(layout_data["output"], dict):
-                            layout_data = layout_data["output"]
+                        if isinstance(layout_data, dict) and "output" in layout_data:
+                            output_value = layout_data.get("output")
+                            if isinstance(output_value, dict):
+                                layout_data = output_value
+                            elif isinstance(output_value, str) and output_value.strip():
+                                try:
+                                    layout_data = json.loads(output_value)
+                                except Exception:
+                                    layout_data = {}
 
                         atualizados_ids = []
                         for _, row in contentores_df.iterrows():
@@ -1929,7 +1936,6 @@ if aba == "🗺️ Mapa dos Contentores":
                     tentativas = int(st.session_state.get("mapa_salvar_layout_tentativas", 0))
                     if tentativas < 2:
                         st.session_state["mapa_salvar_layout_tentativas"] = tentativas + 1
-                        st.session_state["mapa_layout_reader_tick"] += 1
                         st.rerun()
                     else:
                         st.session_state["mapa_salvar_layout_pendente"] = False
