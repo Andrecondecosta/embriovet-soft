@@ -1627,9 +1627,12 @@ if aba == "🗺️ Mapa dos Contentores":
 
             from streamlit_js_eval import streamlit_js_eval
 
+            st.button("Sincronizar mapa", key="mapa_sync_rerun_btn", help="Atualiza posições arrastadas no mapa")
+
             movimento_raw = streamlit_js_eval(
                 js_expressions='window.localStorage.getItem("contentor_move")',
-                key='mapa_contentor_move_reader'
+                key='mapa_contentor_move_reader',
+                want_output=True,
             )
 
             if movimento_raw and movimento_raw != "null":
@@ -1775,6 +1778,12 @@ if aba == "🗺️ Mapa dos Contentores":
                 function guardarMovimentoNoBrowser(payload) {
                     try {
                         window.localStorage.setItem('contentor_move', JSON.stringify(payload));
+                        const syncButton = Array.from(window.parent.document.querySelectorAll('button')).find(
+                            btn => btn.innerText && btn.innerText.trim() === 'Sincronizar mapa'
+                        );
+                        if (syncButton) {
+                            syncButton.click();
+                        }
                         statusBar.textContent = `Guardado: ${payload.codigo} (X=${payload.x}, Y=${payload.y})`;
                     } catch (err) {
                         console.error('Erro ao gravar movimento no localStorage:', err);
