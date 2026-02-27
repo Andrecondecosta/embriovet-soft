@@ -55,6 +55,14 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Router central em `app.py` delega para módulos de página (`map_page`, `stock_page`, `reports_page`) e interrompe fluxo com `st.stop()`.
   - Páginas extraídas para `/app/modules/pages/`.
   - Bug crítico de escopo no `exec()` corrigido em todos os módulos de página (`exec(PAGE_CODE, local_ctx, local_ctx)`).
+- Módulo **Registrar Inseminação** redesenhado (UX técnica, sem mudar lógica de negócio central):
+  - Seleção de lotes em **modal** com filtros prévios por garanhão e proprietário
+  - Lista densa por lote (ref/data, localização, motilidade, dose, disponível, qty com `- / +`)
+  - Botão **Usar** recolhe lotes com qty > 0, soma duplicados automaticamente e atualiza página principal
+  - Área **Linhas da inseminação** com edição por `- / +` + input numérico e remoção por linha
+  - Regra de qty zero: remoção automática da linha
+  - Validação de stock no UI e no backend
+  - Novo fluxo transacional `registrar_inseminacao_multiplas` com `SELECT ... FOR UPDATE` para consistência
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
@@ -64,6 +72,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Ver Stock UX + modularização fase 1 validados com **PASS 100% frontend**: `/app/test_reports/iteration_11.json`
 - Iteração seguinte (novas features) validada por code review do testing agent com app bloqueada por BD indisponível no ambiente de teste: `/app/test_reports/iteration_12.json`
 - Verificação da Fase 2 e correção de bug `exec()` confirmadas por code review: `/app/test_reports/iteration_13.json` e `/app/test_reports/iteration_14.json`
+- Registrar Inseminação (nova UX) validado por code review completo no testing agent: `/app/test_reports/iteration_15.json` (bloqueado dinamicamente por indisponibilidade de PostgreSQL no ambiente)
 
 ## Backlog priorizado
 ### P0
@@ -76,3 +85,4 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Teste aprofundado da regra de segurança de exclusão de contentor com stock > 0
 - Refatorar `app.py` em módulos menores (DB/UI/relatórios) — **Fase 1 e Fase 2 concluídas**
 - Próximo passo técnico: substituir estratégia baseada em `exec` por funções tipadas por página (Fase 3), reduzindo complexidade e melhorando debuggabilidade.
+- Quando BD estiver ativa, executar reteste dinâmico ponta-a-ponta do novo fluxo de inseminação multi-linha.
