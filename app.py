@@ -1584,7 +1584,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
 
-if st.sidebar.button("🚪 Logout", width="stretch"):
+if st.sidebar.button("🚪 Logout", use_container_width=True):
     del st.session_state['user']
     st.rerun()
 
