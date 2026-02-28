@@ -925,9 +925,9 @@ def run_map_page(ctx: dict):
 
                             col_btn_edit1, col_btn_edit2 = st.columns(2)
                             with col_btn_edit1:
-                                salvar = st.form_submit_button("Salvar", use_container_width=True)
+                                salvar = st.form_submit_button("Salvar", width="stretch")
                             with col_btn_edit2:
-                                cancelar_edit = st.form_submit_button("Cancelar", use_container_width=True)
+                                cancelar_edit = st.form_submit_button("Cancelar", width="stretch")
 
                             if cancelar_edit:
                                 st.session_state[f'modal_editar_{row["id"]}'] = False
