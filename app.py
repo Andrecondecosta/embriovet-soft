@@ -2401,6 +2401,8 @@ elif aba == "📥 Importar Sémen":
 # 📝 Registrar Inseminação
 # ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
+    run_insemination_page({**globals(), **locals()})
+    st.stop()
     st.header("Registrar Inseminação")
     inject_stepper_css()
 
