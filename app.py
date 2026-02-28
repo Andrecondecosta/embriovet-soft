@@ -2289,7 +2289,7 @@ elif aba == "📥 Importar Sémen":
             st.success("Validação concluída sem erros.")
         else:
             st.warning("Foram encontrados erros. Corrija antes de importar.")
-            st.dataframe(erros_df, use_container_width=True, height=200, hide_index=True)
+            st.dataframe(erros_df, width="stretch", height=200, hide_index=True)
 
         def executar_importacao(linhas):
             report_rows = []
@@ -2363,7 +2363,7 @@ elif aba == "📥 Importar Sémen":
                 logger.error(f"Erro ao importar: {e}")
                 return False, pd.DataFrame(report_rows), str(e)
 
-        importar_disabled = not erros_df.empty or not linhas_validas
+        importar_disabled = (not linhas_validas) or (not preview_df.empty and not erros_df.empty)
         if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
