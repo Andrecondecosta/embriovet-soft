@@ -13,6 +13,7 @@ import hashlib
 import time
 import json
 import unicodedata
+import importlib.util
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from io import BytesIO
 from reportlab.lib import colors
@@ -1814,6 +1815,45 @@ elif aba == "📥 Importar Sémen":
                 font-size: .78rem;
                 color: #475569;
             }
+            .import-table-wrap {
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                overflow-x: auto;
+                max-width: 100%;
+            }
+            .import-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: .78rem;
+            }
+            .import-table th, .import-table td {
+                border-bottom: 1px solid #e2e8f0;
+                padding: 4px 6px;
+                white-space: nowrap;
+                text-align: left;
+            }
+            .import-table th {
+                position: sticky;
+                top: 0;
+                background: #f1f5f9;
+                z-index: 4;
+                font-weight: 700;
+                color: #0f172a;
+            }
+            .import-sticky-1, .import-sticky-2, .import-sticky-3 {
+                position: sticky;
+                background: #f8fafc;
+                z-index: 3;
+            }
+            .import-sticky-1 { left: 0; min-width: 160px; }
+            .import-sticky-2 { left: 160px; min-width: 140px; }
+            .import-sticky-3 { left: 300px; min-width: 120px; }
+            .import-table th.import-sticky-1,
+            .import-table th.import-sticky-2,
+            .import-table th.import-sticky-3 {
+                z-index: 6;
+                background: #e2e8f0;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1835,6 +1875,7 @@ elif aba == "📥 Importar Sémen":
     ]
 
     template_df = pd.DataFrame(columns=template_cols)
+    xlsx_ready = importlib.util.find_spec("openpyxl") is not None
 
     def gerar_template_xlsx():
         buffer = BytesIO()
@@ -1897,19 +1938,22 @@ elif aba == "📥 Importar Sémen":
             unsafe_allow_html=True,
         )
     with ctx2:
-        st.download_button(
-            "Descarregar template (XLSX)",
-            data=gerar_template_xlsx(),
-            file_name="template_importar_semen.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+        if xlsx_ready:
+            st.download_button(
+                "Descarregar template (XLSX)",
+                data=gerar_template_xlsx(),
+                file_name="template_importar_semen.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width="stretch",
+            )
+        else:
+            st.caption("XLSX requer openpyxl instalado no ambiente.")
         st.download_button(
             "Descarregar template (CSV)",
             data=gerar_template_csv(),
             file_name="template_importar_semen.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
     render_zone_title("Upload + Preview", "import-zone-title")
@@ -1926,7 +1970,11 @@ elif aba == "📥 Importar Sémen":
             if uploaded_file.name.lower().endswith(".csv"):
                 raw_df = pd.read_csv(uploaded_file)
             else:
-                raw_df = pd.read_excel(uploaded_file)
+                if not xlsx_ready:
+                    st.error("Para ler XLSX, instale openpyxl no ambiente.")
+                    raw_df = pd.DataFrame()
+                else:
+                    raw_df = pd.read_excel(uploaded_file)
         except Exception as e:
             st.error(f"Erro ao ler o ficheiro: {e}")
             raw_df = pd.DataFrame()
@@ -2048,13 +2096,22 @@ elif aba == "📥 Importar Sémen":
                     if not pd.isna(row.get("qualidade")):
                         try:
                             qualidade = int(float(row.get("qualidade")))
+                            if qualidade < 0 or qualidade > 100:
+                                row_errors.append("Qualidade deve estar entre 0 e 100")
                         except Exception:
                             row_errors.append("Qualidade inválida")
 
                     data_embriovet = None
                     origem_externa = None
                     if data_ref and data_ref.lower() != "nan":
-                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=True)
+                        dayfirst = False
+                        if "/" in data_ref or "." in data_ref:
+                            dayfirst = True
+                        elif "-" in data_ref:
+                            parts = data_ref.split("-")
+                            if parts and len(parts[0]) <= 2:
+                                dayfirst = True
+                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=dayfirst)
                         if pd.isna(parsed):
                             origem_externa = data_ref
                         else:
@@ -2086,7 +2143,73 @@ elif aba == "📥 Importar Sémen":
                 erros_df = pd.DataFrame(erros)
 
     if not preview_df.empty:
-        st.dataframe(preview_df, use_container_width=True, height=260, hide_index=True)
+        st.markdown(
+            "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
+            unsafe_allow_html=True,
+        )
+        compact_view = st.toggle("Vista compacta", value=True)
+
+        full_cols = [
+            "garanhao",
+            "data_embriovet/ref",
+            "existencia_atual",
+            "dose",
+            "motilidade",
+            "qualidade",
+            "proprietario_nome",
+            "contentor_codigo",
+            "canister",
+            "andar",
+            "observacoes",
+            "certificado",
+        ]
+        compact_cols = [
+            "garanhao",
+            "data_embriovet/ref",
+            "existencia_atual",
+            "dose",
+            "motilidade",
+            "qualidade",
+        ]
+        col_order = compact_cols if compact_view else full_cols
+        col_order = [c for c in col_order if c in preview_df.columns]
+
+        sticky_cols = ["garanhao", "data_embriovet/ref", "existencia_atual"]
+
+        import html as html_lib
+
+        def render_preview_table(df, columns):
+            df_show = df[columns].fillna("")
+            header_cells = []
+            for idx, col in enumerate(columns):
+                cls = ""
+                if col in sticky_cols:
+                    cls = f"import-sticky-{sticky_cols.index(col) + 1}"
+                label = col.replace("_", " ")
+                header_cells.append(f"<th class='{cls}'>{html_lib.escape(label)}</th>")
+
+            rows_html = []
+            for _, row in df_show.iterrows():
+                cells = []
+                for col in columns:
+                    cls = ""
+                    if col in sticky_cols:
+                        cls = f"import-sticky-{sticky_cols.index(col) + 1}"
+                    val = html_lib.escape(str(row.get(col, "")))
+                    cells.append(f"<td class='{cls}'>{val}</td>")
+                rows_html.append(f"<tr>{''.join(cells)}</tr>")
+
+            table_html = f"""
+            <div class='import-table-wrap'>
+                <table class='import-table'>
+                    <thead><tr>{''.join(header_cells)}</tr></thead>
+                    <tbody>{''.join(rows_html)}</tbody>
+                </table>
+            </div>
+            """
+            st.markdown(table_html, unsafe_allow_html=True)
+
+        render_preview_table(preview_df, col_order)
 
     render_zone_title("Validação + Ação", "import-zone-title")
     if uploaded_file is None:
@@ -2180,7 +2303,7 @@ elif aba == "📥 Importar Sémen":
                 return False, pd.DataFrame(report_rows), str(e)
 
         importar_disabled = not erros_df.empty or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
+        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
                 st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
@@ -2197,7 +2320,7 @@ elif aba == "📥 Importar Sémen":
                 data=report_csv,
                 file_name="relatorio_importacao.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
 
 # ------------------------------------------------------------
