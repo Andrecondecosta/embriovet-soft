@@ -1700,9 +1700,6 @@ def mostrar_tela_login(app_settings):
                     else:
                         st.error("❌ Utilizador ou password incorretos")
         
-        if app_settings and app_settings.get("show_initial_credentials"):
-            st.markdown("---")
-            st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
