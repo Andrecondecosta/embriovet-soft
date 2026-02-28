@@ -162,11 +162,11 @@ def get_connection():
 # ✅ Migrations automáticas no arranque
 # ------------------------------------------------------------
 try:
-    with get_connection() as conn:
-        base_dir = Path(__file__).resolve().parent
-        migrations_dir = str(base_dir / "migrations")
-        summary = apply_migrations(conn, migrations_dir=migrations_dir)
-        logger.info(f"✅ Migrations ok | applied={summary['applied']} | skipped={summary['skipped']}")
+    conn = connection_pool.getconn()
+    try:
+        run_migrations(conn, migrations_dir="/app/migrations")
+    finally:
+        connection_pool.putconn(conn)
 except Exception as e:
     logger.error(f"❌ Falha ao aplicar migrations: {e}")
     st.error(f"Falha ao aplicar migrations: {e}")
