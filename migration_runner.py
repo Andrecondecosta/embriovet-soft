@@ -7,9 +7,6 @@ logger = logging.getLogger(__name__)
 
 def run_migrations(conn, migrations_dir="/app/migrations"):
     migrations_path = Path(migrations_dir)
-    if not migrations_path.exists():
-        return
-
     cur = conn.cursor()
 
     # advisory lock para evitar concorrência
@@ -28,12 +25,14 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
     cur.execute("SELECT version FROM schema_migrations;")
     applied = {row[0] for row in cur.fetchall()}
 
-    files = sorted([p for p in migrations_path.glob("*.sql")])
-    if not files:
-        logger.info("No migrations found")
-        return
+    files = []
+    if migrations_path.exists():
+        files = sorted([p for p in migrations_path.glob("*.sql")])
 
     try:
+        if not files:
+            logger.info(f"No migrations found in {migrations_dir}")
+            return
         for f in files:
             version = f.name
             if version in applied:
