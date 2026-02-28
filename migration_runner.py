@@ -39,9 +39,13 @@ def run_migrations(conn, migrations_dir="migrations"):
             sql = f.read_text(encoding="utf-8").strip()
             logger.info(f"Applying migration {version}")
 
-            if sql:
-                cur.execute(sql)
+            if not sql:
+                logger.info(f"Empty migration file: {version}")
+                cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
+                conn.commit()
+                continue
 
+            cur.execute(sql)
             cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
             conn.commit()
 

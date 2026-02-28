@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2 import pool
 import os
 import base64
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import contextmanager
@@ -184,6 +185,7 @@ def get_app_settings():
                 SELECT id, company_name, logo_base64, primary_color,
                        is_initialized, show_initial_credentials
                 FROM app_settings
+                WHERE id = 1
                 ORDER BY id
                 LIMIT 1
                 """
@@ -213,7 +215,11 @@ def ensure_app_settings():
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "INSERT INTO app_settings (company_name) VALUES ('Sistema') RETURNING id;"
+                """
+                INSERT INTO app_settings (id, company_name)
+                SELECT 1, 'Sistema'
+                WHERE NOT EXISTS (SELECT 1 FROM app_settings);
+                """
             )
             conn.commit()
             cur.close()
@@ -233,6 +239,26 @@ def save_app_settings(settings_id, company_name, logo_base64, primary_color):
                 logo_base64 = %s,
                 primary_color = %s,
                 is_initialized = TRUE,
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (company_name, logo_base64, primary_color, settings_id),
+        )
+        conn.commit()
+        cur.close()
+
+
+def finalize_app_settings(settings_id, company_name, logo_base64, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                primary_color = %s,
+                is_initialized = TRUE,
+                show_initial_credentials = FALSE,
                 updated_at = now()
             WHERE id = %s
             """,
@@ -985,23 +1011,23 @@ def criar_hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-def ensure_admin_user_exists():
+def ensure_admin_user_exists(username, password):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM usuarios WHERE username = %s", ("admin",))
-            row = cur.fetchone()
-            if row:
+            cur.execute("SELECT COUNT(*) FROM usuarios")
+            total = cur.fetchone()[0] or 0
+            if total > 0:
                 cur.close()
                 return
 
-            password_hash = criar_hash_password("admin123")
+            password_hash = criar_hash_password(password)
             cur.execute(
                 """
                 INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)
                 VALUES (%s, %s, %s, %s, TRUE, TRUE)
                 """,
-                ("admin", "Administrador", password_hash, "Administrador"),
+                (username, "Administrador", password_hash, "Administrador"),
             )
             conn.commit()
             cur.close()
@@ -1675,9 +1701,6 @@ def mostrar_tela_login(app_settings):
                     else:
                         st.error("❌ Utilizador ou password incorretos")
         
-        if app_settings and app_settings.get("show_initial_credentials"):
-            st.markdown("---")
-            st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
@@ -1750,25 +1773,87 @@ def render_change_credentials(user, app_settings):
 
 
 def render_onboarding(app_settings):
+    inject_stock_css()
+    inject_reports_css()
+
     st.title("Configuração inicial")
     st.caption("Defina o branding base deste ambiente.")
 
-    with st.form("onboarding_form"):
-        nome_empresa = st.text_input("Nome da empresa", value=app_settings.get("company_name") or "")
-        cor = st.color_picker("Cor primária", value=app_settings.get("primary_color") or "#2563eb")
-        logo_file = st.file_uploader("Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+    if "onboarding_company_name" not in st.session_state:
+        st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
+    if "onboarding_primary_color" not in st.session_state:
+        st.session_state["onboarding_primary_color"] = app_settings.get("primary_color") or "#2563eb"
+    if "onboarding_admin_username" not in st.session_state:
+        st.session_state["onboarding_admin_username"] = "admin"
+    if "onboarding_admin_password" not in st.session_state:
+        st.session_state["onboarding_admin_password"] = secrets.token_urlsafe(8)
 
-    if submitted:
-        logo_base64 = app_settings.get("logo_base64")
-        if logo_file is not None:
-            logo_bytes = logo_file.read()
-            if logo_bytes:
-                encoded = base64.b64encode(logo_bytes).decode("utf-8")
-                logo_base64 = f"data:{logo_file.type};base64,{encoded}"
+    if app_settings.get("logo_base64") and "onboarding_logo_base64" not in st.session_state:
+        st.session_state["onboarding_logo_base64"] = app_settings.get("logo_base64")
 
-        save_app_settings(app_settings["id"], nome_empresa, logo_base64, cor)
-        st.success("✅ Configuração guardada")
+    logo_preview = st.session_state.get("onboarding_logo_base64")
+    nome_preview = st.session_state.get("onboarding_company_name")
+
+    if logo_preview:
+        st.markdown(
+            f"""
+            <div style='display:flex; align-items:center; gap:12px; margin-bottom:8px;'>
+                <img src='{logo_preview}' style='height:36px;'/>
+                <h3 style='margin:0;'>{nome_preview}</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    render_zone_title("Zona A — Branding", "insem-zone-title")
+    col_a1, col_a2 = st.columns([2, 1])
+    with col_a1:
+        company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
+    with col_a2:
+        primary_color = st.color_picker("Cor principal", key="onboarding_primary_color")
+        st.markdown(
+            f"<div style='width:100%; height:10px; border-radius:6px; background:{primary_color}; border:1px solid #e2e8f0;'></div>",
+            unsafe_allow_html=True,
+        )
+
+    logo_file = st.file_uploader("Logótipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+    if logo_file is not None:
+        logo_bytes = logo_file.read()
+        if logo_bytes:
+            encoded = base64.b64encode(logo_bytes).decode("utf-8")
+            st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
+
+    render_zone_title("Zona B — Conta Admin", "insem-zone-title")
+    admin_username = st.text_input("Username admin", key="onboarding_admin_username")
+    admin_password = st.text_input("Password temporária", key="onboarding_admin_password")
+    st.caption("Esta password é temporária. Vai ser obrigatório alterar no primeiro login.")
+
+    render_zone_title("Zona C — Confirmar", "insem-zone-title")
+    cred_text = f"Username: {admin_username}\nPassword: {admin_password}"
+    st.markdown("**Credenciais iniciais**")
+    st.code(cred_text)
+
+    cred_js = cred_text.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n")
+    st.components.v1.html(
+        f"""
+        <button style='padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-weight:600;'
+                onclick="navigator.clipboard.writeText(`{cred_js}`)">Copiar</button>
+        """,
+        height=40,
+    )
+
+    if st.button("Concluir configuração", type="primary", width="stretch"):
+        if not company_name:
+            st.error("❌ Nome da empresa é obrigatório")
+            return
+        if not admin_username or not admin_password:
+            st.error("❌ Username e password são obrigatórios")
+            return
+
+        logo_base64 = st.session_state.get("onboarding_logo_base64")
+        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color)
+        ensure_admin_user_exists(admin_username, admin_password)
+        st.success("✅ Configuração concluída")
         st.rerun()
 
 # Carregar app settings e onboarding inicial
@@ -1780,9 +1865,6 @@ if not app_settings:
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
-
-# Garantir admin inicial
-ensure_admin_user_exists()
 
 # Verificar se está logado
 if 'user' not in st.session_state:
