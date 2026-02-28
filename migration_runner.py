@@ -1,5 +1,8 @@
 import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def run_migrations(conn, migrations_dir="/app/migrations"):
@@ -26,11 +29,15 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
     applied = {row[0] for row in cur.fetchall()}
 
     files = sorted([p for p in migrations_path.glob("*.sql")])
+    if not files:
+        logger.info("No migrations found")
+        return
 
     try:
         for f in files:
             version = f.name
             if version in applied:
+                logger.info(f"Migration already applied: {version}")
                 continue
 
             sql = f.read_text(encoding="utf-8").strip()
@@ -40,6 +47,7 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
                 continue
 
             try:
+                logger.info(f"Applying migration {version}")
                 cur.execute("BEGIN;")
                 cur.execute(sql)
                 cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
@@ -49,6 +57,7 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
                 cur.execute("ROLLBACK;")
                 conn.rollback()
                 raise
+        logger.info("Migrations finished")
     finally:
         try:
             cur.execute("SELECT pg_advisory_unlock(987654321);")
