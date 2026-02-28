@@ -2714,7 +2714,7 @@ elif aba == "📝 Registrar Inseminação":
                     st.button(
                         "✕",
                         key=f"insem_line_remove_{sid}",
-                        use_container_width=True,
+                        width="stretch",
                         on_click=remover_linha,
                         args=(sid,),
                     )
