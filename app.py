@@ -2195,7 +2195,10 @@ elif aba == "📥 Importar Sémen":
                 col_order = compact_cols if compact_view else full_cols
                 col_order = [c for c in col_order if c in editor_df.columns]
 
+                preview_placeholder = st.container()
+
                 editor_view = editor_df[col_order].copy()
+                st.caption("Editar dados (alterações apenas em memória)")
                 edited_view = st.data_editor(
                     editor_view,
                     key="import_editor",
@@ -2254,7 +2257,8 @@ elif aba == "📥 Importar Sémen":
                     """
                     st.markdown(table_html, unsafe_allow_html=True)
 
-                render_preview_table(preview_df, col_order, errors_map)
+                with preview_placeholder:
+                    render_preview_table(preview_df, col_order, errors_map)
 
                 if errors_map:
                     first_error = sorted(errors_map.keys())[0]
