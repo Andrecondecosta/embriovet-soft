@@ -1530,7 +1530,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
 # 🖼️ Interface Streamlit
 # ------------------------------------------------------------
 st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Gestor Sémen - Embriovet"),
+    page_title=os.getenv("APP_TITLE", "Sistema"),
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
 )
