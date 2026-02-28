@@ -184,6 +184,7 @@ def get_app_settings():
                 SELECT id, company_name, logo_base64, primary_color,
                        is_initialized, show_initial_credentials
                 FROM app_settings
+                WHERE id = 1
                 ORDER BY id
                 LIMIT 1
                 """
@@ -213,7 +214,11 @@ def ensure_app_settings():
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "INSERT INTO app_settings (company_name) VALUES ('Sistema') RETURNING id;"
+                """
+                INSERT INTO app_settings (id, company_name)
+                SELECT 1, 'Sistema'
+                WHERE NOT EXISTS (SELECT 1 FROM app_settings);
+                """
             )
             conn.commit()
             cur.close()
@@ -233,6 +238,26 @@ def save_app_settings(settings_id, company_name, logo_base64, primary_color):
                 logo_base64 = %s,
                 primary_color = %s,
                 is_initialized = TRUE,
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (company_name, logo_base64, primary_color, settings_id),
+        )
+        conn.commit()
+        cur.close()
+
+
+def finalize_app_settings(settings_id, company_name, logo_base64, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                primary_color = %s,
+                is_initialized = TRUE,
+                show_initial_credentials = FALSE,
                 updated_at = now()
             WHERE id = %s
             """,
