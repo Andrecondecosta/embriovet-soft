@@ -33,6 +33,7 @@ def run_migrations(conn, migrations_dir="migrations"):
         for f in files:
             version = f.name
             if version in applied:
+                logger.info(f"Migration already applied: {version}")
                 continue
 
             sql = f.read_text(encoding="utf-8").strip()
@@ -43,6 +44,8 @@ def run_migrations(conn, migrations_dir="migrations"):
 
             cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
             conn.commit()
+
+        logger.info("Migrations finished")
 
     finally:
         cur.execute("SELECT pg_advisory_unlock(987654321);")
