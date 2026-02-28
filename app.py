@@ -173,6 +173,86 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------------
+# ⚙️ App Settings (white-label)
+# ------------------------------------------------------------
+def get_app_settings():
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, company_name, logo_base64, primary_color,
+                       is_initialized, show_initial_credentials
+                FROM app_settings
+                ORDER BY id
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "company_name": row[1],
+            "logo_base64": row[2],
+            "primary_color": row[3],
+            "is_initialized": row[4],
+            "show_initial_credentials": row[5],
+        }
+    except Exception as e:
+        logger.error(f"Erro ao carregar app_settings: {e}")
+        return None
+
+
+def ensure_app_settings():
+    settings = get_app_settings()
+    if settings:
+        return settings
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO app_settings (company_name) VALUES ('Sistema') RETURNING id;"
+            )
+            conn.commit()
+            cur.close()
+        return get_app_settings()
+    except Exception as e:
+        logger.error(f"Erro ao criar app_settings: {e}")
+        return None
+
+
+def save_app_settings(settings_id, company_name, logo_base64, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                primary_color = %s,
+                is_initialized = TRUE,
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (company_name, logo_base64, primary_color, settings_id),
+        )
+        conn.commit()
+        cur.close()
+
+
+def update_show_initial_credentials(value: bool):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE app_settings SET show_initial_credentials = %s, updated_at = now()",
+            (value,),
+        )
+        conn.commit()
+        cur.close()
+
+# ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
 def carregar_proprietarios(apenas_ativos=False):
