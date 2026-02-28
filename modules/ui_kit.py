@@ -89,34 +89,6 @@ def inject_stepper_css():
                 border-color: #fecaca;
                 background: #fee2e2;
             }
-            button[aria-label="−"],
-            button[aria-label="+"],
-            button[aria-label="-"],
-            button[title="Diminuir quantidade"],
-            button[title="Aumentar quantidade"] {
-                min-width: 36px;
-                min-height: 36px;
-                font-size: 16px;
-                font-weight: 700;
-                line-height: 1;
-                color: #0f172a;
-                border: 1px solid #cbd5e1;
-                background: #f8fafc;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 0;
-            }
-            button[aria-label="−"] *,
-            button[aria-label="+"] *,
-            button[aria-label="-"] *,
-            button[title="Diminuir quantidade"] *,
-            button[title="Aumentar quantidade"] * {
-                color: #0f172a !important;
-                opacity: 1 !important;
-                font-size: 16px !important;
-                font-weight: 700 !important;
-            }
         </style>
         """,
         unsafe_allow_html=True,
