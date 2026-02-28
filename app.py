@@ -1866,9 +1866,6 @@ if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
 
-# Garantir admin inicial
-ensure_admin_user_exists()
-
 # Verificar se está logado
 if 'user' not in st.session_state:
     mostrar_tela_login(app_settings)
