@@ -90,7 +90,10 @@ def inject_stepper_css():
                 background: #fee2e2;
             }
             button[aria-label="−"],
-            button[aria-label="+"] {
+            button[aria-label="+"],
+            button[aria-label="-"],
+            button[title="Diminuir quantidade"],
+            button[title="Aumentar quantidade"] {
                 min-width: 36px;
                 min-height: 36px;
                 font-size: 16px;
@@ -103,6 +106,14 @@ def inject_stepper_css():
                 align-items: center;
                 justify-content: center;
                 padding: 0;
+            }
+            button[aria-label="−"] *,
+            button[aria-label="+"] *,
+            button[aria-label="-"] * {
+                color: #0f172a !important;
+                opacity: 1 !important;
+                font-size: 16px !important;
+                font-weight: 700 !important;
             }
         </style>
         """,
