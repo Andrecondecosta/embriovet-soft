@@ -68,6 +68,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Modal de seleção simplificado: checkbox por lote, filtros compactos, confirmação adiciona lotes com qty=1 e mantém seleção entre aberturas
   - Nova página **Importar Sémen**: template XLSX/CSV (com fallback se openpyxl não estiver disponível), upload, preview com colunas reordenadas + sticky à esquerda + toggle compacta/completa, edição via `st.data_editor` com validação inline (células a vermelho + tooltip) e scroll automático para o primeiro erro, importação transacional e relatório de importação
 - Redesign técnico do bloco **Transferir Palhetas** no Ver Stock: cabeçalho operacional compacto, controlo horizontal do tipo de operação, grelha de execução com stepper, avisos discretos e micro-resumo dinâmico
+- Componente de **stepper** padronizado (render_stepper) com keys únicas e estado controlado por `st.session_state` aplicado em transferência e linhas de inseminação
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.
