@@ -113,7 +113,11 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
     tooltip = invalid_tooltip if invalid and invalid_tooltip else ""
     cls = "stepper-value invalid" if invalid else "stepper-value"
 
-    with cols[0]:
+    value_col, minus_col, plus_col = cols
+
+    with value_col:
+        st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
+    with minus_col:
         st.button(
             "−",
             key=f"{key}_minus",
@@ -122,9 +126,7 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             disabled=min_value is not None and value <= min_value,
             help="Diminuir quantidade",
         )
-    with cols[1]:
-        st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
-    with cols[2]:
+    with plus_col:
         st.button(
             "+",
             key=f"{key}_plus",
