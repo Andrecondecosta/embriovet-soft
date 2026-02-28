@@ -89,6 +89,21 @@ def inject_stepper_css():
                 border-color: #fecaca;
                 background: #fee2e2;
             }
+            button[aria-label="−"],
+            button[aria-label="+"] {
+                min-width: 36px;
+                min-height: 36px;
+                font-size: 16px;
+                font-weight: 700;
+                line-height: 1;
+                color: #0f172a;
+                border: 1px solid #cbd5e1;
+                background: #f8fafc;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -114,11 +129,25 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
     cls = "stepper-value invalid" if invalid else "stepper-value"
 
     with cols[0]:
-        st.button("-", key=f"{key}_minus", on_click=step, args=(-1,), disabled=min_value is not None and value <= min_value)
+        st.button(
+            "−",
+            key=f"{key}_minus",
+            on_click=step,
+            args=(-1,),
+            disabled=min_value is not None and value <= min_value,
+            help="Diminuir quantidade",
+        )
     with cols[1]:
         st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
     with cols[2]:
-        st.button("+", key=f"{key}_plus", on_click=step, args=(1,), disabled=max_value is not None and value >= max_value)
+        st.button(
+            "+",
+            key=f"{key}_plus",
+            on_click=step,
+            args=(1,),
+            disabled=max_value is not None and value >= max_value,
+            help="Aumentar quantidade",
+        )
 
     return value, invalid
 
