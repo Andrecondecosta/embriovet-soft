@@ -148,10 +148,10 @@ def run_reports_page(ctx: dict):
             }.items():
                 if not df.empty:
                     csv += f"\n{nome}:\n{df.to_csv(index=False)}\n"
-            st.download_button("CSV", csv.encode("utf-8"), f"garanhao_{garanhao_sel}.csv", "text/csv", use_container_width=True, key="rel_csv_g")
+            st.download_button("CSV", csv.encode("utf-8"), f"garanhao_{garanhao_sel}.csv", "text/csv", width="stretch", key="rel_csv_g")
             pdf = gerar_pdf_garanhao(garanhao_sel, s, i, t, te)
             if pdf:
-                st.download_button("PDF", pdf, f"garanhao_{garanhao_sel}.pdf", "application/pdf", use_container_width=True, key="rel_pdf_g")
+                st.download_button("PDF", pdf, f"garanhao_{garanhao_sel}.pdf", "application/pdf", width="stretch", key="rel_pdf_g")
 
         render_kpi_strip([
             ("palhetas em stock", int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
@@ -160,9 +160,9 @@ def run_reports_page(ctx: dict):
             ("transf. externas", len(te)),
         ])
         if not s.empty:
-            st.dataframe(safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), use_container_width=True, hide_index=True, height=350)
+            st.dataframe(safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
         if not i.empty:
-            st.dataframe(safe_pick(i, ["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False), use_container_width=True, hide_index=True, height=300)
+            st.dataframe(safe_pick(i, ["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False), width="stretch", hide_index=True, height=300)
 
     elif modo == "Proprietário" and prop_sel:
         nome = proprietarios[proprietarios["id"] == prop_sel]["nome"].values[0]
@@ -178,7 +178,7 @@ def run_reports_page(ctx: dict):
             st.markdown(f"<div class='reports-results-head'><strong>Proprietário:</strong> {nome}</div>", unsafe_allow_html=True)
         with right:
             csv = safe_pick(s, ["garanhao", "existencia_atual", "qualidade", "data_embriovet"])
-            st.download_button("CSV", csv.to_csv(index=False).encode("utf-8"), f"proprietario_{nome}.csv", "text/csv", use_container_width=True, key="rel_csv_p")
+            st.download_button("CSV", csv.to_csv(index=False).encode("utf-8"), f"proprietario_{nome}.csv", "text/csv", width="stretch", key="rel_csv_p")
 
         render_kpi_strip([
             ("palhetas em stock", int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
@@ -187,7 +187,7 @@ def run_reports_page(ctx: dict):
             ("transf. enviadas", len(t_out)),
         ])
         if not s.empty:
-            st.dataframe(safe_pick(s, ["garanhao", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), use_container_width=True, hide_index=True, height=350)
+            st.dataframe(safe_pick(s, ["garanhao", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
 
     elif modo == "Contentor / Localização" and contentor_sel:
         s = stock[stock["contentor_id"] == contentor_sel].copy() if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
@@ -208,20 +208,20 @@ def run_reports_page(ctx: dict):
             ("canisters", s["canister"].nunique() if (not s.empty and "canister" in s.columns) else 0),
         ])
         if not s.empty:
-            st.dataframe(safe_pick(s, ["proprietario_nome", "garanhao", "existencia_atual", "canister", "andar", "data_embriovet", "data_criacao"]), use_container_width=True, hide_index=True, height=420)
+            st.dataframe(safe_pick(s, ["proprietario_nome", "garanhao", "existencia_atual", "canister", "andar", "data_embriovet", "data_criacao"]), width="stretch", hide_index=True, height=420)
         else:
             st.info("Sem dados para os filtros atuais.")
 
     elif modo == "Histórico Geral" and tipo_hist:
         if tipo_hist == "Inseminações":
             d = insem.copy()
-            st.dataframe(safe_pick(d, ["data_inseminacao", "garanhao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False) if not d.empty else d, use_container_width=True, hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["data_inseminacao", "garanhao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
         elif tipo_hist == "Transferências Internas":
             d = transf.copy()
-            st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, use_container_width=True, hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
         elif tipo_hist == "Transferências Externas":
             d = transf_ext.copy()
-            st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, use_container_width=True, hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
         else:
             d = stock.copy()
-            st.dataframe(safe_pick(d, ["proprietario_nome", "garanhao", "data_embriovet", "data_criacao", "existencia_atual", "qualidade", "local_armazenagem"]).sort_values("existencia_atual", ascending=False) if not d.empty else d, use_container_width=True, hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["proprietario_nome", "garanhao", "data_embriovet", "data_criacao", "existencia_atual", "qualidade", "local_armazenagem"]).sort_values("existencia_atual", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)

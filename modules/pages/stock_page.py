@@ -64,12 +64,12 @@ def run_stock_page(ctx: dict):
 
         resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
         if not resumo_por_proprietario.empty:
-            st.dataframe(
-                resumo_por_proprietario,
-                use_container_width=True,
-                hide_index=True,
-                height=220,
-            )
+                st.dataframe(
+                    resumo_por_proprietario,
+                    width="stretch",
+                    hide_index=True,
+                    height=220,
+                )
 
         with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
             transf_hist, transf_ext_hist = filter_transfer_history(
@@ -89,7 +89,7 @@ def run_stock_page(ctx: dict):
                         f"transferencias_internas_{filtro}.csv",
                         "text/csv",
                         key=f"stock_hist_ti_{filtro}",
-                        use_container_width=True,
+                        width="stretch",
                     )
             with cexp2:
                 if not transf_ext_hist.empty:
@@ -100,17 +100,17 @@ def run_stock_page(ctx: dict):
                         f"transferencias_externas_{filtro}.csv",
                         "text/csv",
                         key=f"stock_hist_te_{filtro}",
-                        use_container_width=True,
+                        width="stretch",
                     )
 
             if not transf_hist.empty:
                 ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)
                 ex_ti.columns = ["Data", "De", "Para", "Palhetas"]
-                st.dataframe(ex_ti, use_container_width=True, hide_index=True, height=220)
+                st.dataframe(ex_ti, width="stretch", hide_index=True, height=220)
             if not transf_ext_hist.empty:
                 ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)
                 ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]
-                st.dataframe(ex_te, use_container_width=True, hide_index=True, height=220)
+                st.dataframe(ex_te, width="stretch", hide_index=True, height=220)
 
             if transf_hist.empty and transf_ext_hist.empty:
                 st.info("Sem transferências para o filtro atual.")
@@ -210,7 +210,7 @@ def run_stock_page(ctx: dict):
                                 ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"],
                             ).sort_values("data_transferencia", ascending=False)
                             ex_int.columns = ["Data", "De", "Para", "Palhetas"]
-                            st.dataframe(ex_int, use_container_width=True, hide_index=True, height=180)
+                            st.dataframe(ex_int, width="stretch", hide_index=True, height=180)
 
                         if not lote_transf_ext.empty:
                             ex_ext = safe_pick(
@@ -218,7 +218,7 @@ def run_stock_page(ctx: dict):
                                 ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"],
                             ).sort_values("data_transferencia", ascending=False)
                             ex_ext.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_ext.columns)]
-                            st.dataframe(ex_ext, use_container_width=True, hide_index=True, height=180)
+                            st.dataframe(ex_ext, width="stretch", hide_index=True, height=180)
 
                         if lote_transf_int.empty and lote_transf_ext.empty:
                             st.info("Sem histórico técnico de transferências para este lote.")

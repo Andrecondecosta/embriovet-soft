@@ -125,7 +125,7 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             args=(-1,),
             disabled=min_value is not None and value <= min_value,
             help="Diminuir quantidade",
-            use_container_width=True,
+            width="stretch",
         )
     with plus_col:
         st.button(
@@ -135,7 +135,7 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             args=(1,),
             disabled=max_value is not None and value >= max_value,
             help="Aumentar quantidade",
-            use_container_width=True,
+            width="stretch",
         )
 
     return value, invalid
