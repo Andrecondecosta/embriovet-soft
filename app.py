@@ -1831,6 +1831,7 @@ elif aba == "📥 Importar Sémen":
     ]
 
     template_df = pd.DataFrame(columns=template_cols)
+    xlsx_ready = importlib.util.find_spec("openpyxl") is not None
 
     def gerar_template_xlsx():
         buffer = BytesIO()
@@ -1893,13 +1894,16 @@ elif aba == "📥 Importar Sémen":
             unsafe_allow_html=True,
         )
     with ctx2:
-        st.download_button(
-            "Descarregar template (XLSX)",
-            data=gerar_template_xlsx(),
-            file_name="template_importar_semen.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+        if xlsx_ready:
+            st.download_button(
+                "Descarregar template (XLSX)",
+                data=gerar_template_xlsx(),
+                file_name="template_importar_semen.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        else:
+            st.caption("XLSX requer openpyxl instalado no ambiente.")
         st.download_button(
             "Descarregar template (CSV)",
             data=gerar_template_csv(),
@@ -1922,7 +1926,11 @@ elif aba == "📥 Importar Sémen":
             if uploaded_file.name.lower().endswith(".csv"):
                 raw_df = pd.read_csv(uploaded_file)
             else:
-                raw_df = pd.read_excel(uploaded_file)
+                if not xlsx_ready:
+                    st.error("Para ler XLSX, instale openpyxl no ambiente.")
+                    raw_df = pd.DataFrame()
+                else:
+                    raw_df = pd.read_excel(uploaded_file)
         except Exception as e:
             st.error(f"Erro ao ler o ficheiro: {e}")
             raw_df = pd.DataFrame()
