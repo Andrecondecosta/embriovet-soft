@@ -1900,7 +1900,7 @@ elif aba == "📥 Importar Sémen":
                 data=gerar_template_xlsx(),
                 file_name="template_importar_semen.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.caption("XLSX requer openpyxl instalado no ambiente.")
@@ -1909,7 +1909,7 @@ elif aba == "📥 Importar Sémen":
             data=gerar_template_csv(),
             file_name="template_importar_semen.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
     render_zone_title("Upload + Preview", "import-zone-title")
@@ -2052,13 +2052,22 @@ elif aba == "📥 Importar Sémen":
                     if not pd.isna(row.get("qualidade")):
                         try:
                             qualidade = int(float(row.get("qualidade")))
+                            if qualidade < 0 or qualidade > 100:
+                                row_errors.append("Qualidade deve estar entre 0 e 100")
                         except Exception:
                             row_errors.append("Qualidade inválida")
 
                     data_embriovet = None
                     origem_externa = None
                     if data_ref and data_ref.lower() != "nan":
-                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=True)
+                        dayfirst = False
+                        if "/" in data_ref or "." in data_ref:
+                            dayfirst = True
+                        elif "-" in data_ref:
+                            parts = data_ref.split("-")
+                            if parts and len(parts[0]) <= 2:
+                                dayfirst = True
+                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=dayfirst)
                         if pd.isna(parsed):
                             origem_externa = data_ref
                         else:
@@ -2184,7 +2193,7 @@ elif aba == "📥 Importar Sémen":
                 return False, pd.DataFrame(report_rows), str(e)
 
         importar_disabled = not erros_df.empty or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
+        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
                 st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
@@ -2201,7 +2210,7 @@ elif aba == "📥 Importar Sémen":
                 data=report_csv,
                 file_name="relatorio_importacao.csv",
                 mime="text/csv",
-                use_container_width=True,
+                width="stretch",
             )
 
 # ------------------------------------------------------------
