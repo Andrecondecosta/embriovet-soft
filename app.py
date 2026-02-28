@@ -159,6 +159,20 @@ def get_connection():
             connection_pool.putconn(conn)
 
 # ------------------------------------------------------------
+# ✅ Migrations automáticas no arranque
+# ------------------------------------------------------------
+try:
+    with get_connection() as conn:
+        base_dir = Path(__file__).resolve().parent
+        migrations_dir = str(base_dir / "migrations")
+        summary = apply_migrations(conn, migrations_dir=migrations_dir)
+        logger.info(f"✅ Migrations ok | applied={summary['applied']} | skipped={summary['skipped']}")
+except Exception as e:
+    logger.error(f"❌ Falha ao aplicar migrations: {e}")
+    st.error(f"Falha ao aplicar migrations: {e}")
+    st.stop()
+
+# ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
 def carregar_proprietarios(apenas_ativos=False):
