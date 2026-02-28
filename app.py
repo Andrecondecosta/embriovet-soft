@@ -25,9 +25,11 @@ import warnings
 from modules.ui_kit import (
     inject_reports_css,
     inject_stock_css,
+    inject_stepper_css,
     render_zone_title,
     render_kpi_strip,
     safe_pick,
+    render_stepper,
 )
 from modules.stock_reporting import (
     filter_stock_view,
