@@ -1809,6 +1809,12 @@ else:
     st.title(nome_empresa)
 
 # Sidebar com info do utilizador
+if app_settings.get("logo_base64"):
+    st.sidebar.markdown(
+        f"<img src='{app_settings['logo_base64']}' style='max-width:100%; height:48px; object-fit:contain; margin-bottom:8px;'/>",
+        unsafe_allow_html=True,
+    )
+st.sidebar.markdown(f"### {nome_empresa}")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
