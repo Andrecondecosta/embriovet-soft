@@ -1843,6 +1843,12 @@ elif aba == "📥 Importar Sémen":
             .import-sticky-1 { left: 0; min-width: 160px; }
             .import-sticky-2 { left: 160px; min-width: 140px; }
             .import-sticky-3 { left: 300px; min-width: 120px; }
+            .import-table th.import-sticky-1,
+            .import-table th.import-sticky-2,
+            .import-table th.import-sticky-3 {
+                z-index: 6;
+                background: #e2e8f0;
+            }
         </style>
         """,
         unsafe_allow_html=True,
