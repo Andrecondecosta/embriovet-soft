@@ -2681,6 +2681,18 @@ elif aba == "📝 Registrar Inseminação":
         if not linhas:
             st.info("Nenhum lote selecionado. Clique em 'Selecionar lotes'.")
         else:
+            header_cols = st.columns([2.4, 1.8, 0.8, 1.6, 0.6])
+            with header_cols[0]:
+                st.markdown("<div class='insem-modal-head'>Ref</div>", unsafe_allow_html=True)
+            with header_cols[1]:
+                st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
+            with header_cols[2]:
+                st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
+            with header_cols[3]:
+                st.markdown("<div class='insem-modal-head'>Quantidade</div>", unsafe_allow_html=True)
+            with header_cols[4]:
+                st.markdown("<div class='insem-modal-head'>Remover</div>", unsafe_allow_html=True)
+
             for sid in list(linhas.keys()):
                 linha = linhas[sid]
                 max_disp = int(linha.get("max_disponivel", 0))
@@ -2691,21 +2703,21 @@ elif aba == "📝 Registrar Inseminação":
                 if step_key not in st.session_state:
                     st.session_state[step_key] = qtd
 
-                l1, l2, lval, lminus, lplus, l4 = st.columns([3.0, 1.1, 0.7, 0.5, 0.5, 0.8])
+                l1, l2, l3, lqty, l4 = st.columns([2.4, 1.8, 0.8, 1.6, 0.6])
                 with l1:
-                    st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='insem-lote-main'>{linha['ref']}</div>", unsafe_allow_html=True)
                 with l2:
-                    qtd_display = int(st.session_state.get(step_key, qtd) or 0)
-                    st.markdown(f"<div class='insem-lote-sub'>Qtd</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
-
-                qtd_val, _ = render_stepper(
-                    [lval, lminus, lplus],
-                    step_key,
-                    min_value=0,
-                    max_value=max_disp,
-                )
+                    st.markdown(f"<div class='insem-lote-sub'>{linha['local']}</div>", unsafe_allow_html=True)
+                with l3:
+                    st.markdown(f"<div class='insem-lote-main'>{max_disp}</div>", unsafe_allow_html=True)
+                with lqty:
+                    qcols = st.columns([0.7, 0.5, 0.5])
+                    qtd_val, _ = render_stepper(
+                        qcols,
+                        step_key,
+                        min_value=0,
+                        max_value=max_disp,
+                    )
 
                 if qtd_val != qtd:
                     if qtd_val == 0:
