@@ -1748,6 +1748,29 @@ def render_change_credentials(user, app_settings):
         st.success("✅ Credenciais atualizadas com sucesso")
         st.rerun()
 
+
+def render_onboarding(app_settings):
+    st.title("Configuração inicial")
+    st.caption("Defina o branding base deste ambiente.")
+
+    with st.form("onboarding_form"):
+        nome_empresa = st.text_input("Nome da empresa", value=app_settings.get("company_name") or "")
+        cor = st.color_picker("Cor primária", value=app_settings.get("primary_color") or "#2563eb")
+        logo_file = st.file_uploader("Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+
+    if submitted:
+        logo_base64 = app_settings.get("logo_base64")
+        if logo_file is not None:
+            logo_bytes = logo_file.read()
+            if logo_bytes:
+                encoded = base64.b64encode(logo_bytes).decode("utf-8")
+                logo_base64 = f"data:{logo_file.type};base64,{encoded}"
+
+        save_app_settings(app_settings["id"], nome_empresa, logo_base64, cor)
+        st.success("✅ Configuração guardada")
+        st.rerun()
+
 # Verificar se está logado
 if 'user' not in st.session_state:
     mostrar_tela_login()
