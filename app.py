@@ -1647,9 +1647,10 @@ inject_reports_css()
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
-def mostrar_tela_login():
+def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
-    st.title("🔐 Login - Gestor de Sémen Embriovet")
+    nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
+    st.title(f"🔐 Login - {nome_empresa}")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -1674,8 +1675,9 @@ def mostrar_tela_login():
                     else:
                         st.error("❌ Utilizador ou password incorretos")
         
-        st.markdown("---")
-        st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
+        if app_settings and app_settings.get("show_initial_credentials"):
+            st.markdown("---")
+            st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
