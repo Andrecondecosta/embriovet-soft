@@ -70,6 +70,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Redesign técnico do bloco **Transferir Palhetas** no Ver Stock: cabeçalho operacional compacto, controlo horizontal do tipo de operação, grelha de execução com stepper, avisos discretos e micro-resumo dinâmico
 - Componente de **stepper** padronizado (render_stepper) com keys únicas e estado controlado por `st.session_state` aplicado em transferência e linhas de inseminação
   - Stepper estilizado com símbolos visíveis (− / +), tamanho mínimo e aria-labels/tooltip para acessibilidade
+  - CSS do stepper reforçado para garantir visibilidade dos símbolos em todos os contextos (desktop/mobile)
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.
