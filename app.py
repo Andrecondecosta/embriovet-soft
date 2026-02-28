@@ -1010,23 +1010,23 @@ def criar_hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-def ensure_admin_user_exists():
+def ensure_admin_user_exists(username, password):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM usuarios WHERE username = %s", ("admin",))
-            row = cur.fetchone()
-            if row:
+            cur.execute("SELECT COUNT(*) FROM usuarios")
+            total = cur.fetchone()[0] or 0
+            if total > 0:
                 cur.close()
                 return
 
-            password_hash = criar_hash_password("admin123")
+            password_hash = criar_hash_password(password)
             cur.execute(
                 """
                 INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)
                 VALUES (%s, %s, %s, %s, TRUE, TRUE)
                 """,
-                ("admin", "Administrador", password_hash, "Administrador"),
+                (username, "Administrador", password_hash, "Administrador"),
             )
             conn.commit()
             cur.close()
