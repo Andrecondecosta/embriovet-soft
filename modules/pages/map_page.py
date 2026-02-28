@@ -327,15 +327,15 @@ def run_map_page(ctx: dict):
                     )
                     bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
                     with bar_btn1:
-                        criar_novo = st.button("Adicionar contentor", key="map_add_btn_desktop", use_container_width=True)
+                        criar_novo = st.button("Adicionar contentor", key="map_add_btn_desktop", width="stretch")
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar layout", key="map_save_btn_desktop", type="primary", use_container_width=True)
+                            salvar_layout = st.button("Salvar layout", key="map_save_btn_desktop", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_desktop", use_container_width=True)
+                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_desktop", width="stretch")
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar edição", key="map_cancel_btn_desktop", use_container_width=True)
+                            cancelar_edicao = st.button("Cancelar edição", key="map_cancel_btn_desktop", width="stretch")
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
