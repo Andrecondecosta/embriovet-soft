@@ -70,6 +70,59 @@ def inject_stock_css():
     )
 
 
+def inject_stepper_css():
+    st.markdown(
+        """
+        <style>
+            .stepper-value {
+                font-weight: 600;
+                font-size: .85rem;
+                padding: 2px 6px;
+                text-align: center;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                background: #f8fafc;
+                min-width: 32px;
+            }
+            .stepper-value.invalid {
+                color: #b91c1c;
+                border-color: #fecaca;
+                background: #fee2e2;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
+    if key not in st.session_state:
+        st.session_state[key] = min_value
+
+    def step(delta):
+        current = int(st.session_state.get(key, 0) or 0)
+        next_val = current + delta
+        if min_value is not None:
+            next_val = max(min_value, next_val)
+        if max_value is not None and delta > 0:
+            next_val = min(max_value, next_val)
+        st.session_state[key] = next_val
+
+    value = int(st.session_state.get(key, 0) or 0)
+    invalid = max_value is not None and value > max_value
+    tooltip = invalid_tooltip if invalid and invalid_tooltip else ""
+    cls = "stepper-value invalid" if invalid else "stepper-value"
+
+    with cols[0]:
+        st.button("-", key=f"{key}_minus", on_click=step, args=(-1,), disabled=min_value is not None and value <= min_value)
+    with cols[1]:
+        st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
+    with cols[2]:
+        st.button("+", key=f"{key}_plus", on_click=step, args=(1,), disabled=max_value is not None and value >= max_value)
+
+    return value, invalid
+
+
 def render_zone_title(title: str, cls: str = "reports-zone-title"):
     st.markdown(f"<div class='{cls}'>{title}</div>", unsafe_allow_html=True)
 

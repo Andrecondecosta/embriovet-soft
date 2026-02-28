@@ -25,9 +25,11 @@ import warnings
 from modules.ui_kit import (
     inject_reports_css,
     inject_stock_css,
+    inject_stepper_css,
     render_zone_title,
     render_kpi_strip,
     safe_pick,
+    render_stepper,
 )
 from modules.stock_reporting import (
     filter_stock_view,
@@ -2401,6 +2403,7 @@ elif aba == "📥 Importar Sémen":
 # ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
     st.header("Registrar Inseminação")
+    inject_stepper_css()
 
     st.markdown(
         """
@@ -2533,6 +2536,7 @@ elif aba == "📝 Registrar Inseminação":
         linhas.pop(sid, None)
         st.session_state["insem_linhas"] = linhas
         st.session_state.pop(f"insem_line_input_{sid}", None)
+        st.session_state.pop(f"insem_step_{sid}", None)
 
     def sync_linha_input(lote_id, max_disponivel):
         sid = str(lote_id)
@@ -2680,49 +2684,34 @@ elif aba == "📝 Registrar Inseminação":
                 qtd = int(linha.get("qty", 0))
 
                 st.markdown("<div class='insem-line'>", unsafe_allow_html=True)
-                l1, l2, l3, l4 = st.columns([3.2, 1.2, 2.4, 0.8])
+                step_key = f"insem_step_{sid}"
+                if step_key not in st.session_state:
+                    st.session_state[step_key] = qtd
+
+                l1, l2, lminus, lval, lplus, l4 = st.columns([3.0, 1.1, 0.5, 0.7, 0.5, 0.8])
                 with l1:
                     st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
                 with l2:
-                    st.markdown(f"<div class='insem-lote-sub'>Qtd atual</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='insem-lote-main'>{qtd}</div>", unsafe_allow_html=True)
-                with l3:
-                    q1, q2, q3 = st.columns([1, 2, 1])
-                    with q1:
-                        st.button(
-                            "-",
-                            key=f"insem_line_minus_{sid}",
-                            use_container_width=True,
-                            on_click=dec_linha_qtd,
-                            args=(sid,),
-                        )
-                    with q2:
-                        input_key = f"insem_line_input_{sid}"
-                        if input_key not in st.session_state:
-                            st.session_state[input_key] = qtd
-                        novo_qtd = st.number_input(
-                            "Qtd",
-                            min_value=0,
-                            max_value=max(max_disp, 0),
-                            value=int(st.session_state[input_key]),
-                            step=1,
-                            key=input_key,
-                            label_visibility="collapsed",
-                            on_change=sync_linha_input,
-                            args=(sid, max_disp),
-                        )
-                        if int(novo_qtd) != qtd:
-                            sync_linha_input(sid, max_disp)
-                    with q3:
-                        st.button(
-                            "+",
-                            key=f"insem_line_plus_{sid}",
-                            use_container_width=True,
-                            disabled=qtd >= max_disp,
-                            on_click=inc_linha_qtd,
-                            args=(sid, max_disp),
-                        )
+                    qtd_display = int(st.session_state.get(step_key, qtd) or 0)
+                    st.markdown(f"<div class='insem-lote-sub'>Qtd</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
+
+                qtd_val, _ = render_stepper(
+                    [lminus, lval, lplus],
+                    step_key,
+                    min_value=0,
+                    max_value=max_disp,
+                )
+
+                if qtd_val != qtd:
+                    if qtd_val == 0:
+                        linhas.pop(sid, None)
+                        st.session_state.pop(step_key, None)
+                    else:
+                        linhas[sid]["qty"] = int(qtd_val)
+                    st.session_state["insem_linhas"] = linhas
+
                 with l4:
                     st.button(
                         "✕",
