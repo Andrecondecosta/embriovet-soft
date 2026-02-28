@@ -293,22 +293,32 @@ def run_stock_page(ctx: dict):
                                     edit_contentor_id = int(contentores_df_edit.loc[contentores_df_edit["codigo"] == edit_contentor_codigo, "id"].iloc[0])
 
                                 with col_loc2:
-                                    canister_atual = row.get("canister", 1)
+                                    canister_raw = to_py(row.get("canister"))
+                                    try:
+                                        canister_atual = int(canister_raw) if canister_raw is not None else 1
+                                    except Exception:
+                                        canister_atual = 1
+                                    idx_canister = max(0, min(9, canister_atual - 1))
                                     edit_canister = st.selectbox(
                                         "Canister *",
                                         options=list(range(1, 11)),
-                                        index=canister_atual - 1 if canister_atual else 0,
+                                        index=idx_canister,
                                         key=f"edit_can_{row['id']}"
                                     )
 
                                 with col_loc3:
-                                    andar_atual = row.get("andar", 1)
+                                    andar_raw = to_py(row.get("andar"))
+                                    try:
+                                        andar_atual = int(andar_raw) if andar_raw is not None else 1
+                                    except Exception:
+                                        andar_atual = 1
+                                    idx_andar = 0 if andar_atual == 1 else 1
                                     edit_andar = st.radio(
                                         "Andar *",
                                         options=[1, 2],
                                         format_func=lambda x: f"{x}º",
                                         horizontal=True,
-                                        index=andar_atual - 1 if andar_atual else 0,
+                                        index=idx_andar,
                                         key=f"edit_and_{row['id']}"
                                     )
                             else:
