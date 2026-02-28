@@ -3,7 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import pool
 import os
-from pathlib import Path
+import base64
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import logging
@@ -32,7 +32,7 @@ from modules.ui_kit import (
     safe_pick,
     render_stepper,
 )
-from modules.migrations_runner import apply_migrations
+from migration_runner import run_migrations
 from modules.stock_reporting import (
     filter_stock_view,
     summarize_stock_by_owner,
