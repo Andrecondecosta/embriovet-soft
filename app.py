@@ -1518,6 +1518,9 @@ st.set_page_config(
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
 )
+inject_stepper_css()
+inject_stock_css()
+inject_reports_css()
 
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
@@ -1582,7 +1585,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
 
-if st.sidebar.button("🚪 Logout", width="stretch"):
+if st.sidebar.button("🚪 Logout", use_container_width=True):
     del st.session_state['user']
     st.rerun()
 
@@ -2378,7 +2381,7 @@ elif aba == "📥 Importar Sémen":
 
         has_errors = bool(errors_map) or not erros_df.empty
         importar_disabled = has_errors or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
+        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
                 st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
