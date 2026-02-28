@@ -380,18 +380,18 @@ def run_stock_page(ctx: dict):
                                     font-size: .78rem;
                                     color: #0f172a;
                                 }
-                                div[data-testid='stRadio'] [role='radiogroup'] {
+                                div[data-testid='stRadio'][aria-label='tipo_operacao_transferencia'] [role='radiogroup'] {
                                     display: flex;
                                     gap: 8px;
                                 }
-                                div[data-testid='stRadio'] label {
+                                div[data-testid='stRadio'][aria-label='tipo_operacao_transferencia'] label {
                                     border: 1px solid #dbe4ee;
                                     background: #f8fafc;
                                     padding: 4px 10px;
                                     border-radius: 8px;
                                     font-size: .78rem;
                                 }
-                                div[data-testid='stRadio'] label:has(input:checked) {
+                                div[data-testid='stRadio'][aria-label='tipo_operacao_transferencia'] label:has(input:checked) {
                                     background: #e2e8f0;
                                     border-color: #cbd5f5;
                                 }
@@ -423,7 +423,7 @@ def run_stock_page(ctx: dict):
 
                         # Tipo de operação
                         tipo_transf = st.radio(
-                            "",
+                            "tipo_operacao_transferencia",
                             ["Transferência Interna", "Saída Externa"],
                             key=f"tipo_transf_{row['id']}",
                             horizontal=True,
