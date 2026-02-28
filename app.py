@@ -1694,6 +1694,60 @@ def verificar_permissao(nivel_minimo):
     
     return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
 
+
+def render_change_credentials(user, app_settings):
+    st.title("⚙️ Segurança: Alterar credenciais")
+    st.info("É obrigatório alterar username e password no primeiro acesso.")
+
+    with st.form("change_credentials_form"):
+        novo_username = st.text_input("Novo username", value=user.get("username", ""))
+        nova_password = st.text_input("Nova password", type="password")
+        confirmar_password = st.text_input("Confirmar password", type="password")
+        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+
+    if submitted:
+        if not novo_username:
+            st.error("❌ Username é obrigatório")
+            return
+        if not nova_password or not confirmar_password:
+            st.error("❌ Password é obrigatória")
+            return
+        if nova_password != confirmar_password:
+            st.error("❌ Passwords não coincidem")
+            return
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM usuarios WHERE username = %s AND id <> %s",
+                (novo_username, user["id"]),
+            )
+            if cur.fetchone():
+                cur.close()
+                st.error("❌ Username já existe")
+                return
+
+            nova_hash = criar_hash_password(nova_password)
+            cur.execute(
+                """
+                UPDATE usuarios
+                SET username = %s,
+                    password_hash = %s,
+                    must_change_password = FALSE,
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (novo_username, nova_hash, user["id"]),
+            )
+            conn.commit()
+            cur.close()
+
+        update_show_initial_credentials(False)
+        st.session_state['user']['username'] = novo_username
+        st.session_state['user']['must_change_password'] = False
+        st.success("✅ Credenciais atualizadas com sucesso")
+        st.rerun()
+
 # Verificar se está logado
 if 'user' not in st.session_state:
     mostrar_tela_login()
