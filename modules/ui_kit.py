@@ -138,16 +138,18 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
         """
         <script>
         (function() {
-            const setLabel = (label) => {
-                const btns = window.parent.document.querySelectorAll(`button[aria-label="${label}"]`);
+            const setLabel = (label, title) => {
+                const btns = window.parent.document.querySelectorAll(
+                    `button[aria-label="${label}"], button[title="${title}"]`
+                );
                 btns.forEach(btn => {
                     if (!btn.innerText || !btn.innerText.trim()) {
                         btn.innerText = label;
                     }
                 });
             };
-            setLabel("−");
-            setLabel("+");
+            setLabel("−", "Diminuir quantidade");
+            setLabel("+", "Aumentar quantidade");
         })();
         </script>
         """,
