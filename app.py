@@ -3,7 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import pool
 import os
-from pathlib import Path
+import base64
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import logging
@@ -32,7 +32,7 @@ from modules.ui_kit import (
     safe_pick,
     render_stepper,
 )
-from modules.migrations_runner import apply_migrations
+from migration_runner import run_migrations
 from modules.stock_reporting import (
     filter_stock_view,
     summarize_stock_by_owner,
@@ -162,15 +162,95 @@ def get_connection():
 # ✅ Migrations automáticas no arranque
 # ------------------------------------------------------------
 try:
-    with get_connection() as conn:
-        base_dir = Path(__file__).resolve().parent
-        migrations_dir = str(base_dir / "migrations")
-        summary = apply_migrations(conn, migrations_dir=migrations_dir)
-        logger.info(f"✅ Migrations ok | applied={summary['applied']} | skipped={summary['skipped']}")
+    conn = connection_pool.getconn()
+    try:
+        run_migrations(conn, migrations_dir="/app/migrations")
+    finally:
+        connection_pool.putconn(conn)
 except Exception as e:
     logger.error(f"❌ Falha ao aplicar migrations: {e}")
     st.error(f"Falha ao aplicar migrations: {e}")
     st.stop()
+
+# ------------------------------------------------------------
+# ⚙️ App Settings (white-label)
+# ------------------------------------------------------------
+def get_app_settings():
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, company_name, logo_base64, primary_color,
+                       is_initialized, show_initial_credentials
+                FROM app_settings
+                ORDER BY id
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "company_name": row[1],
+            "logo_base64": row[2],
+            "primary_color": row[3],
+            "is_initialized": row[4],
+            "show_initial_credentials": row[5],
+        }
+    except Exception as e:
+        logger.error(f"Erro ao carregar app_settings: {e}")
+        return None
+
+
+def ensure_app_settings():
+    settings = get_app_settings()
+    if settings:
+        return settings
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO app_settings (company_name) VALUES ('Sistema') RETURNING id;"
+            )
+            conn.commit()
+            cur.close()
+        return get_app_settings()
+    except Exception as e:
+        logger.error(f"Erro ao criar app_settings: {e}")
+        return None
+
+
+def save_app_settings(settings_id, company_name, logo_base64, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                primary_color = %s,
+                is_initialized = TRUE,
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (company_name, logo_base64, primary_color, settings_id),
+        )
+        conn.commit()
+        cur.close()
+
+
+def update_show_initial_credentials(value: bool):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE app_settings SET show_initial_credentials = %s, updated_at = now()",
+            (value,),
+        )
+        conn.commit()
+        cur.close()
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
@@ -904,6 +984,31 @@ def criar_hash_password(password):
     """Cria hash da password usando bcrypt"""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
+
+def ensure_admin_user_exists():
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM usuarios WHERE username = %s", ("admin",))
+            row = cur.fetchone()
+            if row:
+                cur.close()
+                return
+
+            password_hash = criar_hash_password("admin123")
+            cur.execute(
+                """
+                INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)
+                VALUES (%s, %s, %s, %s, TRUE, TRUE)
+                """,
+                ("admin", "Administrador", password_hash, "Administrador"),
+            )
+            conn.commit()
+            cur.close()
+            logger.info("Utilizador admin inicial criado")
+    except Exception as e:
+        logger.error(f"Erro ao criar admin inicial: {e}")
+
 def verificar_password(password, password_hash):
     """Verifica se a password corresponde ao hash"""
     try:
@@ -917,7 +1022,7 @@ def autenticar_usuario(username, password):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, username, nome_completo, password_hash, nivel, ativo
+                SELECT id, username, nome_completo, password_hash, nivel, ativo, must_change_password
                 FROM usuarios
                 WHERE username = %s AND ativo = TRUE
             """, (username,))
@@ -928,7 +1033,7 @@ def autenticar_usuario(username, password):
             if not resultado:
                 return None
             
-            user_id, username, nome, pwd_hash, nivel, ativo = resultado
+            user_id, username, nome, pwd_hash, nivel, ativo, must_change_password = resultado
             
             # Verificar password
             if verificar_password(password, pwd_hash):
@@ -945,7 +1050,8 @@ def autenticar_usuario(username, password):
                     'id': user_id,
                     'username': username,
                     'nome': nome,
-                    'nivel': nivel
+                    'nivel': nivel,
+                    'must_change_password': must_change_password
                 }
             
             return None
@@ -1530,7 +1636,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
 # 🖼️ Interface Streamlit
 # ------------------------------------------------------------
 st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Gestor Sémen - Embriovet"),
+    page_title=os.getenv("APP_TITLE", "Sistema"),
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
 )
@@ -1541,9 +1647,10 @@ inject_reports_css()
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
-def mostrar_tela_login():
+def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
-    st.title("🔐 Login - Gestor de Sémen Embriovet")
+    nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
+    st.title(f"🔐 Login - {nome_empresa}")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -1568,8 +1675,9 @@ def mostrar_tela_login():
                     else:
                         st.error("❌ Utilizador ou password incorretos")
         
-        st.markdown("---")
-        st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
+        if app_settings and app_settings.get("show_initial_credentials"):
+            st.markdown("---")
+            st.info("ℹ️ **Credenciais iniciais:**\n\n👤 Username: `admin`\n\n🔒 Password: `admin123`")
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
@@ -1586,17 +1694,141 @@ def verificar_permissao(nivel_minimo):
     
     return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
 
+
+def render_change_credentials(user, app_settings):
+    st.title("⚙️ Segurança: Alterar credenciais")
+    st.info("É obrigatório alterar username e password no primeiro acesso.")
+
+    with st.form("change_credentials_form"):
+        novo_username = st.text_input("Novo username", value=user.get("username", ""))
+        nova_password = st.text_input("Nova password", type="password")
+        confirmar_password = st.text_input("Confirmar password", type="password")
+        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+
+    if submitted:
+        if not novo_username:
+            st.error("❌ Username é obrigatório")
+            return
+        if not nova_password or not confirmar_password:
+            st.error("❌ Password é obrigatória")
+            return
+        if nova_password != confirmar_password:
+            st.error("❌ Passwords não coincidem")
+            return
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM usuarios WHERE username = %s AND id <> %s",
+                (novo_username, user["id"]),
+            )
+            if cur.fetchone():
+                cur.close()
+                st.error("❌ Username já existe")
+                return
+
+            nova_hash = criar_hash_password(nova_password)
+            cur.execute(
+                """
+                UPDATE usuarios
+                SET username = %s,
+                    password_hash = %s,
+                    must_change_password = FALSE,
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (novo_username, nova_hash, user["id"]),
+            )
+            conn.commit()
+            cur.close()
+
+        update_show_initial_credentials(False)
+        st.session_state['user']['username'] = novo_username
+        st.session_state['user']['must_change_password'] = False
+        st.success("✅ Credenciais atualizadas com sucesso")
+        st.rerun()
+
+
+def render_onboarding(app_settings):
+    st.title("Configuração inicial")
+    st.caption("Defina o branding base deste ambiente.")
+
+    with st.form("onboarding_form"):
+        nome_empresa = st.text_input("Nome da empresa", value=app_settings.get("company_name") or "")
+        cor = st.color_picker("Cor primária", value=app_settings.get("primary_color") or "#2563eb")
+        logo_file = st.file_uploader("Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+
+    if submitted:
+        logo_base64 = app_settings.get("logo_base64")
+        if logo_file is not None:
+            logo_bytes = logo_file.read()
+            if logo_bytes:
+                encoded = base64.b64encode(logo_bytes).decode("utf-8")
+                logo_base64 = f"data:{logo_file.type};base64,{encoded}"
+
+        save_app_settings(app_settings["id"], nome_empresa, logo_base64, cor)
+        st.success("✅ Configuração guardada")
+        st.rerun()
+
+# Carregar app settings e onboarding inicial
+app_settings = ensure_app_settings()
+if not app_settings:
+    st.error("Falha ao carregar app_settings")
+    st.stop()
+
+if not app_settings.get("is_initialized"):
+    render_onboarding(app_settings)
+    st.stop()
+
+# Garantir admin inicial
+ensure_admin_user_exists()
+
 # Verificar se está logado
 if 'user' not in st.session_state:
-    mostrar_tela_login()
+    mostrar_tela_login(app_settings)
     st.stop()
 
 # Usuário logado - mostrar info no sidebar
 user = st.session_state['user']
 
-st.title("🐴 Gestor de Sémen com Múltiplos Proprietários")
+# Forçar alteração de credenciais no 1º login
+if user.get("must_change_password"):
+    render_change_credentials(user, app_settings)
+    st.stop()
+
+nome_empresa = app_settings.get("company_name") or "Sistema"
+if app_settings.get("logo_base64"):
+    st.markdown(
+        f"<div style='display:flex; align-items:center; gap:12px;'>"
+        f"<img src='{app_settings['logo_base64']}' style='height:36px;'/>
+        <h2 style='margin:0;'>{nome_empresa}</h2></div>",
+        unsafe_allow_html=True,
+    )
+else:
+    st.title(nome_empresa)
+
+if app_settings.get("primary_color"):
+    st.markdown(
+        f"""
+        <style>
+            :root {{ --brand-primary: {app_settings['primary_color']}; }}
+            .stButton > button[data-testid="baseButton-primary"] {{
+                background-color: var(--brand-primary) !important;
+                border-color: var(--brand-primary) !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # Sidebar com info do utilizador
+if app_settings.get("logo_base64"):
+    st.sidebar.markdown(
+        f"<img src='{app_settings['logo_base64']}' style='max-width:100%; height:48px; object-fit:contain; margin-bottom:8px;'/>",
+        unsafe_allow_html=True,
+    )
+st.sidebar.markdown(f"### {nome_empresa}")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
