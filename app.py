@@ -1810,6 +1810,39 @@ elif aba == "📥 Importar Sémen":
                 font-size: .78rem;
                 color: #475569;
             }
+            .import-table-wrap {
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                overflow-x: auto;
+                max-width: 100%;
+            }
+            .import-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: .78rem;
+            }
+            .import-table th, .import-table td {
+                border-bottom: 1px solid #e2e8f0;
+                padding: 4px 6px;
+                white-space: nowrap;
+                text-align: left;
+            }
+            .import-table th {
+                position: sticky;
+                top: 0;
+                background: #f1f5f9;
+                z-index: 4;
+                font-weight: 700;
+                color: #0f172a;
+            }
+            .import-sticky-1, .import-sticky-2, .import-sticky-3 {
+                position: sticky;
+                background: #f8fafc;
+                z-index: 3;
+            }
+            .import-sticky-1 { left: 0; min-width: 160px; }
+            .import-sticky-2 { left: 160px; min-width: 140px; }
+            .import-sticky-3 { left: 300px; min-width: 120px; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2099,7 +2132,73 @@ elif aba == "📥 Importar Sémen":
                 erros_df = pd.DataFrame(erros)
 
     if not preview_df.empty:
-        st.dataframe(preview_df, use_container_width=True, height=260, hide_index=True)
+        st.markdown(
+            "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
+            unsafe_allow_html=True,
+        )
+        compact_view = st.toggle("Vista compacta", value=True)
+
+        full_cols = [
+            "garanhao",
+            "data_embriovet/ref",
+            "existencia_atual",
+            "dose",
+            "motilidade",
+            "qualidade",
+            "proprietario_nome",
+            "contentor_codigo",
+            "canister",
+            "andar",
+            "observacoes",
+            "certificado",
+        ]
+        compact_cols = [
+            "garanhao",
+            "data_embriovet/ref",
+            "existencia_atual",
+            "dose",
+            "motilidade",
+            "qualidade",
+        ]
+        col_order = compact_cols if compact_view else full_cols
+        col_order = [c for c in col_order if c in preview_df.columns]
+
+        sticky_cols = ["garanhao", "data_embriovet/ref", "existencia_atual"]
+
+        import html as html_lib
+
+        def render_preview_table(df, columns):
+            df_show = df[columns].fillna("")
+            header_cells = []
+            for idx, col in enumerate(columns):
+                cls = ""
+                if col in sticky_cols:
+                    cls = f"import-sticky-{sticky_cols.index(col) + 1}"
+                label = col.replace("_", " ")
+                header_cells.append(f"<th class='{cls}'>{html_lib.escape(label)}</th>")
+
+            rows_html = []
+            for _, row in df_show.iterrows():
+                cells = []
+                for col in columns:
+                    cls = ""
+                    if col in sticky_cols:
+                        cls = f"import-sticky-{sticky_cols.index(col) + 1}"
+                    val = html_lib.escape(str(row.get(col, "")))
+                    cells.append(f"<td class='{cls}'>{val}</td>")
+                rows_html.append(f"<tr>{''.join(cells)}</tr>")
+
+            table_html = f"""
+            <div class='import-table-wrap'>
+                <table class='import-table'>
+                    <thead><tr>{''.join(header_cells)}</tr></thead>
+                    <tbody>{''.join(rows_html)}</tbody>
+                </table>
+            </div>
+            """
+            st.markdown(table_html, unsafe_allow_html=True)
+
+        render_preview_table(preview_df, col_order)
 
     render_zone_title("Validação + Ação", "import-zone-title")
     if uploaded_file is None:
