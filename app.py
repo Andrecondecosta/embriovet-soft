@@ -2160,6 +2160,8 @@ elif aba == "📥 Importar Sémen":
                     st.session_state["import_file_id"] = file_id
                     st.session_state["import_editor_df"] = preview_df.copy()
                     st.session_state["import_row_numbers"] = row_numbers
+                    st.session_state.pop("import_editor", None)
+                    st.session_state.pop("import_last_error_idx", None)
 
                 editor_df = st.session_state.get("import_editor_df", preview_df.copy())
                 row_numbers = st.session_state.get("import_row_numbers", row_numbers)
