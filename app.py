@@ -407,7 +407,7 @@ def carregar_transferencias():
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
                 FROM transferencias t
-                LEFT JOIN estoque_dono e ON t.stock_id = e.id
+                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
@@ -1423,7 +1423,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             # Registrar transferência na tabela de transferências
             cur.execute("""
                 INSERT INTO transferencias (
-                    stock_id, proprietario_origem_id, proprietario_destino_id,
+                    estoque_id, proprietario_origem_id, proprietario_destino_id,
                     quantidade, data_transferencia
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
