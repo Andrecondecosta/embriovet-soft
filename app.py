@@ -2531,6 +2531,7 @@ elif aba == "📝 Registrar Inseminação":
         linhas.pop(sid, None)
         st.session_state["insem_linhas"] = linhas
         st.session_state.pop(f"insem_line_input_{sid}", None)
+        st.session_state.pop(f"insem_step_{sid}", None)
 
     def sync_linha_input(lote_id, max_disponivel):
         sid = str(lote_id)
