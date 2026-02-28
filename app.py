@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2 import pool
 import os
 import base64
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import contextmanager
