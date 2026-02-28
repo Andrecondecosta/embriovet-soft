@@ -2679,17 +2679,18 @@ elif aba == "📝 Registrar Inseminação":
                 qtd = int(linha.get("qty", 0))
 
                 st.markdown("<div class='insem-line'>", unsafe_allow_html=True)
+                step_key = f"insem_step_{sid}"
+                if step_key not in st.session_state:
+                    st.session_state[step_key] = qtd
+
                 l1, l2, lminus, lval, lplus, l4 = st.columns([3.0, 1.1, 0.5, 0.7, 0.5, 0.8])
                 with l1:
                     st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
                 with l2:
+                    qtd_display = int(st.session_state.get(step_key, qtd) or 0)
                     st.markdown(f"<div class='insem-lote-sub'>Qtd</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='insem-lote-main'>{qtd}</div>", unsafe_allow_html=True)
-
-                step_key = f"insem_step_{sid}"
-                if step_key not in st.session_state:
-                    st.session_state[step_key] = qtd
+                    st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
 
                 qtd_val, _ = render_stepper(
                     [lminus, lval, lplus],
