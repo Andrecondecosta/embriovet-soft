@@ -36,7 +36,8 @@ def run_migrations(conn, migrations_dir="migrations"):
                 logger.info(f"Migration already applied: {version}")
                 continue
 
-            sql = f.read_text(encoding="utf-8").strip()
+            raw_sql = f.read_text(encoding="utf-8")
+            sql = raw_sql.strip()
             logger.info(f"Applying migration {version}")
 
             if not sql:
@@ -45,7 +46,17 @@ def run_migrations(conn, migrations_dir="migrations"):
                 conn.commit()
                 continue
 
-            cur.execute(sql)
+            lines = [
+                line for line in sql.splitlines()
+                if line.strip() and not line.strip().startswith("--")
+            ]
+            if not lines:
+                logger.info(f"Empty migration file: {version}")
+                cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
+                conn.commit()
+                continue
+
+            cur.execute(raw_sql)
             cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
             conn.commit()
 
