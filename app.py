@@ -1849,6 +1849,15 @@ elif aba == "📥 Importar Sémen":
                 z-index: 6;
                 background: #e2e8f0;
             }
+            .import-error-cell {
+                background: #fee2e2 !important;
+                color: #991b1b;
+            }
+            .import-error-icon {
+                margin-left: 4px;
+                font-size: .75rem;
+                color: #dc2626;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1959,6 +1968,132 @@ elif aba == "📥 Importar Sémen":
     preview_df = pd.DataFrame()
     erros_df = pd.DataFrame()
     linhas_validas = []
+    errors_map = {}
+    row_numbers = []
+    contentor_map = {}
+
+    def parse_int(valor):
+        try:
+            if pd.isna(valor):
+                return None
+            return int(float(valor))
+        except Exception:
+            return None
+
+    def validate_import_df(df, row_nums, cont_map):
+        errors = {}
+        errors_list = []
+        valid_rows = []
+
+        for idx, row in df.iterrows():
+            row_num = row_nums[idx] if idx < len(row_nums) else idx + 2
+
+            def add_error(col, msg):
+                errors.setdefault(idx, {})[col] = msg
+                errors_list.append({"linha": row_num, "coluna": col, "erro": msg})
+
+            garanhao = str(row.get("garanhao", "")).strip()
+            if not garanhao or garanhao.lower() == "nan":
+                add_error("garanhao", "Garanhão obrigatório")
+
+            prop_nome = str(row.get("proprietario_nome", "")).strip()
+            if not prop_nome or prop_nome.lower() == "nan":
+                add_error("proprietario_nome", "Proprietário obrigatório")
+
+            data_ref = str(row.get("data_embriovet/ref", "")).strip()
+            if not data_ref or data_ref.lower() == "nan":
+                add_error("data_embriovet/ref", "Data/Ref obrigatória")
+
+            palhetas = parse_int(row.get("existencia_atual"))
+            if palhetas is None:
+                add_error("existencia_atual", "Existência atual inválida")
+            elif palhetas <= 0:
+                add_error("existencia_atual", "Existência atual deve ser > 0")
+
+            motilidade = parse_int(row.get("motilidade"))
+            if motilidade is None:
+                add_error("motilidade", "Motilidade inválida")
+            elif motilidade < 0 or motilidade > 100:
+                add_error("motilidade", "Motilidade deve estar entre 0 e 100")
+
+            qualidade = row.get("qualidade")
+            qualidade_val = None
+            if qualidade not in [None, "", "nan"] and not pd.isna(qualidade):
+                qualidade_val = parse_int(qualidade)
+                if qualidade_val is None:
+                    add_error("qualidade", "Qualidade inválida")
+                elif qualidade_val < 0 or qualidade_val > 100:
+                    add_error("qualidade", "Qualidade deve estar entre 0 e 100")
+
+            cont_code = str(row.get("contentor_codigo", "")).strip()
+            cont_key = cont_code.upper()
+            if not cont_code or cont_code.lower() == "nan":
+                add_error("contentor_codigo", "Contentor obrigatório")
+            elif cont_key not in cont_map:
+                add_error("contentor_codigo", "Contentor inexistente")
+
+            canister = parse_int(row.get("canister"))
+            if canister is None:
+                add_error("canister", "Canister inválido")
+            elif canister < 1 or canister > 10:
+                add_error("canister", "Canister deve ser 1-10")
+
+            andar = parse_int(row.get("andar"))
+            if andar is None:
+                add_error("andar", "Andar inválido")
+            elif andar not in [1, 2]:
+                add_error("andar", "Andar deve ser 1 ou 2")
+
+            dose = ""
+            if not pd.isna(row.get("dose")):
+                dose = str(row.get("dose")).strip()
+
+            observacoes = ""
+            if not pd.isna(row.get("observacoes")):
+                observacoes = str(row.get("observacoes")).strip()
+
+            certificado = None
+            if not pd.isna(row.get("certificado")):
+                certificado = str(row.get("certificado")).strip()
+
+            data_embriovet = None
+            origem_externa = None
+            if data_ref and data_ref.lower() != "nan":
+                dayfirst = False
+                if "/" in data_ref or "." in data_ref:
+                    dayfirst = True
+                elif "-" in data_ref:
+                    parts = data_ref.split("-")
+                    if parts and len(parts[0]) <= 2:
+                        dayfirst = True
+                parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=dayfirst)
+                if pd.isna(parsed):
+                    origem_externa = data_ref
+                else:
+                    data_embriovet = parsed.date()
+
+            if idx not in errors:
+                valid_rows.append(
+                    {
+                        "linha": row_num,
+                        "garanhao": garanhao,
+                        "proprietario_nome": prop_nome,
+                        "data_embriovet": data_embriovet,
+                        "origem_externa": origem_externa,
+                        "existencia_atual": palhetas,
+                        "dose": dose or None,
+                        "motilidade": motilidade,
+                        "contentor_id": cont_map.get(cont_key),
+                        "contentor_codigo": cont_code,
+                        "canister": canister,
+                        "andar": andar,
+                        "observacoes": observacoes or None,
+                        "certificado": certificado or None,
+                        "qualidade": qualidade_val,
+                    }
+                )
+
+        return errors, pd.DataFrame(errors_list), valid_rows
 
     if uploaded_file is not None:
         try:
@@ -1987,7 +2122,7 @@ elif aba == "📥 Importar Sémen":
             if missing:
                 st.error(f"Colunas obrigatórias em falta: {', '.join(missing)}")
                 erros_df = pd.DataFrame([
-                    {"linha": "-", "erro": f"Colunas obrigatórias em falta: {', '.join(missing)}"}
+                    {"linha": "-", "coluna": "-", "erro": f"Colunas obrigatórias em falta: {', '.join(missing)}"}
                 ])
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
@@ -2002,16 +2137,17 @@ elif aba == "📥 Importar Sémen":
                     "existencia_atual",
                     "dose",
                     "motilidade",
+                    "qualidade",
                     "proprietario_nome",
                     "contentor_codigo",
                     "canister",
                     "andar",
                     "observacoes",
                     "certificado",
-                    "qualidade",
                 ]
                 preview_df = norm_df[preview_cols].copy()
                 preview_df = preview_df.rename(columns={"data_ref": "data_embriovet/ref"})
+                row_numbers = norm_df["__row"].tolist()
 
                 contentores_df = carregar_contentores()
                 contentor_map = {
@@ -2019,192 +2155,122 @@ elif aba == "📥 Importar Sémen":
                     for cod, cid in zip(contentores_df.get("codigo", []), contentores_df.get("id", []))
                 }
 
-                erros = []
-                for _, row in norm_df.iterrows():
-                    linha = int(row["__row"])
-                    row_errors = []
+                file_id = (uploaded_file.name, getattr(uploaded_file, "size", None))
+                if st.session_state.get("import_file_id") != file_id:
+                    st.session_state["import_file_id"] = file_id
+                    st.session_state["import_editor_df"] = preview_df.copy()
+                    st.session_state["import_row_numbers"] = row_numbers
 
-                    garanhao = str(row.get("garanhao", "")).strip()
-                    if not garanhao or garanhao.lower() == "nan":
-                        row_errors.append("Garanhão obrigatório")
+                editor_df = st.session_state.get("import_editor_df", preview_df.copy())
+                row_numbers = st.session_state.get("import_row_numbers", row_numbers)
 
-                    prop_nome = str(row.get("proprietario_nome", "")).strip()
-                    if not prop_nome or prop_nome.lower() == "nan":
-                        row_errors.append("Proprietário obrigatório")
+                st.markdown(
+                    "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
+                    unsafe_allow_html=True,
+                )
+                compact_view = st.toggle("Vista compacta", value=True)
 
-                    data_ref = str(row.get("data_ref", "")).strip()
-                    if not data_ref or data_ref.lower() == "nan":
-                        row_errors.append("Data/Ref obrigatória")
+                full_cols = [
+                    "garanhao",
+                    "data_embriovet/ref",
+                    "existencia_atual",
+                    "dose",
+                    "motilidade",
+                    "qualidade",
+                    "proprietario_nome",
+                    "contentor_codigo",
+                    "canister",
+                    "andar",
+                    "observacoes",
+                    "certificado",
+                ]
+                compact_cols = [
+                    "garanhao",
+                    "data_embriovet/ref",
+                    "existencia_atual",
+                    "dose",
+                    "motilidade",
+                    "qualidade",
+                ]
+                col_order = compact_cols if compact_view else full_cols
+                col_order = [c for c in col_order if c in editor_df.columns]
 
-                    try:
-                        palhetas = int(float(row.get("existencia_atual", 0)))
-                        if palhetas <= 0:
-                            row_errors.append("Existência atual deve ser > 0")
-                    except Exception:
-                        row_errors.append("Existência atual inválida")
-                        palhetas = None
+                editor_view = editor_df[col_order].copy()
+                edited_view = st.data_editor(
+                    editor_view,
+                    key="import_editor",
+                    num_rows="fixed",
+                    width="stretch",
+                    hide_index=True,
+                )
 
-                    dose = ""
-                    if not pd.isna(row.get("dose")):
-                        dose = str(row.get("dose")).strip()
+                updated_df = editor_df.copy()
+                for col in edited_view.columns:
+                    updated_df[col] = edited_view[col]
+                st.session_state["import_editor_df"] = updated_df
+                preview_df = updated_df
 
-                    try:
-                        motilidade = int(float(row.get("motilidade", 0)))
-                        if motilidade < 0 or motilidade > 100:
-                            row_errors.append("Motilidade deve estar entre 0 e 100")
-                    except Exception:
-                        row_errors.append("Motilidade inválida")
-                        motilidade = None
+                errors_map, erros_df, linhas_validas = validate_import_df(preview_df, row_numbers, contentor_map)
 
-                    cont_code = str(row.get("contentor_codigo", "")).strip()
-                    cont_key = cont_code.upper()
-                    if not cont_code or cont_code.lower() == "nan":
-                        row_errors.append("Contentor obrigatório")
-                    elif cont_key not in contentor_map:
-                        row_errors.append("Contentor inexistente")
+                sticky_cols = ["garanhao", "data_embriovet/ref", "existencia_atual"]
 
-                    try:
-                        canister = int(float(row.get("canister", 0)))
-                        if canister < 1 or canister > 10:
-                            row_errors.append("Canister deve ser 1-10")
-                    except Exception:
-                        row_errors.append("Canister inválido")
-                        canister = None
+                import html as html_lib
 
-                    try:
-                        andar = int(float(row.get("andar", 0)))
-                        if andar not in [1, 2]:
-                            row_errors.append("Andar deve ser 1 ou 2")
-                    except Exception:
-                        row_errors.append("Andar inválido")
-                        andar = None
+                def render_preview_table(df, columns, error_map):
+                    df_show = df[columns].fillna("")
+                    header_cells = []
+                    for col in columns:
+                        cls = ""
+                        if col in sticky_cols:
+                            cls = f"import-sticky-{sticky_cols.index(col) + 1}"
+                        label = col.replace("_", " ")
+                        header_cells.append(f"<th class='{cls}'>{html_lib.escape(label)}</th>")
 
-                    observacoes = ""
-                    if not pd.isna(row.get("observacoes")):
-                        observacoes = str(row.get("observacoes")).strip()
+                    rows_html = []
+                    for idx, row in df_show.iterrows():
+                        cells = []
+                        row_errors = error_map.get(idx, {})
+                        for col in columns:
+                            classes = []
+                            if col in sticky_cols:
+                                classes.append(f"import-sticky-{sticky_cols.index(col) + 1}")
+                            msg = row_errors.get(col)
+                            if msg:
+                                classes.append("import-error-cell")
+                            cls = " ".join(classes)
+                            title_attr = f" title='{html_lib.escape(msg)}'" if msg else ""
+                            val = html_lib.escape(str(row.get(col, "")))
+                            icon = "<span class='import-error-icon'>⚠</span>" if msg else ""
+                            cells.append(f"<td class='{cls}'{title_attr}>{val}{icon}</td>")
+                        rows_html.append(f"<tr id='import-row-{idx}'>%s</tr>" % "".join(cells))
 
-                    certificado = None
-                    if not pd.isna(row.get("certificado")):
-                        certificado = str(row.get("certificado")).strip()
+                    table_html = f"""
+                    <div class='import-table-wrap'>
+                        <table class='import-table'>
+                            <thead><tr>{''.join(header_cells)}</tr></thead>
+                            <tbody>{''.join(rows_html)}</tbody>
+                        </table>
+                    </div>
+                    """
+                    st.markdown(table_html, unsafe_allow_html=True)
 
-                    qualidade = None
-                    if not pd.isna(row.get("qualidade")):
-                        try:
-                            qualidade = int(float(row.get("qualidade")))
-                            if qualidade < 0 or qualidade > 100:
-                                row_errors.append("Qualidade deve estar entre 0 e 100")
-                        except Exception:
-                            row_errors.append("Qualidade inválida")
+                render_preview_table(preview_df, col_order, errors_map)
 
-                    data_embriovet = None
-                    origem_externa = None
-                    if data_ref and data_ref.lower() != "nan":
-                        dayfirst = False
-                        if "/" in data_ref or "." in data_ref:
-                            dayfirst = True
-                        elif "-" in data_ref:
-                            parts = data_ref.split("-")
-                            if parts and len(parts[0]) <= 2:
-                                dayfirst = True
-                        parsed = pd.to_datetime(data_ref, errors="coerce", dayfirst=dayfirst)
-                        if pd.isna(parsed):
-                            origem_externa = data_ref
-                        else:
-                            data_embriovet = parsed.date()
-
-                    if row_errors:
-                        erros.append({"linha": linha, "erro": "; ".join(row_errors)})
-                    else:
-                        linhas_validas.append(
-                            {
-                                "linha": linha,
-                                "garanhao": garanhao,
-                                "proprietario_nome": prop_nome,
-                                "data_embriovet": data_embriovet,
-                                "origem_externa": origem_externa,
-                                "existencia_atual": palhetas,
-                                "dose": dose or None,
-                                "motilidade": motilidade,
-                                "contentor_id": contentor_map.get(cont_key),
-                                "contentor_codigo": cont_code,
-                                "canister": canister,
-                                "andar": andar,
-                                "observacoes": observacoes or None,
-                                "certificado": certificado or None,
-                                "qualidade": qualidade,
-                            }
+                if errors_map:
+                    first_error = sorted(errors_map.keys())[0]
+                    if st.session_state.get("import_last_error_idx") != first_error:
+                        st.session_state["import_last_error_idx"] = first_error
+                        st.components.v1.html(
+                            f"""
+                            <script>
+                            setTimeout(() => {{
+                                const row = window.parent.document.getElementById('import-row-{first_error}');
+                                if (row) {{ row.scrollIntoView({{behavior: 'smooth', block: 'center'}}); }}
+                            }}, 300);
+                            </script>
+                            """,
+                            height=0,
                         )
-
-                erros_df = pd.DataFrame(erros)
-
-    if not preview_df.empty:
-        st.markdown(
-            "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
-            unsafe_allow_html=True,
-        )
-        compact_view = st.toggle("Vista compacta", value=True)
-
-        full_cols = [
-            "garanhao",
-            "data_embriovet/ref",
-            "existencia_atual",
-            "dose",
-            "motilidade",
-            "qualidade",
-            "proprietario_nome",
-            "contentor_codigo",
-            "canister",
-            "andar",
-            "observacoes",
-            "certificado",
-        ]
-        compact_cols = [
-            "garanhao",
-            "data_embriovet/ref",
-            "existencia_atual",
-            "dose",
-            "motilidade",
-            "qualidade",
-        ]
-        col_order = compact_cols if compact_view else full_cols
-        col_order = [c for c in col_order if c in preview_df.columns]
-
-        sticky_cols = ["garanhao", "data_embriovet/ref", "existencia_atual"]
-
-        import html as html_lib
-
-        def render_preview_table(df, columns):
-            df_show = df[columns].fillna("")
-            header_cells = []
-            for idx, col in enumerate(columns):
-                cls = ""
-                if col in sticky_cols:
-                    cls = f"import-sticky-{sticky_cols.index(col) + 1}"
-                label = col.replace("_", " ")
-                header_cells.append(f"<th class='{cls}'>{html_lib.escape(label)}</th>")
-
-            rows_html = []
-            for _, row in df_show.iterrows():
-                cells = []
-                for col in columns:
-                    cls = ""
-                    if col in sticky_cols:
-                        cls = f"import-sticky-{sticky_cols.index(col) + 1}"
-                    val = html_lib.escape(str(row.get(col, "")))
-                    cells.append(f"<td class='{cls}'>{val}</td>")
-                rows_html.append(f"<tr>{''.join(cells)}</tr>")
-
-            table_html = f"""
-            <div class='import-table-wrap'>
-                <table class='import-table'>
-                    <thead><tr>{''.join(header_cells)}</tr></thead>
-                    <tbody>{''.join(rows_html)}</tbody>
-                </table>
-            </div>
-            """
-            st.markdown(table_html, unsafe_allow_html=True)
-
-        render_preview_table(preview_df, col_order)
 
     render_zone_title("Validação + Ação", "import-zone-title")
     if uploaded_file is None:
