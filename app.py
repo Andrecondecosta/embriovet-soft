@@ -1517,6 +1517,9 @@ st.set_page_config(
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
 )
+inject_stepper_css()
+inject_stock_css()
+inject_reports_css()
 
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
