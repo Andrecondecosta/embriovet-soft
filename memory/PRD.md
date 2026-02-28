@@ -80,6 +80,8 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Linhas do consumo/inseminação ajustadas para layout técnico: Ref | Localização | Disponível | Quantidade (stepper) | Remover
   - Página Registrar Inseminação modularizada em `/modules/pages/insemination_page.py` com modal de seleção por checkbox
   - Sistema de migrations SQL (sem SQLAlchemy) com `schema_migrations` e advisory lock
+  - Migrations automáticas via `/app/migration_runner.py` com app_settings, onboarding e compatibilidade de transferencias
+  - White-label por DB (company_name/logo/cor) + wizard inicial e forçar troca de credenciais no 1º login
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.
