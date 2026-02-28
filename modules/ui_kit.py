@@ -64,6 +64,16 @@ def inject_stock_css():
                 color: #0f172a;
                 margin: .2rem 0 .25rem 0;
             }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def inject_stepper_css():
+    st.markdown(
+        """
+        <style>
             .stepper-value {
                 font-weight: 600;
                 font-size: .85rem;
