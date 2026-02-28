@@ -28,11 +28,11 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
     files = []
     if migrations_path.exists():
         files = sorted([p for p in migrations_path.glob("*.sql")])
-    if not files:
-        logger.info(f"No migrations found in {migrations_dir}")
-        return
 
     try:
+        if not files:
+            logger.info(f"No migrations found in {migrations_dir}")
+            return
         for f in files:
             version = f.name
             if version in applied:
