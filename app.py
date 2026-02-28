@@ -2281,7 +2281,7 @@ elif aba == "📥 Importar Sémen":
         st.info("Carregue um ficheiro para validar.")
     else:
         total_linhas = len(preview_df)
-        total_erros = 0 if erros_df.empty else len(erros_df)
+        total_erros = len(errors_map) if errors_map else 0
         total_validas = max(0, total_linhas - total_erros)
         render_kpi_strip([
             ("Linhas", total_linhas),
