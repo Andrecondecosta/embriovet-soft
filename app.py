@@ -1022,7 +1022,7 @@ def autenticar_usuario(username, password):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, username, nome_completo, password_hash, nivel, ativo
+                SELECT id, username, nome_completo, password_hash, nivel, ativo, must_change_password
                 FROM usuarios
                 WHERE username = %s AND ativo = TRUE
             """, (username,))
@@ -1033,7 +1033,7 @@ def autenticar_usuario(username, password):
             if not resultado:
                 return None
             
-            user_id, username, nome, pwd_hash, nivel, ativo = resultado
+            user_id, username, nome, pwd_hash, nivel, ativo, must_change_password = resultado
             
             # Verificar password
             if verificar_password(password, pwd_hash):
@@ -1050,7 +1050,8 @@ def autenticar_usuario(username, password):
                     'id': user_id,
                     'username': username,
                     'nome': nome,
-                    'nivel': nivel
+                    'nivel': nivel,
+                    'must_change_password': must_change_password
                 }
             
             return None
