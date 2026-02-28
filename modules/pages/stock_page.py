@@ -423,7 +423,7 @@ def run_stock_page(ctx: dict):
 
                         # Tipo de operação
                         tipo_transf = st.radio(
-                            "",
+                            "tipo_operacao_transferencia",
                             ["Transferência Interna", "Saída Externa"],
                             key=f"tipo_transf_{row['id']}",
                             horizontal=True,
