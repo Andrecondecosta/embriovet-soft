@@ -2691,7 +2691,7 @@ elif aba == "📝 Registrar Inseminação":
                 if step_key not in st.session_state:
                     st.session_state[step_key] = qtd
 
-                l1, l2, lminus, lval, lplus, l4 = st.columns([3.0, 1.1, 0.5, 0.7, 0.5, 0.8])
+                l1, l2, lval, lminus, lplus, l4 = st.columns([3.0, 1.1, 0.7, 0.5, 0.5, 0.8])
                 with l1:
                     st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
@@ -2701,7 +2701,7 @@ elif aba == "📝 Registrar Inseminação":
                     st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
 
                 qtd_val, _ = render_stepper(
-                    [lminus, lval, lplus],
+                    [lval, lminus, lplus],
                     step_key,
                     min_value=0,
                     max_value=max_disp,

@@ -442,7 +442,7 @@ def run_stock_page(ctx: dict):
                             if st.button("Novo proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
                                 modal_adicionar_proprietario()
 
-                            c_dest, c_minus, c_val, c_plus, c_action = st.columns([2.4, 0.6, 0.8, 0.6, 1])
+                            c_dest, c_val, c_minus, c_plus, c_action = st.columns([2.4, 0.7, 0.5, 0.5, 1])
                             with c_dest:
                                 ids = proprietarios["id"].tolist() if not proprietarios.empty else []
                                 idx_transf = 0
@@ -466,16 +466,16 @@ def run_stock_page(ctx: dict):
                                 st.session_state[step_key] = max(min(existencia, 1), 1)
 
                             qtd_val, invalid = render_stepper(
-                                [c_minus, c_val, c_plus],
+                                [c_val, c_minus, c_plus],
                                 step_key,
-                                min_value=0,
+                                min_value=1,
                                 max_value=existencia,
                                 invalid_tooltip="Stock insuficiente",
                             )
 
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
-                                btn_disabled = qtd_val <= 0 or qtd_val > existencia or not ids or novo_proprietario is None
+                                btn_disabled = qtd_val < 1 or qtd_val > existencia or not ids or novo_proprietario is None
                                 if st.button("Executar", key=f"btn_transf_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_val):
                                         restante = max(0, existencia - qtd_val)
@@ -512,7 +512,7 @@ def run_stock_page(ctx: dict):
                             with h5:
                                 st.markdown("<div class='transf-grid-head'>Ação</div>", unsafe_allow_html=True)
 
-                            c_dest, c_tipo, c_minus, c_val, c_plus, c_obs, c_action = st.columns([2, 1.2, 0.6, 0.8, 0.6, 2, 1])
+                            c_dest, c_tipo, c_val, c_minus, c_plus, c_obs, c_action = st.columns([2, 1.2, 0.7, 0.5, 0.5, 2, 1])
                             with c_dest:
                                 destinatario_ext = st.text_input(
                                     "Destinatário",
@@ -533,9 +533,9 @@ def run_stock_page(ctx: dict):
                                 st.session_state[step_ext_key] = max(min(existencia, 1), 1)
 
                             qtd_ext_val, invalid_ext = render_stepper(
-                                [c_minus, c_val, c_plus],
+                                [c_val, c_minus, c_plus],
                                 step_ext_key,
-                                min_value=0,
+                                min_value=1,
                                 max_value=existencia,
                                 invalid_tooltip="Stock insuficiente",
                             )
@@ -550,7 +550,7 @@ def run_stock_page(ctx: dict):
 
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
-                                btn_disabled = qtd_ext_val <= 0 or qtd_ext_val > existencia or not destinatario_ext
+                                btn_disabled = qtd_ext_val < 1 or qtd_ext_val > existencia or not destinatario_ext
                                 if st.button("Confirmar", key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_externo(row["id"], destinatario_ext, qtd_ext_val, tipo_saida, obs_ext):
                                         restante = max(0, existencia - qtd_ext_val)
