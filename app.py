@@ -2398,6 +2398,7 @@ elif aba == "📥 Importar Sémen":
 # ------------------------------------------------------------
 elif aba == "📝 Registrar Inseminação":
     st.header("Registrar Inseminação")
+    inject_stepper_css()
 
     st.markdown(
         """
