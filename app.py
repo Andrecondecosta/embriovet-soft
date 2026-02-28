@@ -1803,9 +1803,12 @@ if user.get("must_change_password"):
 nome_empresa = app_settings.get("company_name") or "Sistema"
 if app_settings.get("logo_base64"):
     st.markdown(
-        f"<div style='display:flex; align-items:center; gap:12px;'>"
-        f"<img src='{app_settings['logo_base64']}' style='height:36px;'/>
-        <h2 style='margin:0;'>{nome_empresa}</h2></div>",
+        f"""
+        <div style='display:flex; align-items:center; gap:12px;'>
+            <img src='{app_settings['logo_base64']}' style='height:36px;'/>
+            <h2 style='margin:0;'>{nome_empresa}</h2>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 else:
