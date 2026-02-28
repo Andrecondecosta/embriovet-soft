@@ -13,6 +13,7 @@ import hashlib
 import time
 import json
 import unicodedata
+import importlib.util
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from io import BytesIO
 from reportlab.lib import colors
