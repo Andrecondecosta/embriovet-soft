@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2 import pool
 import os
 import base64
+from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import logging
@@ -164,7 +165,9 @@ def get_connection():
 try:
     conn = connection_pool.getconn()
     try:
-        run_migrations(conn, migrations_dir="/app/migrations")
+        BASE_DIR = Path(__file__).resolve().parent
+        MIGRATIONS_DIR = BASE_DIR / "migrations"
+        run_migrations(conn, migrations_dir=str(MIGRATIONS_DIR))
     finally:
         connection_pool.putconn(conn)
 except Exception as e:
