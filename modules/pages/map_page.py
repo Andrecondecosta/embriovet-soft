@@ -311,15 +311,15 @@ def run_map_page(ctx: dict):
 
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button("Adicionar", key="map_add_btn_mobile", use_container_width=True)
+                        criar_novo = st.button("Adicionar", key="map_add_btn_mobile", width="stretch")
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar", key="map_save_btn_mobile", type="primary", use_container_width=True)
+                            salvar_layout = st.button("Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_mobile", use_container_width=True)
+                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_mobile", width="stretch")
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar", key="map_cancel_btn_mobile", use_container_width=True)
+                            cancelar_edicao = st.button("Cancelar", key="map_cancel_btn_mobile", width="stretch")
                 else:
                     st.markdown(
                         f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
