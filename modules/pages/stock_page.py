@@ -393,18 +393,18 @@ def run_stock_page(ctx: dict):
                                     font-size: .78rem;
                                     color: #0f172a;
                                 }
-                                .transf-segmented [role='radiogroup'] {
+                                div[data-testid='stRadio'] [role='radiogroup'] {
                                     display: flex;
                                     gap: 8px;
                                 }
-                                .transf-segmented label {
+                                div[data-testid='stRadio'] label {
                                     border: 1px solid #dbe4ee;
                                     background: #f8fafc;
                                     padding: 4px 10px;
                                     border-radius: 8px;
                                     font-size: .78rem;
                                 }
-                                .transf-segmented label:has(input:checked) {
+                                div[data-testid='stRadio'] label:has(input:checked) {
                                     background: #e2e8f0;
                                     border-color: #cbd5f5;
                                 }
