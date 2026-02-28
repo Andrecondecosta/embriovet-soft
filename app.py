@@ -1771,9 +1771,22 @@ def render_onboarding(app_settings):
         st.success("✅ Configuração guardada")
         st.rerun()
 
+# Carregar app settings e onboarding inicial
+app_settings = ensure_app_settings()
+if not app_settings:
+    st.error("Falha ao carregar app_settings")
+    st.stop()
+
+if not app_settings.get("is_initialized"):
+    render_onboarding(app_settings)
+    st.stop()
+
+# Garantir admin inicial
+ensure_admin_user_exists()
+
 # Verificar se está logado
 if 'user' not in st.session_state:
-    mostrar_tela_login()
+    mostrar_tela_login(app_settings)
     st.stop()
 
 # Usuário logado - mostrar info no sidebar
