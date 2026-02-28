@@ -117,11 +117,21 @@ def inject_stepper_css():
                 font-size: 16px !important;
                 font-weight: 700 !important;
             }
+            button[title="Diminuir quantidade"],
+            button[title="Aumentar quantidade"] {
+                color: transparent;
+            }
             button[title="Diminuir quantidade"]::after {
                 content: "−";
+                color: #0f172a;
+                font-size: 16px;
+                font-weight: 700;
             }
             button[title="Aumentar quantidade"]::after {
                 content: "+";
+                color: #0f172a;
+                font-size: 16px;
+                font-weight: 700;
             }
         </style>
         """,
