@@ -79,6 +79,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Transferências corrigidas para usar coluna `estoque_id` (não `stock_id`)
   - Linhas do consumo/inseminação ajustadas para layout técnico: Ref | Localização | Disponível | Quantidade (stepper) | Remover
   - Página Registrar Inseminação modularizada em `/modules/pages/insemination_page.py` com modal de seleção por checkbox
+  - Sistema de migrations SQL (sem SQLAlchemy) com `schema_migrations` e advisory lock
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.

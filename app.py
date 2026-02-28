@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import pool
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import logging
@@ -31,6 +32,7 @@ from modules.ui_kit import (
     safe_pick,
     render_stepper,
 )
+from modules.migrations_runner import apply_migrations
 from modules.stock_reporting import (
     filter_stock_view,
     summarize_stock_by_owner,
@@ -155,6 +157,20 @@ def get_connection():
     finally:
         if conn:
             connection_pool.putconn(conn)
+
+# ------------------------------------------------------------
+# ✅ Migrations automáticas no arranque
+# ------------------------------------------------------------
+try:
+    with get_connection() as conn:
+        base_dir = Path(__file__).resolve().parent
+        migrations_dir = str(base_dir / "migrations")
+        summary = apply_migrations(conn, migrations_dir=migrations_dir)
+        logger.info(f"✅ Migrations ok | applied={summary['applied']} | skipped={summary['skipped']}")
+except Exception as e:
+    logger.error(f"❌ Falha ao aplicar migrations: {e}")
+    st.error(f"Falha ao aplicar migrations: {e}")
+    st.stop()
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
