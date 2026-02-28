@@ -347,97 +347,237 @@ def run_stock_page(ctx: dict):
                 # TAB 3: Transferir (Gestor e Admin apenas)
                 if tab3 is not None:
                     with tab3:
-                        st.markdown("### 🔄 Transferir Palhetas")
-
-                        # Escolher tipo de transferência
-                        tipo_transf = st.radio(
-                            "Tipo de Transferência:",
-                            ["🔄 Interna (para outro proprietário do sistema)", "📤 Externa (venda/envio para fora)"],
-                            key=f"tipo_transf_{row['id']}"
+                        st.markdown(
+                            """
+                            <style>
+                                .transf-header {
+                                    background: #f5f7fa;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    padding: 6px 10px;
+                                    font-size: .78rem;
+                                    color: #1f2937;
+                                    margin-bottom: 8px;
+                                }
+                                .transf-warning {
+                                    font-size: .75rem;
+                                    color: #b45309;
+                                    margin: 6px 0;
+                                }
+                                .transf-grid-head {
+                                    font-size: .7rem;
+                                    text-transform: uppercase;
+                                    letter-spacing: .05em;
+                                    color: #64748b;
+                                }
+                                .transf-qty {
+                                    font-weight: 600;
+                                    font-size: .85rem;
+                                    padding: 2px 6px;
+                                    text-align: center;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 6px;
+                                    background: #f8fafc;
+                                }
+                                .transf-qty.invalid {
+                                    color: #b91c1c;
+                                    border-color: #fecaca;
+                                    background: #fee2e2;
+                                }
+                                .transf-inline-msg {
+                                    margin-top: 6px;
+                                    padding: 4px 8px;
+                                    border: 1px solid #e2e8f0;
+                                    border-radius: 6px;
+                                    background: #f8fafc;
+                                    font-size: .78rem;
+                                    color: #0f172a;
+                                }
+                                .transf-segmented [role='radiogroup'] {
+                                    display: flex;
+                                    gap: 8px;
+                                }
+                                .transf-segmented label {
+                                    border: 1px solid #dbe4ee;
+                                    background: #f8fafc;
+                                    padding: 4px 10px;
+                                    border-radius: 8px;
+                                    font-size: .78rem;
+                                }
+                                .transf-segmented label:has(input:checked) {
+                                    background: #e2e8f0;
+                                    border-color: #cbd5f5;
+                                }
+                            </style>
+                            """,
+                            unsafe_allow_html=True,
                         )
 
-                        if tipo_transf.startswith("🔄"):
-                            # TRANSFERÊNCIA INTERNA
-                            st.info("Transferir para outro proprietário cadastrado no sistema")
+                        # Cabeçalho operacional
+                        localizacao = "N/A"
+                        if row.get('contentor_id'):
+                            try:
+                                contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
+                                with get_connection() as conn:
+                                    contentor_df = pd.read_sql_query(contentor_query, conn)
+                                    if not contentor_df.empty:
+                                        contentor_codigo = contentor_df.iloc[0]['codigo']
+                                        canister_num = row.get('canister', 'N/A')
+                                        andar_num = row.get('andar', 'N/A')
+                                        localizacao = f"{contentor_codigo} C{canister_num} A{andar_num}"
+                            except Exception:
+                                localizacao = "N/A"
 
-                            # Botão + para adicionar proprietário
-                            if st.button("➕ Novo Proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                        header_texto = (
+                            f"{referencia} · {row.get('garanhao', '—')} · Proprietário: {proprietario_nome} · "
+                            f"Disp: {existencia} · {localizacao}"
+                        )
+                        st.markdown(f"<div class='transf-header'>{header_texto}</div>", unsafe_allow_html=True)
+
+                        # Tipo de operação
+                        tipo_transf = st.radio(
+                            "",
+                            ["Transferência Interna", "Saída Externa"],
+                            key=f"tipo_transf_{row['id']}",
+                            horizontal=True,
+                            label_visibility="collapsed",
+                        )
+                        st.markdown("<div class='transf-segmented'></div>", unsafe_allow_html=True)
+
+                        if tipo_transf == "Transferência Interna":
+                            st.markdown("<div class='transf-grid-head'>Destino | Quantidade | Ação</div>", unsafe_allow_html=True)
+                            if st.button("Novo proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
                                 modal_adicionar_proprietario()
 
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if not proprietarios.empty:
-                                    ids = proprietarios["id"].tolist()
-
-                                    # Se acabou de adicionar, selecionar o novo
-                                    idx_transf = 0
-                                    if 'novo_proprietario_id' in st.session_state:
-                                        if st.session_state['novo_proprietario_id'] in ids:
-                                            idx_transf = ids.index(st.session_state['novo_proprietario_id'])
-
-                                    novo_proprietario = st.selectbox(
-                                        "Para qual proprietário?",
-                                        options=ids,
-                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
-                                        index=idx_transf,
-                                        key=f"transf_select_{row['id']}",
-                                    )
-
-                            with col2:
-                                qtd_transferir = st.number_input(
-                                    "Quantidade de palhetas",
-                                    min_value=1,
-                                    max_value=max(existencia, 1),
-                                    value=max(min(existencia, 1), 1),
-                                    key=f"transf_qtd_{row['id']}"
+                            c1, c2, c3 = st.columns([2.4, 1.2, 1])
+                            with c1:
+                                ids = proprietarios["id"].tolist() if not proprietarios.empty else []
+                                idx_transf = 0
+                                if 'novo_proprietario_id' in st.session_state and st.session_state['novo_proprietario_id'] in ids:
+                                    idx_transf = ids.index(st.session_state['novo_proprietario_id'])
+                                novo_proprietario = st.selectbox(
+                                    "Destino",
+                                    options=ids,
+                                    format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                    index=idx_transf if ids else 0,
+                                    key=f"transf_select_{row['id']}",
+                                    label_visibility="collapsed",
                                 )
 
-                            if st.button("🔄 Transferir Internamente", key=f"btn_transf_{row['id']}", type="primary"):
-                                if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_transferir):
-                                    st.success(f"✅ {qtd_transferir} palhetas transferidas de {proprietario_nome} para {proprietarios_dict.get(novo_proprietario, 'Desconhecido')}!")
-                                    # Marcar que usou
-                                    if 'novo_proprietario_id' in st.session_state:
-                                        st.session_state['novo_proprietario_usado'] = True
-                                    st.rerun()
+                            qtd_key = f"transf_qtd_{row['id']}"
+                            if qtd_key not in st.session_state:
+                                st.session_state[qtd_key] = max(min(existencia, 1), 1)
+
+                            def step_qtd(delta):
+                                novo = max(0, int(st.session_state[qtd_key]) + delta)
+                                st.session_state[qtd_key] = novo
+
+                            with c2:
+                                q1, q2, q3 = st.columns([1, 1, 1])
+                                with q1:
+                                    st.button("-", key=f"transf_minus_{row['id']}", on_click=step_qtd, args=(-1,))
+                                with q2:
+                                    qtd_val = int(st.session_state[qtd_key])
+                                    invalid = qtd_val <= 0 or qtd_val > existencia
+                                    tooltip = "Stock insuficiente" if qtd_val > existencia else ""
+                                    cls = "transf-qty invalid" if invalid else "transf-qty"
+                                    st.markdown(f"<div class='{cls}' title='{tooltip}'>{qtd_val}</div>", unsafe_allow_html=True)
+                                with q3:
+                                    st.button("+", key=f"transf_plus_{row['id']}", on_click=step_qtd, args=(1,))
+
+                            with c3:
+                                btn_disabled = qtd_val <= 0 or qtd_val > existencia or not ids
+                                if st.button("Executar", key=f"btn_transf_{row['id']}", disabled=btn_disabled):
+                                    if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_val):
+                                        restante = max(0, existencia - qtd_val)
+                                        st.session_state[f"transf_msg_{row['id']}"] = (
+                                            f"✓ {qtd_val} palhetas transferidas. Stock restante: {restante}."
+                                        )
+                                        if 'novo_proprietario_id' in st.session_state:
+                                            st.session_state['novo_proprietario_usado'] = True
+                                        st.rerun()
+
+                            impacto = max(0, qtd_val) * -1
+                            previsto = max(0, existencia - qtd_val)
+                            st.markdown(
+                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                unsafe_allow_html=True,
+                            )
+                            if st.session_state.get(f"transf_msg_{row['id']}"):
+                                st.markdown(
+                                    f"<div class='transf-inline-msg'>{st.session_state.get(f'transf_msg_{row['id']}')}</div>",
+                                    unsafe_allow_html=True,
+                                )
 
                         else:
-                            # TRANSFERÊNCIA EXTERNA
-                            st.warning("⚠️ Esta operação retira o sêmen do stock (venda/envio)")
-
-                            col1, col2 = st.columns(2)
-                            with col1:
+                            st.markdown("<div class='transf-warning'>⚠ Esta operação remove palhetas do stock.</div>", unsafe_allow_html=True)
+                            st.markdown("<div class='transf-grid-head'>Destinatário | Tipo | Quantidade | Observações | Ação</div>", unsafe_allow_html=True)
+                            c1, c2, c3, c4, c5 = st.columns([2, 1.2, 1.2, 2, 1])
+                            with c1:
                                 destinatario_ext = st.text_input(
-                                    "Nome do Comprador/Destinatário *",
-                                    placeholder="Ex: João Silva, Fazenda XYZ",
-                                    key=f"dest_ext_{row['id']}"
+                                    "Destinatário",
+                                    placeholder="Nome do destinatário",
+                                    key=f"dest_ext_{row['id']}",
+                                    label_visibility="collapsed",
                                 )
+                            with c2:
                                 tipo_saida = st.selectbox(
-                                    "Tipo de Saída",
+                                    "Tipo",
                                     ["Venda", "Doação", "Exportação", "Outro"],
-                                    key=f"tipo_saida_{row['id']}"
+                                    key=f"tipo_saida_{row['id']}",
+                                    label_visibility="collapsed",
                                 )
 
-                            with col2:
-                                qtd_transferir_ext = st.number_input(
-                                    "Quantidade de palhetas",
-                                    min_value=1,
-                                    max_value=max(existencia, 1),
-                                    value=max(min(existencia, 1), 1),
-                                    key=f"transf_qtd_ext_{row['id']}"
-                                )
-                                obs_ext = st.text_area(
+                            qtd_ext_key = f"transf_qtd_ext_{row['id']}"
+                            if qtd_ext_key not in st.session_state:
+                                st.session_state[qtd_ext_key] = max(min(existencia, 1), 1)
+
+                            def step_qtd_ext(delta):
+                                novo = max(0, int(st.session_state[qtd_ext_key]) + delta)
+                                st.session_state[qtd_ext_key] = novo
+
+                            with c3:
+                                q1e, q2e, q3e = st.columns([1, 1, 1])
+                                with q1e:
+                                    st.button("-", key=f"transf_minus_ext_{row['id']}", on_click=step_qtd_ext, args=(-1,))
+                                with q2e:
+                                    qtd_ext_val = int(st.session_state[qtd_ext_key])
+                                    invalid_ext = qtd_ext_val <= 0 or qtd_ext_val > existencia
+                                    tooltip_ext = "Stock insuficiente" if qtd_ext_val > existencia else ""
+                                    cls_ext = "transf-qty invalid" if invalid_ext else "transf-qty"
+                                    st.markdown(f"<div class='{cls_ext}' title='{tooltip_ext}'>{qtd_ext_val}</div>", unsafe_allow_html=True)
+                                with q3e:
+                                    st.button("+", key=f"transf_plus_ext_{row['id']}", on_click=step_qtd_ext, args=(1,))
+
+                            with c4:
+                                obs_ext = st.text_input(
                                     "Observações",
-                                    placeholder="Ex: Valor, forma de pagamento, contato...",
+                                    placeholder="Observações",
                                     key=f"obs_ext_{row['id']}",
-                                    height=80
+                                    label_visibility="collapsed",
                                 )
 
-                            if st.button("📤 Enviar para Externo", key=f"btn_transf_ext_{row['id']}", type="primary"):
-                                if not destinatario_ext:
-                                    st.error("❌ Nome do destinatário é obrigatório")
-                                elif transferir_palhetas_externo(row["id"], destinatario_ext, qtd_transferir_ext, tipo_saida, obs_ext):
-                                    st.success(f"✅ {qtd_transferir_ext} palhetas enviadas para {destinatario_ext} ({tipo_saida})")
-                                    st.rerun()
+                            with c5:
+                                btn_disabled = qtd_ext_val <= 0 or qtd_ext_val > existencia or not destinatario_ext
+                                if st.button("Confirmar", key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
+                                    if transferir_palhetas_externo(row["id"], destinatario_ext, qtd_ext_val, tipo_saida, obs_ext):
+                                        restante = max(0, existencia - qtd_ext_val)
+                                        st.session_state[f"transf_msg_{row['id']}"] = (
+                                            f"✓ {qtd_ext_val} palhetas transferidas. Stock restante: {restante}."
+                                        )
+                                        st.rerun()
+
+                            impacto = max(0, qtd_ext_val) * -1
+                            previsto = max(0, existencia - qtd_ext_val)
+                            st.markdown(
+                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                unsafe_allow_html=True,
+                            )
+                            if st.session_state.get(f"transf_msg_{row['id']}"):
+                                st.markdown(
+                                    f"<div class='transf-inline-msg'>{st.session_state.get(f'transf_msg_{row['id']}')}</div>",
+                                    unsafe_allow_html=True,
+                                )
     else:
         st.info("ℹ️ Nenhum stock cadastrado.")
 
