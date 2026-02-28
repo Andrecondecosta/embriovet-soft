@@ -371,20 +371,6 @@ def run_stock_page(ctx: dict):
                                     letter-spacing: .05em;
                                     color: #64748b;
                                 }
-                                .transf-qty {
-                                    font-weight: 600;
-                                    font-size: .85rem;
-                                    padding: 2px 6px;
-                                    text-align: center;
-                                    border: 1px solid #e2e8f0;
-                                    border-radius: 6px;
-                                    background: #f8fafc;
-                                }
-                                .transf-qty.invalid {
-                                    color: #b91c1c;
-                                    border-color: #fecaca;
-                                    background: #fee2e2;
-                                }
                                 .transf-inline-msg {
                                     margin-top: 6px;
                                     padding: 4px 8px;
