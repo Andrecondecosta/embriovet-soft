@@ -2376,7 +2376,7 @@ elif aba == "📥 Importar Sémen":
 
         has_errors = bool(errors_map) or not erros_df.empty
         importar_disabled = has_errors or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
+        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
                 st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
