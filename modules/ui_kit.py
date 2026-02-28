@@ -125,6 +125,7 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             args=(-1,),
             disabled=min_value is not None and value <= min_value,
             help="Diminuir quantidade",
+            use_container_width=True,
         )
     with plus_col:
         st.button(
@@ -134,29 +135,8 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             args=(1,),
             disabled=max_value is not None and value >= max_value,
             help="Aumentar quantidade",
+            use_container_width=True,
         )
-
-    st.components.v1.html(
-        """
-        <script>
-        (function() {
-            const setLabel = (label, title) => {
-                const btns = window.parent.document.querySelectorAll(
-                    `button[aria-label="${label}"], button[title="${title}"]`
-                );
-                btns.forEach(btn => {
-                    if (!btn.innerText || !btn.innerText.trim()) {
-                        btn.innerText = label;
-                    }
-                });
-            };
-            setLabel("−", "Diminuir quantidade");
-            setLabel("+", "Aumentar quantidade");
-        })();
-        </script>
-        """,
-        height=0,
-    )
 
     return value, invalid
 
