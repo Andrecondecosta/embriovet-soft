@@ -134,6 +134,28 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
             help="Aumentar quantidade",
         )
 
+    st.components.v1.html(
+        """
+        <script>
+        (function() {
+            const setLabel = (label, title) => {
+                const btns = window.parent.document.querySelectorAll(
+                    `button[aria-label="${label}"], button[title="${title}"]`
+                );
+                btns.forEach(btn => {
+                    if (!btn.innerText || !btn.innerText.trim()) {
+                        btn.innerText = label;
+                    }
+                });
+            };
+            setLabel("−", "Diminuir quantidade");
+            setLabel("+", "Aumentar quantidade");
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
     return value, invalid
 
 
