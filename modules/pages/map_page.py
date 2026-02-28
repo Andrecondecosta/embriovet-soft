@@ -883,7 +883,7 @@ def run_map_page(ctx: dict):
                         st.markdown(f"**Total Lotes:** {total_lotes}")
 
                     with col_det3:
-                        if st.button("Editar", key=f"edit_{row['id']}", use_container_width=True):
+                        if st.button("Editar", key=f"edit_{row['id']}", width="stretch"):
                             st.session_state[f'modal_editar_{row["id"]}'] = True
                             st.rerun()
 
@@ -891,7 +891,7 @@ def run_map_page(ctx: dict):
                         if st.button(
                             "Apagar",
                             key=f"del_{row['id']}",
-                            use_container_width=True,
+                            width="stretch",
                             disabled=not pode_apagar,
                             help="Só é possível apagar quando o contentor não tem stock"
                         ):
