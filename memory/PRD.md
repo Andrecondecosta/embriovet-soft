@@ -71,7 +71,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Componente de **stepper** padronizado (render_stepper) com keys únicas e estado controlado por `st.session_state` aplicado em transferência e linhas de inseminação
   - Stepper estilizado com símbolos visíveis (− / +), tamanho mínimo e aria-labels/tooltip para acessibilidade
   - CSS do stepper reforçado para garantir visibilidade dos símbolos em todos os contextos (desktop/mobile)
-  - Fallback visual para botões do stepper via `title`/`::after` assegurando +/− sempre visíveis
+  - CSS do stepper simplificado para alinhar visual ao fluxo de Inseminação
   - CSS de radio do Ver Stock agora escopado para evitar alterações no menu lateral
   - CSS base (stock/reports/stepper) aplicado globalmente após `set_page_config` para consistência
 - Next Action concluído: **Fase 3 da modularização**
