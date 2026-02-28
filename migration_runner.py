@@ -1,11 +1,10 @@
-import os
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def run_migrations(conn, migrations_dir="/app/migrations"):
+def run_migrations(conn, migrations_dir="migrations"):
     migrations_path = Path(migrations_dir)
     cur = conn.cursor()
 
@@ -25,9 +24,7 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
     cur.execute("SELECT version FROM schema_migrations;")
     applied = {row[0] for row in cur.fetchall()}
 
-    files = []
-    if migrations_path.exists():
-        files = sorted([p for p in migrations_path.glob("*.sql")])
+    files = sorted(migrations_path.glob("*.sql")) if migrations_path.exists() else []
 
     try:
         if not files:
@@ -40,26 +37,17 @@ def run_migrations(conn, migrations_dir="/app/migrations"):
                 continue
 
             sql = f.read_text(encoding="utf-8").strip()
-            if not sql:
-                cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
-                conn.commit()
-                continue
+            logger.info(f"Applying migration {version}")
 
-            try:
-                logger.info(f"Applying migration {version}")
-                cur.execute("BEGIN;")
+            if sql:
                 cur.execute(sql)
-                cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
-                cur.execute("COMMIT;")
-                conn.commit()
-            except Exception:
-                cur.execute("ROLLBACK;")
-                conn.rollback()
-                raise
+
+            cur.execute("INSERT INTO schema_migrations(version) VALUES (%s);", (version,))
+            conn.commit()
+
         logger.info("Migrations finished")
+
     finally:
-        try:
-            cur.execute("SELECT pg_advisory_unlock(987654321);")
-        except Exception:
-            pass
+        cur.execute("SELECT pg_advisory_unlock(987654321);")
+        conn.commit()
         cur.close()
