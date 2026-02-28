@@ -442,7 +442,6 @@ def run_stock_page(ctx: dict):
                             horizontal=True,
                             label_visibility="collapsed",
                         )
-                        st.markdown("<div class='transf-segmented'></div>", unsafe_allow_html=True)
 
                         if tipo_transf == "Transferência Interna":
                             st.markdown("<div class='transf-grid-head'>Destino | Quantidade | Ação</div>", unsafe_allow_html=True)
@@ -455,14 +454,18 @@ def run_stock_page(ctx: dict):
                                 idx_transf = 0
                                 if 'novo_proprietario_id' in st.session_state and st.session_state['novo_proprietario_id'] in ids:
                                     idx_transf = ids.index(st.session_state['novo_proprietario_id'])
-                                novo_proprietario = st.selectbox(
-                                    "Destino",
-                                    options=ids,
-                                    format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
-                                    index=idx_transf if ids else 0,
-                                    key=f"transf_select_{row['id']}",
-                                    label_visibility="collapsed",
-                                )
+                                novo_proprietario = None
+                                if ids:
+                                    novo_proprietario = st.selectbox(
+                                        "Destino",
+                                        options=ids,
+                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                        index=idx_transf,
+                                        key=f"transf_select_{row['id']}",
+                                        label_visibility="collapsed",
+                                    )
+                                else:
+                                    st.caption("Sem proprietários disponíveis.")
 
                             qtd_key = f"transf_qtd_{row['id']}"
                             if qtd_key not in st.session_state:
@@ -472,25 +475,27 @@ def run_stock_page(ctx: dict):
                                 novo = max(0, int(st.session_state[qtd_key]) + delta)
                                 st.session_state[qtd_key] = novo
 
+                            qtd_val = int(st.session_state[qtd_key])
+                            invalid = qtd_val <= 0 or qtd_val > existencia
+                            tooltip = "Stock insuficiente" if qtd_val > existencia else ""
+
                             with c2:
                                 q1, q2, q3 = st.columns([1, 1, 1])
                                 with q1:
                                     st.button("-", key=f"transf_minus_{row['id']}", on_click=step_qtd, args=(-1,))
                                 with q2:
-                                    qtd_val = int(st.session_state[qtd_key])
-                                    invalid = qtd_val <= 0 or qtd_val > existencia
-                                    tooltip = "Stock insuficiente" if qtd_val > existencia else ""
                                     cls = "transf-qty invalid" if invalid else "transf-qty"
                                     st.markdown(f"<div class='{cls}' title='{tooltip}'>{qtd_val}</div>", unsafe_allow_html=True)
                                 with q3:
                                     st.button("+", key=f"transf_plus_{row['id']}", on_click=step_qtd, args=(1,))
 
+                            msg_key = f"transf_msg_{row['id']}"
                             with c3:
-                                btn_disabled = qtd_val <= 0 or qtd_val > existencia or not ids
+                                btn_disabled = qtd_val <= 0 or qtd_val > existencia or not ids or novo_proprietario is None
                                 if st.button("Executar", key=f"btn_transf_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_val):
                                         restante = max(0, existencia - qtd_val)
-                                        st.session_state[f"transf_msg_{row['id']}"] = (
+                                        st.session_state[msg_key] = (
                                             f"✓ {qtd_val} palhetas transferidas. Stock restante: {restante}."
                                         )
                                         if 'novo_proprietario_id' in st.session_state:
@@ -503,9 +508,9 @@ def run_stock_page(ctx: dict):
                                 f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if st.session_state.get(f"transf_msg_{row['id']}"):
+                            if st.session_state.get(msg_key):
                                 st.markdown(
-                                    f"<div class='transf-inline-msg'>{st.session_state.get(f'transf_msg_{row['id']}')}</div>",
+                                    f"<div class='transf-inline-msg'>{st.session_state.get(msg_key)}</div>",
                                     unsafe_allow_html=True,
                                 )
 
@@ -536,14 +541,15 @@ def run_stock_page(ctx: dict):
                                 novo = max(0, int(st.session_state[qtd_ext_key]) + delta)
                                 st.session_state[qtd_ext_key] = novo
 
+                            qtd_ext_val = int(st.session_state[qtd_ext_key])
+                            invalid_ext = qtd_ext_val <= 0 or qtd_ext_val > existencia
+                            tooltip_ext = "Stock insuficiente" if qtd_ext_val > existencia else ""
+
                             with c3:
                                 q1e, q2e, q3e = st.columns([1, 1, 1])
                                 with q1e:
                                     st.button("-", key=f"transf_minus_ext_{row['id']}", on_click=step_qtd_ext, args=(-1,))
                                 with q2e:
-                                    qtd_ext_val = int(st.session_state[qtd_ext_key])
-                                    invalid_ext = qtd_ext_val <= 0 or qtd_ext_val > existencia
-                                    tooltip_ext = "Stock insuficiente" if qtd_ext_val > existencia else ""
                                     cls_ext = "transf-qty invalid" if invalid_ext else "transf-qty"
                                     st.markdown(f"<div class='{cls_ext}' title='{tooltip_ext}'>{qtd_ext_val}</div>", unsafe_allow_html=True)
                                 with q3e:
@@ -557,12 +563,13 @@ def run_stock_page(ctx: dict):
                                     label_visibility="collapsed",
                                 )
 
+                            msg_key = f"transf_msg_{row['id']}"
                             with c5:
                                 btn_disabled = qtd_ext_val <= 0 or qtd_ext_val > existencia or not destinatario_ext
                                 if st.button("Confirmar", key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_externo(row["id"], destinatario_ext, qtd_ext_val, tipo_saida, obs_ext):
                                         restante = max(0, existencia - qtd_ext_val)
-                                        st.session_state[f"transf_msg_{row['id']}"] = (
+                                        st.session_state[msg_key] = (
                                             f"✓ {qtd_ext_val} palhetas transferidas. Stock restante: {restante}."
                                         )
                                         st.rerun()
@@ -573,9 +580,9 @@ def run_stock_page(ctx: dict):
                                 f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
                                 unsafe_allow_html=True,
                             )
-                            if st.session_state.get(f"transf_msg_{row['id']}"):
+                            if st.session_state.get(msg_key):
                                 st.markdown(
-                                    f"<div class='transf-inline-msg'>{st.session_state.get(f'transf_msg_{row['id']}')}</div>",
+                                    f"<div class='transf-inline-msg'>{st.session_state.get(msg_key)}</div>",
                                     unsafe_allow_html=True,
                                 )
     else:
