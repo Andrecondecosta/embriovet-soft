@@ -5,6 +5,7 @@ def run_stock_page(ctx: dict):
     st.header("Estoque Atual")
     inject_stock_css()
     inject_reports_css()
+    inject_stepper_css()
 
     if not stock.empty:
         garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
