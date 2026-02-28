@@ -1537,7 +1537,7 @@ def mostrar_tela_login():
             username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
             password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
@@ -1584,7 +1584,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"### 👤 {user['nome']}")
 st.sidebar.markdown(f"**Nível:** {user['nivel']}")
 
-if st.sidebar.button("🚪 Logout", use_container_width=True):
+if st.sidebar.button("🚪 Logout", width="stretch"):
     del st.session_state['user']
     st.rerun()
 
@@ -1621,7 +1621,7 @@ def modal_adicionar_proprietario():
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Adicionar", type="primary", use_container_width=True):
+        if st.button("✅ Adicionar", type="primary", width="stretch"):
             if not novo_nome:
                 st.error("❌ Nome é obrigatório")
             else:
@@ -1636,7 +1636,7 @@ def modal_adicionar_proprietario():
                     st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
                     st.rerun()
     with col2:
-        if st.button("❌ Cancelar", use_container_width=True):
+        if st.button("❌ Cancelar", width="stretch"):
             st.rerun()
 
 # Carregar dados
@@ -2376,7 +2376,7 @@ elif aba == "📥 Importar Sémen":
 
         has_errors = bool(errors_map) or not erros_df.empty
         importar_disabled = has_errors or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, use_container_width=False):
+        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
                 st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
@@ -2626,7 +2626,7 @@ elif aba == "📝 Registrar Inseminação":
 
             b1, b2 = st.columns([2, 1])
             with b1:
-                if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", use_container_width=True):
+                if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", width="stretch"):
                     selecionados_ids = []
                     for key, val in st.session_state.items():
                         if key.startswith("insem_modal_sel_") and val:
@@ -2657,7 +2657,7 @@ elif aba == "📝 Registrar Inseminação":
                     st.session_state["insem_linhas"] = linhas
                     st.rerun()
             with b2:
-                if st.button("Fechar", key="insem_modal_cancelar", use_container_width=True):
+                if st.button("Fechar", key="insem_modal_cancelar", width="stretch"):
                     st.rerun()
 
         render_zone_title("Zona de seleção", "insem-zone-title")
@@ -2667,7 +2667,7 @@ elif aba == "📝 Registrar Inseminação":
         with csel2:
             egua = st.text_input("Égua *", key="insem_egua")
         with csel3:
-            if st.button("Selecionar lotes", key="insem_btn_open_modal", use_container_width=True):
+            if st.button("Selecionar lotes", key="insem_btn_open_modal", width="stretch"):
                 abrir_modal_lotes()
 
         render_zone_title("Linhas da inseminação", "insem-zone-title")
@@ -2722,7 +2722,7 @@ elif aba == "📝 Registrar Inseminação":
 
             badd1, badd2 = st.columns([2, 2])
             with badd1:
-                if st.button("Adicionar linha", key="insem_btn_add_line", use_container_width=True):
+                if st.button("Adicionar linha", key="insem_btn_add_line", width="stretch"):
                     abrir_modal_lotes()
             with badd2:
                 total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
@@ -2746,7 +2746,7 @@ elif aba == "📝 Registrar Inseminação":
             unsafe_allow_html=True,
         )
         st.markdown("---")
-        if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", use_container_width=True):
+        if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", width="stretch"):
             linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
             if not linhas_finais:
                 st.error("Selecione pelo menos uma linha de lote.")
@@ -2885,7 +2885,7 @@ elif aba == "👥 Gestão de Proprietários":
                             btn_label = "🔴 Desativar" if status_atual else "🟢 Ativar"
                             btn_type = "secondary" if status_atual else "primary"
                             
-                            if st.button(btn_label, key=f"status_{prop['id']}", use_container_width=True, type=btn_type):
+                            if st.button(btn_label, key=f"status_{prop['id']}", width="stretch", type=btn_type):
                                 # Marcar para manter expandido
                                 st.session_state[f'expand_{prop["id"]}'] = True
                                 st.session_state['status_changed'] = True
@@ -2901,7 +2901,7 @@ elif aba == "👥 Gestão de Proprietários":
                                     st.error("❌ Erro ao alterar status. Verifique se a coluna 'ativo' existe.")
                         
                         with col_a2:
-                            if st.button("🗑️ Apagar", key=f"del_{prop['id']}", use_container_width=True, type="secondary"):
+                            if st.button("🗑️ Apagar", key=f"del_{prop['id']}", width="stretch", type="secondary"):
                                 if deletar_proprietario(prop['id']):
                                     if f'expand_{prop["id"]}' in st.session_state:
                                         del st.session_state[f'expand_{prop["id"]}']
@@ -2927,7 +2927,7 @@ elif aba == "👥 Gestão de Proprietários":
                                 cp_e = st.text_input("Código Postal", value=prop.get('codigo_postal', '') or '')
                                 cidade_e = st.text_input("Cidade", value=prop.get('cidade', '') or '')
                             
-                            salvar = st.form_submit_button("💾 Guardar Alterações", type="primary", use_container_width=True)
+                            salvar = st.form_submit_button("💾 Guardar Alterações", type="primary", width="stretch")
                             
                             if salvar:
                                 if not nome_e:
@@ -2966,7 +2966,7 @@ elif aba == "👥 Gestão de Proprietários":
                 cp_n = st.text_input("Código Postal")
                 cidade_n = st.text_input("Cidade")
             
-            adicionar = st.form_submit_button("➕ Adicionar", type="primary", use_container_width=True)
+            adicionar = st.form_submit_button("➕ Adicionar", type="primary", width="stretch")
             
             if adicionar:
                 if not nome_n:
