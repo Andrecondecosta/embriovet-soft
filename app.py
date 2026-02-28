@@ -38,6 +38,7 @@ from modules.stock_reporting import (
 from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
+from modules.pages.insemination_page import run_insemination_page, inject_insemination_css
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
@@ -1666,6 +1667,10 @@ if aba == "📦 Ver Stock":
 
 if aba == "📈 Relatórios":
     run_reports_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "📝 Registrar Inseminação":
+    run_insemination_page({**globals(), **locals()})
     st.stop()
 
 # ------------------------------------------------------------
