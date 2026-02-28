@@ -116,9 +116,9 @@ def run_map_page(ctx: dict):
 
             col_submit1, col_submit2 = st.columns([1, 1])
             with col_submit1:
-                submitted = st.form_submit_button("Criar Contentor", use_container_width=True)
+                submitted = st.form_submit_button("Criar Contentor", width="stretch")
             with col_submit2:
-                cancelar = st.form_submit_button("Cancelar", use_container_width=True)
+                cancelar = st.form_submit_button("Cancelar", width="stretch")
 
             if cancelar:
                 st.session_state['modal_novo_contentor'] = False
