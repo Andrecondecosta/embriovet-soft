@@ -75,6 +75,8 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - CSS de radio do Ver Stock agora escopado para evitar alterações no menu lateral
   - CSS base (stock/reports/stepper) aplicado globalmente após `set_page_config` para consistência
   - Stepper padronizado com layout **valor → − → +** e botões com `width="stretch"` para consistência entre Transferências e Inseminação
+  - Fix no Ver Stock: índices de canister/andar convertidos para int para evitar erro de selectbox
+  - Transferências corrigidas para usar coluna `estoque_id` (não `stock_id`)
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.
