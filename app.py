@@ -51,6 +51,7 @@ from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
+from modules.i18n import t
 
 THEMES = {
     "blue": "#1D4ED8",
@@ -197,7 +198,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials, theme_key
+                       is_initialized, show_initial_credentials, theme_key, language
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -216,6 +217,7 @@ def get_app_settings():
             "is_initialized": row[4],
             "show_initial_credentials": row[5],
             "theme_key": row[6],
+            "language": row[7],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
@@ -231,8 +233,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name, theme_key)
-                SELECT 1, 'Sistema', 'blue'
+                INSERT INTO app_settings (id, company_name, theme_key, language)
+                SELECT 1, 'Sistema', 'blue', 'pt-PT'
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
@@ -291,6 +293,17 @@ def update_show_initial_credentials(value: bool):
         cur.execute(
             "UPDATE app_settings SET show_initial_credentials = %s, updated_at = now()",
             (value,),
+        )
+        conn.commit()
+        cur.close()
+
+
+def update_language(language: str):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE app_settings SET language = %s, updated_at = now()",
+            (language,),
         )
         conn.commit()
         cur.close()
@@ -1695,30 +1708,30 @@ inject_reports_css()
 def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
-    st.title(f"🔐 Login - {nome_empresa}")
+    st.title(t("login.title", company=nome_empresa))
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("### Autenticação")
+        st.markdown(f"### {t('login.auth')}")
         
         with st.form("login_form"):
-            username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
-            password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
+            username = st.text_input("👤 " + t("login.username"), placeholder=t("login.username"))
+            password = st.text_input("🔒 " + t("login.password"), type="password", placeholder=t("login.password"))
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
+            submitted = st.form_submit_button("🚀 " + t("login.submit"), type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
-                    st.error("❌ Preencha todos os campos")
+                    st.error(t("login.missing"))
                 else:
                     user = autenticar_usuario(username, password)
                     if user:
                         st.session_state['user'] = user
-                        st.success(f"✅ Bem-vindo, {user['nome']}!")
+                        st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
-                        st.error("❌ Utilizador ou password incorretos")
+                        st.error(t("login.invalid"))
         
 
 def verificar_permissao(nivel_minimo):
@@ -1738,14 +1751,14 @@ def verificar_permissao(nivel_minimo):
 
 
 def render_change_credentials(user, app_settings):
-    st.title("⚙️ Segurança: Alterar credenciais")
-    st.info("É obrigatório alterar username e password no primeiro acesso.")
+    st.title(t("security.title"))
+    st.info(t("security.info"))
 
     with st.form("change_credentials_form"):
-        novo_username = st.text_input("Novo username", value=user.get("username", ""))
-        nova_password = st.text_input("Nova password", type="password")
-        confirmar_password = st.text_input("Confirmar password", type="password")
-        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+        novo_username = st.text_input(t("security.username"), value=user.get("username", ""))
+        nova_password = st.text_input(t("security.new_password"), type="password")
+        confirmar_password = st.text_input(t("security.confirm_password"), type="password")
+        submitted = st.form_submit_button(t("security.save"), type="primary", width="stretch")
 
     if submitted:
         if not novo_username:
@@ -1766,7 +1779,7 @@ def render_change_credentials(user, app_settings):
             )
             if cur.fetchone():
                 cur.close()
-                st.error("❌ Username já existe")
+                st.error(t("security.username_exists"))
                 return
 
             nova_hash = criar_hash_password(nova_password)
@@ -1787,7 +1800,7 @@ def render_change_credentials(user, app_settings):
         update_show_initial_credentials(False)
         st.session_state['user']['username'] = novo_username
         st.session_state['user']['must_change_password'] = False
-        st.success("✅ Credenciais atualizadas com sucesso")
+        st.success(t("security.success"))
         st.rerun()
 
 
@@ -1795,8 +1808,8 @@ def render_onboarding(app_settings):
     inject_stock_css()
     inject_reports_css()
 
-    st.title("Configuração inicial")
-    st.caption("Defina o branding base deste ambiente.")
+    st.title(t("onboarding.title"))
+    st.caption(t("onboarding.subtitle"))
 
     if "onboarding_company_name" not in st.session_state:
         st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
@@ -1824,13 +1837,13 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    render_zone_title("Zona A — Identidade", "insem-zone-title")
+    render_zone_title(t("onboarding.zone_brand"), "insem-zone-title")
     col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
-        company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
+        company_name = st.text_input(t("onboarding.company"), key="onboarding_company_name")
     with col_a2:
         theme_key = st.radio(
-            "Tema",
+            t("onboarding.theme"),
             options=list(THEMES.keys()),
             format_func=lambda k: k.capitalize(),
             key="onboarding_theme_key",
@@ -1842,21 +1855,21 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    logo_file = st.file_uploader("Logótipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+    logo_file = st.file_uploader(t("onboarding.logo"), type=["png", "jpg", "jpeg"])
     if logo_file is not None:
         logo_bytes = logo_file.read()
         if logo_bytes:
             encoded = base64.b64encode(logo_bytes).decode("utf-8")
             st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
 
-    render_zone_title("Zona B — Conta de Administrador", "insem-zone-title")
-    admin_username = st.text_input("Nome de utilizador admin", key="onboarding_admin_username")
-    admin_password = st.text_input("Password temporária", key="onboarding_admin_password")
-    st.caption("Esta password é temporária. Vai ser obrigatório alterar no primeiro login.")
+    render_zone_title(t("onboarding.zone_admin"), "insem-zone-title")
+    admin_username = st.text_input(t("onboarding.admin_user"), key="onboarding_admin_username")
+    admin_password = st.text_input(t("onboarding.admin_password"), key="onboarding_admin_password")
+    st.caption(t("onboarding.temp_note"))
 
-    render_zone_title("Zona C — Confirmar", "insem-zone-title")
+    render_zone_title(t("onboarding.zone_confirm"), "insem-zone-title")
     cred_text = f"Username: {admin_username}\nPassword: {admin_password}"
-    st.markdown("**Credenciais iniciais**")
+    st.markdown(f"**{t('onboarding.credentials')}**")
     st.code(cred_text)
 
     cred_js = cred_text.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n")
@@ -1868,19 +1881,19 @@ def render_onboarding(app_settings):
         height=40,
     )
 
-    if st.button("Concluir configuração", type="primary", width="stretch"):
+    if st.button(t("onboarding.finish"), type="primary", width="stretch"):
         if not company_name:
-            st.error("❌ Nome da empresa é obrigatório")
+            st.error(t("msg.require_company"))
             return
         if not admin_username or not admin_password:
-            st.error("❌ Username e password são obrigatórios")
+            st.error(t("msg.require_admin"))
             return
 
         logo_base64 = st.session_state.get("onboarding_logo_base64")
         primary_color = THEMES.get(theme_key, THEMES["blue"])
         finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
         ensure_admin_user_exists(admin_username, admin_password)
-        st.success("✅ Configuração concluída")
+        st.success(t("onboarding.done"))
         st.rerun()
 
 # Carregar app settings e onboarding inicial
@@ -1888,6 +1901,9 @@ app_settings = ensure_app_settings()
 if not app_settings:
     st.error("Falha ao carregar app_settings")
     st.stop()
+
+if "lang" not in st.session_state:
+    st.session_state["lang"] = app_settings.get("language", "pt-PT")
 
 inject_shell_css(app_settings.get("primary_color"))
 
@@ -1913,21 +1929,26 @@ if logout_clicked:
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
-    st.session_state['aba_selecionada'] = "🎨 Definições"
+    st.session_state['aba_selecionada'] = t("menu.settings")
     st.rerun()
 
 # Menu lateral adaptado às permissões
-menu_options = ["🏠 Painel", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+menu_options = [
+    t("menu.dashboard"),
+    t("menu.map"),
+    t("menu.stock"),
+    t("menu.reports"),
+]
 
 if verificar_permissao('Gestor'):
-    menu_options.insert(2, "➕ Adicionar Stock")
-    menu_options.insert(3, "📥 Importar Sémen")
-    menu_options.insert(4, "📝 Registrar Inseminação")
-    menu_options.append("👥 Gestão de Proprietários")
+    menu_options.insert(2, t("menu.add_stock"))
+    menu_options.insert(3, t("menu.import"))
+    menu_options.insert(4, t("menu.register_insemination"))
+    menu_options.append(t("menu.owners"))
 
 if verificar_permissao('Administrador'):
-    menu_options.append("⚙️ Gestão de Utilizadores")
-    menu_options.append("🎨 Definições")
+    menu_options.append(t("menu.users"))
+    menu_options.append(t("menu.settings"))
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
@@ -1990,30 +2011,30 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 # Router de páginas (Fase 3 da modularização)
 # ------------------------------------------------------------
-if aba == "🗺️ Mapa dos Contentores":
+if aba == t("menu.map"):
     run_map_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🏠 Painel":
+if aba == t("menu.dashboard"):
     run_dashboard_page({**globals(), **locals()})
     st.stop()
 
-if aba == "📦 Ver Stock":
+if aba == t("menu.stock"):
     run_stock_page({**globals(), **locals()})
     st.stop()
 
-if aba == "📈 Relatórios":
+if aba == t("menu.reports"):
     run_reports_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🎨 Definições":
+if aba == t("menu.settings"):
     run_settings_page({**globals(), **locals()})
     st.stop()
 
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
-elif aba == "➕ Adicionar Stock":
+elif aba == t("menu.add_stock"):
     st.header("➕ Inserir novo stock com Proprietário")
 
     if proprietarios.empty:
@@ -2120,13 +2141,13 @@ elif aba == "➕ Adicionar Stock":
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
                             # Mudar aba para Ver Stock
-                            st.session_state['aba_selecionada'] = "📦 Ver Stock"
+                            st.session_state['aba_selecionada'] = t("menu.stock")
                             st.rerun()
 
 # ------------------------------------------------------------
 # 📥 Importar Sémen
 # ------------------------------------------------------------
-elif aba == "📥 Importar Sémen":
+elif aba == t("menu.import"):
     st.header("Importar Sémen")
 
     st.markdown(
@@ -2735,7 +2756,7 @@ elif aba == "📥 Importar Sémen":
 # ------------------------------------------------------------
 # 📝 Registrar Inseminação
 # ------------------------------------------------------------
-elif aba == "📝 Registrar Inseminação":
+elif aba == t("menu.register_insemination"):
     run_insemination_page({**globals(), **locals()})
     st.stop()
     st.header("Registrar Inseminação")
@@ -3121,7 +3142,7 @@ elif aba == "📝 Registrar Inseminação":
                     st.session_state["insem_linhas"] = {}
                     st.rerun()
 
-elif aba == "👥 Gestão de Proprietários":
+elif aba == t("menu.owners"):
     st.header("👥 Gestão de Proprietários")
     
     # Verificar e criar coluna ativo se não existir
@@ -3340,7 +3361,7 @@ elif aba == "👥 Gestão de Proprietários":
 # ------------------------------------------------------------
 # ⚙️ Gestão de Utilizadores (Apenas Administrador)
 # ------------------------------------------------------------
-elif aba == "⚙️ Gestão de Utilizadores":
+elif aba == t("menu.users"):
     st.header("⚙️ Gestão de Utilizadores")
     
     usuarios_df = carregar_usuarios()
