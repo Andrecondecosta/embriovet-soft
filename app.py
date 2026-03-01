@@ -2670,23 +2670,23 @@ elif aba == t("menu.import"):
                             height=0,
                         )
 
-    render_zone_title("Validação + Ação", "import-zone-title")
+    render_zone_title(t("import.zone.validate"), "import-zone-title")
     if uploaded_file is None:
-        st.info("Carregue um ficheiro para validar.")
+        st.info(t("import.upload_to_validate"))
     else:
         total_linhas = len(preview_df)
         total_erros = len(errors_map) if errors_map else 0
         total_validas = max(0, total_linhas - total_erros)
         render_kpi_strip([
-            ("Linhas", total_linhas),
-            ("Válidas", total_validas),
-            ("Com erros", total_erros),
+            (t("import.kpi.lines"), total_linhas),
+            (t("import.kpi.valid"), total_validas),
+            (t("import.kpi.errors"), total_erros),
         ])
 
         if erros_df.empty:
-            st.success("Validação concluída sem erros.")
+            st.success(t("import.validation_ok"))
         else:
-            st.warning("Foram encontrados erros. Corrija antes de importar.")
+            st.warning(t("import.validation_errors"))
             st.dataframe(erros_df, width="stretch", height=200, hide_index=True)
 
         def executar_importacao(linhas):
@@ -2763,20 +2763,20 @@ elif aba == t("menu.import"):
 
         has_errors = bool(errors_map) or not erros_df.empty
         importar_disabled = has_errors or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
+        if st.button(t("btn.import"), type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
-                st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
+                st.success(t("import.completed", count=len(report_df)))
                 st.session_state["import_report"] = report_df
             else:
-                st.error(f"Importação falhou. {err_msg}")
+                st.error(t("import.failed", error=err_msg))
                 if not report_df.empty:
                     st.session_state["import_report"] = report_df
 
         if "import_report" in st.session_state and not st.session_state["import_report"].empty:
             report_csv = st.session_state["import_report"].to_csv(index=False).encode("utf-8")
             st.download_button(
-                "Descarregar relatório de importação",
+                t("import.download_report"),
                 data=report_csv,
                 file_name="relatorio_importacao.csv",
                 mime="text/csv",
