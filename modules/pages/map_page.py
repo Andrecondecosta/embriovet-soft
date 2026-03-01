@@ -142,7 +142,7 @@ def run_map_page(ctx: dict):
                             'h': 90
                         })
                         if contentor_id:
-                        st.success(t("map.container_created", code=codigo))
+                            st.success(t("map.container_created", code=codigo))
                             st.session_state['modal_novo_contentor'] = False
                             st.rerun()
 
