@@ -35,7 +35,7 @@ def run_reports_page(ctx: dict):
     aplicar_filtro_data = ctx["aplicar_filtro_data"]
     gerar_pdf_garanhao = ctx["gerar_pdf_garanhao"]
 
-    st.header("Relatórios")
+    st.header(t("reports.title"))
     inject_reports_css()
 
     stock = carregar_stock()
@@ -45,10 +45,10 @@ def run_reports_page(ctx: dict):
     proprietarios = carregar_proprietarios()
     contentores = carregar_contentores()
 
-    render_zone_title("Zona de seleção")
+    render_zone_title(t("reports.zone.selection"))
     modo = st.radio(
-        "Tipo de análise",
-        ["Garanhão", "Proprietário", "Contentor / Localização", "Histórico Geral"],
+        t("reports.analysis_type"),
+        [t("reports.mode.stallion"), t("reports.mode.owner"), t("reports.mode.container"), t("reports.mode.history")],
         horizontal=True,
         label_visibility="collapsed",
         key="rel_modo",
@@ -59,26 +59,26 @@ def run_reports_page(ctx: dict):
     contentor_sel = None
     tipo_hist = None
 
-    if modo == "Garanhão" and not stock.empty:
-        garanhao_sel = st.selectbox("Selecionar garanhão", sorted(stock["garanhao"].dropna().unique()), key="rel_sel_g")
-    elif modo == "Proprietário" and not proprietarios.empty:
+    if modo == t("reports.mode.stallion") and not stock.empty:
+        garanhao_sel = st.selectbox(t("reports.select_stallion"), sorted(stock["garanhao"].dropna().unique()), key="rel_sel_g")
+    elif modo == t("reports.mode.owner") and not proprietarios.empty:
         prop_sel = st.selectbox(
-            "Selecionar proprietário",
+            t("reports.select_owner"),
             proprietarios["id"].tolist(),
             format_func=lambda x: proprietarios[proprietarios["id"] == x]["nome"].values[0],
             key="rel_sel_p",
         )
-    elif modo == "Contentor / Localização" and not contentores.empty:
+    elif modo == t("reports.mode.container") and not contentores.empty:
         contentor_sel = st.selectbox(
-            "Selecionar contentor",
+            t("reports.select_container"),
             contentores["id"].tolist(),
             format_func=lambda x: contentores[contentores["id"] == x]["codigo"].values[0],
             key="rel_sel_c",
         )
-    elif modo == "Histórico Geral":
+    elif modo == t("reports.mode.history"):
         tipo_hist = st.radio(
-            "Tipo de histórico",
-            ["Inseminações", "Transferências Internas", "Transferências Externas", "Stock Completo"],
+            t("reports.history_type"),
+            [t("reports.history.inseminations"), t("reports.history.transfer_internal"), t("reports.history.transfer_external"), t("reports.history.full_stock")],
             horizontal=True,
             label_visibility="collapsed",
             key="rel_tipo_hist",
