@@ -136,14 +136,14 @@ def run_stock_page(ctx: dict):
                 # Tabs: Mostrar conforme permissões
                 if verificar_permissao('Administrador'):
                     # Admin vê tudo: Detalhes, Editar, Transferir
-                    tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
+                    tab1, tab2, tab3 = st.tabs([t("stock.tab.details"), t("stock.tab.edit"), t("stock.tab.transfer")])
                 elif verificar_permissao('Gestor'):
                     # Gestor vê: Detalhes, Transferir (sem Editar)
-                    tab1, tab3 = st.tabs(["📋 Detalhes", "🔄 Transferir"])
+                    tab1, tab3 = st.tabs([t("stock.tab.details"), t("stock.tab.transfer")])
                     tab2 = None
                 else:
                     # Visualizador vê apenas: Detalhes
-                    tab1 = st.tabs(["📋 Detalhes"])[0]
+                    tab1 = st.tabs([t("stock.tab.details")])[0]
                     tab2 = None
                     tab3 = None
 
