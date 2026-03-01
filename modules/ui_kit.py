@@ -63,13 +63,14 @@ def inject_reports_css():
                 margin: 0.35rem 0 0.6rem 0;
             }
             .reports-kpi-item {
-                border: 1px solid #dbe4ee;
-                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                background: #ffffff;
                 color: #334155;
                 border-radius: 8px;
-                padding: 4px 9px;
+                padding: 8px 12px;
                 font-size: 0.78rem;
                 white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
             }
             .reports-kpi-item b { color: #0f172a; }
             .reports-results-head {
