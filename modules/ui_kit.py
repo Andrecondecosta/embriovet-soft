@@ -202,6 +202,13 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--bg);
                 border-right: 1px solid var(--border);
             }}
+            .sidebar-shell {{
+                background: #f8fafc;
+                padding: 14px 12px;
+                border-radius: 14px;
+                border: 1px solid var(--border);
+                box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
+            }}
             .sidebar-brand {{
                 padding: 12px 12px 8px 12px;
                 border-bottom: 1px solid var(--border);
