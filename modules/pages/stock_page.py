@@ -412,7 +412,7 @@ def run_stock_page(ctx: dict):
                         )
 
                         # Cabeçalho operacional
-                        localizacao = "N/A"
+                        localizacao = t("common.na")
                         if row.get('contentor_id'):
                             try:
                                 contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
@@ -420,37 +420,41 @@ def run_stock_page(ctx: dict):
                                     contentor_df = pd.read_sql_query(contentor_query, conn)
                                     if not contentor_df.empty:
                                         contentor_codigo = contentor_df.iloc[0]['codigo']
-                                        canister_num = row.get('canister', 'N/A')
-                                        andar_num = row.get('andar', 'N/A')
+                                        canister_num = row.get('canister', t("common.na"))
+                                        andar_num = row.get('andar', t("common.na"))
                                         localizacao = f"{contentor_codigo} C{canister_num} A{andar_num}"
                             except Exception:
-                                localizacao = "N/A"
+                                localizacao = t("common.na")
 
-                        header_texto = (
-                            f"{referencia} · {row.get('garanhao', '—')} · Proprietário: {proprietario_nome} · "
-                            f"Disp: {existencia} · {localizacao}"
+                        header_texto = t(
+                            "stock.lote_header",
+                            data=referencia,
+                            garanhao=row.get('garanhao', '—'),
+                            owner=proprietario_nome,
+                            disp=existencia,
+                            local=localizacao,
                         )
                         st.markdown(f"<div class='transf-header'>{header_texto}</div>", unsafe_allow_html=True)
 
                         # Tipo de operação
                         tipo_transf = st.radio(
-                            "tipo_operacao_transferencia",
-                            ["Transferência Interna", "Saída Externa"],
+                            t("stock.transfer_type"),
+                            [t("stock.transfer_internal"), t("stock.transfer_external")],
                             key=f"tipo_transf_{row['id']}",
                             horizontal=True,
                             label_visibility="collapsed",
                         )
 
-                        if tipo_transf == "Transferência Interna":
+                        if tipo_transf == t("stock.transfer_internal"):
                             h1, h2, h3 = st.columns([2.4, 1.8, 1])
                             with h1:
-                                st.markdown("<div class='transf-grid-head'>Destino</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('stock.destination')}</div>", unsafe_allow_html=True)
                             with h2:
-                                st.markdown("<div class='transf-grid-head'>Quantidade</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.quantity')}</div>", unsafe_allow_html=True)
                             with h3:
-                                st.markdown("<div class='transf-grid-head'>Ação</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.action')}</div>", unsafe_allow_html=True)
 
-                            if st.button("Novo proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                            if st.button(t("stock.new_owner"), key=f"btn_add_prop_transf_{row['id']}", help=t("stock.new_owner_help")):
                                 modal_adicionar_proprietario()
 
                             c_dest, c_val, c_minus, c_plus, c_action = st.columns([2.4, 0.7, 0.5, 0.5, 1])
