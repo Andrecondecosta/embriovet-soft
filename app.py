@@ -2326,35 +2326,35 @@ elif aba == t("menu.import"):
         "andar",
     ]
 
-    render_zone_title("Contexto / Ajuda", "import-zone-title")
+    render_zone_title(t("import.zone.context"), "import-zone-title")
     ctx1, ctx2 = st.columns([3, 1.5])
     with ctx1:
         st.markdown(
-            "<div class='import-hint'>Carregue o ficheiro, valide e só depois importe. Use o template para manter as colunas corretas.</div>",
+            f"<div class='import-hint'>{t('import.hint')}</div>",
             unsafe_allow_html=True,
         )
     with ctx2:
         if xlsx_ready:
             st.download_button(
-                "Descarregar template (XLSX)",
+                t("import.download_xlsx"),
                 data=gerar_template_xlsx(),
                 file_name="template_importar_semen.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 width="stretch",
             )
         else:
-            st.caption("XLSX requer openpyxl instalado no ambiente.")
+            st.caption(t("import.xlsx_requires"))
         st.download_button(
-            "Descarregar template (CSV)",
+            t("import.download_csv"),
             data=gerar_template_csv(),
             file_name="template_importar_semen.csv",
             mime="text/csv",
             width="stretch",
         )
 
-    render_zone_title("Upload + Preview", "import-zone-title")
+    render_zone_title(t("import.zone.upload"), "import-zone-title")
     st.markdown("<div class='import-toolbar'>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Carregar ficheiro (XLSX ou CSV)", type=["xlsx", "csv"])
+    uploaded_file = st.file_uploader(t("import.upload_label"), type=["xlsx", "csv"])
     st.markdown("</div>", unsafe_allow_html=True)
 
     preview_df = pd.DataFrame()
