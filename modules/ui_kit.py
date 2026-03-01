@@ -224,6 +224,7 @@ def inject_shell_css(primary_color: str | None):
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
                 background: #ffffff;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
             }}
             .sidebar-user-name {{
                 font-size: .85rem;
