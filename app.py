@@ -33,6 +33,9 @@ from modules.ui_kit import (
     render_kpi_strip,
     safe_pick,
     render_stepper,
+    inject_shell_css,
+    render_header,
+    render_sidebar,
 )
 from migration_runner import run_migrations
 from modules.stock_reporting import (
@@ -293,30 +296,6 @@ def update_show_initial_credentials(value: bool):
         cur.close()
 
 
-def apply_theme_css(theme_key, primary_color):
-    color = THEMES.get(theme_key) or primary_color or THEMES["blue"]
-    st.markdown(
-        f"""
-        <style>
-            :root {{ --primary-color: {color}; }}
-            .stButton > button[data-testid="baseButton-primary"] {{
-                background-color: var(--primary-color) !important;
-                border-color: var(--primary-color) !important;
-            }}
-            .stSidebar [role="radiogroup"] label:has(input:checked) {{
-                border-color: var(--primary-color) !important;
-                color: var(--primary-color) !important;
-            }}
-            .reports-kpi-item b {{
-                color: var(--primary-color) !important;
-            }}
-            a {{
-                color: var(--primary-color) !important;
-            }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
@@ -1845,7 +1824,7 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    render_zone_title("Zona A — Branding", "insem-zone-title")
+    render_zone_title("Zona A — Identidade", "insem-zone-title")
     col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
         company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
@@ -1870,8 +1849,8 @@ def render_onboarding(app_settings):
             encoded = base64.b64encode(logo_bytes).decode("utf-8")
             st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
 
-    render_zone_title("Zona B — Conta Admin", "insem-zone-title")
-    admin_username = st.text_input("Username admin", key="onboarding_admin_username")
+    render_zone_title("Zona B — Conta de Administrador", "insem-zone-title")
+    admin_username = st.text_input("Nome de utilizador admin", key="onboarding_admin_username")
     admin_password = st.text_input("Password temporária", key="onboarding_admin_password")
     st.caption("Esta password é temporária. Vai ser obrigatório alterar no primeiro login.")
 
@@ -1910,7 +1889,7 @@ if not app_settings:
     st.error("Falha ao carregar app_settings")
     st.stop()
 
-apply_theme_css(app_settings.get("theme_key"), app_settings.get("primary_color"))
+inject_shell_css(app_settings.get("primary_color"))
 
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
@@ -1929,40 +1908,16 @@ if user.get("must_change_password"):
     render_change_credentials(user, app_settings)
     st.stop()
 
-nome_empresa = app_settings.get("company_name") or "Sistema"
-if app_settings.get("logo_base64"):
-    st.markdown(
-        f"""
-        <div style='display:flex; align-items:center; gap:12px;'>
-            <img src='{app_settings['logo_base64']}' style='height:36px;'/>
-            <h2 style='margin:0;'>{nome_empresa}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.title(nome_empresa)
-
-
-# Sidebar com info do utilizador
-if app_settings.get("logo_base64"):
-    st.sidebar.markdown(
-        f"<img src='{app_settings['logo_base64']}' style='max-width:100%; height:48px; object-fit:contain; margin-bottom:8px;'/>",
-        unsafe_allow_html=True,
-    )
-st.sidebar.markdown(f"### {nome_empresa}")
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"### 👤 {user['nome']}")
-st.sidebar.markdown(f"**Nível:** {user['nivel']}")
-
-if st.sidebar.button("🚪 Logout", width="stretch"):
+settings_clicked, logout_clicked = render_header(app_settings, user)
+if logout_clicked:
     del st.session_state['user']
     st.rerun()
-
-st.sidebar.markdown("---")
+if settings_clicked:
+    st.session_state['aba_selecionada'] = "🎨 Definições"
+    st.rerun()
 
 # Menu lateral adaptado às permissões
-menu_options = ["🏠 Dashboard", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+menu_options = ["🏠 Painel", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
     menu_options.insert(2, "➕ Adicionar Stock")
@@ -1981,7 +1936,8 @@ if 'aba_selecionada' in st.session_state:
 else:
     idx_aba = 0
 
-aba = st.sidebar.radio("Menu", menu_options, index=idx_aba)
+active_key = menu_options[idx_aba] if menu_options else ""
+aba = render_sidebar(app_settings, user, menu_options, active_key)
 
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
@@ -2038,7 +1994,7 @@ if aba == "🗺️ Mapa dos Contentores":
     run_map_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🏠 Dashboard":
+if aba == "🏠 Painel":
     run_dashboard_page({**globals(), **locals()})
     st.stop()
 

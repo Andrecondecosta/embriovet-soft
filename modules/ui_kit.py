@@ -141,6 +141,194 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
     return value, invalid
 
 
+def inject_shell_css(primary_color: str | None):
+    color = primary_color or "#1D4ED8"
+    st.markdown(
+        f"""
+        <style>
+            :root {{
+                --radius: 10px;
+                --border: #e2e8f0;
+                --muted: #64748b;
+                --bg: #f8fafc;
+                --text: #0f172a;
+                --primary: {color};
+            }}
+            [data-testid="stSidebar"] {{
+                background: var(--bg);
+                border-right: 1px solid var(--border);
+            }}
+            .sidebar-brand {{
+                padding: 12px 12px 8px 12px;
+                border-bottom: 1px solid var(--border);
+            }}
+            .sidebar-brand-title {{
+                font-weight: 700;
+                color: var(--text);
+                margin: 0;
+            }}
+            .sidebar-user-card {{
+                margin: 10px 12px;
+                padding: 10px;
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                background: #ffffff;
+            }}
+            .sidebar-user-name {{
+                font-size: .85rem;
+                font-weight: 600;
+                color: var(--text);
+            }}
+            .sidebar-user-chip {{
+                display: inline-block;
+                font-size: .7rem;
+                padding: 2px 6px;
+                border-radius: 999px;
+                background: #eef2f7;
+                color: var(--muted);
+                margin-top: 4px;
+            }}
+            [data-testid="stSidebar"] [role="radiogroup"] label {{
+                border: 1px solid transparent;
+                border-radius: var(--radius);
+                padding: 6px 8px;
+                margin: 2px 8px;
+                color: var(--text);
+            }}
+            [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
+                background: #ffffff;
+                border-color: var(--border);
+            }}
+            [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
+                background: #ffffff;
+                border-color: var(--primary);
+                color: var(--primary);
+                position: relative;
+            }}
+            [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {{
+                content: "";
+                position: absolute;
+                left: -8px;
+                top: 6px;
+                bottom: 6px;
+                width: 3px;
+                border-radius: 3px;
+                background: var(--primary);
+            }}
+            .app-topbar {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 10px 12px;
+                border-bottom: 1px solid var(--border);
+                background: #ffffff;
+                margin-bottom: 10px;
+            }}
+            .app-topbar-title {{
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: var(--text);
+            }}
+            .app-topbar-actions .stButton > button {{
+                font-size: .78rem;
+                padding: 4px 10px;
+            }}
+            .reports-kpi-item b {{
+                color: var(--primary) !important;
+            }}
+            a {{
+                color: var(--primary) !important;
+            }}
+            .stButton > button[data-testid="baseButton-primary"] {{
+                background-color: var(--primary) !important;
+                border-color: var(--primary) !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_header(app_settings, user_info):
+    company_name = (app_settings or {}).get("company_name") or "Sistema"
+    logo = (app_settings or {}).get("logo_base64")
+
+    st.markdown("<div class='app-topbar'>", unsafe_allow_html=True)
+    col_left, col_right = st.columns([5, 2])
+    with col_left:
+        if logo:
+            st.markdown(
+                f"""
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <img src='{logo}' style='height:28px;'/>
+                    <div class='app-topbar-title'>{company_name}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
+            st.markdown(
+                f"""
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
+                        {initials}
+                    </div>
+                    <div class='app-topbar-title'>{company_name}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with col_right:
+        st.markdown("<div class='app-topbar-actions'>", unsafe_allow_html=True)
+        settings_clicked = st.button("⚙ Definições", width="content", key="topbar_settings")
+        logout_clicked = st.button("Terminar sessão", width="content", key="topbar_logout")
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    return settings_clicked, logout_clicked
+
+
+def render_sidebar(app_settings, user_info, menu_items, active_key):
+    company_name = (app_settings or {}).get("company_name") or "Sistema"
+    logo = (app_settings or {}).get("logo_base64")
+    user_name = (user_info or {}).get("nome") or "Utilizador"
+    nivel = (user_info or {}).get("nivel") or ""
+
+    st.sidebar.markdown(
+        "<div class='sidebar-brand'>",
+        unsafe_allow_html=True,
+    )
+    if logo:
+        st.sidebar.markdown(
+            f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>",
+            unsafe_allow_html=True,
+        )
+    else:
+        initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
+        st.sidebar.markdown(
+            f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>",
+            unsafe_allow_html=True,
+        )
+    st.sidebar.markdown(f"<div class='sidebar-brand-title'>{company_name}</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+    st.sidebar.markdown(
+        f"""
+        <div class='sidebar-user-card'>
+            <div class='sidebar-user-name'>{user_name}</div>
+            <div class='sidebar-user-chip'>{nivel}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    idx = menu_items.index(active_key) if active_key in menu_items else 0
+    aba = st.sidebar.radio("Menu", menu_items, index=idx, label_visibility="collapsed")
+    return aba
+
+
 def render_zone_title(title: str, cls: str = "reports-zone-title"):
     st.markdown(f"<div class='{cls}'>{title}</div>", unsafe_allow_html=True)
 
