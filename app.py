@@ -3010,32 +3010,36 @@ elif aba == t("menu.owners"):
 # ⚙️ Gestão de Utilizadores (Apenas Administrador)
 # ------------------------------------------------------------
 elif aba == t("menu.users"):
-    st.header("⚙️ Gestão de Utilizadores")
-    
+    st.header(t("users.title"))
+
     usuarios_df = carregar_usuarios()
-    
-    tab1, tab2, tab3 = st.tabs(["📋 Lista de Utilizadores", "➕ Adicionar Utilizador", "🔒 Alterar Password"])
-    
+
+    tab1, tab2, tab3 = st.tabs([
+        t("users.tab.list"),
+        t("users.tab.add"),
+        t("users.tab.change_password"),
+    ])
+
     # TAB 1: Lista
     with tab1:
         if usuarios_df.empty:
-            st.info("ℹ️ Nenhum utilizador cadastrado.")
+            st.info(t("users.none_registered"))
         else:
-        st.markdown(t("users.total", count=len(usuarios_df)))
-            
+            st.markdown(t("users.total", count=len(usuarios_df)))
+
             # Filtros
             col1, col2 = st.columns(2)
             with col1:
-            filtro_nivel = st.multiselect(
-                t("users.filter_level"),
+                filtro_nivel = st.multiselect(
+                    t("users.filter_level"),
                     options=usuarios_df["nivel"].unique(),
-                    default=None
+                    default=None,
                 )
             with col2:
-            filtro_status = st.selectbox(
-                t("label.status"),
-                [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")]
-            )
+                filtro_status = st.selectbox(
+                    t("label.status"),
+                    [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")],
+                )
             
             usuarios_filtrado = usuarios_df.copy()
             if filtro_nivel:
