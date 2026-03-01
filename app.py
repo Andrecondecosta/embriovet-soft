@@ -1824,7 +1824,7 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    render_zone_title("Zona A — Branding", "insem-zone-title")
+    render_zone_title("Zona A — Identidade", "insem-zone-title")
     col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
         company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
@@ -1849,8 +1849,8 @@ def render_onboarding(app_settings):
             encoded = base64.b64encode(logo_bytes).decode("utf-8")
             st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
 
-    render_zone_title("Zona B — Conta Admin", "insem-zone-title")
-    admin_username = st.text_input("Username admin", key="onboarding_admin_username")
+    render_zone_title("Zona B — Conta de Administrador", "insem-zone-title")
+    admin_username = st.text_input("Nome de utilizador admin", key="onboarding_admin_username")
     admin_password = st.text_input("Password temporária", key="onboarding_admin_password")
     st.caption("Esta password é temporária. Vai ser obrigatório alterar no primeiro login.")
 
