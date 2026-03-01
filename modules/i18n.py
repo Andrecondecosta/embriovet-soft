@@ -1783,8 +1783,23 @@ TRANSLATIONS = {
 
 def t(key: str, **kwargs):
     lang = st.session_state.get("lang", "pt-PT")
+    if lang == "zz":
+        return f"⟦{key}⟧"
     fallback = TRANSLATIONS["pt-PT"]
     text = TRANSLATIONS.get(lang, fallback).get(key, fallback.get(key, key))
     if kwargs:
         return text.format(**kwargs)
     return text
+
+
+def get_i18n_diagnostics(langs=None):
+    base = TRANSLATIONS.get("pt-PT", {})
+    keys = set(base.keys())
+    missing = {}
+    languages = langs or ["pt-PT", "en", "fr", "de"]
+    for lang in languages:
+        lang_map = TRANSLATIONS.get(lang, {})
+        missing_keys = sorted(keys - set(lang_map.keys()))
+        if missing_keys:
+            missing[lang] = missing_keys
+    return {"total_keys": len(keys), "missing": missing}
