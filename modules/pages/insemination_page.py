@@ -81,6 +81,23 @@ def run_insemination_page(ctx):
         st.session_state["insem_garanhao_modal"] = None
     if "insem_prop_modal" not in st.session_state:
         st.session_state["insem_prop_modal"] = "Todos"
+    if "insem_show_success" not in st.session_state:
+        st.session_state["insem_show_success"] = False
+
+    @st.dialog("✅ Concluído", width="small")
+    def show_success_dialog():
+        st.markdown("A inseminação foi registada com sucesso.")
+        if st.button("OK", type="primary", width="stretch"):
+            st.session_state["insem_linhas"] = {}
+            st.session_state["insem_egua"] = ""
+            for k in list(st.session_state.keys()):
+                if k.startswith("insem_modal_qtd_") or k.startswith("insem_step_") or k.startswith("insem_line_input_"):
+                    st.session_state.pop(k, None)
+            st.session_state["insem_show_success"] = False
+            st.rerun()
+
+    if st.session_state["insem_show_success"]:
+        show_success_dialog()
 
     def lote_ref(row):
         return row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
@@ -332,6 +349,5 @@ def run_insemination_page(ctx):
 
             ok = registrar_inseminacao_multiplas(registros, data_insem, egua)
             if ok:
-                st.success("Inseminação registrada com sucesso.")
-                st.session_state["insem_linhas"] = {}
+                st.session_state["insem_show_success"] = True
                 st.rerun()
