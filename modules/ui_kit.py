@@ -249,19 +249,19 @@ def inject_shell_css(primary_color: str | None):
                 color: var(--text);
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
-                background: #ffffff;
+                background: #f1f5f9;
                 border-color: var(--border);
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
-                background: #ffffff;
-                border-color: var(--primary);
+                background: #eef2ff;
+                border-color: rgba(37, 99, 235, 0.3);
                 color: var(--primary);
                 position: relative;
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {{
                 content: "";
                 position: absolute;
-                left: -8px;
+                left: 0;
                 top: 6px;
                 bottom: 6px;
                 width: 3px;
