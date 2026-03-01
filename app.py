@@ -2178,7 +2178,7 @@ elif aba == t("menu.add_stock"):
 # 📥 Importar Sémen
 # ------------------------------------------------------------
 elif aba == t("menu.import"):
-    st.header("Importar Sémen")
+    st.header(t("import.title"))
 
     st.markdown(
         """
