@@ -298,6 +298,17 @@ def update_show_initial_credentials(value: bool):
         cur.close()
 
 
+def update_language(language: str):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE app_settings SET language = %s, updated_at = now()",
+            (language,),
+        )
+        conn.commit()
+        cur.close()
+
+
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
