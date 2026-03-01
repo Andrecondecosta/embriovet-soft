@@ -25,12 +25,13 @@ def run_settings_page(ctx: dict):
     with col_left:
         company_name = st.text_input(t("label.company_name"), value=current_company)
 
-        lang_options = ["pt-PT", "en", "fr", "de"]
+        lang_options = ["pt-PT", "en", "fr", "de", "zz"]
         lang_labels = {
             "pt-PT": t("language.pt_pt"),
             "en": t("language.en"),
             "fr": t("language.fr"),
             "de": t("language.de"),
+            "zz": t("language.zz"),
         }
         language = st.selectbox(
             label=t("settings.language_label"),
