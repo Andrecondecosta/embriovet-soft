@@ -100,26 +100,26 @@ def run_map_page(ctx: dict):
     # Modal para adicionar contentor - design limpo
     if st.session_state.get('modal_novo_contentor', False):
         st.markdown("---")
-        st.markdown("### Adicionar Novo Contentor")
+        st.markdown(f"### {t('map.add_container_title')}")
 
         with st.form("form_novo_contentor"):
             col_form1, col_form2 = st.columns([1, 1])
 
             with col_form1:
                 codigo = st.text_input(
-                    "Código do Contentor *", 
-                    placeholder="Ex: CT-01, A1, EMB01",
-                    help="Identificador único alfanumérico"
+                    t("map.container_code_required"), 
+                    placeholder=t("map.container_code_placeholder"),
+                    help=t("map.container_code_help")
                 )
 
             with col_form2:
-                descricao = st.text_input("Descrição (opcional)", placeholder="Localização ou notas")
+                descricao = st.text_input(t("map.container_description_optional"), placeholder=t("map.container_description_placeholder"))
 
             col_submit1, col_submit2 = st.columns([1, 1])
             with col_submit1:
-                submitted = st.form_submit_button("Criar Contentor", width="stretch")
+                submitted = st.form_submit_button(t("btn.create_container"), width="stretch")
             with col_submit2:
-                cancelar = st.form_submit_button("Cancelar", width="stretch")
+                cancelar = st.form_submit_button(t("btn.cancel"), width="stretch")
 
             if cancelar:
                 st.session_state['modal_novo_contentor'] = False
@@ -127,10 +127,10 @@ def run_map_page(ctx: dict):
 
             if submitted:
                 if not codigo:
-                    st.error("Código é obrigatório")
+                    st.error(t("map.container_code_required_error"))
                 else:
                     if codigo in contentores_df['codigo'].values:
-                        st.error(f"Já existe um contentor com o código '{codigo}'")
+                        st.error(t("map.container_code_exists", code=codigo))
                     else:
                         import random
                         contentor_id = adicionar_contentor({
@@ -142,7 +142,7 @@ def run_map_page(ctx: dict):
                             'h': 90
                         })
                         if contentor_id:
-                            st.success(f"Contentor '{codigo}' criado com sucesso")
+                        st.success(t("map.container_created", code=codigo))
                             st.session_state['modal_novo_contentor'] = False
                             st.rerun()
 
