@@ -3086,7 +3086,7 @@ elif aba == t("menu.users"):
         st.markdown(f"### {t('users.add_new')}")
         
         with st.form("add_usuario"):
-            novo_username = st.text_input("Username *", placeholder=t("users.username_placeholder"))
+            novo_username = st.text_input(t("users.username_required"), placeholder=t("users.username_placeholder"))
             novo_nome = st.text_input(t("label.full_name_required"))
             novo_nivel = st.selectbox(t("users.access_level"), [t("users.level.admin"), t("users.level.manager"), t("users.level.viewer")])
             nova_password = st.text_input(t("users.password_label"), type="password", placeholder=t("users.password_min"))
