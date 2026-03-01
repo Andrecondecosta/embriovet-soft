@@ -84,38 +84,38 @@ def run_reports_page(ctx: dict):
             key="rel_tipo_hist",
         )
 
-    render_zone_title("Zona de filtros")
+    render_zone_title(t("reports.zone.filters"))
     filtros = {}
-    with st.expander("Filtros de análise", expanded=False):
+    with st.expander(t("reports.filters_title"), expanded=False):
         c1, c2, c3 = st.columns(3)
         with c1:
-            usar_periodo = st.checkbox("Aplicar período", value=False, key="rel_periodo_flag")
+            usar_periodo = st.checkbox(t("reports.apply_period"), value=False, key="rel_periodo_flag")
         with c2:
-            data_inicio = st.date_input("Data início", value=None, key="rel_periodo_ini") if usar_periodo else None
+            data_inicio = st.date_input(t("reports.date_start"), value=None, key="rel_periodo_ini") if usar_periodo else None
         with c3:
-            data_fim = st.date_input("Data fim", value=None, key="rel_periodo_fim") if usar_periodo else None
+            data_fim = st.date_input(t("reports.date_end"), value=None, key="rel_periodo_fim") if usar_periodo else None
 
         if data_inicio and data_fim and data_inicio > data_fim:
-            st.warning("Período inválido")
+            st.warning(t("reports.invalid_period"))
             data_inicio, data_fim = None, None
 
-        if modo == "Garanhão" and garanhao_sel:
+        if modo == t("reports.mode.stallion") and garanhao_sel:
             base = stock[stock["garanhao"] == garanhao_sel]
-            filtros["prop"] = st.multiselect("Proprietários", sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_g_prop")
-        elif modo == "Proprietário" and prop_sel:
+            filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_g_prop")
+        elif modo == t("reports.mode.owner") and prop_sel:
             base = stock[stock["dono_id"] == prop_sel] if not stock.empty else pd.DataFrame()
-            filtros["gar"] = st.multiselect("Garanhões", sorted(base["garanhao"].dropna().unique()) if not base.empty else [], key="rel_f_p_gar")
-        elif modo == "Contentor / Localização" and contentor_sel:
+            filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao"].dropna().unique()) if not base.empty else [], key="rel_f_p_gar")
+        elif modo == t("reports.mode.container") and contentor_sel:
             base = stock[stock["contentor_id"] == contentor_sel] if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
             f1, f2, f3, f4 = st.columns(4)
             with f1:
-                filtros["gar"] = st.multiselect("Garanhões", sorted(base["garanhao"].dropna().unique()) if not base.empty else [], key="rel_f_c_gar")
+                filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao"].dropna().unique()) if not base.empty else [], key="rel_f_c_gar")
             with f2:
-                filtros["prop"] = st.multiselect("Proprietários", sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_prop")
+                filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_prop")
             with f3:
-                filtros["can"] = st.multiselect("Canister", sorted(base["canister"].dropna().unique()) if (not base.empty and "canister" in base.columns) else [], key="rel_f_c_can")
+                filtros["can"] = st.multiselect(t("reports.canister"), sorted(base["canister"].dropna().unique()) if (not base.empty and "canister" in base.columns) else [], key="rel_f_c_can")
             with f4:
-                filtros["and"] = st.multiselect("Andar", sorted(base["andar"].dropna().unique()) if (not base.empty and "andar" in base.columns) else [], key="rel_f_c_and")
+                filtros["and"] = st.multiselect(t("reports.floor"), sorted(base["andar"].dropna().unique()) if (not base.empty and "andar" in base.columns) else [], key="rel_f_c_and")
 
     if usar_periodo and (data_inicio or data_fim):
         if not insem.empty:
