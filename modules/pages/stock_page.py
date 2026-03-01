@@ -227,10 +227,10 @@ def run_stock_page(ctx: dict):
                 # TAB 2: Editar (Apenas Admin)
                 if tab2 is not None:
                     with tab2:
-                        st.markdown("### ✏️ Editar Stock")
+                        st.markdown(f"### {t('stock.edit_title')}")
 
                         # Botão + para adicionar proprietário
-                        if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
+                        if st.button(t("stock.new_owner"), key=f"btn_add_prop_edit_{row['id']}", help=t("stock.new_owner_help")):
                             modal_adicionar_proprietario()
 
                         # Carregar contentores para edição
