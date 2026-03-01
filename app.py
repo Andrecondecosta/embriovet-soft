@@ -309,6 +309,25 @@ def update_language(language: str):
         cur.close()
 
 
+def update_branding_settings(company_name, logo_base64, language, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                language = %s,
+                primary_color = %s,
+                updated_at = now()
+            WHERE id = 1
+            """,
+            (company_name, logo_base64, language, primary_color),
+        )
+        conn.commit()
+        cur.close()
+
+
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
@@ -1697,6 +1716,17 @@ st.set_page_config(
     page_title=os.getenv("APP_TITLE", "Sistema"),
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
+)
+st.markdown(
+    """
+    <style>
+    header[data-testid="stHeader"] { display: none; }
+    div[data-testid="stAppViewContainer"] { padding-top: 0rem; }
+    section.main > div.block-container { padding-top: 1.0rem; }
+    div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 inject_stepper_css()
 inject_stock_css()
