@@ -198,7 +198,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials, theme_key
+                       is_initialized, show_initial_credentials, theme_key, language
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -217,6 +217,7 @@ def get_app_settings():
             "is_initialized": row[4],
             "show_initial_credentials": row[5],
             "theme_key": row[6],
+            "language": row[7],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
@@ -232,8 +233,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name, theme_key)
-                SELECT 1, 'Sistema', 'blue'
+                INSERT INTO app_settings (id, company_name, theme_key, language)
+                SELECT 1, 'Sistema', 'blue', 'pt-PT'
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
