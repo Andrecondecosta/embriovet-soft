@@ -2050,6 +2050,10 @@ if aba == "📈 Relatórios":
     run_reports_page({**globals(), **locals()})
     st.stop()
 
+if aba == "🎨 Definições":
+    run_settings_page({**globals(), **locals()})
+    st.stop()
+
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
