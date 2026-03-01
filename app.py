@@ -1993,16 +1993,16 @@ aba = render_sidebar(app_settings, user, menu_options, active_key)
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
 # ------------------------------------------------------------
-@st.dialog("➕ Adicionar Novo Proprietário")
+@st.dialog(t("owners.add_new_title"))
 def modal_adicionar_proprietario():
     """Modal para adicionar novo proprietário rapidamente"""
-    novo_nome = st.text_input("Nome do Proprietário *", key="modal_novo_prop")
+    novo_nome = st.text_input(t("owners.name_required"), key="modal_novo_prop")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Adicionar", type="primary", width="stretch"):
+        if st.button(t("btn.add"), type="primary", width="stretch"):
             if not novo_nome:
-                st.error("❌ Nome é obrigatório")
+                st.error(t("error.name_required"))
             else:
                 # Criar dados mínimos
                 dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
@@ -2012,10 +2012,10 @@ def modal_adicionar_proprietario():
                 if prop_id:
                     st.session_state['novo_proprietario_id'] = prop_id
                     st.session_state['novo_proprietario_nome'] = novo_nome
-                    st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
+                    st.success(t("owners.added", name=novo_nome))
                     st.rerun()
     with col2:
-        if st.button("❌ Cancelar", width="stretch"):
+        if st.button(t("btn.cancel"), width="stretch"):
             st.rerun()
 
 # Carregar dados
