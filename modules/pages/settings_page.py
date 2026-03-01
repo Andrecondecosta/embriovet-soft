@@ -39,6 +39,12 @@ def run_settings_page(ctx: dict):
             format_func=lambda x: lang_labels.get(x, x),
             index=lang_options.index(current_lang) if current_lang in lang_options else 0,
         )
+        qa_mode_value = st.toggle(
+            t("settings.qa_mode"),
+            value=st.session_state.get("i18n_qa_mode", False),
+            key="settings_i18n_qa_mode",
+        )
+        st.session_state["i18n_qa_mode"] = qa_mode_value
 
         logo_file = st.file_uploader(t("label.logo"), type=["png", "jpg", "jpeg"])
         if logo_file is not None:
