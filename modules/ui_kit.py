@@ -272,7 +272,8 @@ def inject_shell_css(primary_color: str | None):
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 10px 12px;
+                padding: 0 16px;
+                height: 56px;
                 border-bottom: 1px solid var(--border);
                 background: #ffffff;
                 margin-bottom: 10px;
@@ -285,6 +286,7 @@ def inject_shell_css(primary_color: str | None):
             .app-topbar-actions .stButton > button {{
                 font-size: .78rem;
                 padding: 4px 10px;
+                height: 32px;
             }}
             .reports-kpi-item b {{
                 color: var(--primary) !important;
