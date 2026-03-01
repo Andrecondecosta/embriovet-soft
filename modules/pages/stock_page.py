@@ -3,7 +3,7 @@ from modules.i18n import t
 
 def run_stock_page(ctx: dict):
     globals().update(ctx)
-    st.header("Estoque Atual")
+    st.header(t("stock.title"))
     inject_stock_css()
     inject_reports_css()
     inject_stepper_css()
@@ -125,13 +125,13 @@ def run_stock_page(ctx: dict):
 
         for _, row in stock_filtrado.iterrows():
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
-            referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
-            proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+            referencia = row.get("origem_externa") or row.get("data_embriovet") or t("common.no_reference")
+            proprietario_nome = row.get("proprietario_nome", t("common.no_owner"))
 
             # Verificar se é o lote recém-adicionado para abrir automaticamente
             expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False
 
-            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas", expanded=expanded):
+            with st.expander(t("stock.expander_title", ref=referencia, owner=proprietario_nome, qty=existencia), expanded=expanded):
 
                 # Tabs: Mostrar conforme permissões
                 if verificar_permissao('Administrador'):
@@ -151,7 +151,7 @@ def run_stock_page(ctx: dict):
                 with tab1:
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
+                        st.markdown(f"**🏷️ {t('label.owner')}:** {proprietario_nome}")
 
                         # Localização estruturada
                         if row.get('contentor_id'):
@@ -163,9 +163,9 @@ def run_stock_page(ctx: dict):
                                         contentor_codigo = contentor_df.iloc[0]['codigo']
                                         canister_num = row.get('canister', 'N/A')
                                         andar_num = row.get('andar', 'N/A')
-                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")
+                                        st.markdown(f"**📍 {t('label.location')}:** {contentor_codigo} | {t('label.canister')} {canister_num} | {andar_num}º")
                                     else:
-                                        st.markdown(f"**📍 Localização:** N/A")
+                                        st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
                             except Exception:
                                 st.markdown(f"**📍 Localização:** N/A")
                         else:
