@@ -539,8 +539,8 @@ def run_stock_page(ctx: dict):
                                 )
                             with c_tipo:
                                 tipo_saida = st.selectbox(
-                                    "Tipo",
-                                    ["Venda", "Doação", "Exportação", "Outro"],
+                                    t("label.type"),
+                                    [t("stock.type.sale"), t("stock.type.donation"), t("stock.type.export"), t("stock.type.other")],
                                     key=f"tipo_saida_{row['id']}",
                                     label_visibility="collapsed",
                                 )
@@ -554,13 +554,13 @@ def run_stock_page(ctx: dict):
                                 step_ext_key,
                                 min_value=1,
                                 max_value=existencia,
-                                invalid_tooltip="Stock insuficiente",
+                                invalid_tooltip=t("stock.insufficient_stock"),
                             )
 
                             with c_obs:
                                 obs_ext = st.text_input(
-                                    "Observações",
-                                    placeholder="Observações",
+                                    t("label.notes"),
+                                    placeholder=t("label.notes"),
                                     key=f"obs_ext_{row['id']}",
                                     label_visibility="collapsed",
                                 )
@@ -568,18 +568,20 @@ def run_stock_page(ctx: dict):
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
                                 btn_disabled = qtd_ext_val < 1 or qtd_ext_val > existencia or not destinatario_ext
-                                if st.button("Confirmar", key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
+                                if st.button(t("btn.confirm"), key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_externo(row["id"], destinatario_ext, qtd_ext_val, tipo_saida, obs_ext):
                                         restante = max(0, existencia - qtd_ext_val)
-                                        st.session_state[msg_key] = (
-                                            f"✓ {qtd_ext_val} palhetas transferidas. Stock restante: {restante}."
+                                        st.session_state[msg_key] = t(
+                                            "stock.transfer_success",
+                                            qty=qtd_ext_val,
+                                            remaining=restante,
                                         )
                                         st.rerun()
 
                             impacto = max(0, qtd_ext_val) * -1
                             previsto = max(0, existencia - qtd_ext_val)
                             st.markdown(
-                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                f"<div class='transf-inline-msg'>{t('stock.impact', qty=impacto, final=previsto)}</div>",
                                 unsafe_allow_html=True,
                             )
                             if st.session_state.get(msg_key):
