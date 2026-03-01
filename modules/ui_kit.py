@@ -191,7 +191,7 @@ def inject_shell_css(primary_color: str | None):
         f"""
         <style>
             :root {{
-                --radius: 10px;
+                --radius: 8px;
                 --border: #e2e8f0;
                 --muted: #64748b;
                 --bg: #f8fafc;
