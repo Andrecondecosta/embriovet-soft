@@ -2493,16 +2493,16 @@ elif aba == t("menu.import"):
                 raw_df = pd.read_csv(uploaded_file)
             else:
                 if not xlsx_ready:
-                    st.error("Para ler XLSX, instale openpyxl no ambiente.")
+                    st.error(t("import.xlsx_install"))
                     raw_df = pd.DataFrame()
                 else:
                     raw_df = pd.read_excel(uploaded_file)
         except Exception as e:
-            st.error(f"Erro ao ler o ficheiro: {e}")
+            st.error(t("import.read_error", error=e))
             raw_df = pd.DataFrame()
 
         if raw_df.empty:
-            st.warning("O ficheiro está vazio ou não pôde ser lido.")
+            st.warning(t("import.file_empty"))
         else:
             col_map = {}
             for col in raw_df.columns:
@@ -2512,9 +2512,9 @@ elif aba == t("menu.import"):
 
             missing = [col for col in required_cols if col not in col_map]
             if missing:
-                st.error(f"Colunas obrigatórias em falta: {', '.join(missing)}")
+                st.error(t("import.missing_columns", cols=', '.join(missing)))
                 erros_df = pd.DataFrame([
-                    {"linha": "-", "coluna": "-", "erro": f"Colunas obrigatórias em falta: {', '.join(missing)}"}
+                    {"linha": "-", "coluna": "-", "erro": t("import.missing_columns", cols=', '.join(missing))}
                 ])
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
