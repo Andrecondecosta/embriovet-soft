@@ -1933,17 +1933,22 @@ if settings_clicked:
     st.rerun()
 
 # Menu lateral adaptado às permissões
-menu_options = ["🏠 Painel", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+menu_options = [
+    t("menu.dashboard"),
+    t("menu.map"),
+    t("menu.stock"),
+    t("menu.reports"),
+]
 
 if verificar_permissao('Gestor'):
-    menu_options.insert(2, "➕ Adicionar Stock")
-    menu_options.insert(3, "📥 Importar Sémen")
-    menu_options.insert(4, "📝 Registrar Inseminação")
-    menu_options.append("👥 Gestão de Proprietários")
+    menu_options.insert(2, t("menu.add_stock"))
+    menu_options.insert(3, t("menu.import"))
+    menu_options.insert(4, t("menu.register_insemination"))
+    menu_options.append(t("menu.owners"))
 
 if verificar_permissao('Administrador'):
-    menu_options.append("⚙️ Gestão de Utilizadores")
-    menu_options.append("🎨 Definições")
+    menu_options.append(t("menu.users"))
+    menu_options.append(t("menu.settings"))
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
