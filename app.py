@@ -1929,7 +1929,7 @@ if logout_clicked:
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
-    st.session_state['aba_selecionada'] = "🎨 Definições"
+    st.session_state['aba_selecionada'] = t("menu.settings")
     st.rerun()
 
 # Menu lateral adaptado às permissões
