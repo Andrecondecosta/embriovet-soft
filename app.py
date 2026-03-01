@@ -1972,6 +1972,7 @@ if verificar_permissao('Gestor'):
 
 if verificar_permissao('Administrador'):
     menu_options.append("⚙️ Gestão de Utilizadores")
+    menu_options.append("🎨 Definições")
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
