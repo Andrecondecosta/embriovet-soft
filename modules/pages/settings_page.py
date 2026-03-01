@@ -12,7 +12,7 @@ def run_settings_page(ctx: dict):
 
     render_zone_title(t("settings.branding"), "insem-zone-title")
 
-    current_company = app_settings.get("company_name") if app_settings else "Sistema"
+    current_company = app_settings.get("company_name") if app_settings else t("common.system")
     current_lang = app_settings.get("language", "pt-PT") if app_settings else "pt-PT"
     current_logo = app_settings.get("logo_base64") if app_settings else None
     current_primary = app_settings.get("primary_color") if app_settings else "#1D4ED8"
@@ -27,10 +27,10 @@ def run_settings_page(ctx: dict):
 
         lang_options = ["pt-PT", "en", "fr", "de"]
         lang_labels = {
-            "pt-PT": "Português (Portugal)",
-            "en": "English",
-            "fr": "Français",
-            "de": "Deutsch",
+            "pt-PT": t("language.pt_pt"),
+            "en": t("language.en"),
+            "fr": t("language.fr"),
+            "de": t("language.de"),
         }
         language = st.selectbox(
             label=t("settings.language_label"),
@@ -64,9 +64,9 @@ def run_settings_page(ctx: dict):
                 st.rerun()
         with btn_col2:
             if st.button(t("btn.restore_defaults"), width="stretch"):
-                update_branding_settings("Sistema", None, "pt-PT", "#1D4ED8")
+                update_branding_settings(t("common.system"), None, "pt-PT", "#1D4ED8")
                 st.session_state["settings_logo_preview"] = None
-                st.session_state["company_name"] = "Sistema"
+                st.session_state["company_name"] = t("common.system")
                 st.session_state["lang"] = "pt-PT"
                 st.session_state["primary_color"] = "#1D4ED8"
                 st.success(t("success.defaults_restored"))
