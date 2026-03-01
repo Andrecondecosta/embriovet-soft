@@ -28,6 +28,8 @@ def audit(root: str = "/app"):
     regexes = [re.compile(p) for p in PATTERNS]
     findings = []
     for path in Path(root).rglob("*.py"):
+        if path.name.endswith(".bak"):
+            continue
         for idx, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if "t(" in line:
                 continue
