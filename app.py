@@ -1943,19 +1943,6 @@ if app_settings.get("logo_base64"):
 else:
     st.title(nome_empresa)
 
-if app_settings.get("primary_color"):
-    st.markdown(
-        f"""
-        <style>
-            :root {{ --brand-primary: {app_settings['primary_color']}; }}
-            .stButton > button[data-testid="baseButton-primary"] {{
-                background-color: var(--brand-primary) !important;
-                border-color: var(--brand-primary) !important;
-            }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 # Sidebar com info do utilizador
 if app_settings.get("logo_base64"):
