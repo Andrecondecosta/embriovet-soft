@@ -1746,10 +1746,14 @@ def mostrar_tela_login(app_settings):
         st.markdown(f"### {t('login.auth')}")
         
         with st.form("login_form"):
-            username = st.text_input("👤 " + t("login.username"), placeholder=t("login.username"))
-            password = st.text_input("🔒 " + t("login.password"), type="password", placeholder=t("login.password"))
-            
-            submitted = st.form_submit_button("🚀 " + t("login.submit"), type="primary", width="stretch")
+            label_user = "👤 " + t("auth.username")
+            label_pass = "🔒 " + t("auth.password")
+            btn_label = "🚀 " + t("auth.login")
+
+            username = st.text_input(label_user, placeholder=t("auth.username_placeholder"))
+            password = st.text_input(label_pass, type="password", placeholder=t("auth.password_placeholder"))
+
+            submitted = st.form_submit_button(btn_label, type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
