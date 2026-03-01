@@ -178,7 +178,7 @@ def run_stock_page(ctx: dict):
                         st.markdown(f"**⚡ {t('stock.motility_label')}:** {row.get('motilidade') or 0}%")
                         st.markdown(f"**💊 {t('stock.dose_label')}:** {row.get('dose') or t('common.na')}")
                         if row.get("observacoes"):
-                            st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
+                            st.markdown(f"**📝 {t('label.notes')}:** {row.get('observacoes')}")
 
                     # Informações de auditoria
                     st.markdown("---")
@@ -190,14 +190,14 @@ def run_stock_page(ctx: dict):
                                 data_criacao = row.get("data_criacao")
                                 if isinstance(data_criacao, str):
                                     data_criacao = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
-                                st.markdown(f"**📅 Criado em:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
+                                st.markdown(f"**📅 {t('stock.created_at_label')}:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
                             except Exception:
-                                st.markdown(f"**📅 Criado em:** {row.get('data_criacao')}")
+                                st.markdown(f"**📅 {t('stock.created_at_label')}:** {row.get('data_criacao')}")
                     with audit_col2:
                         if row.get("criado_por"):
-                            st.markdown(f"**👤 Criado por:** {row.get('criado_por')}")
+                            st.markdown(f"**👤 {t('stock.created_by_label')}:** {row.get('criado_por')}")
 
-                    with st.expander("Histórico técnico deste lote", expanded=False):
+                    with st.expander(t("stock.lot_history"), expanded=False):
                         lote_transf_int, lote_transf_ext = filter_lot_transfer_history(
                             transf_hist_all,
                             transf_ext_hist_all,
