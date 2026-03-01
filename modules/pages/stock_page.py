@@ -350,7 +350,7 @@ def run_stock_page(ctx: dict):
                                     "observacoes": edit_obs,
                                     "existencia": edit_existencia
                                 }):
-                                    st.success("✅ Stock atualizado com sucesso!")
+                                    st.success(t("stock.updated_success"))
                                     # Marcar que usou
                                     if 'novo_proprietario_id' in st.session_state:
                                         st.session_state['novo_proprietario_usado'] = True
