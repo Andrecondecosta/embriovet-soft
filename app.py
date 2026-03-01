@@ -2559,10 +2559,10 @@ elif aba == t("menu.import"):
                 row_numbers = st.session_state.get("import_row_numbers", row_numbers)
 
                 st.markdown(
-                    "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
+                    f"<div class='import-hint'>{t('import.rules_hint')}</div>",
                     unsafe_allow_html=True,
                 )
-                compact_view = st.toggle("Vista compacta", value=True)
+                compact_view = st.toggle(t("import.compact_view"), value=True)
 
                 full_cols = [
                     "garanhao",
@@ -2592,7 +2592,7 @@ elif aba == t("menu.import"):
                 preview_placeholder = st.container()
 
                 editor_view = editor_df[col_order].copy()
-                st.caption("Editar dados (alterações apenas em memória)")
+                st.caption(t("import.edit_caption"))
                 edited_view = st.data_editor(
                     editor_view,
                     key="import_editor",
