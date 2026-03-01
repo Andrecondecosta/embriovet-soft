@@ -1708,7 +1708,7 @@ inject_reports_css()
 def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
-    st.title(f"🔐 Login - {nome_empresa}")
+    st.title(t("login.title", company=nome_empresa))
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -1716,22 +1716,22 @@ def mostrar_tela_login(app_settings):
         st.markdown("### Autenticação")
         
         with st.form("login_form"):
-            username = st.text_input("👤 Utilizador", placeholder="Digite seu username")
-            password = st.text_input("🔒 Password", type="password", placeholder="Digite sua password")
+            username = st.text_input("👤 " + t("login.username"), placeholder=t("login.username"))
+            password = st.text_input("🔒 " + t("login.password"), type="password", placeholder=t("login.password"))
             
-            submitted = st.form_submit_button("🚀 Entrar", type="primary", width="stretch")
+            submitted = st.form_submit_button("🚀 " + t("login.submit"), type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
-                    st.error("❌ Preencha todos os campos")
+                    st.error(t("login.missing"))
                 else:
                     user = autenticar_usuario(username, password)
                     if user:
                         st.session_state['user'] = user
-                        st.success(f"✅ Bem-vindo, {user['nome']}!")
+                        st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
-                        st.error("❌ Utilizador ou password incorretos")
+                        st.error(t("login.invalid"))
         
 
 def verificar_permissao(nivel_minimo):
