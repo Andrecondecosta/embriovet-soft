@@ -1127,6 +1127,7 @@ TRANSLATIONS = {
         "add_stock.floor_help": "Niveau dans le canister",
         "add_stock.notes_help": "Informations supplémentaires (optionnel)",
         "import.zone.context": "Contexte / Aide",
+        "import.title": "Importer la semence",
         "import.hint": "Chargez le fichier, validez-le puis importez. Utilisez le modèle pour conserver les colonnes correctes.",
         "import.download_xlsx": "Télécharger le modèle (XLSX)",
         "import.xlsx_requires": "XLSX nécessite openpyxl installé.",
