@@ -3173,7 +3173,7 @@ elif aba == t("menu.register_insemination"):
                     st.rerun()
 
 elif aba == t("menu.owners"):
-    st.header("👥 Gestão de Proprietários")
+    st.header(t("owners.title"))
     
     # Verificar e criar coluna ativo se não existir
     try:
@@ -3189,10 +3189,10 @@ elif aba == t("menu.owners"):
                 cur.execute("ALTER TABLE dono ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
                 cur.execute("UPDATE dono SET ativo = TRUE WHERE ativo IS NULL")
                 conn.commit()
-                st.success("✅ Coluna 'ativo' criada automaticamente!")
+                st.success(t("owners.column_created"))
             cur.close()
     except Exception as e:
-        st.error(f"❌ Erro ao verificar/criar coluna ativo: {e}")
+        st.error(t("owners.column_error", error=e))
     
     # TODO: Implementar desativação automática nas transações de stock
     # atualizar_status_proprietarios()
@@ -3205,46 +3205,46 @@ elif aba == t("menu.owners"):
     # Recarregar proprietários (todos, não apenas ativos) - sempre fresh
     proprietarios_todos = carregar_proprietarios(apenas_ativos=False)
     
-    tab1, tab2 = st.tabs(["📋 Lista", "➕ Adicionar"])
+    tab1, tab2 = st.tabs([t("owners.tab.list"), t("owners.tab.add")])
     
     # TAB 1: Lista
     with tab1:
         if proprietarios_todos.empty:
-            st.info("ℹ️ Nenhum proprietário cadastrado.")
+            st.info(t("owners.none_registered"))
         else:
             # Filtro e Ordenação
             col_f1, col_f2 = st.columns(2)
             
             with col_f1:
-                filtro_status = st.radio("Filtrar:", ["Todos", "Ativos", "Inativos"], horizontal=True)
+                filtro_status = st.radio(t("owners.filter"), [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")], horizontal=True)
             
             with col_f2:
-                ordenar_por = st.selectbox("Ordenar por:", ["Nome", "ID", "Status"])
+                ordenar_por = st.selectbox(t("owners.sort_by"), [t("owners.sort.name"), t("owners.sort.id"), t("owners.sort.status")])
             
             # Aplicar filtro
-            if filtro_status == "Ativos":
+            if filtro_status == t("owners.filter.active"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True].copy()
-            elif filtro_status == "Inativos":
+            elif filtro_status == t("owners.filter.inactive"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False].copy()
             else:
                 props_exibir = proprietarios_todos.copy()
             
             # Aplicar ordenação
-            if ordenar_por == "Nome":
+            if ordenar_por == t("owners.sort.name"):
                 props_exibir = props_exibir.sort_values('nome')
-            elif ordenar_por == "ID":
+            elif ordenar_por == t("owners.sort.id"):
                 props_exibir = props_exibir.sort_values('id')
-            elif ordenar_por == "Status":
+            elif ordenar_por == t("owners.sort.status"):
                 props_exibir = props_exibir.sort_values('ativo', ascending=False)
             
-            st.markdown(f"**{len(props_exibir)} proprietários**")
+            st.markdown(t("owners.count", count=len(props_exibir)))
             st.markdown("---")
             
             # Lista de proprietários (estilo lotes)
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
-                status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
+                status_text = t("owners.status.active") if prop.get('ativo', True) else t("owners.status.inactive")
                 
                 # Título do expander com ID | Nome | Status
                 titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
@@ -3256,24 +3256,24 @@ elif aba == t("menu.owners"):
                 with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
-                    tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
+                tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
                     
                     # TAB: Detalhes
                     with tab_det:
                         col1, col2 = st.columns(2)
                         
                         with col1:
-                            st.markdown(f"**🆔 ID:** {prop['id']}")
-                            st.markdown(f"**👤 Nome:** {prop['nome']}")
-                            st.markdown(f"**📧 Email:** {prop.get('email') or 'N/A'}")
-                            st.markdown(f"**📱 Telemóvel:** {prop.get('telemovel') or 'N/A'}")
+                            st.markdown(f"**🆔 {t('label.id')}:** {prop['id']}")
+                            st.markdown(f"**👤 {t('label.name')}:** {prop['nome']}")
+                            st.markdown(f"**📧 {t('label.email')}:** {prop.get('email') or t('common.na')}")
+                            st.markdown(f"**📱 {t('label.phone')}:** {prop.get('telemovel') or t('common.na')}")
                         
                         with col2:
-                            st.markdown(f"**📄 Nome Completo:** {prop.get('nome_completo') or 'N/A'}")
-                            st.markdown(f"**🔢 NIF:** {prop.get('nif') or 'N/A'}")
-                            st.markdown(f"**📍 Morada:** {prop.get('morada') or 'N/A'}")
-                            st.markdown(f"**📮 CP:** {prop.get('codigo_postal') or 'N/A'}")
-                            st.markdown(f"**🏙️ Cidade:** {prop.get('cidade') or 'N/A'}")
+                            st.markdown(f"**📄 {t('label.full_name')}:** {prop.get('nome_completo') or t('common.na')}")
+                            st.markdown(f"**🔢 {t('label.nif')}:** {prop.get('nif') or t('common.na')}")
+                            st.markdown(f"**📍 {t('label.address')}:** {prop.get('morada') or t('common.na')}")
+                            st.markdown(f"**📮 {t('label.postal_code')}:** {prop.get('codigo_postal') or t('common.na')}")
+                            st.markdown(f"**🏙️ {t('label.city')}:** {prop.get('cidade') or t('common.na')}")
                         
                         st.markdown("---")
                         
@@ -3283,7 +3283,7 @@ elif aba == t("menu.owners"):
                         with col_a1:
                             # Botão de alternar status
                             status_atual = prop.get('ativo', True)
-                            btn_label = "🔴 Desativar" if status_atual else "🟢 Ativar"
+                            btn_label = t("owners.deactivate") if status_atual else t("owners.activate")
                             btn_type = "secondary" if status_atual else "primary"
                             
                             if st.button(btn_label, key=f"status_{prop['id']}", width="stretch", type=btn_type):
@@ -3293,46 +3293,46 @@ elif aba == t("menu.owners"):
                                 # Alternar status
                                 resultado = alternar_status_proprietario(prop['id'])
                                 if resultado is not None:
-                                    novo_status = "ATIVO" if resultado else "INATIVO"
-                                    st.success(f"✅ Status alterado para {novo_status}!")
+                                    novo_status = t("owners.status.active") if resultado else t("owners.status.inactive")
+                                    st.success(t("owners.status_changed", status=novo_status))
                                     # Forçar rerun imediato
                                     time.sleep(0.3)
                                     st.rerun()
                                 else:
-                                    st.error("❌ Erro ao alterar status. Verifique se a coluna 'ativo' existe.")
+                                    st.error(t("owners.status_error"))
                         
                         with col_a2:
-                            if st.button("🗑️ Apagar", key=f"del_{prop['id']}", width="stretch", type="secondary"):
+                            if st.button(t("btn.delete"), key=f"del_{prop['id']}", width="stretch", type="secondary"):
                                 if deletar_proprietario(prop['id']):
                                     if f'expand_{prop["id"]}' in st.session_state:
                                         del st.session_state[f'expand_{prop["id"]}']
-                                    st.success("✅ Apagado!")
+                                    st.success(t("success.deleted"))
                                     st.rerun()
                     
                     # TAB: Editar
                     with tab_edit:
-                        st.markdown("### ✏️ Editar Proprietário")
+                        st.markdown(f"### {t('owners.edit_title')}")
                         
                         with st.form(key=f"form_edit_{prop['id']}"):
                             col1, col2 = st.columns(2)
                             
                             with col1:
-                                nome_e = st.text_input("Nome *", value=prop.get('nome', ''))
-                                email_e = st.text_input("Email", value=prop.get('email', '') or '')
-                                tel_e = st.text_input("Telemóvel", value=prop.get('telemovel', '') or '')
-                                nc_e = st.text_input("Nome Completo", value=prop.get('nome_completo', '') or '')
+                                nome_e = st.text_input(t("label.name_required"), value=prop.get('nome', ''))
+                                email_e = st.text_input(t("label.email"), value=prop.get('email', '') or '')
+                                tel_e = st.text_input(t("label.phone"), value=prop.get('telemovel', '') or '')
+                                nc_e = st.text_input(t("label.full_name"), value=prop.get('nome_completo', '') or '')
                             
                             with col2:
-                                nif_e = st.text_input("NIF", value=prop.get('nif', '') or '')
-                                morada_e = st.text_area("Morada", value=prop.get('morada', '') or '', height=100)
-                                cp_e = st.text_input("Código Postal", value=prop.get('codigo_postal', '') or '')
-                                cidade_e = st.text_input("Cidade", value=prop.get('cidade', '') or '')
+                                nif_e = st.text_input(t("label.nif"), value=prop.get('nif', '') or '')
+                                morada_e = st.text_area(t("label.address"), value=prop.get('morada', '') or '', height=100)
+                                cp_e = st.text_input(t("label.postal_code"), value=prop.get('codigo_postal', '') or '')
+                                cidade_e = st.text_input(t("label.city"), value=prop.get('cidade', '') or '')
                             
-                            salvar = st.form_submit_button("💾 Guardar Alterações", type="primary", width="stretch")
+                            salvar = st.form_submit_button(t("btn.save_changes"), type="primary", width="stretch")
                             
                             if salvar:
                                 if not nome_e:
-                                    st.error("❌ Nome é obrigatório")
+                                    st.error(t("error.name_required"))
                                 else:
                                     dados = {
                                         'nome': nome_e,
