@@ -2065,25 +2065,25 @@ if aba == t("menu.settings"):
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
 elif aba == t("menu.add_stock"):
-    st.header("➕ Inserir novo stock com Proprietário")
+    st.header(t("add_stock.title"))
 
     if proprietarios.empty:
-        st.warning("⚠️ Nenhum proprietário cadastrado.")
-        if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
+        st.warning(t("add_stock.no_owners"))
+        if st.button(t("add_stock.add_first_owner"), type="primary"):
             modal_adicionar_proprietario()
     else:
         # Carregar contentores
         contentores_df = carregar_contentores()
         
         if contentores_df.empty:
-            st.warning("⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.")
+            st.warning(t("add_stock.no_containers"))
         else:
             # Botão + fora do form
-            if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+            if st.button(t("stock.new_owner"), key="btn_add_prop_stock", help=t("stock.new_owner_help")):
                 modal_adicionar_proprietario()
             
             with st.form("novo_stock"):
-                garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+                garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
                 
                 # Verificar se há proprietário recém-adicionado
                 if 'novo_proprietario_id' in st.session_state:
@@ -2091,53 +2091,53 @@ elif aba == t("menu.add_stock"):
                 else:
                     idx_default = 0
                 
-                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
+                proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
 
                 dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    data = st.text_input("Data de Produção")
-                    origem = st.text_input("Origem Externa / Referência")
-                    palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
-                    qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
-                    concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
+                    data = st.text_input(t("stock.prod_date"))
+                    origem = st.text_input(t("stock.external_origin"))
+                    palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
+                    qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=0)
+                    concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
 
                 with col2:
-                    motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
-                    certificado = st.selectbox("Certificado?", ["Sim", "Não"])
-                    dose = st.text_input("Dose")
+                    motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=0)
+                    certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")])
+                    dose = st.text_input(t("stock.dose"))
 
                 st.markdown("---")
-                st.subheader("📍 Localização Física")
+                st.subheader(t("stock.location_title"))
                 
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
                     contentor_selecionado = st.selectbox(
-                        "Contentor *",
+                        t("label.container_required"),
                         options=contentores_df["codigo"].tolist(),
-                        help="Selecione o contentor onde o sémen será armazenado"
+                        help=t("add_stock.container_help")
                     )
                     contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])
                 
                 with col_loc2:
                     canister = st.selectbox(
-                        "Canister *",
+                        t("label.canister_required"),
                         options=list(range(1, 11)),
-                        help="Número do canister (1-10)"
+                        help=t("add_stock.canister_help")
                     )
                 
                 with col_loc3:
                     andar = st.radio(
-                        "Andar *",
+                        t("label.floor_required"),
                         options=[1, 2],
                         format_func=lambda x: f"{x}º",
                         horizontal=True,
-                        help="Nível dentro do canister"
+                        help=t("add_stock.floor_help")
                     )
 
-                observacoes = st.text_area("Observações", help="Informações adicionais (opcional)")
-                submitted = st.form_submit_button("💾 Salvar")
+                observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"))
+                submitted = st.form_submit_button(t("btn.save"))
 
                 if submitted:
                     palhetas_int = int(to_py(palhetas) or 0)
