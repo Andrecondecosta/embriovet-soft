@@ -81,7 +81,7 @@ def run_settings_page(ctx: dict):
 
     with col_right:
         st.markdown(
-            """
+            f"""
             <div style='border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#f8fafc;'>
                 <div style='font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:#64748b; margin-bottom:8px;'>{t('common.preview')}</div>
             </div>
