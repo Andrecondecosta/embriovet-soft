@@ -420,7 +420,7 @@ TRANSLATIONS = {
         "users.activated": "✅ Utilizador ativado!",
         "users.add_new": "➕ Adicionar Novo Utilizador",
         "users.username_placeholder": "sem espaços, minúsculas",
-        "users.username_required": "Username *",
+        "users.username_required": "Nom d'utilisateur *",
         "users.access_level": "Nível de Acesso *",
         "users.level.admin": "Administrador",
         "users.level.manager": "Gestor",
