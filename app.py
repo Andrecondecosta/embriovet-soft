@@ -2386,55 +2386,55 @@ elif aba == t("menu.import"):
 
             garanhao = str(row.get("garanhao", "")).strip()
             if not garanhao or garanhao.lower() == "nan":
-                add_error("garanhao", "Garanhão obrigatório")
+                add_error("garanhao", t("import.error.garanhao_required"))
 
             prop_nome = str(row.get("proprietario_nome", "")).strip()
             if not prop_nome or prop_nome.lower() == "nan":
-                add_error("proprietario_nome", "Proprietário obrigatório")
+                add_error("proprietario_nome", t("import.error.owner_required"))
 
             data_ref = str(row.get("data_embriovet/ref", "")).strip()
             if not data_ref or data_ref.lower() == "nan":
-                add_error("data_embriovet/ref", "Data/Ref obrigatória")
+                add_error("data_embriovet/ref", t("import.error.date_required"))
 
             palhetas = parse_int(row.get("existencia_atual"))
             if palhetas is None:
-                add_error("existencia_atual", "Existência atual inválida")
+                add_error("existencia_atual", t("import.error.stock_invalid"))
             elif palhetas <= 0:
-                add_error("existencia_atual", "Existência atual deve ser > 0")
+                add_error("existencia_atual", t("import.error.stock_positive"))
 
             motilidade = parse_int(row.get("motilidade"))
             if motilidade is None:
-                add_error("motilidade", "Motilidade inválida")
+                add_error("motilidade", t("import.error.motility_invalid"))
             elif motilidade < 0 or motilidade > 100:
-                add_error("motilidade", "Motilidade deve estar entre 0 e 100")
+                add_error("motilidade", t("import.error.motility_range"))
 
             qualidade = row.get("qualidade")
             qualidade_val = None
             if qualidade not in [None, "", "nan"] and not pd.isna(qualidade):
                 qualidade_val = parse_int(qualidade)
                 if qualidade_val is None:
-                    add_error("qualidade", "Qualidade inválida")
+                    add_error("qualidade", t("import.error.quality_invalid"))
                 elif qualidade_val < 0 or qualidade_val > 100:
-                    add_error("qualidade", "Qualidade deve estar entre 0 e 100")
+                    add_error("qualidade", t("import.error.quality_range"))
 
             cont_code = str(row.get("contentor_codigo", "")).strip()
             cont_key = cont_code.upper()
             if not cont_code or cont_code.lower() == "nan":
-                add_error("contentor_codigo", "Contentor obrigatório")
+                add_error("contentor_codigo", t("import.error.container_required"))
             elif cont_key not in cont_map:
-                add_error("contentor_codigo", "Contentor inexistente")
+                add_error("contentor_codigo", t("import.error.container_missing"))
 
             canister = parse_int(row.get("canister"))
             if canister is None:
-                add_error("canister", "Canister inválido")
+                add_error("canister", t("import.error.canister_invalid"))
             elif canister < 1 or canister > 10:
-                add_error("canister", "Canister deve ser 1-10")
+                add_error("canister", t("import.error.canister_range"))
 
             andar = parse_int(row.get("andar"))
             if andar is None:
-                add_error("andar", "Andar inválido")
+                add_error("andar", t("import.error.floor_invalid"))
             elif andar not in [1, 2]:
-                add_error("andar", "Andar deve ser 1 ou 2")
+                add_error("andar", t("import.error.floor_range"))
 
             dose = ""
             if not pd.isna(row.get("dose")):
