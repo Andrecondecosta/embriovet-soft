@@ -3345,33 +3345,33 @@ elif aba == t("menu.owners"):
                                         'cidade': cidade_e
                                     }
                                     if editar_proprietario(prop['id'], dados):
-                                        st.success("✅ Atualizado!")
+                                        st.success(t("success.updated"))
                                         st.rerun()
     
     # TAB 2: Adicionar
     with tab2:
-        st.markdown("### ➕ Novo Proprietário")
+        st.markdown(f"### {t('owners.new_title')}")
         
         with st.form("form_adicionar"):
             col1, col2 = st.columns(2)
             
             with col1:
-                nome_n = st.text_input("Nome *")
-                email_n = st.text_input("Email")
-                tel_n = st.text_input("Telemóvel")
-                nc_n = st.text_input("Nome Completo")
+                nome_n = st.text_input(t("label.name_required"))
+                email_n = st.text_input(t("label.email"))
+                tel_n = st.text_input(t("label.phone"))
+                nc_n = st.text_input(t("label.full_name"))
             
             with col2:
-                nif_n = st.text_input("NIF")
-                morada_n = st.text_area("Morada", height=100)
-                cp_n = st.text_input("Código Postal")
-                cidade_n = st.text_input("Cidade")
+                nif_n = st.text_input(t("label.nif"))
+                morada_n = st.text_area(t("label.address"), height=100)
+                cp_n = st.text_input(t("label.postal_code"))
+                cidade_n = st.text_input(t("label.city"))
             
-            adicionar = st.form_submit_button("➕ Adicionar", type="primary", width="stretch")
+            adicionar = st.form_submit_button(t("btn.add"), type="primary", width="stretch")
             
             if adicionar:
                 if not nome_n:
-                    st.error("❌ Nome é obrigatório")
+                    st.error(t("error.name_required"))
                 else:
                     dados = {
                         'nome': nome_n,
@@ -3385,7 +3385,7 @@ elif aba == t("menu.owners"):
                     }
                     prop_id = adicionar_proprietario(dados)
                     if prop_id:
-                        st.success(f"✅ '{nome_n}' adicionado!")
+                        st.success(t("owners.added", name=nome_n))
                         st.rerun()
 
 # ------------------------------------------------------------
