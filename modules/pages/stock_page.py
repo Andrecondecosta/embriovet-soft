@@ -237,7 +237,7 @@ def run_stock_page(ctx: dict):
                         contentores_df_edit = carregar_contentores()
 
                         with st.form(key=f"edit_form_{row['id']}"):
-                            edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
+                            edit_garanhao = st.text_input(t("label.garanhao"), value=row.get("garanhao", ""))
 
                             # Proprietário
                             prop_atual = row.get("dono_id")
