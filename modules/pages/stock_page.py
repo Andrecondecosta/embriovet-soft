@@ -251,7 +251,7 @@ def run_stock_page(ctx: dict):
                                 idx_prop = list(proprietarios["id"]).index(prop_atual)
 
                             edit_proprietario = st.selectbox(
-                                "Proprietário",
+                                t("label.owner"),
                                 options=proprietarios["id"].tolist(),
                                 format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
                                 index=idx_prop,
@@ -260,20 +260,20 @@ def run_stock_page(ctx: dict):
 
                             col1, col2 = st.columns(2)
                             with col1:
-                                edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
-                                edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
-                                edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
-                                edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
-                                edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+                                edit_data = st.text_input(t("stock.prod_date"), value=row.get("data_embriovet") or "")
+                                edit_origem = st.text_input(t("stock.external_origin"), value=row.get("origem_externa") or "")
+                                edit_palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
+                                edit_existencia = st.number_input(t("stock.current_stock"), min_value=0, value=existencia)
+                                edit_qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
 
                             with col2:
-                                edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
-                                edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
-                                edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
-                                edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                                edit_concentracao = st.number_input(t("stock.concentration"), min_value=0, value=int(to_py(row.get("concentracao")) or 0))
+                                edit_motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
+                                edit_certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")], index=0 if row.get("certificado") == "Sim" else 1)
+                                edit_dose = st.text_input(t("stock.dose"), value=row.get("dose") or "")
 
                             st.markdown("---")
-                            st.subheader("📍 Localização Física")
+                            st.subheader(t("stock.location_title"))
 
                             if not contentores_df_edit.empty:
                                 col_loc1, col_loc2, col_loc3 = st.columns(3)
@@ -286,7 +286,7 @@ def run_stock_page(ctx: dict):
 
                                 with col_loc1:
                                     edit_contentor_codigo = st.selectbox(
-                                        "Contentor *",
+                                        t("label.container_required"),
                                         options=contentores_df_edit["codigo"].tolist(),
                                         index=idx_contentor,
                                         key=f"edit_cont_{row['id']}"
@@ -301,7 +301,7 @@ def run_stock_page(ctx: dict):
                                         canister_atual = 1
                                     idx_canister = max(0, min(9, canister_atual - 1))
                                     edit_canister = st.selectbox(
-                                        "Canister *",
+                                        t("label.canister_required"),
                                         options=list(range(1, 11)),
                                         index=idx_canister,
                                         key=f"edit_can_{row['id']}"
@@ -315,7 +315,7 @@ def run_stock_page(ctx: dict):
                                         andar_atual = 1
                                     idx_andar = 0 if andar_atual == 1 else 1
                                     edit_andar = st.radio(
-                                        "Andar *",
+                                        t("label.floor_required"),
                                         options=[1, 2],
                                         format_func=lambda x: f"{x}º",
                                         horizontal=True,
@@ -323,14 +323,14 @@ def run_stock_page(ctx: dict):
                                         key=f"edit_and_{row['id']}"
                                     )
                             else:
-                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")
+                                st.warning(t("stock.no_containers"))
                                 edit_contentor_id = None
                                 edit_canister = 1
                                 edit_andar = 1
 
-                            edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
+                            edit_obs = st.text_area(t("label.notes"), value=row.get("observacoes") or "")
 
-                            submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
+                            submit_edit = st.form_submit_button(t("btn.save_changes"), type="primary")
 
                             if submit_edit:
                                 if editar_stock(row["id"], {
