@@ -47,6 +47,16 @@ from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
 from modules.pages.dashboard_page import run_dashboard_page
+from modules.pages.settings_page import run_settings_page
+
+THEMES = {
+    "blue": "#1D4ED8",
+    "green": "#15803D",
+    "wine": "#7C2D12",
+    "teal": "#0F766E",
+    "gray": "#374151",
+    "purple": "#5B21B6",
+}
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
@@ -184,7 +194,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials
+                       is_initialized, show_initial_credentials, theme_key
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -202,6 +212,7 @@ def get_app_settings():
             "primary_color": row[3],
             "is_initialized": row[4],
             "show_initial_credentials": row[5],
+            "theme_key": row[6],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
@@ -217,8 +228,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name)
-                SELECT 1, 'Sistema'
+                INSERT INTO app_settings (id, company_name, theme_key)
+                SELECT 1, 'Sistema', 'blue'
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
@@ -230,7 +241,7 @@ def ensure_app_settings():
         return None
 
 
-def save_app_settings(settings_id, company_name, logo_base64, primary_color):
+def save_app_settings(settings_id, company_name, logo_base64, primary_color, theme_key):
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -239,17 +250,18 @@ def save_app_settings(settings_id, company_name, logo_base64, primary_color):
             SET company_name = %s,
                 logo_base64 = %s,
                 primary_color = %s,
+                theme_key = %s,
                 is_initialized = TRUE,
                 updated_at = now()
             WHERE id = %s
             """,
-            (company_name, logo_base64, primary_color, settings_id),
+            (company_name, logo_base64, primary_color, theme_key, settings_id),
         )
         conn.commit()
         cur.close()
 
 
-def finalize_app_settings(settings_id, company_name, logo_base64, primary_color):
+def finalize_app_settings(settings_id, company_name, logo_base64, primary_color, theme_key):
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -258,12 +270,13 @@ def finalize_app_settings(settings_id, company_name, logo_base64, primary_color)
             SET company_name = %s,
                 logo_base64 = %s,
                 primary_color = %s,
+                theme_key = %s,
                 is_initialized = TRUE,
                 show_initial_credentials = FALSE,
                 updated_at = now()
             WHERE id = %s
             """,
-            (company_name, logo_base64, primary_color, settings_id),
+            (company_name, logo_base64, primary_color, theme_key, settings_id),
         )
         conn.commit()
         cur.close()
@@ -278,6 +291,32 @@ def update_show_initial_credentials(value: bool):
         )
         conn.commit()
         cur.close()
+
+
+def apply_theme_css(theme_key, primary_color):
+    color = THEMES.get(theme_key) or primary_color or THEMES["blue"]
+    st.markdown(
+        f"""
+        <style>
+            :root {{ --primary-color: {color}; }}
+            .stButton > button[data-testid="baseButton-primary"] {{
+                background-color: var(--primary-color) !important;
+                border-color: var(--primary-color) !important;
+            }}
+            .stSidebar [role="radiogroup"] label:has(input:checked) {{
+                border-color: var(--primary-color) !important;
+                color: var(--primary-color) !important;
+            }}
+            .reports-kpi-item b {{
+                color: var(--primary-color) !important;
+            }}
+            a {{
+                color: var(--primary-color) !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
@@ -1782,8 +1821,8 @@ def render_onboarding(app_settings):
 
     if "onboarding_company_name" not in st.session_state:
         st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
-    if "onboarding_primary_color" not in st.session_state:
-        st.session_state["onboarding_primary_color"] = app_settings.get("primary_color") or "#2563eb"
+    if "onboarding_theme_key" not in st.session_state:
+        st.session_state["onboarding_theme_key"] = app_settings.get("theme_key") or "blue"
     if "onboarding_admin_username" not in st.session_state:
         st.session_state["onboarding_admin_username"] = "admin"
     if "onboarding_admin_password" not in st.session_state:
@@ -1807,13 +1846,20 @@ def render_onboarding(app_settings):
         )
 
     render_zone_title("Zona A — Branding", "insem-zone-title")
-    col_a1, col_a2 = st.columns([2, 1])
+    col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
         company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
     with col_a2:
-        primary_color = st.color_picker("Cor principal", key="onboarding_primary_color")
+        theme_key = st.radio(
+            "Tema",
+            options=list(THEMES.keys()),
+            format_func=lambda k: k.capitalize(),
+            key="onboarding_theme_key",
+            horizontal=True,
+        )
+        preview_color = THEMES.get(theme_key, THEMES["blue"])
         st.markdown(
-            f"<div style='width:100%; height:10px; border-radius:6px; background:{primary_color}; border:1px solid #e2e8f0;'></div>",
+            f"<div style='width:100%; height:10px; border-radius:6px; background:{preview_color}; border:1px solid #e2e8f0;'></div>",
             unsafe_allow_html=True,
         )
 
@@ -1852,7 +1898,8 @@ def render_onboarding(app_settings):
             return
 
         logo_base64 = st.session_state.get("onboarding_logo_base64")
-        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color)
+        primary_color = THEMES.get(theme_key, THEMES["blue"])
+        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
         ensure_admin_user_exists(admin_username, admin_password)
         st.success("✅ Configuração concluída")
         st.rerun()
@@ -1862,6 +1909,8 @@ app_settings = ensure_app_settings()
 if not app_settings:
     st.error("Falha ao carregar app_settings")
     st.stop()
+
+apply_theme_css(app_settings.get("theme_key"), app_settings.get("primary_color"))
 
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
@@ -1894,19 +1943,6 @@ if app_settings.get("logo_base64"):
 else:
     st.title(nome_empresa)
 
-if app_settings.get("primary_color"):
-    st.markdown(
-        f"""
-        <style>
-            :root {{ --brand-primary: {app_settings['primary_color']}; }}
-            .stButton > button[data-testid="baseButton-primary"] {{
-                background-color: var(--brand-primary) !important;
-                border-color: var(--brand-primary) !important;
-            }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 # Sidebar com info do utilizador
 if app_settings.get("logo_base64"):
@@ -1936,6 +1972,7 @@ if verificar_permissao('Gestor'):
 
 if verificar_permissao('Administrador'):
     menu_options.append("⚙️ Gestão de Utilizadores")
+    menu_options.append("🎨 Definições")
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
@@ -2013,8 +2050,8 @@ if aba == "📈 Relatórios":
     run_reports_page({**globals(), **locals()})
     st.stop()
 
-if aba == "📝 Registrar Inseminação":
-    run_insemination_page({**globals(), **locals()})
+if aba == "🎨 Definições":
+    run_settings_page({**globals(), **locals()})
     st.stop()
 
 # ------------------------------------------------------------
