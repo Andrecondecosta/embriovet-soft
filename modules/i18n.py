@@ -769,6 +769,7 @@ TRANSLATIONS = {
         "error.password_required": "❌ Password is required",
         "error.passwords_mismatch": "❌ Passwords do not match",
         "error.app_settings_load": "Failed to load app_settings",
+        "error.load_data": "Error loading data: {error}",
         "owners.none_registered_warn": "⚠️ No owners registered. Please register owners first.",
         "owners.title": "👥 Owner Management",
         "owners.column_created": "✅ 'active' column created automatically!",
