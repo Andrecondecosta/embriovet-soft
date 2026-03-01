@@ -3150,3 +3150,25 @@ elif aba == t("menu.users"):
 st.sidebar.markdown("---")
 st.sidebar.markdown(t("footer.version"))
 st.sidebar.markdown(t("footer.auth"))
+
+if st.session_state.get("i18n_qa_mode"):
+    diagnostics = get_i18n_diagnostics()
+    current_lang = st.session_state.get("lang", "pt-PT")
+    if current_lang == "zz":
+        st.sidebar.markdown(f"⟦qa.footer_language⟧ {current_lang}")
+        st.sidebar.markdown(f"⟦qa.footer_keys⟧ {diagnostics['total_keys']}")
+    else:
+        st.sidebar.markdown(t("qa.footer_language", lang=current_lang))
+        st.sidebar.markdown(t("qa.footer_keys", total=diagnostics["total_keys"]))
+
+    if diagnostics["missing"]:
+        summary = ", ".join([f"{lang}({len(keys)})" for lang, keys in diagnostics["missing"].items()])
+        if current_lang == "zz":
+            st.sidebar.warning(f"⟦qa.footer_missing⟧ {summary}")
+        else:
+            st.sidebar.warning(t("qa.footer_missing", summary=summary))
+    else:
+        if current_lang == "zz":
+            st.sidebar.success("⟦qa.footer_all_translated⟧")
+        else:
+            st.sidebar.success(t("qa.footer_all_translated"))
