@@ -1821,8 +1821,8 @@ def render_onboarding(app_settings):
 
     if "onboarding_company_name" not in st.session_state:
         st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
-    if "onboarding_primary_color" not in st.session_state:
-        st.session_state["onboarding_primary_color"] = app_settings.get("primary_color") or "#2563eb"
+    if "onboarding_theme_key" not in st.session_state:
+        st.session_state["onboarding_theme_key"] = app_settings.get("theme_key") or "blue"
     if "onboarding_admin_username" not in st.session_state:
         st.session_state["onboarding_admin_username"] = "admin"
     if "onboarding_admin_password" not in st.session_state:
@@ -1846,13 +1846,20 @@ def render_onboarding(app_settings):
         )
 
     render_zone_title("Zona A — Branding", "insem-zone-title")
-    col_a1, col_a2 = st.columns([2, 1])
+    col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
         company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
     with col_a2:
-        primary_color = st.color_picker("Cor principal", key="onboarding_primary_color")
+        theme_key = st.radio(
+            "Tema",
+            options=list(THEMES.keys()),
+            format_func=lambda k: k.capitalize(),
+            key="onboarding_theme_key",
+            horizontal=True,
+        )
+        preview_color = THEMES.get(theme_key, THEMES["blue"])
         st.markdown(
-            f"<div style='width:100%; height:10px; border-radius:6px; background:{primary_color}; border:1px solid #e2e8f0;'></div>",
+            f"<div style='width:100%; height:10px; border-radius:6px; background:{preview_color}; border:1px solid #e2e8f0;'></div>",
             unsafe_allow_html=True,
         )
 
@@ -1891,7 +1898,8 @@ def render_onboarding(app_settings):
             return
 
         logo_base64 = st.session_state.get("onboarding_logo_base64")
-        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color)
+        primary_color = THEMES.get(theme_key, THEMES["blue"])
+        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
         ensure_admin_user_exists(admin_username, admin_password)
         st.success("✅ Configuração concluída")
         st.rerun()
