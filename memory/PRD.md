@@ -92,6 +92,11 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - `DATABASE_URL` ativa com Render PostgreSQL (`sslmode=require`).
   - Pool confirmado em logs: `✅ Pool criado com DATABASE_URL (sslmode=require)`.
 
+## Implementado (2026-03-01)
+- Modo QA i18n com pseudo-locale "zz" e diagnóstico de traduções no rodapé
+- Toggle de QA i18n em Definições + idioma pseudo-locale disponível
+- Map/Logins/Utilizadores/Definições alinhados 100% ao i18n
+
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
 - Novos ciclos (iteration_4 e iteration_5): validação funcional bloqueada por ambiente sem PostgreSQL (`localhost:5432` indisponível), mas code review confirmou implementação das melhorias de interação e organização visual
