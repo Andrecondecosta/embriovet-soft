@@ -1621,6 +1621,7 @@ TRANSLATIONS = {
         "error.password_required": "❌ Passwort ist erforderlich",
         "error.passwords_mismatch": "❌ Passwörter stimmen nicht überein",
         "error.app_settings_load": "app_settings konnte nicht geladen werden",
+        "error.load_data": "Fehler beim Laden der Daten: {error}",
         "owners.none_registered_warn": "⚠️ Keine Eigentümer vorhanden. Bitte zuerst Eigentümer erfassen.",
         "owners.title": "👥 Eigentümerverwaltung",
         "owners.column_created": "✅ Spalte 'aktiv' automatisch erstellt!",
