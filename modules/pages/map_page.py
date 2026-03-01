@@ -148,7 +148,7 @@ def run_map_page(ctx: dict):
 
     # Área do mapa
     if contentores_df.empty:
-        st.info("Nenhum contentor cadastrado. Utilize 'Novo Contentor' para começar.")
+        st.info(t("map.no_containers"))
     else:
         if modo_visualizacao:
             total_contentores = len(contentores_df)
