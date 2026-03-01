@@ -1908,37 +1908,13 @@ if user.get("must_change_password"):
     render_change_credentials(user, app_settings)
     st.stop()
 
-nome_empresa = app_settings.get("company_name") or "Sistema"
-if app_settings.get("logo_base64"):
-    st.markdown(
-        f"""
-        <div style='display:flex; align-items:center; gap:12px;'>
-            <img src='{app_settings['logo_base64']}' style='height:36px;'/>
-            <h2 style='margin:0;'>{nome_empresa}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.title(nome_empresa)
-
-
-# Sidebar com info do utilizador
-if app_settings.get("logo_base64"):
-    st.sidebar.markdown(
-        f"<img src='{app_settings['logo_base64']}' style='max-width:100%; height:48px; object-fit:contain; margin-bottom:8px;'/>",
-        unsafe_allow_html=True,
-    )
-st.sidebar.markdown(f"### {nome_empresa}")
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"### 👤 {user['nome']}")
-st.sidebar.markdown(f"**Nível:** {user['nivel']}")
-
-if st.sidebar.button("🚪 Logout", width="stretch"):
+settings_clicked, logout_clicked = render_header(app_settings, user)
+if logout_clicked:
     del st.session_state['user']
     st.rerun()
-
-st.sidebar.markdown("---")
+if settings_clicked:
+    st.session_state['aba_selecionada'] = "🎨 Definições"
+    st.rerun()
 
 # Menu lateral adaptado às permissões
 menu_options = ["🏠 Painel", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
@@ -1960,7 +1936,8 @@ if 'aba_selecionada' in st.session_state:
 else:
     idx_aba = 0
 
-aba = st.sidebar.radio("Menu", menu_options, index=idx_aba)
+active_key = menu_options[idx_aba] if menu_options else ""
+aba = render_sidebar(app_settings, user, menu_options, active_key)
 
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
