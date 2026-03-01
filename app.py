@@ -1713,7 +1713,7 @@ def mostrar_tela_login(app_settings):
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("### Autenticação")
+        st.markdown(f"### {t('login.auth')}")
         
         with st.form("login_form"):
             username = st.text_input("👤 " + t("login.username"), placeholder=t("login.username"))
