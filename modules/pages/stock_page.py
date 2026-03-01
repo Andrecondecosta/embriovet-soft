@@ -1,4 +1,5 @@
 # Typed page module (Fase 3)
+from modules.i18n import t
 
 def run_stock_page(ctx: dict):
     globals().update(ctx)
