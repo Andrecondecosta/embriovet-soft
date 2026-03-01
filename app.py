@@ -2143,9 +2143,9 @@ elif aba == t("menu.add_stock"):
                     palhetas_int = int(to_py(palhetas) or 0)
 
                     if not garanhao:
-                        st.error("❌ Nome do garanhão é obrigatório")
+                        st.error(t("error.stallion_required"))
                     elif palhetas_int <= 0:
-                        st.error("❌ Número de palhetas deve ser maior que zero")
+                        st.error(t("error.straws_positive"))
                     else:
                         ok = inserir_stock(
                             {
@@ -2166,7 +2166,7 @@ elif aba == t("menu.add_stock"):
                             }
                         )
                         if ok:
-                            st.success("✅ Stock adicionado com sucesso!")
+                            st.success(t("success.stock_added"))
                             # Marcar que usou o proprietário
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
