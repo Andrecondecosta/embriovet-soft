@@ -3142,7 +3142,7 @@ elif aba == t("menu.register_insemination"):
                     st.session_state["insem_linhas"] = {}
                     st.rerun()
 
-elif aba == "👥 Gestão de Proprietários":
+elif aba == t("menu.owners"):
     st.header("👥 Gestão de Proprietários")
     
     # Verificar e criar coluna ativo se não existir
@@ -3361,7 +3361,7 @@ elif aba == "👥 Gestão de Proprietários":
 # ------------------------------------------------------------
 # ⚙️ Gestão de Utilizadores (Apenas Administrador)
 # ------------------------------------------------------------
-elif aba == "⚙️ Gestão de Utilizadores":
+elif aba == t("menu.users"):
     st.header("⚙️ Gestão de Utilizadores")
     
     usuarios_df = carregar_usuarios()
