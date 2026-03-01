@@ -194,7 +194,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials
+                       is_initialized, show_initial_credentials, theme_key
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -212,6 +212,7 @@ def get_app_settings():
             "primary_color": row[3],
             "is_initialized": row[4],
             "show_initial_credentials": row[5],
+            "theme_key": row[6],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
@@ -227,8 +228,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name)
-                SELECT 1, 'Sistema'
+                INSERT INTO app_settings (id, company_name, theme_key)
+                SELECT 1, 'Sistema', 'blue'
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
@@ -240,7 +241,7 @@ def ensure_app_settings():
         return None
 
 
-def save_app_settings(settings_id, company_name, logo_base64, primary_color):
+def save_app_settings(settings_id, company_name, logo_base64, primary_color, theme_key):
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -249,17 +250,18 @@ def save_app_settings(settings_id, company_name, logo_base64, primary_color):
             SET company_name = %s,
                 logo_base64 = %s,
                 primary_color = %s,
+                theme_key = %s,
                 is_initialized = TRUE,
                 updated_at = now()
             WHERE id = %s
             """,
-            (company_name, logo_base64, primary_color, settings_id),
+            (company_name, logo_base64, primary_color, theme_key, settings_id),
         )
         conn.commit()
         cur.close()
 
 
-def finalize_app_settings(settings_id, company_name, logo_base64, primary_color):
+def finalize_app_settings(settings_id, company_name, logo_base64, primary_color, theme_key):
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -268,12 +270,13 @@ def finalize_app_settings(settings_id, company_name, logo_base64, primary_color)
             SET company_name = %s,
                 logo_base64 = %s,
                 primary_color = %s,
+                theme_key = %s,
                 is_initialized = TRUE,
                 show_initial_credentials = FALSE,
                 updated_at = now()
             WHERE id = %s
             """,
-            (company_name, logo_base64, primary_color, settings_id),
+            (company_name, logo_base64, primary_color, theme_key, settings_id),
         )
         conn.commit()
         cur.close()
