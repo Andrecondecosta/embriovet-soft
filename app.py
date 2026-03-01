@@ -1893,7 +1893,7 @@ def render_onboarding(app_settings):
         primary_color = THEMES.get(theme_key, THEMES["blue"])
         finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
         ensure_admin_user_exists(admin_username, admin_password)
-        st.success("✅ Configuração concluída")
+        st.success(t("onboarding.done"))
         st.rerun()
 
 # Carregar app settings e onboarding inicial
