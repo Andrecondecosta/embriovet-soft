@@ -1698,6 +1698,17 @@ st.set_page_config(
     layout=os.getenv("APP_LAYOUT", "wide"),
     page_icon="🐴",
 )
+st.markdown(
+    """
+    <style>
+    header[data-testid="stHeader"] { display: none; }
+    div[data-testid="stAppViewContainer"] { padding-top: 0rem; }
+    section.main > div.block-container { padding-top: 1.0rem; }
+    div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 inject_stepper_css()
 inject_stock_css()
 inject_reports_css()
