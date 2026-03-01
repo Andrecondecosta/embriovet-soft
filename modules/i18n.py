@@ -707,6 +707,7 @@ TRANSLATIONS = {
         "add_stock.floor_help": "Level inside the canister",
         "add_stock.notes_help": "Additional information (optional)",
         "import.zone.context": "Context / Help",
+        "import.title": "Import Semen",
         "import.hint": "Upload the file, validate it and only then import. Use the template to keep correct columns.",
         "import.download_xlsx": "Download template (XLSX)",
         "import.xlsx_requires": "XLSX requires openpyxl installed.",
