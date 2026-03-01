@@ -161,22 +161,22 @@ def run_stock_page(ctx: dict):
                                     contentor_df = pd.read_sql_query(contentor_query, conn)
                                     if not contentor_df.empty:
                                         contentor_codigo = contentor_df.iloc[0]['codigo']
-                                        canister_num = row.get('canister', 'N/A')
-                                        andar_num = row.get('andar', 'N/A')
+                                        canister_num = row.get('canister', t('common.na'))
+                                        andar_num = row.get('andar', t('common.na'))
                                         st.markdown(f"**📍 {t('label.location')}:** {contentor_codigo} | {t('label.canister')} {canister_num} | {andar_num}º")
                                     else:
                                         st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
                             except Exception:
-                                st.markdown(f"**📍 Localização:** N/A")
+                                st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
                         else:
-                            st.markdown(f"**📍 Localização:** N/A")
+                            st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
 
-                        st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
-                        st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
+                        st.markdown(f"**📜 {t('stock.certificate_label')}:** {row.get('certificado') or t('common.na')}")
+                        st.markdown(f"**✨ {t('stock.quality_label')}:** {row.get('qualidade') or 0}%")
                     with col2:
-                        st.markdown(f"**🔬 Concentração:** {row.get('concentracao') or 0} milhões/mL")
-                        st.markdown(f"**⚡ Motilidade:** {row.get('motilidade') or 0}%")
-                        st.markdown(f"**💊 Dose:** {row.get('dose') or 'N/A'}")
+                        st.markdown(f"**🔬 {t('stock.concentration_label')}:** {row.get('concentracao') or 0} {t('stock.million_ml')}")
+                        st.markdown(f"**⚡ {t('stock.motility_label')}:** {row.get('motilidade') or 0}%")
+                        st.markdown(f"**💊 {t('stock.dose_label')}:** {row.get('dose') or t('common.na')}")
                         if row.get("observacoes"):
                             st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
 
