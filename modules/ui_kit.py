@@ -2,6 +2,48 @@ import streamlit as st
 from modules.i18n import t
 
 
+def inject_design_system():
+    st.markdown(
+        """
+        <style>
+            :root {
+                --ds-font-size: 0.9rem;
+                --ds-radius: 8px;
+                --ds-radius-sm: 6px;
+                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+                --ds-spacing: 0.7rem;
+            }
+            html, body, [data-testid="stAppViewContainer"] {
+                font-size: 14px;
+                color: #0f172a;
+            }
+            section.main > div.block-container {
+                padding-top: 0.8rem;
+                padding-bottom: 1.4rem;
+            }
+            .stButton > button,
+            .stDownloadButton > button,
+            .stTextInput input,
+            .stSelectbox select,
+            .stTextArea textarea,
+            .stNumberInput input,
+            .stDateInput input {
+                border-radius: var(--ds-radius) !important;
+            }
+            .stCard, .app-card {
+                border-radius: var(--ds-radius) !important;
+                box-shadow: var(--ds-shadow-sm);
+            }
+            .stMarkdown {
+                line-height: 1.45;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_reports_css():
     st.markdown(
         """
