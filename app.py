@@ -1890,6 +1890,9 @@ if not app_settings:
     st.error("Falha ao carregar app_settings")
     st.stop()
 
+if "lang" not in st.session_state:
+    st.session_state["lang"] = app_settings.get("language", "pt-PT")
+
 inject_shell_css(app_settings.get("primary_color"))
 
 if not app_settings.get("is_initialized"):
