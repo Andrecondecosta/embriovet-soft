@@ -466,15 +466,15 @@ def run_stock_page(ctx: dict):
                                 novo_proprietario = None
                                 if ids:
                                     novo_proprietario = st.selectbox(
-                                        "Destino",
+                                        t("stock.destination"),
                                         options=ids,
-                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                        format_func=lambda x: proprietarios_dict.get(x, t("common.unknown")),
                                         index=idx_transf,
                                         key=f"transf_select_{row['id']}",
                                         label_visibility="collapsed",
                                     )
                                 else:
-                                    st.caption("Sem proprietários disponíveis.")
+                                    st.caption(t("stock.no_owners_available"))
 
                             step_key = f"stock_transf_int_{row['id']}"
                             if step_key not in st.session_state:
@@ -485,17 +485,19 @@ def run_stock_page(ctx: dict):
                                 step_key,
                                 min_value=1,
                                 max_value=existencia,
-                                invalid_tooltip="Stock insuficiente",
+                                invalid_tooltip=t("stock.insufficient_stock"),
                             )
 
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
                                 btn_disabled = qtd_val < 1 or qtd_val > existencia or not ids or novo_proprietario is None
-                                if st.button("Executar", key=f"btn_transf_{row['id']}", disabled=btn_disabled):
+                                if st.button(t("btn.execute"), key=f"btn_transf_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_val):
                                         restante = max(0, existencia - qtd_val)
-                                        st.session_state[msg_key] = (
-                                            f"✓ {qtd_val} palhetas transferidas. Stock restante: {restante}."
+                                        st.session_state[msg_key] = t(
+                                            "stock.transfer_success",
+                                            qty=qtd_val,
+                                            remaining=restante,
                                         )
                                         if 'novo_proprietario_id' in st.session_state:
                                             st.session_state['novo_proprietario_usado'] = True
@@ -504,7 +506,7 @@ def run_stock_page(ctx: dict):
                             impacto = max(0, qtd_val) * -1
                             previsto = max(0, existencia - qtd_val)
                             st.markdown(
-                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                f"<div class='transf-inline-msg'>{t('stock.impact', qty=impacto, final=previsto)}</div>",
                                 unsafe_allow_html=True,
                             )
                             if st.session_state.get(msg_key):
@@ -514,24 +516,24 @@ def run_stock_page(ctx: dict):
                                 )
 
                         else:
-                            st.markdown("<div class='transf-warning'>⚠ Esta operação remove palhetas do stock.</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='transf-warning'>{t('stock.warning_remove')}</div>", unsafe_allow_html=True)
                             h1, h2, h3, h4, h5 = st.columns([2, 1.2, 1.8, 2, 1])
                             with h1:
-                                st.markdown("<div class='transf-grid-head'>Destinatário</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('stock.recipient')}</div>", unsafe_allow_html=True)
                             with h2:
-                                st.markdown("<div class='transf-grid-head'>Tipo</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.type')}</div>", unsafe_allow_html=True)
                             with h3:
-                                st.markdown("<div class='transf-grid-head'>Quantidade</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.quantity')}</div>", unsafe_allow_html=True)
                             with h4:
-                                st.markdown("<div class='transf-grid-head'>Observações</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.notes')}</div>", unsafe_allow_html=True)
                             with h5:
-                                st.markdown("<div class='transf-grid-head'>Ação</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.action')}</div>", unsafe_allow_html=True)
 
                             c_dest, c_tipo, c_val, c_minus, c_plus, c_obs, c_action = st.columns([2, 1.2, 0.7, 0.5, 0.5, 2, 1])
                             with c_dest:
                                 destinatario_ext = st.text_input(
-                                    "Destinatário",
-                                    placeholder="Nome do destinatário",
+                                    t("stock.recipient"),
+                                    placeholder=t("stock.recipient_placeholder"),
                                     key=f"dest_ext_{row['id']}",
                                     label_visibility="collapsed",
                                 )
