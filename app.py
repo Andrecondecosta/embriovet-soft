@@ -33,6 +33,9 @@ from modules.ui_kit import (
     render_kpi_strip,
     safe_pick,
     render_stepper,
+    inject_shell_css,
+    render_header,
+    render_sidebar,
 )
 from migration_runner import run_migrations
 from modules.stock_reporting import (
