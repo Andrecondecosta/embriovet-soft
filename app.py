@@ -1941,7 +1941,7 @@ if st.sidebar.button("🚪 Logout", width="stretch"):
 st.sidebar.markdown("---")
 
 # Menu lateral adaptado às permissões
-menu_options = ["🏠 Dashboard", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+menu_options = ["🏠 Painel", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
     menu_options.insert(2, "➕ Adicionar Stock")
