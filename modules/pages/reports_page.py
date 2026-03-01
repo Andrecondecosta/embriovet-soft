@@ -1,4 +1,5 @@
 import pandas as pd
+from modules.i18n import t
 
 
 def _filtrar_stock_por_periodo(df, data_inicio, data_fim):
