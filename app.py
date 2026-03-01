@@ -47,6 +47,16 @@ from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
 from modules.pages.dashboard_page import run_dashboard_page
+from modules.pages.settings_page import run_settings_page
+
+THEMES = {
+    "blue": "#1D4ED8",
+    "green": "#15803D",
+    "wine": "#7C2D12",
+    "teal": "#0F766E",
+    "gray": "#374151",
+    "purple": "#5B21B6",
+}
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
