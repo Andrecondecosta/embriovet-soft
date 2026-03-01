@@ -94,10 +94,10 @@ def run_settings_page(ctx: dict):
                     <div style='font-weight:700; font-size:1.0rem;'>{company_name}</div>
                 </div>
                 <div style='margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;'>
-                    <div style='font-size:.75rem; color:#64748b; margin-bottom:6px;'>Menu</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px; background:#f8fafc;'>🏠 Painel</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px;'>📦 Ver Stock</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0;'>📈 Relatórios</div>
+                    <div style='font-size:.75rem; color:#64748b; margin-bottom:6px;'>{t('common.menu')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px; background:#f8fafc;'>{t('menu.dashboard')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px;'>{t('menu.stock')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0;'>{t('menu.reports')}</div>
                 </div>
             </div>
             """,
