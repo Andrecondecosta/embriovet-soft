@@ -309,6 +309,25 @@ def update_language(language: str):
         cur.close()
 
 
+def update_branding_settings(company_name, logo_base64, language, primary_color):
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE app_settings
+            SET company_name = %s,
+                logo_base64 = %s,
+                language = %s,
+                primary_color = %s,
+                updated_at = now()
+            WHERE id = 1
+            """,
+            (company_name, logo_base64, language, primary_color),
+        )
+        conn.commit()
+        cur.close()
+
+
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
