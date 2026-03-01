@@ -2024,7 +2024,7 @@ try:
     stock = carregar_stock(apenas_ativos=True)  # Apenas de proprietários ativos
     insem = carregar_inseminacoes()
 except Exception as e:
-    st.error(f"Erro ao carregar dados: {e}")
+    st.error(t("error.load_data", error=e))
     st.stop()
 
 # Limpar session state do novo proprietário após usá-lo (evita que fique selecionado sempre)
@@ -2036,7 +2036,7 @@ if 'novo_proprietario_usado' in st.session_state:
     del st.session_state['novo_proprietario_usado']
 
 if proprietarios.empty:
-st.warning(t("owners.none_registered_warn"))
+    st.warning(t("owners.none_registered_warn"))
 
 # ------------------------------------------------------------
 # Router de páginas (Fase 3 da modularização)
