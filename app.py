@@ -2141,7 +2141,7 @@ elif aba == t("menu.add_stock"):
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
                             # Mudar aba para Ver Stock
-                            st.session_state['aba_selecionada'] = "📦 Ver Stock"
+                            st.session_state['aba_selecionada'] = t("menu.stock")
                             st.rerun()
 
 # ------------------------------------------------------------
