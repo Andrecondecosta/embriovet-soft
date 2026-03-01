@@ -343,6 +343,7 @@ TRANSLATIONS = {
         "error.password_required": "❌ Password é obrigatória",
         "error.passwords_mismatch": "❌ Passwords não coincidem",
         "error.app_settings_load": "Falha ao carregar app_settings",
+        "error.load_data": "Erro ao carregar dados: {error}",
         "owners.none_registered_warn": "⚠️ Nenhum proprietário cadastrado. Por favor, cadastre proprietários primeiro.",
         "owners.title": "👥 Gestão de Proprietários",
         "owners.column_created": "✅ Coluna 'ativo' criada automaticamente!",
