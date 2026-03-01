@@ -51,7 +51,7 @@ from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
-from modules.i18n import t
+from modules.i18n import t, get_i18n_diagnostics
 
 THEMES = {
     "blue": "#1D4ED8",
