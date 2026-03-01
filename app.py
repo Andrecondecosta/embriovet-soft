@@ -806,30 +806,30 @@ def inserir_stock(dados):
     """Insere novo stock no banco de dados"""
     try:
         if not dados.get("Garanhão"):
-            st.error("❌ Nome do garanhão é obrigatório")
+            st.error(t("error.stallion_required"))
             return False
         
         if not dados.get("Contentor"):
-            st.error("❌ Contentor é obrigatório")
+            st.error(t("error.container_required"))
             return False
         
         if not dados.get("Canister"):
-            st.error("❌ Canister é obrigatório")
+            st.error(t("error.canister_required"))
             return False
         
         if not dados.get("Andar"):
-            st.error("❌ Andar é obrigatório")
+            st.error(t("error.floor_required"))
             return False
 
         palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
         try:
             palhetas_int = int(palhetas_val)
         except Exception:
-            st.error("❌ Palhetas tem de ser numérico")
+            st.error(t("error.straws_numeric"))
             return False
 
         if palhetas_int < 0:
-            st.error("❌ Número de palhetas não pode ser negativo")
+            st.error(t("error.straws_negative"))
             return False
 
         with get_connection() as conn:
@@ -901,15 +901,15 @@ def registrar_inseminacao(registro):
         try:
             palhetas_int = int(palhetas_val)
         except Exception:
-            st.error("❌ Número de palhetas deve ser numérico")
+            st.error(t("error.straws_numeric"))
             return False
 
         if palhetas_int <= 0:
-            st.error("❌ Número de palhetas deve ser maior que zero")
+            st.error(t("error.straws_positive"))
             return False
 
         if not registro.get("egua"):
-            st.error("❌ Nome da égua é obrigatório")
+            st.error(t("error.mare_required"))
             return False
 
         with get_connection() as conn:
@@ -922,7 +922,7 @@ def registrar_inseminacao(registro):
             result = cur.fetchone()
 
             if not result:
-                st.error("❌ Estoque não encontrado")
+                st.error(t("error.stock_not_found"))
                 return False
 
             existencia_atual = result[0] or 0
@@ -977,11 +977,11 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
     """Registra múltiplas linhas de inseminação numa transação única"""
     try:
         if not egua:
-            st.error("❌ Nome da égua é obrigatório")
+            st.error(t("error.mare_required"))
             return False
 
         if not registros:
-            st.error("❌ Selecione pelo menos um lote")
+            st.error(t("error.select_lot"))
             return False
 
         with get_connection() as conn:
@@ -995,7 +995,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
 
                 if palhetas <= 0:
                     cur.close()
-                    st.error("❌ Quantidade inválida em uma das linhas")
+                    st.error(t("error.invalid_qty_line"))
                     return False
 
                 cur.execute(
@@ -1005,7 +1005,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
                 row = cur.fetchone()
                 if not row:
                     cur.close()
-                    st.error("❌ Um dos lotes selecionados não foi encontrado")
+                    st.error(t("error.lot_not_found"))
                     return False
 
                 existencia = int(row[0] or 0)
@@ -1161,7 +1161,7 @@ def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
             # Verificar se username já existe
             cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
             if cur.fetchone():
-                st.error("❌ Nome de utilizador já existe")
+                st.error(t("error.username_exists"))
                 return False
             
             password_hash = criar_hash_password(password)
@@ -1563,7 +1563,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             
             origem = cur.fetchone()
             if not origem:
-                st.error("❌ Lote de origem não encontrado")
+                st.error(t("error.origin_lot_not_found"))
                 return False
             
             (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
@@ -1573,7 +1573,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             quantidade_int = int(to_py(quantidade) or 0)
             
             if quantidade_int <= 0:
-                st.error("❌ Quantidade deve ser maior que zero")
+                st.error(t("error.qty_positive"))
                 return False
             
             if quantidade_int > exist_atual:
@@ -1656,7 +1656,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             
             origem = cur.fetchone()
             if not origem:
-                st.error("❌ Lote de origem não encontrado")
+                st.error(t("error.origin_lot_not_found"))
                 return False
             
             garanhao, prop_origem_id, exist_atual = origem
@@ -1664,7 +1664,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             quantidade_int = int(to_py(quantidade) or 0)
             
             if quantidade_int <= 0:
-                st.error("❌ Quantidade deve ser maior que zero")
+                st.error(t("error.qty_positive"))
                 return False
             
             if quantidade_int > exist_atual:
@@ -1792,13 +1792,13 @@ def render_change_credentials(user, app_settings):
 
     if submitted:
         if not novo_username:
-            st.error("❌ Username é obrigatório")
+            st.error(t("error.username_required"))
             return
         if not nova_password or not confirmar_password:
-            st.error("❌ Password é obrigatória")
+            st.error(t("error.password_required"))
             return
         if nova_password != confirmar_password:
-            st.error("❌ Passwords não coincidem")
+            st.error(t("error.passwords_mismatch"))
             return
 
         with get_connection() as conn:
@@ -1929,7 +1929,7 @@ def render_onboarding(app_settings):
 # Carregar app settings e onboarding inicial
 app_settings = ensure_app_settings()
 if not app_settings:
-    st.error("Falha ao carregar app_settings")
+    st.error(t("error.app_settings_load"))
     st.stop()
 
 if "lang" not in st.session_state:
@@ -2036,7 +2036,7 @@ if 'novo_proprietario_usado' in st.session_state:
     del st.session_state['novo_proprietario_usado']
 
 if proprietarios.empty:
-    st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
+st.warning(t("owners.none_registered_warn"))
 
 # ------------------------------------------------------------
 # Router de páginas (Fase 3 da modularização)
