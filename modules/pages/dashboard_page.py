@@ -54,7 +54,7 @@ def run_dashboard_page(ctx: dict):
     st.markdown(
         f"""
         <div class='dash-header'>
-            <div class='dash-title'>Dashboard Operacional</div>
+            <div class='dash-title'>Painel Operacional</div>
             <div class='dash-subtitle'>{company_name} · {today_str}</div>
         </div>
         """,
