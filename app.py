@@ -26,6 +26,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
 from modules.ui_kit import (
+    inject_design_system,
     inject_reports_css,
     inject_stock_css,
     inject_stepper_css,
@@ -1939,6 +1940,7 @@ if not app_settings:
 if "lang" not in st.session_state:
     st.session_state["lang"] = app_settings.get("language", "pt-PT")
 
+inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
 if not app_settings.get("is_initialized"):
