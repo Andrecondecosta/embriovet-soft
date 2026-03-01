@@ -29,7 +29,7 @@ def run_map_page(ctx: dict):
         js_eval_disponivel = False
 
     if not js_eval_disponivel:
-        st.warning("Dependência em falta: execute `pip install streamlit-js-eval` para salvar layout do mapa.")
+        st.warning(t("map.missing_dependency"))
     else:
         bridge_boot = None
         if not st.session_state.get("map_bridge_bootstrapped", False):
@@ -304,7 +304,7 @@ def run_map_page(ctx: dict):
 
             with st.container():
                 if is_mobile:
-                    st.markdown("<div class='map-tech-context'>Sistema de localização física e inventário de sémen equino</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='map-tech-context'>{t('map.tech_context')}</div>", unsafe_allow_html=True)
                     st.markdown(
                         f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span></div></div>",
                         unsafe_allow_html=True,
@@ -312,15 +312,15 @@ def run_map_page(ctx: dict):
 
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button("Adicionar", key="map_add_btn_mobile", width="stretch")
+                        criar_novo = st.button(t("btn.add"), key="map_add_btn_mobile", width="stretch")
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
+                            salvar_layout = st.button(t("btn.save"), key="map_save_btn_mobile", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_mobile", width="stretch")
+                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_mobile", width="stretch")
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar", key="map_cancel_btn_mobile", width="stretch")
+                            cancelar_edicao = st.button(t("btn.cancel"), key="map_cancel_btn_mobile", width="stretch")
                 else:
                     st.markdown(
                         f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
@@ -328,15 +328,15 @@ def run_map_page(ctx: dict):
                     )
                     bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
                     with bar_btn1:
-                        criar_novo = st.button("Adicionar contentor", key="map_add_btn_desktop", width="stretch")
+                        criar_novo = st.button(t("map.add_container_button"), key="map_add_btn_desktop", width="stretch")
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("Salvar layout", key="map_save_btn_desktop", type="primary", width="stretch")
+                            salvar_layout = st.button(t("map.save_layout"), key="map_save_btn_desktop", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("Editar mapa", key="map_edit_btn_desktop", width="stretch")
+                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_desktop", width="stretch")
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("Cancelar edição", key="map_cancel_btn_desktop", width="stretch")
+                            cancelar_edicao = st.button(t("map.cancel_edit"), key="map_cancel_btn_desktop", width="stretch")
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -366,7 +366,7 @@ def run_map_page(ctx: dict):
 
             if salvar_layout:
                 if not js_eval_disponivel:
-                    st.error("Para salvar layout no mapa, instale: pip install streamlit-js-eval")
+                    st.error(t("map.install_dependency"))
                 else:
                     logger.info("Salvar layout acionado pelo utilizador")
                     st.session_state["mapa_salvar_layout_pendente"] = True
@@ -863,7 +863,7 @@ def run_map_page(ctx: dict):
                 components.html(mapa_render, height=505)
 
             # Mostrar lista de contentores abaixo do mapa
-            st.markdown("<div class='inv-contentores-head'>Inventário de Contentores</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='inv-contentores-head'>{t('map.inventory_title')}</div>", unsafe_allow_html=True)
 
             for idx, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
@@ -884,7 +884,7 @@ def run_map_page(ctx: dict):
                         st.markdown(f"**Total Lotes:** {total_lotes}")
 
                     with col_det3:
-                        if st.button("Editar", key=f"edit_{row['id']}", width="stretch"):
+                        if st.button(t("btn.edit"), key=f"edit_{row['id']}", width="stretch"):
                             st.session_state[f'modal_editar_{row["id"]}'] = True
                             st.rerun()
 
@@ -900,10 +900,10 @@ def run_map_page(ctx: dict):
                                 st.success(f"Contentor '{row['codigo']}' apagado")
                                 st.rerun()
                         if not pode_apagar:
-                            st.caption("Apagar bloqueado: contentor com stock")
+                            st.caption(t("map.delete_blocked"))
 
                     if not stock_contentor.empty:
-                        st.markdown("**Lotes:**")
+                        st.markdown(f"**{t('label.lots')}:**")
                         for canister in sorted(stock_contentor['canister'].unique()):
                             stock_canister = stock_contentor[stock_contentor['canister'] == canister]
                             for andar in sorted(stock_canister['andar'].unique()):
@@ -916,19 +916,19 @@ def run_map_page(ctx: dict):
                     if st.session_state.get(f'modal_editar_{row["id"]}', False):
                         st.markdown("---")
                         with st.form(f"form_editar_{row['id']}"):
-                            st.markdown("#### Editar Contentor")
+                            st.markdown(f"#### {t('map.edit_container_title')}")
 
                             col_edit1, col_edit2 = st.columns(2)
                             with col_edit1:
-                                novo_codigo = st.text_input("Código", value=row['codigo'])
+                                novo_codigo = st.text_input(t("label.code"), value=row['codigo'])
                             with col_edit2:
-                                nova_descricao = st.text_input("Descrição", value=row['descricao'] or '')
+                                nova_descricao = st.text_input(t("label.description"), value=row['descricao'] or '')
 
                             col_btn_edit1, col_btn_edit2 = st.columns(2)
                             with col_btn_edit1:
-                                salvar = st.form_submit_button("Salvar", width="stretch")
+                                salvar = st.form_submit_button(t("btn.save"), width="stretch")
                             with col_btn_edit2:
-                                cancelar_edit = st.form_submit_button("Cancelar", width="stretch")
+                                cancelar_edit = st.form_submit_button(t("btn.cancel"), width="stretch")
 
                             if cancelar_edit:
                                 st.session_state[f'modal_editar_{row["id"]}'] = False
@@ -943,13 +943,13 @@ def run_map_page(ctx: dict):
                                     'w': row['w'],
                                     'h': row['h']
                                 }):
-                                    st.success("Contentor atualizado")
+                                    st.success(t("map.container_updated"))
                                     st.session_state[f'modal_editar_{row["id"]}'] = False
                                     st.rerun()
 
         else:
             # MODO LISTA (mantido para compatibilidade)
-            st.markdown("### Lista de Contentores")
+            st.markdown(f"### {t('map.container_list')}")
 
             for idx, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
