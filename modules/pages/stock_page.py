@@ -32,22 +32,22 @@ def run_stock_page(ctx: dict):
         else:
             idx_default = 0
 
-        render_zone_title("Zona de seleção", "stock-zone-title")
-        filtro = st.selectbox("Garanhão", garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
+        render_zone_title(t("stock.zone.selection"), "stock-zone-title")
+        filtro = st.selectbox(t("label.garanhao"), garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
 
-        render_zone_title("Zona de filtros", "stock-zone-title")
-        with st.expander("Filtros de consulta", expanded=False):
+        render_zone_title(t("stock.zone.filters"), "stock-zone-title")
+        with st.expander(t("stock.filters_title"), expanded=False):
             f1, f2, f3 = st.columns(3)
             with f1:
                 filtro_props = st.multiselect(
-                    "Proprietários",
+                    t("label.owner_plural"),
                     sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),
                     key="stock_filter_props",
                 )
             with f2:
-                min_palhetas = st.number_input("Mín. palhetas", min_value=0, value=0, step=1, key="stock_filter_min")
+                min_palhetas = st.number_input(t("stock.min_straws"), min_value=0, value=0, step=1, key="stock_filter_min")
             with f3:
-                mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")
+                mostrar_sem_stock = st.checkbox(t("stock.include_empty"), value=False, key="stock_filter_zero")
 
         stock_filtrado = filter_stock_view(
             stock,
@@ -60,7 +60,7 @@ def run_stock_page(ctx: dict):
         transf_hist_all = carregar_transferencias()
         transf_ext_hist_all = carregar_transferencias_externas()
 
-        render_zone_title("Zona de resultados", "stock-zone-title")
+        render_zone_title(t("stock.zone.results"), "stock-zone-title")
         render_kpi_strip(stock_kpis(stock_filtrado, to_py))
 
         resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
@@ -72,7 +72,7 @@ def run_stock_page(ctx: dict):
                     height=220,
                 )
 
-        with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
+        with st.expander(t("stock.transfer_history"), expanded=False):
             transf_hist, transf_ext_hist = filter_transfer_history(
                 transf_hist_all,
                 transf_ext_hist_all,
@@ -85,7 +85,7 @@ def run_stock_page(ctx: dict):
                 if not transf_hist.empty:
                     csv_ti = safe_pick(transf_hist, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"])
                     st.download_button(
-                        "CSV Internas",
+                        t("stock.csv_internal"),
                         csv_ti.to_csv(index=False).encode("utf-8"),
                         f"transferencias_internas_{filtro}.csv",
                         "text/csv",
@@ -96,7 +96,7 @@ def run_stock_page(ctx: dict):
                 if not transf_ext_hist.empty:
                     csv_te = safe_pick(transf_ext_hist, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"])
                     st.download_button(
-                        "CSV Externas",
+                        t("stock.csv_external"),
                         csv_te.to_csv(index=False).encode("utf-8"),
                         f"transferencias_externas_{filtro}.csv",
                         "text/csv",
@@ -106,17 +106,17 @@ def run_stock_page(ctx: dict):
 
             if not transf_hist.empty:
                 ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)
-                ex_ti.columns = ["Data", "De", "Para", "Palhetas"]
+                ex_ti.columns = [t("label.date"), t("label.from"), t("label.to"), t("label.straws")] 
                 st.dataframe(ex_ti, width="stretch", hide_index=True, height=220)
             if not transf_ext_hist.empty:
                 ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)
-                ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]
+                ex_te.columns = [t("label.date"), t("label.from"), t("label.to"), t("label.type"), t("label.straws"), t("label.notes")] [:len(ex_te.columns)]
                 st.dataframe(ex_te, width="stretch", hide_index=True, height=220)
 
             if transf_hist.empty and transf_ext_hist.empty:
-                st.info("Sem transferências para o filtro atual.")
+                st.info(t("stock.no_transfers"))
 
-        st.markdown("<div class='stock-table-head'>Lotes Detalhados</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='stock-table-head'>{t('stock.lots_detailed')}</div>", unsafe_allow_html=True)
 
         if stock_filtrado.empty:
             st.info("Sem lotes para o filtro atual.")
