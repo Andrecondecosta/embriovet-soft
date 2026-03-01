@@ -2874,36 +2874,36 @@ elif aba == t("menu.owners"):
                 with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
-                tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
-                    
+                    tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
+
                     # TAB: Detalhes
                     with tab_det:
                         col1, col2 = st.columns(2)
-                        
+
                         with col1:
                             st.markdown(f"**🆔 {t('label.id')}:** {prop['id']}")
                             st.markdown(f"**👤 {t('label.name')}:** {prop['nome']}")
                             st.markdown(f"**📧 {t('label.email')}:** {prop.get('email') or t('common.na')}")
                             st.markdown(f"**📱 {t('label.phone')}:** {prop.get('telemovel') or t('common.na')}")
-                        
+
                         with col2:
                             st.markdown(f"**📄 {t('label.full_name')}:** {prop.get('nome_completo') or t('common.na')}")
                             st.markdown(f"**🔢 {t('label.nif')}:** {prop.get('nif') or t('common.na')}")
                             st.markdown(f"**📍 {t('label.address')}:** {prop.get('morada') or t('common.na')}")
                             st.markdown(f"**📮 {t('label.postal_code')}:** {prop.get('codigo_postal') or t('common.na')}")
                             st.markdown(f"**🏙️ {t('label.city')}:** {prop.get('cidade') or t('common.na')}")
-                        
+
                         st.markdown("---")
-                        
+
                         # Botões de ação
                         col_a1, col_a2 = st.columns(2)
-                        
+
                         with col_a1:
                             # Botão de alternar status
                             status_atual = prop.get('ativo', True)
                             btn_label = t("owners.deactivate") if status_atual else t("owners.activate")
                             btn_type = "secondary" if status_atual else "primary"
-                            
+
                             if st.button(btn_label, key=f"status_{prop['id']}", width="stretch", type=btn_type):
                                 # Marcar para manter expandido
                                 st.session_state[f'expand_{prop["id"]}'] = True
@@ -2918,7 +2918,7 @@ elif aba == t("menu.owners"):
                                     st.rerun()
                                 else:
                                     st.error(t("owners.status_error"))
-                        
+
                         with col_a2:
                             if st.button(t("btn.delete"), key=f"del_{prop['id']}", width="stretch", type="secondary"):
                                 if deletar_proprietario(prop['id']):
@@ -2926,28 +2926,28 @@ elif aba == t("menu.owners"):
                                         del st.session_state[f'expand_{prop["id"]}']
                                     st.success(t("success.deleted"))
                                     st.rerun()
-                    
+
                     # TAB: Editar
                     with tab_edit:
                         st.markdown(f"### {t('owners.edit_title')}")
-                        
+
                         with st.form(key=f"form_edit_{prop['id']}"):
                             col1, col2 = st.columns(2)
-                            
+
                             with col1:
                                 nome_e = st.text_input(t("label.name_required"), value=prop.get('nome', ''))
                                 email_e = st.text_input(t("label.email"), value=prop.get('email', '') or '')
                                 tel_e = st.text_input(t("label.phone"), value=prop.get('telemovel', '') or '')
                                 nc_e = st.text_input(t("label.full_name"), value=prop.get('nome_completo', '') or '')
-                            
+
                             with col2:
                                 nif_e = st.text_input(t("label.nif"), value=prop.get('nif', '') or '')
                                 morada_e = st.text_area(t("label.address"), value=prop.get('morada', '') or '', height=100)
                                 cp_e = st.text_input(t("label.postal_code"), value=prop.get('codigo_postal', '') or '')
                                 cidade_e = st.text_input(t("label.city"), value=prop.get('cidade', '') or '')
-                            
+
                             salvar = st.form_submit_button(t("btn.save_changes"), type="primary", width="stretch")
-                            
+
                             if salvar:
                                 if not nome_e:
                                     st.error(t("error.name_required"))
