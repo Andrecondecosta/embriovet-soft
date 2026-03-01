@@ -216,6 +216,7 @@ def inject_shell_css(primary_color: str | None):
             .sidebar-brand-title {{
                 font-weight: 700;
                 color: var(--text);
+                position: relative;
                 margin: 0;
             }}
             .sidebar-user-card {{
