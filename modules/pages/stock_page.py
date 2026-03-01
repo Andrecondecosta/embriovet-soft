@@ -119,7 +119,7 @@ def run_stock_page(ctx: dict):
         st.markdown(f"<div class='stock-table-head'>{t('stock.lots_detailed')}</div>", unsafe_allow_html=True)
 
         if stock_filtrado.empty:
-            st.info("Sem lotes para o filtro atual.")
+            st.info(t("stock.no_lots_filter"))
 
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
@@ -222,7 +222,7 @@ def run_stock_page(ctx: dict):
                             st.dataframe(ex_ext, width="stretch", hide_index=True, height=180)
 
                         if lote_transf_int.empty and lote_transf_ext.empty:
-                            st.info("Sem histórico técnico de transferências para este lote.")
+                            st.info(t("stock.no_transfer_history_lot"))
 
                 # TAB 2: Editar (Apenas Admin)
                 if tab2 is not None:
@@ -582,7 +582,7 @@ def run_stock_page(ctx: dict):
                                     unsafe_allow_html=True,
                                 )
     else:
-        st.info("ℹ️ Nenhum stock cadastrado.")
+        st.info(t("stock.none_registered"))
 
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
