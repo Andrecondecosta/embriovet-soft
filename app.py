@@ -1751,14 +1751,14 @@ def verificar_permissao(nivel_minimo):
 
 
 def render_change_credentials(user, app_settings):
-    st.title("⚙️ Segurança: Alterar credenciais")
-    st.info("É obrigatório alterar username e password no primeiro acesso.")
+    st.title(t("security.title"))
+    st.info(t("security.info"))
 
     with st.form("change_credentials_form"):
-        novo_username = st.text_input("Novo username", value=user.get("username", ""))
-        nova_password = st.text_input("Nova password", type="password")
-        confirmar_password = st.text_input("Confirmar password", type="password")
-        submitted = st.form_submit_button("Guardar", type="primary", width="stretch")
+        novo_username = st.text_input(t("security.username"), value=user.get("username", ""))
+        nova_password = st.text_input(t("security.new_password"), type="password")
+        confirmar_password = st.text_input(t("security.confirm_password"), type="password")
+        submitted = st.form_submit_button(t("security.save"), type="primary", width="stretch")
 
     if submitted:
         if not novo_username:
@@ -1779,7 +1779,7 @@ def render_change_credentials(user, app_settings):
             )
             if cur.fetchone():
                 cur.close()
-                st.error("❌ Username já existe")
+                st.error(t("security.username_exists"))
                 return
 
             nova_hash = criar_hash_password(nova_password)
@@ -1800,7 +1800,7 @@ def render_change_credentials(user, app_settings):
         update_show_initial_credentials(False)
         st.session_state['user']['username'] = novo_username
         st.session_state['user']['must_change_password'] = False
-        st.success("✅ Credenciais atualizadas com sucesso")
+        st.success(t("security.success"))
         st.rerun()
 
 
