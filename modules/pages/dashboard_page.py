@@ -1,6 +1,7 @@
 from datetime import date, datetime
 import pandas as pd
 import streamlit as st
+from modules.i18n import t
 
 
 def run_dashboard_page(ctx: dict):
@@ -54,7 +55,7 @@ def run_dashboard_page(ctx: dict):
     st.markdown(
         f"""
         <div class='dash-header'>
-            <div class='dash-title'>Painel Operacional</div>
+            <div class='dash-title'>{t("dashboard.title")}</div>
             <div class='dash-subtitle'>{company_name} · {today_str}</div>
         </div>
         """,
@@ -110,15 +111,15 @@ def run_dashboard_page(ctx: dict):
     # Zona B — KPI strip
     render_kpi_strip(
         [
-            ("Total Palhetas", int(total_palhetas)),
-            ("Lotes Ativos", int(lotes_ativos)),
-            ("Inseminações Hoje", int(inseminacoes_hoje)),
-            ("Stock Crítico", int(stock_critico)),
+            (t("dashboard.kpi.total"), int(total_palhetas)),
+            (t("dashboard.kpi.active"), int(lotes_ativos)),
+            (t("dashboard.kpi.today"), int(inseminacoes_hoje)),
+            (t("dashboard.kpi.critical"), int(stock_critico)),
         ]
     )
 
     # Zona C — Alertas
-    render_zone_title("Alertas operacionais", "insem-zone-title")
+    render_zone_title(t("dashboard.alerts"), "insem-zone-title")
     alerts = []
     if stock_critico and stock_critico > 0:
         alerts.append(f"⚠ {stock_critico} lotes com stock crítico (≤5)")
@@ -131,10 +132,10 @@ def run_dashboard_page(ctx: dict):
             unsafe_allow_html=True,
         )
     else:
-        st.markdown("<div class='dash-alerts'>Sistema operacional. Sem alertas.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='dash-alerts'>{t('dashboard.no_alerts')}</div>", unsafe_allow_html=True)
 
     # Zona D — Atividade recente
-    render_zone_title("Atividade recente", "insem-zone-title")
+    render_zone_title(t("dashboard.activity"), "insem-zone-title")
     atividades = []
     try:
         with get_connection() as conn:
@@ -219,22 +220,22 @@ def run_dashboard_page(ctx: dict):
     st.dataframe(df, width="stretch", hide_index=True, height=260)
 
     # Zona E — Ações rápidas
-    render_zone_title("Ações rápidas", "insem-zone-title")
+    render_zone_title(t("dashboard.actions"), "insem-zone-title")
     a1, a2, a3, a4 = st.columns(4)
     with a1:
-        if st.button("Nova Inseminação", width="stretch"):
-            st.session_state['aba_selecionada'] = "📝 Registrar Inseminação"
+        if st.button(t("dashboard.action.new_insem"), width="stretch"):
+            st.session_state['aba_selecionada'] = t("menu.register_insemination")
             st.rerun()
     with a2:
-        if st.button("Nova Transferência", width="stretch"):
-            st.session_state['aba_selecionada'] = "📦 Ver Stock"
+        if st.button(t("dashboard.action.new_transfer"), width="stretch"):
+            st.session_state['aba_selecionada'] = t("menu.stock")
             st.session_state['abrir_transferencias'] = True
             st.rerun()
     with a3:
-        if st.button("Importar Stock", width="stretch"):
-            st.session_state['aba_selecionada'] = "📥 Importar Sémen"
+        if st.button(t("dashboard.action.import"), width="stretch"):
+            st.session_state['aba_selecionada'] = t("menu.import")
             st.rerun()
     with a4:
-        if st.button("Ver Mapa", width="stretch"):
-            st.session_state['aba_selecionada'] = "🗺️ Mapa dos Contentores"
+        if st.button(t("dashboard.action.map"), width="stretch"):
+            st.session_state['aba_selecionada'] = t("menu.map")
             st.rerun()
