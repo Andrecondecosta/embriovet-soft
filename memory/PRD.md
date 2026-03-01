@@ -83,6 +83,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
   - Migrations automáticas via `/app/migration_runner.py` com app_settings, onboarding e compatibilidade de transferencias
   - White-label por DB (company_name/logo/cor) + wizard inicial e forçar troca de credenciais no 1º login
   - Runner de migrations com logs (apply/skip/finished) e caminho dinâmico por `Path(__file__)`
+  - Nova página “🏠 Dashboard” (clínico minimalista) com KPIs, alertas, atividade recente e ações rápidas
 - Next Action concluído: **Fase 3 da modularização**
   - `map_page.py` e `stock_page.py` migrados para funções tipadas (sem `exec`).
   - Router consolidado no `app.py` para Mapa / Ver Stock / Relatórios.
