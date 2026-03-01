@@ -46,6 +46,7 @@ from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
+from modules.pages.dashboard_page import run_dashboard_page
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
@@ -1925,7 +1926,7 @@ if st.sidebar.button("🚪 Logout", width="stretch"):
 st.sidebar.markdown("---")
 
 # Menu lateral adaptado às permissões
-menu_options = ["🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
+menu_options = ["🏠 Dashboard", "🗺️ Mapa dos Contentores", "📦 Ver Stock", "📈 Relatórios"]
 
 if verificar_permissao('Gestor'):
     menu_options.insert(2, "➕ Adicionar Stock")
@@ -1998,6 +1999,10 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 if aba == "🗺️ Mapa dos Contentores":
     run_map_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "🏠 Dashboard":
+    run_dashboard_page({**globals(), **locals()})
     st.stop()
 
 if aba == "📦 Ver Stock":
