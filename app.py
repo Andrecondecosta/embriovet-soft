@@ -1910,6 +1910,8 @@ if not app_settings:
     st.error("Falha ao carregar app_settings")
     st.stop()
 
+apply_theme_css(app_settings.get("theme_key"), app_settings.get("primary_color"))
+
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
