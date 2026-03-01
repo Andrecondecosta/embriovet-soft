@@ -427,19 +427,19 @@ def run_map_page(ctx: dict):
                         if atualizados > 0:
                             st.toast(t("map.layout_saved", count=atualizados), icon="✅")
                         else:
-                            st.toast("Sem alterações para guardar", icon="ℹ️")
+                            st.toast(t("map.no_changes_to_save"), icon="ℹ️")
                         st.rerun()
                     except Exception as e:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
                         logger.error(f"Erro ao salvar layout do mapa: {e}")
-                        st.toast("Falha ao salvar layout", icon="❌")
+                        st.toast(t("map.save_failed"), icon="❌")
                 else:
                     st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
                     if st.session_state["mapa_salvar_layout_tentativas"] > 4:
                         st.session_state["mapa_salvar_layout_pendente"] = False
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.toast("Não foi possível ler as posições alteradas", icon="⚠️")
+                        st.toast(t("map.read_positions_failed"), icon="⚠️")
 
             if st.session_state["mapa_modo_edicao"] and is_mobile:
                 pass
