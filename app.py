@@ -1808,8 +1808,8 @@ def render_onboarding(app_settings):
     inject_stock_css()
     inject_reports_css()
 
-    st.title("Configuração inicial")
-    st.caption("Defina o branding base deste ambiente.")
+    st.title(t("onboarding.title"))
+    st.caption(t("onboarding.subtitle"))
 
     if "onboarding_company_name" not in st.session_state:
         st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
@@ -1837,13 +1837,13 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    render_zone_title("Zona A — Identidade", "insem-zone-title")
+    render_zone_title(t("onboarding.zone_brand"), "insem-zone-title")
     col_a1, col_a2 = st.columns([2, 1.2])
     with col_a1:
-        company_name = st.text_input("Nome da empresa", key="onboarding_company_name")
+        company_name = st.text_input(t("onboarding.company"), key="onboarding_company_name")
     with col_a2:
         theme_key = st.radio(
-            "Tema",
+            t("onboarding.theme"),
             options=list(THEMES.keys()),
             format_func=lambda k: k.capitalize(),
             key="onboarding_theme_key",
@@ -1855,21 +1855,21 @@ def render_onboarding(app_settings):
             unsafe_allow_html=True,
         )
 
-    logo_file = st.file_uploader("Logótipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+    logo_file = st.file_uploader(t("onboarding.logo"), type=["png", "jpg", "jpeg"])
     if logo_file is not None:
         logo_bytes = logo_file.read()
         if logo_bytes:
             encoded = base64.b64encode(logo_bytes).decode("utf-8")
             st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
 
-    render_zone_title("Zona B — Conta de Administrador", "insem-zone-title")
-    admin_username = st.text_input("Nome de utilizador admin", key="onboarding_admin_username")
-    admin_password = st.text_input("Password temporária", key="onboarding_admin_password")
-    st.caption("Esta password é temporária. Vai ser obrigatório alterar no primeiro login.")
+    render_zone_title(t("onboarding.zone_admin"), "insem-zone-title")
+    admin_username = st.text_input(t("onboarding.admin_user"), key="onboarding_admin_username")
+    admin_password = st.text_input(t("onboarding.admin_password"), key="onboarding_admin_password")
+    st.caption(t("onboarding.temp_note"))
 
-    render_zone_title("Zona C — Confirmar", "insem-zone-title")
+    render_zone_title(t("onboarding.zone_confirm"), "insem-zone-title")
     cred_text = f"Username: {admin_username}\nPassword: {admin_password}"
-    st.markdown("**Credenciais iniciais**")
+    st.markdown(f"**{t('onboarding.credentials')}**")
     st.code(cred_text)
 
     cred_js = cred_text.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n")
@@ -1881,12 +1881,12 @@ def render_onboarding(app_settings):
         height=40,
     )
 
-    if st.button("Concluir configuração", type="primary", width="stretch"):
+    if st.button(t("onboarding.finish"), type="primary", width="stretch"):
         if not company_name:
-            st.error("❌ Nome da empresa é obrigatório")
+            st.error(t("msg.require_company"))
             return
         if not admin_username or not admin_password:
-            st.error("❌ Username e password são obrigatórios")
+            st.error(t("msg.require_admin"))
             return
 
         logo_base64 = st.session_state.get("onboarding_logo_base64")
