@@ -292,6 +292,32 @@ def update_show_initial_credentials(value: bool):
         conn.commit()
         cur.close()
 
+
+def apply_theme_css(theme_key, primary_color):
+    color = THEMES.get(theme_key) or primary_color or THEMES["blue"]
+    st.markdown(
+        f"""
+        <style>
+            :root {{ --primary-color: {color}; }}
+            .stButton > button[data-testid="baseButton-primary"] {{
+                background-color: var(--primary-color) !important;
+                border-color: var(--primary-color) !important;
+            }}
+            .stSidebar [role="radiogroup"] label:has(input:checked) {{
+                border-color: var(--primary-color) !important;
+                color: var(--primary-color) !important;
+            }}
+            .reports-kpi-item b {{
+                color: var(--primary-color) !important;
+            }}
+            a {{
+                color: var(--primary-color) !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
