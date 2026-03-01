@@ -253,16 +253,15 @@ def render_header(app_settings, user_info):
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
 
+    st.markdown("<div class='app-topbar'>", unsafe_allow_html=True)
     col_left, col_right = st.columns([5, 2])
     with col_left:
         if logo:
             st.markdown(
                 f"""
-                <div class='app-topbar'>
-                    <div style='display:flex; align-items:center; gap:10px;'>
-                        <img src='{logo}' style='height:28px;'/>
-                        <div class='app-topbar-title'>{company_name}</div>
-                    </div>
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <img src='{logo}' style='height:28px;'/>
+                    <div class='app-topbar-title'>{company_name}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -271,13 +270,11 @@ def render_header(app_settings, user_info):
             initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
             st.markdown(
                 f"""
-                <div class='app-topbar'>
-                    <div style='display:flex; align-items:center; gap:10px;'>
-                        <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
-                            {initials}
-                        </div>
-                        <div class='app-topbar-title'>{company_name}</div>
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
+                        {initials}
                     </div>
+                    <div class='app-topbar-title'>{company_name}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -288,6 +285,7 @@ def render_header(app_settings, user_info):
         settings_clicked = st.button("⚙ Definições", width="content", key="topbar_settings")
         logout_clicked = st.button("Terminar sessão", width="content", key="topbar_logout")
         st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     return settings_clicked, logout_clicked
 
