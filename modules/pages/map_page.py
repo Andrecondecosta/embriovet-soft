@@ -425,7 +425,7 @@ def run_map_page(ctx: dict):
                         st.session_state["mapa_modo_edicao"] = False
 
                         if atualizados > 0:
-                            st.toast(f"Layout guardado ({atualizados} contentor(es))", icon="✅")
+                            st.toast(t("map.layout_saved", count=atualizados), icon="✅")
                         else:
                             st.toast("Sem alterações para guardar", icon="ℹ️")
                         st.rerun()
