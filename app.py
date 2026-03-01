@@ -2011,30 +2011,30 @@ if proprietarios.empty:
 # ------------------------------------------------------------
 # Router de páginas (Fase 3 da modularização)
 # ------------------------------------------------------------
-if aba == "🗺️ Mapa dos Contentores":
+if aba == t("menu.map"):
     run_map_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🏠 Painel":
+if aba == t("menu.dashboard"):
     run_dashboard_page({**globals(), **locals()})
     st.stop()
 
-if aba == "📦 Ver Stock":
+if aba == t("menu.stock"):
     run_stock_page({**globals(), **locals()})
     st.stop()
 
-if aba == "📈 Relatórios":
+if aba == t("menu.reports"):
     run_reports_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🎨 Definições":
+if aba == t("menu.settings"):
     run_settings_page({**globals(), **locals()})
     st.stop()
 
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
-elif aba == "➕ Adicionar Stock":
+elif aba == t("menu.add_stock"):
     st.header("➕ Inserir novo stock com Proprietário")
 
     if proprietarios.empty:
@@ -2147,7 +2147,7 @@ elif aba == "➕ Adicionar Stock":
 # ------------------------------------------------------------
 # 📥 Importar Sémen
 # ------------------------------------------------------------
-elif aba == "📥 Importar Sémen":
+elif aba == t("menu.import"):
     st.header("Importar Sémen")
 
     st.markdown(
@@ -2756,7 +2756,7 @@ elif aba == "📥 Importar Sémen":
 # ------------------------------------------------------------
 # 📝 Registrar Inseminação
 # ------------------------------------------------------------
-elif aba == "📝 Registrar Inseminação":
+elif aba == t("menu.register_insemination"):
     run_insemination_page({**globals(), **locals()})
     st.stop()
     st.header("Registrar Inseminação")
