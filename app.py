@@ -46,6 +46,7 @@ from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
+from modules.pages.dashboard_page import run_dashboard_page
 
 # Suprimir avisos repetitivos do pandas para conexões DBAPI2 (psycopg2)
 warnings.filterwarnings(
