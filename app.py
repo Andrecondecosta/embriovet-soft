@@ -2017,7 +2017,7 @@ if aba == "🗺️ Mapa dos Contentores":
     run_map_page({**globals(), **locals()})
     st.stop()
 
-if aba == "🏠 Dashboard":
+if aba == "🏠 Painel":
     run_dashboard_page({**globals(), **locals()})
     st.stop()
 
