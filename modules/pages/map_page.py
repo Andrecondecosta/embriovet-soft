@@ -852,10 +852,12 @@ def run_map_page(ctx: dict):
             mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
             mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
             mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
-            mapa_render = mapa_render.replace(
-                "__STATUS_TEXT__",
-                "Arraste os contentores e salve o layout." if st.session_state["mapa_modo_edicao"] else "Clique num contentor para ver inventário."
+            status_text = (
+                t("map.status_edit")
+                if st.session_state["mapa_modo_edicao"]
+                else t("map.status_view")
             )
+            mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
 
             if is_mobile:
                 components.html(mapa_render, height=355)
