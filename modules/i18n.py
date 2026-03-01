@@ -1547,6 +1547,7 @@ TRANSLATIONS = {
         "add_stock.floor_help": "Ebene im Canister",
         "add_stock.notes_help": "Zusätzliche Informationen (optional)",
         "import.zone.context": "Kontext / Hilfe",
+        "import.title": "Sperma importieren",
         "import.hint": "Datei hochladen, validieren und erst dann importieren. Verwenden Sie die Vorlage für korrekte Spalten.",
         "import.download_xlsx": "Vorlage herunterladen (XLSX)",
         "import.xlsx_requires": "XLSX erfordert installiertes openpyxl.",
