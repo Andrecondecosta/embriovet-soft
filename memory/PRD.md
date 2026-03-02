@@ -101,6 +101,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Design system global aplicado (tipografia base, radius, sombras e espaçamento compacto)
 - Header e Sidebar refinados para estilo SaaS premium (layout, alinhamentos e destaque ativo)
 - Cards KPI do Dashboard com fundo branco e sombra leve
+- Correção de indentação no modal de seleção de lotes (Registrar Inseminação)
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
