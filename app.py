@@ -2054,6 +2054,10 @@ if "lang" not in st.session_state:
 inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
+if not app_settings.get("welcome_completed", False):
+    render_welcome_page()
+    st.stop()
+
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
