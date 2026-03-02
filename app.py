@@ -1716,6 +1716,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
 st.set_page_config(
     page_title=os.getenv("APP_TITLE", "Sistema"),
     layout=os.getenv("APP_LAYOUT", "wide"),
+    initial_sidebar_state="expanded",
     page_icon="🐴",
 )
 st.markdown(
