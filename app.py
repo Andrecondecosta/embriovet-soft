@@ -1723,51 +1723,22 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    [data-testid="stMainMenu"] { display: none !important; }
-    footer { display: none !important; }
-    div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
-    section.main { padding-top: 0 !important; }
-    section.main > div.block-container { padding-top: 0.25rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebar"] { padding-top: 0.25rem !important; }
-    [data-testid="stSidebar"] > div { padding-top: 0.25rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-    header[data-testid="stHeader"] { height: 48px !important; }
-    [data-testid="stDeployButton"],
-    [data-testid="stToolbar"] [aria-label="Deploy"],
-    [data-testid="stToolbar"] button[title="Deploy"],
-    [data-testid="stToolbar"] a[title="Deploy"] { display: none !important; }
+    [data-testid="stMainMenu"] { display:none !important; }
+    footer { display:none !important; }
+
+    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
+    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
+    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
+
+    header[data-testid="stHeader"] { height: 2.6rem !important; }
+    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
+
+    .block-container { margin-top: 0 !important; }
+
+    div[data-testid="stToolbar"] > div:last-child { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
-)
-
-st.components.v1.html(
-    """
-    <script>
-    (function() {
-        const hideDeploy = () => {
-            const root = window.parent.document;
-            const header = root.querySelector('header[data-testid="stHeader"]');
-            if (!header) return;
-            header.querySelectorAll('*').forEach(el => {
-                if (el.textContent && el.textContent.trim() === 'Deploy') {
-                    const btn = el.closest('button, a');
-                    if (btn) {
-                        btn.style.display = 'none';
-                    } else {
-                        el.style.display = 'none';
-                    }
-                }
-            });
-        };
-        hideDeploy();
-        const obs = new MutationObserver(hideDeploy);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
-        setTimeout(hideDeploy, 500);
-    })();
-    </script>
-    """,
-    height=0,
 )
 inject_stepper_css()
 inject_stock_css()
