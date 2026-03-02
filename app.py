@@ -236,8 +236,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name, theme_key, language)
-                SELECT 1, 'Sistema', 'blue', 'pt-PT'
+                INSERT INTO app_settings (id, company_name, theme_key, language, welcome_completed)
+                SELECT 1, 'Sistema', 'blue', 'pt-PT', FALSE
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
