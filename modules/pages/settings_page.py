@@ -1,17 +1,18 @@
 import base64
 import streamlit as st
+from modules.i18n import t
 
 
 def run_settings_page(ctx: dict):
     globals().update(ctx)
 
-    st.header("Definições")
+    st.header(t("settings.title"))
     inject_stock_css()
     inject_reports_css()
 
-    render_zone_title("Branding", "insem-zone-title")
+    render_zone_title(t("settings.branding"), "insem-zone-title")
 
-    current_company = app_settings.get("company_name") if app_settings else "Sistema"
+    current_company = app_settings.get("company_name") if app_settings else t("common.system")
     current_lang = app_settings.get("language", "pt-PT") if app_settings else "pt-PT"
     current_logo = app_settings.get("logo_base64") if app_settings else None
     current_primary = app_settings.get("primary_color") if app_settings else "#1D4ED8"
@@ -22,33 +23,40 @@ def run_settings_page(ctx: dict):
     col_left, col_right = st.columns([1.2, 1])
 
     with col_left:
-        company_name = st.text_input("Nome da empresa", value=current_company)
+        company_name = st.text_input(t("label.company_name"), value=current_company)
 
-        lang_options = ["pt-PT", "en", "fr", "de"]
+        lang_options = ["pt-PT", "en", "fr", "de", "zz"]
         lang_labels = {
-            "pt-PT": "Português (Portugal)",
-            "en": "English",
-            "fr": "Français",
-            "de": "Deutsch",
+            "pt-PT": t("language.pt_pt"),
+            "en": t("language.en"),
+            "fr": t("language.fr"),
+            "de": t("language.de"),
+            "zz": t("language.zz"),
         }
         language = st.selectbox(
-            label="Idioma",
+            label=t("settings.language_label"),
             options=lang_options,
             format_func=lambda x: lang_labels.get(x, x),
             index=lang_options.index(current_lang) if current_lang in lang_options else 0,
         )
+        qa_mode_value = st.toggle(
+            t("settings.qa_mode"),
+            value=st.session_state.get("i18n_qa_mode", False),
+            key="settings_i18n_qa_mode",
+        )
+        st.session_state["i18n_qa_mode"] = qa_mode_value
 
-        logo_file = st.file_uploader("Logótipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+        logo_file = st.file_uploader(t("label.logo"), type=["png", "jpg", "jpeg"])
         if logo_file is not None:
             b64 = base64.b64encode(logo_file.getvalue()).decode("utf-8")
             logo_uri = f"data:{logo_file.type};base64,{b64}"
             st.session_state["settings_logo_preview"] = logo_uri
 
-        primary_color = st.text_input("Cor principal (opcional)", value=current_primary or "")
+        primary_color = st.text_input(t("label.primary_color_optional"), value=current_primary or "")
 
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            if st.button("Guardar alterações", type="primary", width="stretch"):
+            if st.button(t("btn.save_changes"), type="primary", width="stretch"):
                 update_branding_settings(
                     company_name,
                     st.session_state.get("settings_logo_preview"),
@@ -59,23 +67,23 @@ def run_settings_page(ctx: dict):
                 st.session_state["logo_base64"] = st.session_state.get("settings_logo_preview")
                 st.session_state["lang"] = language
                 st.session_state["primary_color"] = primary_color or None
-                st.success("✅ Alterações guardadas")
+                st.success(t("success.saved"))
                 st.rerun()
         with btn_col2:
-            if st.button("Restaurar defaults", width="stretch"):
-                update_branding_settings("Sistema", None, "pt-PT", "#1D4ED8")
+            if st.button(t("btn.restore_defaults"), width="stretch"):
+                update_branding_settings(t("common.system"), None, "pt-PT", "#1D4ED8")
                 st.session_state["settings_logo_preview"] = None
-                st.session_state["company_name"] = "Sistema"
+                st.session_state["company_name"] = t("common.system")
                 st.session_state["lang"] = "pt-PT"
                 st.session_state["primary_color"] = "#1D4ED8"
-                st.success("✅ Defaults restaurados")
+                st.success(t("success.defaults_restored"))
                 st.rerun()
 
     with col_right:
         st.markdown(
-            """
+            f"""
             <div style='border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#f8fafc;'>
-                <div style='font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:#64748b; margin-bottom:8px;'>Preview</div>
+                <div style='font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:#64748b; margin-bottom:8px;'>{t('common.preview')}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -93,10 +101,10 @@ def run_settings_page(ctx: dict):
                     <div style='font-weight:700; font-size:1.0rem;'>{company_name}</div>
                 </div>
                 <div style='margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;'>
-                    <div style='font-size:.75rem; color:#64748b; margin-bottom:6px;'>Menu</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px; background:#f8fafc;'>🏠 Painel</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px;'>📦 Ver Stock</div>
-                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0;'>📈 Relatórios</div>
+                    <div style='font-size:.75rem; color:#64748b; margin-bottom:6px;'>{t('common.menu')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px; background:#f8fafc;'>{t('menu.dashboard')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:6px;'>{t('menu.stock')}</div>
+                    <div style='padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0;'>{t('menu.reports')}</div>
                 </div>
             </div>
             """,

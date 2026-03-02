@@ -1,11 +1,12 @@
 import pandas as pd
 import streamlit as st
+from modules.i18n import t
 
 
 def run_insemination_page(ctx):
     globals().update(ctx)
 
-    st.header("Registrar Inseminação")
+    st.header(t("insemination.title"))
     inject_stepper_css()
 
     st.markdown(
@@ -84,10 +85,10 @@ def run_insemination_page(ctx):
     if "insem_show_success" not in st.session_state:
         st.session_state["insem_show_success"] = False
 
-    @st.dialog("✅ Concluído", width="small")
+    @st.dialog(t("insemination.success_title"), width="small")
     def show_success_dialog():
-        st.markdown("A inseminação foi registada com sucesso.")
-        if st.button("OK", type="primary", width="stretch"):
+        st.markdown(t("insemination.success_msg"))
+        if st.button(t("btn.ok"), type="primary", width="stretch"):
             st.session_state["insem_linhas"] = {}
             st.session_state["insem_egua"] = ""
             for k in list(st.session_state.keys()):
@@ -134,25 +135,25 @@ def run_insemination_page(ctx):
 
     stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
     if stock_disponivel.empty:
-        st.warning("Nenhum lote disponível para inseminação.")
+        st.warning(t("insemination.no_lotes_available"))
         return
 
     if st.session_state["insem_garanhao_modal"] is None:
         st.session_state["insem_garanhao_modal"] = sorted(stock_disponivel["garanhao"].dropna().unique())[0]
 
-    @st.dialog("Selecionar lotes", width="large")
+    @st.dialog(t("insemination.select_lots_title"), width="large")
     def abrir_modal_lotes():
-        st.markdown("<div class='insem-modal-head'>Filtros</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='insem-modal-head'>{t('common.filters')}</div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             gar_opts = sorted(stock_disponivel["garanhao"].dropna().unique())
             idx_g = gar_opts.index(st.session_state["insem_garanhao_modal"]) if st.session_state["insem_garanhao_modal"] in gar_opts else 0
-            gar_sel = st.selectbox("Garanhão", gar_opts, index=idx_g, key="insem_modal_garanhao")
+            gar_sel = st.selectbox(t("label.garanhao"), gar_opts, index=idx_g, key="insem_modal_garanhao")
         with c2:
             base_prop = stock_disponivel[stock_disponivel["garanhao"] == gar_sel]
             prop_opts = ["Todos"] + sorted(base_prop["proprietario_nome"].dropna().unique())
             idx_p = prop_opts.index(st.session_state.get("insem_prop_modal", "Todos")) if st.session_state.get("insem_prop_modal", "Todos") in prop_opts else 0
-            prop_sel = st.selectbox("Proprietário", prop_opts, index=idx_p, key="insem_modal_prop")
+            prop_sel = st.selectbox(t("label.owner"), prop_opts, index=idx_p, key="insem_modal_prop")
 
         st.session_state["insem_garanhao_modal"] = gar_sel
         st.session_state["insem_prop_modal"] = prop_sel
@@ -166,22 +167,22 @@ def run_insemination_page(ctx):
             modal_df = modal_df.sort_values("_ord", ascending=False)
 
         if modal_df.empty:
-            st.info("Sem lotes para os filtros selecionados.")
+            st.info(t("insemination.no_lotes_for_filters"))
             return
 
-        st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='insem-modal-head'>{t('insemination.lotes')}</div>", unsafe_allow_html=True)
 
         header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
         with header_cols[0]:
-            st.markdown("<div class='insem-modal-head'>Lote</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.lote')}</div>", unsafe_allow_html=True)
         with header_cols[1]:
-            st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.location')}</div>", unsafe_allow_html=True)
         with header_cols[2]:
-            st.markdown("<div class='insem-modal-head'>Motilidade / Dose</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.motility_dose')}</div>", unsafe_allow_html=True)
         with header_cols[3]:
-            st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.available')}</div>", unsafe_allow_html=True)
         with header_cols[4]:
-            st.markdown("<div class='insem-modal-head'>Selecionar</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('btn.select')}</div>", unsafe_allow_html=True)
 
         for _, row in modal_df.iterrows():
             lote = lote_payload(row)
@@ -193,14 +194,14 @@ def run_insemination_page(ctx):
             with row_cols[1]:
                 st.caption(lote["local"])
             with row_cols[2]:
-                st.caption(f"M {lote['motilidade']}% · D {lote['dose']}")
+                st.caption(t("insemination.motility_dose", mot=lote['motilidade'], dose=lote['dose']))
             with row_cols[3]:
-                st.caption(f"Disp {lote['max_disponivel']}")
+                st.caption(t("insemination.available_value", value=lote['max_disponivel']))
             with row_cols[4]:
                 sel_key = f"insem_modal_sel_{sid}"
                 default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["insem_linhas"])
-                st.checkbox(
-                    "Selecionar",
+                    st.checkbox(
+                        t("btn.select"),
                     key=sel_key,
                     value=default_checked,
                     label_visibility="collapsed",
@@ -208,7 +209,7 @@ def run_insemination_page(ctx):
 
         b1, b2 = st.columns([2, 1])
         with b1:
-            if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", width="stretch"):
+            if st.button(t("btn.confirm_selection"), type="primary", key="insem_modal_confirmar", width="stretch"):
                 selecionados_ids = []
                 for key, val in st.session_state.items():
                     if key.startswith("insem_modal_sel_") and val:
@@ -218,12 +219,12 @@ def run_insemination_page(ctx):
                             continue
 
                 if not selecionados_ids:
-                    st.warning("Selecione pelo menos um lote.")
+                    st.warning(t("warning.select_one_lot"))
                     return
 
                 selecionados_df = stock_disponivel[stock_disponivel["id"].isin(selecionados_ids)].copy()
                 if selecionados_df.empty:
-                    st.warning("Nenhum lote selecionado disponível.")
+                    st.warning(t("insemination.no_lotes_selected"))
                     return
 
                 linhas = st.session_state["insem_linhas"]
@@ -239,24 +240,24 @@ def run_insemination_page(ctx):
                 st.session_state["insem_linhas"] = linhas
                 st.rerun()
         with b2:
-            if st.button("Fechar", key="insem_modal_cancelar", width="stretch"):
+            if st.button(t("btn.close"), key="insem_modal_cancelar", width="stretch"):
                 st.rerun()
 
-    render_zone_title("Zona de seleção", "insem-zone-title")
+    render_zone_title(t("insemination.zone_selection"), "insem-zone-title")
     csel1, csel2, csel3 = st.columns([2, 2, 1.5])
     with csel1:
-        data_insem = st.date_input("Data da inseminação", key="insem_data")
+        data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
     with csel2:
-        egua = st.text_input("Égua *", key="insem_egua")
+        egua = st.text_input(t("label.mare"), key="insem_egua")
     with csel3:
-        if st.button("Selecionar lotes", key="insem_btn_open_modal", width="stretch"):
+        if st.button(t("btn.select_lots"), key="insem_btn_open_modal", width="stretch"):
             abrir_modal_lotes()
 
-    render_zone_title("Linhas da inseminação", "insem-zone-title")
+    render_zone_title(t("insemination.lines_title"), "insem-zone-title")
     linhas = st.session_state["insem_linhas"]
 
     if not linhas:
-        st.info("Nenhum lote selecionado. Clique em 'Selecionar lotes'.")
+        st.info(t("insemination.no_lotes_selected_hint"))
     else:
         for sid in list(linhas.keys()):
             linha = linhas[sid]
@@ -271,10 +272,13 @@ def run_insemination_page(ctx):
             l1, l2, lval, lminus, lplus, l4 = st.columns([3.0, 1.1, 0.7, 0.5, 0.5, 0.8])
             with l1:
                 st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · Disp {max_disp}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='insem-lote-sub'>{linha['proprietario_nome']} · {t('insemination.available_inline', value=max_disp)}</div>",
+                    unsafe_allow_html=True,
+                )
             with l2:
                 qtd_display = int(st.session_state.get(step_key, qtd) or 0)
-                st.markdown(f"<div class='insem-lote-sub'>Qtd</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='insem-lote-sub'>{t('label.quantity')}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
 
             qtd_val, _ = render_stepper(
@@ -294,7 +298,7 @@ def run_insemination_page(ctx):
 
             with l4:
                 st.button(
-                    "✕",
+                    t("btn.remove"),
                     key=f"insem_line_remove_{sid}",
                     width="stretch",
                     on_click=remover_linha,
@@ -304,11 +308,14 @@ def run_insemination_page(ctx):
 
         badd1, badd2 = st.columns([2, 2])
         with badd1:
-            if st.button("Adicionar linha", key="insem_btn_add_line", width="stretch"):
+            if st.button(t("btn.add_line"), key="insem_btn_add_line", width="stretch"):
                 abrir_modal_lotes()
         with badd2:
             total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
-            st.markdown(f"<div class='insem-lote-main'>Total: {total_palhetas} palhetas</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div class='insem-lote-main'>{t('label.total')}: {total_palhetas} {t('label.straws')}</div>",
+                unsafe_allow_html=True,
+            )
 
     total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
     total_linhas = sum(1 for v in linhas.values() if int(v.get("qty", 0)) > 0)
@@ -328,12 +335,12 @@ def run_insemination_page(ctx):
         unsafe_allow_html=True,
     )
     st.markdown("---")
-    if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", width="stretch"):
+    if st.button(t("btn.register_insemination"), type="primary", key="btn_registrar_insem_final", width="stretch"):
         linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
         if not linhas_finais:
-            st.error("Selecione pelo menos uma linha de lote.")
+            st.error(t("error.select_lot_line"))
         elif not egua:
-            st.error("Nome da égua é obrigatório.")
+            st.error(t("error.mare_required"))
         else:
             registros = []
             for l in linhas_finais:

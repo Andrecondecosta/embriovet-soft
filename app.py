@@ -26,6 +26,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
 from modules.ui_kit import (
+    inject_design_system,
     inject_reports_css,
     inject_stock_css,
     inject_stepper_css,
@@ -51,7 +52,7 @@ from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
-from modules.i18n import t
+from modules.i18n import t, get_i18n_diagnostics
 
 THEMES = {
     "blue": "#1D4ED8",
@@ -806,30 +807,30 @@ def inserir_stock(dados):
     """Insere novo stock no banco de dados"""
     try:
         if not dados.get("Garanhão"):
-            st.error("❌ Nome do garanhão é obrigatório")
+            st.error(t("error.stallion_required"))
             return False
         
         if not dados.get("Contentor"):
-            st.error("❌ Contentor é obrigatório")
+            st.error(t("error.container_required"))
             return False
         
         if not dados.get("Canister"):
-            st.error("❌ Canister é obrigatório")
+            st.error(t("error.canister_required"))
             return False
         
         if not dados.get("Andar"):
-            st.error("❌ Andar é obrigatório")
+            st.error(t("error.floor_required"))
             return False
 
         palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
         try:
             palhetas_int = int(palhetas_val)
         except Exception:
-            st.error("❌ Palhetas tem de ser numérico")
+            st.error(t("error.straws_numeric"))
             return False
 
         if palhetas_int < 0:
-            st.error("❌ Número de palhetas não pode ser negativo")
+            st.error(t("error.straws_negative"))
             return False
 
         with get_connection() as conn:
@@ -901,15 +902,15 @@ def registrar_inseminacao(registro):
         try:
             palhetas_int = int(palhetas_val)
         except Exception:
-            st.error("❌ Número de palhetas deve ser numérico")
+            st.error(t("error.straws_numeric"))
             return False
 
         if palhetas_int <= 0:
-            st.error("❌ Número de palhetas deve ser maior que zero")
+            st.error(t("error.straws_positive"))
             return False
 
         if not registro.get("egua"):
-            st.error("❌ Nome da égua é obrigatório")
+            st.error(t("error.mare_required"))
             return False
 
         with get_connection() as conn:
@@ -922,7 +923,7 @@ def registrar_inseminacao(registro):
             result = cur.fetchone()
 
             if not result:
-                st.error("❌ Estoque não encontrado")
+                st.error(t("error.stock_not_found"))
                 return False
 
             existencia_atual = result[0] or 0
@@ -977,11 +978,11 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
     """Registra múltiplas linhas de inseminação numa transação única"""
     try:
         if not egua:
-            st.error("❌ Nome da égua é obrigatório")
+            st.error(t("error.mare_required"))
             return False
 
         if not registros:
-            st.error("❌ Selecione pelo menos um lote")
+            st.error(t("error.select_lot"))
             return False
 
         with get_connection() as conn:
@@ -995,7 +996,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
 
                 if palhetas <= 0:
                     cur.close()
-                    st.error("❌ Quantidade inválida em uma das linhas")
+                    st.error(t("error.invalid_qty_line"))
                     return False
 
                 cur.execute(
@@ -1005,7 +1006,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
                 row = cur.fetchone()
                 if not row:
                     cur.close()
-                    st.error("❌ Um dos lotes selecionados não foi encontrado")
+                    st.error(t("error.lot_not_found"))
                     return False
 
                 existencia = int(row[0] or 0)
@@ -1161,7 +1162,7 @@ def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
             # Verificar se username já existe
             cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
             if cur.fetchone():
-                st.error("❌ Nome de utilizador já existe")
+                st.error(t("error.username_exists"))
                 return False
             
             password_hash = criar_hash_password(password)
@@ -1563,7 +1564,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             
             origem = cur.fetchone()
             if not origem:
-                st.error("❌ Lote de origem não encontrado")
+                st.error(t("error.origin_lot_not_found"))
                 return False
             
             (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
@@ -1573,7 +1574,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             quantidade_int = int(to_py(quantidade) or 0)
             
             if quantidade_int <= 0:
-                st.error("❌ Quantidade deve ser maior que zero")
+                st.error(t("error.qty_positive"))
                 return False
             
             if quantidade_int > exist_atual:
@@ -1656,7 +1657,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             
             origem = cur.fetchone()
             if not origem:
-                st.error("❌ Lote de origem não encontrado")
+                st.error(t("error.origin_lot_not_found"))
                 return False
             
             garanhao, prop_origem_id, exist_atual = origem
@@ -1664,7 +1665,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             quantidade_int = int(to_py(quantidade) or 0)
             
             if quantidade_int <= 0:
-                st.error("❌ Quantidade deve ser maior que zero")
+                st.error(t("error.qty_positive"))
                 return False
             
             if quantidade_int > exist_atual:
@@ -1746,10 +1747,14 @@ def mostrar_tela_login(app_settings):
         st.markdown(f"### {t('login.auth')}")
         
         with st.form("login_form"):
-            username = st.text_input("👤 " + t("login.username"), placeholder=t("login.username"))
-            password = st.text_input("🔒 " + t("login.password"), type="password", placeholder=t("login.password"))
-            
-            submitted = st.form_submit_button("🚀 " + t("login.submit"), type="primary", width="stretch")
+            label_user = "👤 " + t("auth.username")
+            label_pass = "🔒 " + t("auth.password")
+            btn_label = "🚀 " + t("auth.login")
+
+            username = st.text_input(label_user, placeholder=t("auth.username_placeholder"))
+            password = st.text_input(label_pass, type="password", placeholder=t("auth.password_placeholder"))
+
+            submitted = st.form_submit_button(btn_label, type="primary", width="stretch")
             
             if submitted:
                 if not username or not password:
@@ -1792,13 +1797,13 @@ def render_change_credentials(user, app_settings):
 
     if submitted:
         if not novo_username:
-            st.error("❌ Username é obrigatório")
+            st.error(t("error.username_required"))
             return
         if not nova_password or not confirmar_password:
-            st.error("❌ Password é obrigatória")
+            st.error(t("error.password_required"))
             return
         if nova_password != confirmar_password:
-            st.error("❌ Passwords não coincidem")
+            st.error(t("error.passwords_mismatch"))
             return
 
         with get_connection() as conn:
@@ -1929,12 +1934,13 @@ def render_onboarding(app_settings):
 # Carregar app settings e onboarding inicial
 app_settings = ensure_app_settings()
 if not app_settings:
-    st.error("Falha ao carregar app_settings")
+    st.error(t("error.app_settings_load"))
     st.stop()
 
 if "lang" not in st.session_state:
     st.session_state["lang"] = app_settings.get("language", "pt-PT")
 
+inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
 if not app_settings.get("is_initialized"):
@@ -1993,16 +1999,16 @@ aba = render_sidebar(app_settings, user, menu_options, active_key)
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
 # ------------------------------------------------------------
-@st.dialog("➕ Adicionar Novo Proprietário")
+@st.dialog(t("owners.add_new_title"))
 def modal_adicionar_proprietario():
     """Modal para adicionar novo proprietário rapidamente"""
-    novo_nome = st.text_input("Nome do Proprietário *", key="modal_novo_prop")
+    novo_nome = st.text_input(t("owners.name_required"), key="modal_novo_prop")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Adicionar", type="primary", width="stretch"):
+        if st.button(t("btn.add"), type="primary", width="stretch"):
             if not novo_nome:
-                st.error("❌ Nome é obrigatório")
+                st.error(t("error.name_required"))
             else:
                 # Criar dados mínimos
                 dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
@@ -2012,10 +2018,10 @@ def modal_adicionar_proprietario():
                 if prop_id:
                     st.session_state['novo_proprietario_id'] = prop_id
                     st.session_state['novo_proprietario_nome'] = novo_nome
-                    st.success(f"✅ Proprietário '{novo_nome}' adicionado!")
+                    st.success(t("owners.added", name=novo_nome))
                     st.rerun()
     with col2:
-        if st.button("❌ Cancelar", width="stretch"):
+        if st.button(t("btn.cancel"), width="stretch"):
             st.rerun()
 
 # Carregar dados
@@ -2024,7 +2030,7 @@ try:
     stock = carregar_stock(apenas_ativos=True)  # Apenas de proprietários ativos
     insem = carregar_inseminacoes()
 except Exception as e:
-    st.error(f"Erro ao carregar dados: {e}")
+    st.error(t("error.load_data", error=e))
     st.stop()
 
 # Limpar session state do novo proprietário após usá-lo (evita que fique selecionado sempre)
@@ -2036,7 +2042,7 @@ if 'novo_proprietario_usado' in st.session_state:
     del st.session_state['novo_proprietario_usado']
 
 if proprietarios.empty:
-    st.warning("⚠️ Nenhum proprietario cadastrado. Por favor, cadastre proprietarios primeiro.")
+    st.warning(t("owners.none_registered_warn"))
 
 # ------------------------------------------------------------
 # Router de páginas (Fase 3 da modularização)
@@ -2065,25 +2071,25 @@ if aba == t("menu.settings"):
 # ➕ Adicionar Stock
 # ------------------------------------------------------------
 elif aba == t("menu.add_stock"):
-    st.header("➕ Inserir novo stock com Proprietário")
+    st.header(t("add_stock.title"))
 
     if proprietarios.empty:
-        st.warning("⚠️ Nenhum proprietário cadastrado.")
-        if st.button("➕ Adicionar Primeiro Proprietário", type="primary"):
+        st.warning(t("add_stock.no_owners"))
+        if st.button(t("add_stock.add_first_owner"), type="primary"):
             modal_adicionar_proprietario()
     else:
         # Carregar contentores
         contentores_df = carregar_contentores()
         
         if contentores_df.empty:
-            st.warning("⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.")
+            st.warning(t("add_stock.no_containers"))
         else:
             # Botão + fora do form
-            if st.button("➕ Novo Proprietário", key="btn_add_prop_stock", help="Adicionar novo proprietário"):
+            if st.button(t("stock.new_owner"), key="btn_add_prop_stock", help=t("stock.new_owner_help")):
                 modal_adicionar_proprietario()
             
             with st.form("novo_stock"):
-                garanhao = st.text_input("Garanhão *", help="Nome obrigatório")
+                garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
                 
                 # Verificar se há proprietário recém-adicionado
                 if 'novo_proprietario_id' in st.session_state:
@@ -2091,61 +2097,61 @@ elif aba == t("menu.add_stock"):
                 else:
                     idx_default = 0
                 
-                proprietario_nome = st.selectbox("Proprietário do Sémen *", proprietarios["nome"], index=idx_default)
+                proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
 
                 dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    data = st.text_input("Data de Produção")
-                    origem = st.text_input("Origem Externa / Referência")
-                    palhetas = st.number_input("Palhetas Produzidas *", min_value=0, value=0)
-                    qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=0)
-                    concentracao = st.number_input("Concentração (milhões/mL)", min_value=0, value=0)
+                    data = st.text_input(t("stock.prod_date"))
+                    origem = st.text_input(t("stock.external_origin"))
+                    palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
+                    qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=0)
+                    concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
 
                 with col2:
-                    motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=0)
-                    certificado = st.selectbox("Certificado?", ["Sim", "Não"])
-                    dose = st.text_input("Dose")
+                    motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=0)
+                    certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")])
+                    dose = st.text_input(t("stock.dose"))
 
                 st.markdown("---")
-                st.subheader("📍 Localização Física")
+                st.subheader(t("stock.location_title"))
                 
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
                     contentor_selecionado = st.selectbox(
-                        "Contentor *",
+                        t("label.container_required"),
                         options=contentores_df["codigo"].tolist(),
-                        help="Selecione o contentor onde o sémen será armazenado"
+                        help=t("add_stock.container_help")
                     )
                     contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])
                 
                 with col_loc2:
                     canister = st.selectbox(
-                        "Canister *",
+                        t("label.canister_required"),
                         options=list(range(1, 11)),
-                        help="Número do canister (1-10)"
+                        help=t("add_stock.canister_help")
                     )
                 
                 with col_loc3:
                     andar = st.radio(
-                        "Andar *",
+                        t("label.floor_required"),
                         options=[1, 2],
                         format_func=lambda x: f"{x}º",
                         horizontal=True,
-                        help="Nível dentro do canister"
+                        help=t("add_stock.floor_help")
                     )
 
-                observacoes = st.text_area("Observações", help="Informações adicionais (opcional)")
-                submitted = st.form_submit_button("💾 Salvar")
+                observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"))
+                submitted = st.form_submit_button(t("btn.save"))
 
                 if submitted:
                     palhetas_int = int(to_py(palhetas) or 0)
 
                     if not garanhao:
-                        st.error("❌ Nome do garanhão é obrigatório")
+                        st.error(t("error.stallion_required"))
                     elif palhetas_int <= 0:
-                        st.error("❌ Número de palhetas deve ser maior que zero")
+                        st.error(t("error.straws_positive"))
                     else:
                         ok = inserir_stock(
                             {
@@ -2166,7 +2172,7 @@ elif aba == t("menu.add_stock"):
                             }
                         )
                         if ok:
-                            st.success("✅ Stock adicionado com sucesso!")
+                            st.success(t("success.stock_added"))
                             # Marcar que usou o proprietário
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
@@ -2178,7 +2184,7 @@ elif aba == t("menu.add_stock"):
 # 📥 Importar Sémen
 # ------------------------------------------------------------
 elif aba == t("menu.import"):
-    st.header("Importar Sémen")
+    st.header(t("import.title"))
 
     st.markdown(
         """
@@ -2326,35 +2332,35 @@ elif aba == t("menu.import"):
         "andar",
     ]
 
-    render_zone_title("Contexto / Ajuda", "import-zone-title")
+    render_zone_title(t("import.zone.context"), "import-zone-title")
     ctx1, ctx2 = st.columns([3, 1.5])
     with ctx1:
         st.markdown(
-            "<div class='import-hint'>Carregue o ficheiro, valide e só depois importe. Use o template para manter as colunas corretas.</div>",
+            f"<div class='import-hint'>{t('import.hint')}</div>",
             unsafe_allow_html=True,
         )
     with ctx2:
         if xlsx_ready:
             st.download_button(
-                "Descarregar template (XLSX)",
+                t("import.download_xlsx"),
                 data=gerar_template_xlsx(),
                 file_name="template_importar_semen.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 width="stretch",
             )
         else:
-            st.caption("XLSX requer openpyxl instalado no ambiente.")
+            st.caption(t("import.xlsx_requires"))
         st.download_button(
-            "Descarregar template (CSV)",
+            t("import.download_csv"),
             data=gerar_template_csv(),
             file_name="template_importar_semen.csv",
             mime="text/csv",
             width="stretch",
         )
 
-    render_zone_title("Upload + Preview", "import-zone-title")
+    render_zone_title(t("import.zone.upload"), "import-zone-title")
     st.markdown("<div class='import-toolbar'>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Carregar ficheiro (XLSX ou CSV)", type=["xlsx", "csv"])
+    uploaded_file = st.file_uploader(t("import.upload_label"), type=["xlsx", "csv"])
     st.markdown("</div>", unsafe_allow_html=True)
 
     preview_df = pd.DataFrame()
@@ -2386,55 +2392,55 @@ elif aba == t("menu.import"):
 
             garanhao = str(row.get("garanhao", "")).strip()
             if not garanhao or garanhao.lower() == "nan":
-                add_error("garanhao", "Garanhão obrigatório")
+                add_error("garanhao", t("import.error.garanhao_required"))
 
             prop_nome = str(row.get("proprietario_nome", "")).strip()
             if not prop_nome or prop_nome.lower() == "nan":
-                add_error("proprietario_nome", "Proprietário obrigatório")
+                add_error("proprietario_nome", t("import.error.owner_required"))
 
             data_ref = str(row.get("data_embriovet/ref", "")).strip()
             if not data_ref or data_ref.lower() == "nan":
-                add_error("data_embriovet/ref", "Data/Ref obrigatória")
+                add_error("data_embriovet/ref", t("import.error.date_required"))
 
             palhetas = parse_int(row.get("existencia_atual"))
             if palhetas is None:
-                add_error("existencia_atual", "Existência atual inválida")
+                add_error("existencia_atual", t("import.error.stock_invalid"))
             elif palhetas <= 0:
-                add_error("existencia_atual", "Existência atual deve ser > 0")
+                add_error("existencia_atual", t("import.error.stock_positive"))
 
             motilidade = parse_int(row.get("motilidade"))
             if motilidade is None:
-                add_error("motilidade", "Motilidade inválida")
+                add_error("motilidade", t("import.error.motility_invalid"))
             elif motilidade < 0 or motilidade > 100:
-                add_error("motilidade", "Motilidade deve estar entre 0 e 100")
+                add_error("motilidade", t("import.error.motility_range"))
 
             qualidade = row.get("qualidade")
             qualidade_val = None
             if qualidade not in [None, "", "nan"] and not pd.isna(qualidade):
                 qualidade_val = parse_int(qualidade)
                 if qualidade_val is None:
-                    add_error("qualidade", "Qualidade inválida")
+                    add_error("qualidade", t("import.error.quality_invalid"))
                 elif qualidade_val < 0 or qualidade_val > 100:
-                    add_error("qualidade", "Qualidade deve estar entre 0 e 100")
+                    add_error("qualidade", t("import.error.quality_range"))
 
             cont_code = str(row.get("contentor_codigo", "")).strip()
             cont_key = cont_code.upper()
             if not cont_code or cont_code.lower() == "nan":
-                add_error("contentor_codigo", "Contentor obrigatório")
+                add_error("contentor_codigo", t("import.error.container_required"))
             elif cont_key not in cont_map:
-                add_error("contentor_codigo", "Contentor inexistente")
+                add_error("contentor_codigo", t("import.error.container_missing"))
 
             canister = parse_int(row.get("canister"))
             if canister is None:
-                add_error("canister", "Canister inválido")
+                add_error("canister", t("import.error.canister_invalid"))
             elif canister < 1 or canister > 10:
-                add_error("canister", "Canister deve ser 1-10")
+                add_error("canister", t("import.error.canister_range"))
 
             andar = parse_int(row.get("andar"))
             if andar is None:
-                add_error("andar", "Andar inválido")
+                add_error("andar", t("import.error.floor_invalid"))
             elif andar not in [1, 2]:
-                add_error("andar", "Andar deve ser 1 ou 2")
+                add_error("andar", t("import.error.floor_range"))
 
             dose = ""
             if not pd.isna(row.get("dose")):
@@ -2493,16 +2499,16 @@ elif aba == t("menu.import"):
                 raw_df = pd.read_csv(uploaded_file)
             else:
                 if not xlsx_ready:
-                    st.error("Para ler XLSX, instale openpyxl no ambiente.")
+                    st.error(t("import.xlsx_install"))
                     raw_df = pd.DataFrame()
                 else:
                     raw_df = pd.read_excel(uploaded_file)
         except Exception as e:
-            st.error(f"Erro ao ler o ficheiro: {e}")
+            st.error(t("import.read_error", error=e))
             raw_df = pd.DataFrame()
 
         if raw_df.empty:
-            st.warning("O ficheiro está vazio ou não pôde ser lido.")
+            st.warning(t("import.file_empty"))
         else:
             col_map = {}
             for col in raw_df.columns:
@@ -2512,9 +2518,9 @@ elif aba == t("menu.import"):
 
             missing = [col for col in required_cols if col not in col_map]
             if missing:
-                st.error(f"Colunas obrigatórias em falta: {', '.join(missing)}")
+                st.error(t("import.missing_columns", cols=', '.join(missing)))
                 erros_df = pd.DataFrame([
-                    {"linha": "-", "coluna": "-", "erro": f"Colunas obrigatórias em falta: {', '.join(missing)}"}
+                    {"linha": "-", "coluna": "-", "erro": t("import.missing_columns", cols=', '.join(missing))}
                 ])
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
@@ -2559,10 +2565,10 @@ elif aba == t("menu.import"):
                 row_numbers = st.session_state.get("import_row_numbers", row_numbers)
 
                 st.markdown(
-                    "<div class='import-hint'>motilidade 0–100 · qualidade 0–100 · canister 1–10 · andar 1–2</div>",
+                    f"<div class='import-hint'>{t('import.rules_hint')}</div>",
                     unsafe_allow_html=True,
                 )
-                compact_view = st.toggle("Vista compacta", value=True)
+                compact_view = st.toggle(t("import.compact_view"), value=True)
 
                 full_cols = [
                     "garanhao",
@@ -2592,7 +2598,7 @@ elif aba == t("menu.import"):
                 preview_placeholder = st.container()
 
                 editor_view = editor_df[col_order].copy()
-                st.caption("Editar dados (alterações apenas em memória)")
+                st.caption(t("import.edit_caption"))
                 edited_view = st.data_editor(
                     editor_view,
                     key="import_editor",
@@ -2670,23 +2676,23 @@ elif aba == t("menu.import"):
                             height=0,
                         )
 
-    render_zone_title("Validação + Ação", "import-zone-title")
+    render_zone_title(t("import.zone.validate"), "import-zone-title")
     if uploaded_file is None:
-        st.info("Carregue um ficheiro para validar.")
+        st.info(t("import.upload_to_validate"))
     else:
         total_linhas = len(preview_df)
         total_erros = len(errors_map) if errors_map else 0
         total_validas = max(0, total_linhas - total_erros)
         render_kpi_strip([
-            ("Linhas", total_linhas),
-            ("Válidas", total_validas),
-            ("Com erros", total_erros),
+            (t("import.kpi.lines"), total_linhas),
+            (t("import.kpi.valid"), total_validas),
+            (t("import.kpi.errors"), total_erros),
         ])
 
         if erros_df.empty:
-            st.success("Validação concluída sem erros.")
+            st.success(t("import.validation_ok"))
         else:
-            st.warning("Foram encontrados erros. Corrija antes de importar.")
+            st.warning(t("import.validation_errors"))
             st.dataframe(erros_df, width="stretch", height=200, hide_index=True)
 
         def executar_importacao(linhas):
@@ -2763,20 +2769,20 @@ elif aba == t("menu.import"):
 
         has_errors = bool(errors_map) or not erros_df.empty
         importar_disabled = has_errors or not linhas_validas
-        if st.button("Importar", type="primary", disabled=importar_disabled, width="content"):
+        if st.button(t("btn.import"), type="primary", disabled=importar_disabled, width="content"):
             ok, report_df, err_msg = executar_importacao(linhas_validas)
             if ok:
-                st.success(f"Importação concluída: {len(report_df)} linhas importadas.")
+                st.success(t("import.completed", count=len(report_df)))
                 st.session_state["import_report"] = report_df
             else:
-                st.error(f"Importação falhou. {err_msg}")
+                st.error(t("import.failed", error=err_msg))
                 if not report_df.empty:
                     st.session_state["import_report"] = report_df
 
         if "import_report" in st.session_state and not st.session_state["import_report"].empty:
             report_csv = st.session_state["import_report"].to_csv(index=False).encode("utf-8")
             st.download_button(
-                "Descarregar relatório de importação",
+                t("import.download_report"),
                 data=report_csv,
                 file_name="relatorio_importacao.csv",
                 mime="text/csv",
@@ -2789,391 +2795,9 @@ elif aba == t("menu.import"):
 elif aba == t("menu.register_insemination"):
     run_insemination_page({**globals(), **locals()})
     st.stop()
-    st.header("Registrar Inseminação")
-    inject_stepper_css()
-
-    st.markdown(
-        """
-        <style>
-            .insem-zone-title {
-                font-size: .78rem;
-                text-transform: uppercase;
-                letter-spacing: .05em;
-                color: #64748b;
-                margin: .2rem 0 .35rem 0;
-                font-weight: 700;
-            }
-            .insem-line {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                background: #f8fafc;
-                padding: 6px 8px;
-                margin-bottom: 6px;
-            }
-            .insem-lote-main {
-                font-size: .9rem;
-                font-weight: 600;
-                color: #0f172a;
-            }
-            .insem-lote-sub {
-                font-size: .76rem;
-                color: #64748b;
-                margin-top: 2px;
-            }
-            .insem-modal-head {
-                font-size: .75rem;
-                text-transform: uppercase;
-                color: #64748b;
-                letter-spacing: .04em;
-                margin: .2rem 0;
-            }
-            .insem-summary-bar {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                background: #eef2f7;
-                border: 1px solid #e2e8f0;
-                padding: 8px 12px;
-                border-radius: 8px;
-                font-size: .78rem;
-                color: #1f2937;
-            }
-            .insem-summary-item {
-                display: flex;
-                align-items: baseline;
-                gap: 6px;
-                font-weight: 600;
-            }
-            .insem-summary-label {
-                text-transform: uppercase;
-                letter-spacing: .05em;
-                font-size: .68rem;
-                color: #64748b;
-            }
-            .insem-summary-value {
-                font-size: .9rem;
-                color: #0f172a;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if "insem_linhas" not in st.session_state:
-        st.session_state["insem_linhas"] = {}
-    if "insem_garanhao_modal" not in st.session_state:
-        st.session_state["insem_garanhao_modal"] = None
-    if "insem_prop_modal" not in st.session_state:
-        st.session_state["insem_prop_modal"] = "Todos"
-
-    def lote_ref(row):
-        return row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
-
-    def lote_local(row):
-        contentor = row.get("contentor_codigo") or row.get("local_armazenagem") or "SEM-CONTENTOR"
-        can = row.get("canister")
-        andr = row.get("andar")
-        if pd.notna(can) and pd.notna(andr):
-            return f"{contentor} / C{int(can)} / A{int(andr)}"
-        return str(contentor)
-
-    def lote_payload(row):
-        return {
-            "stock_id": int(row.get("id")),
-            "garanhao": row.get("garanhao"),
-            "dono_id": to_py(row.get("dono_id")),
-            "proprietario_nome": row.get("proprietario_nome") or "—",
-            "ref": lote_ref(row),
-            "local": lote_local(row),
-            "motilidade": int(to_py(row.get("motilidade")) or 0),
-            "dose": to_py(row.get("dose")) or "—",
-            "protocolo": row.get("data_embriovet") or row.get("origem_externa") or "N/A",
-            "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
-        }
-
-    def inc_linha_qtd(lote_id, max_disponivel):
-        sid = str(lote_id)
-        linhas = st.session_state["insem_linhas"]
-        if sid not in linhas:
-            return
-        atual = int(linhas[sid].get("qty", 0) or 0)
-        novo = min(int(max_disponivel), atual + 1)
-        linhas[sid]["qty"] = novo
-        st.session_state["insem_linhas"] = linhas
-        st.session_state[f"insem_line_input_{sid}"] = novo
-
-    def dec_linha_qtd(lote_id):
-        sid = str(lote_id)
-        linhas = st.session_state["insem_linhas"]
-        if sid not in linhas:
-            return
-        atual = int(linhas[sid].get("qty", 0) or 0)
-        novo = max(0, atual - 1)
-        if novo == 0:
-            linhas.pop(sid, None)
-            st.session_state.pop(f"insem_line_input_{sid}", None)
-        else:
-            linhas[sid]["qty"] = novo
-            st.session_state[f"insem_line_input_{sid}"] = novo
-        st.session_state["insem_linhas"] = linhas
-
-    def remover_linha(lote_id):
-        sid = str(lote_id)
-        linhas = st.session_state["insem_linhas"]
-        linhas.pop(sid, None)
-        st.session_state["insem_linhas"] = linhas
-        st.session_state.pop(f"insem_line_input_{sid}", None)
-        st.session_state.pop(f"insem_step_{sid}", None)
-
-    def sync_linha_input(lote_id, max_disponivel):
-        sid = str(lote_id)
-        linhas = st.session_state["insem_linhas"]
-        if sid not in linhas:
-            return
-        raw = int(st.session_state.get(f"insem_line_input_{sid}", 0) or 0)
-        novo = max(0, min(int(max_disponivel), raw))
-        if novo == 0:
-            linhas.pop(sid, None)
-            st.session_state.pop(f"insem_line_input_{sid}", None)
-        else:
-            linhas[sid]["qty"] = novo
-            st.session_state[f"insem_line_input_{sid}"] = novo
-        st.session_state["insem_linhas"] = linhas
-
-    stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
-    if stock_disponivel.empty:
-        st.warning("Nenhum lote disponível para inseminação.")
-    else:
-        if st.session_state["insem_garanhao_modal"] is None:
-            st.session_state["insem_garanhao_modal"] = sorted(stock_disponivel["garanhao"].dropna().unique())[0]
-
-        @st.dialog("Selecionar lotes", width="large")
-        def abrir_modal_lotes():
-            st.markdown("<div class='insem-modal-head'>Filtros</div>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            with c1:
-                gar_opts = sorted(stock_disponivel["garanhao"].dropna().unique())
-                idx_g = gar_opts.index(st.session_state["insem_garanhao_modal"]) if st.session_state["insem_garanhao_modal"] in gar_opts else 0
-                gar_sel = st.selectbox("Garanhão", gar_opts, index=idx_g, key="insem_modal_garanhao")
-            with c2:
-                base_prop = stock_disponivel[stock_disponivel["garanhao"] == gar_sel]
-                prop_opts = ["Todos"] + sorted(base_prop["proprietario_nome"].dropna().unique())
-                idx_p = prop_opts.index(st.session_state.get("insem_prop_modal", "Todos")) if st.session_state.get("insem_prop_modal", "Todos") in prop_opts else 0
-                prop_sel = st.selectbox("Proprietário", prop_opts, index=idx_p, key="insem_modal_prop")
-
-            st.session_state["insem_garanhao_modal"] = gar_sel
-            st.session_state["insem_prop_modal"] = prop_sel
-
-            modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
-            if prop_sel != "Todos":
-                modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
-
-            if "data_embriovet" in modal_df.columns:
-                modal_df["_ord"] = pd.to_datetime(modal_df["data_embriovet"], errors="coerce")
-                modal_df = modal_df.sort_values("_ord", ascending=False)
-
-            if modal_df.empty:
-                st.info("Sem lotes para os filtros selecionados.")
-                return
-
-            st.markdown("<div class='insem-modal-head'>Lotes</div>", unsafe_allow_html=True)
-
-            header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
-            with header_cols[0]:
-                st.markdown("<div class='insem-modal-head'>Lote</div>", unsafe_allow_html=True)
-            with header_cols[1]:
-                st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
-            with header_cols[2]:
-                st.markdown("<div class='insem-modal-head'>Motilidade / Dose</div>", unsafe_allow_html=True)
-            with header_cols[3]:
-                st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
-            with header_cols[4]:
-                st.markdown("<div class='insem-modal-head'>Selecionar</div>", unsafe_allow_html=True)
-
-            for _, row in modal_df.iterrows():
-                lote = lote_payload(row)
-                sid = lote["stock_id"]
-
-                row_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
-                with row_cols[0]:
-                    st.caption(f"{lote['ref']}")
-                with row_cols[1]:
-                    st.caption(lote["local"])
-                with row_cols[2]:
-                    st.caption(f"M {lote['motilidade']}% · D {lote['dose']}")
-                with row_cols[3]:
-                    st.caption(f"Disp {lote['max_disponivel']}")
-                with row_cols[4]:
-                    sel_key = f"insem_modal_sel_{sid}"
-                    default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["insem_linhas"])
-                    st.checkbox(
-                        "Selecionar",
-                        key=sel_key,
-                        value=default_checked,
-                        label_visibility="collapsed",
-                    )
-
-            b1, b2 = st.columns([2, 1])
-            with b1:
-                if st.button("Confirmar seleção", type="primary", key="insem_modal_confirmar", width="stretch"):
-                    selecionados_ids = []
-                    for key, val in st.session_state.items():
-                        if key.startswith("insem_modal_sel_") and val:
-                            try:
-                                selecionados_ids.append(int(key.split("insem_modal_sel_")[-1]))
-                            except Exception:
-                                continue
-
-                    if not selecionados_ids:
-                        st.warning("Selecione pelo menos um lote.")
-                        return
-
-                    selecionados_df = stock_disponivel[stock_disponivel["id"].isin(selecionados_ids)].copy()
-                    if selecionados_df.empty:
-                        st.warning("Nenhum lote selecionado disponível.")
-                        return
-
-                    linhas = st.session_state["insem_linhas"]
-                    for _, row in selecionados_df.iterrows():
-                        lote = lote_payload(row)
-                        sid = str(lote["stock_id"])
-                        if sid not in linhas:
-                            linhas[sid] = {
-                                **lote,
-                                "qty": 1,
-                            }
-
-                    st.session_state["insem_linhas"] = linhas
-                    st.rerun()
-            with b2:
-                if st.button("Fechar", key="insem_modal_cancelar", width="stretch"):
-                    st.rerun()
-
-        render_zone_title("Zona de seleção", "insem-zone-title")
-        csel1, csel2, csel3 = st.columns([2, 2, 1.5])
-        with csel1:
-            data_insem = st.date_input("Data da inseminação", key="insem_data")
-        with csel2:
-            egua = st.text_input("Égua *", key="insem_egua")
-        with csel3:
-            if st.button("Selecionar lotes", key="insem_btn_open_modal", width="stretch"):
-                abrir_modal_lotes()
-
-        render_zone_title("Linhas da inseminação", "insem-zone-title")
-        linhas = st.session_state["insem_linhas"]
-
-        if not linhas:
-            st.info("Nenhum lote selecionado. Clique em 'Selecionar lotes'.")
-        else:
-            header_cols = st.columns([2.4, 1.8, 0.8, 1.6, 0.6])
-            with header_cols[0]:
-                st.markdown("<div class='insem-modal-head'>Ref</div>", unsafe_allow_html=True)
-            with header_cols[1]:
-                st.markdown("<div class='insem-modal-head'>Localização</div>", unsafe_allow_html=True)
-            with header_cols[2]:
-                st.markdown("<div class='insem-modal-head'>Disponível</div>", unsafe_allow_html=True)
-            with header_cols[3]:
-                st.markdown("<div class='insem-modal-head'>Quantidade</div>", unsafe_allow_html=True)
-            with header_cols[4]:
-                st.markdown("<div class='insem-modal-head'>Remover</div>", unsafe_allow_html=True)
-
-            for sid in list(linhas.keys()):
-                linha = linhas[sid]
-                max_disp = int(linha.get("max_disponivel", 0))
-                qtd = int(linha.get("qty", 0))
-
-                st.markdown("<div class='insem-line'>", unsafe_allow_html=True)
-                step_key = f"insem_step_{sid}"
-                if step_key not in st.session_state:
-                    st.session_state[step_key] = qtd
-
-                l1, l2, l3, lqty, l4 = st.columns([2.4, 1.8, 0.8, 1.6, 0.6])
-                with l1:
-                    st.markdown(f"<div class='insem-lote-main'>{linha['ref']}</div>", unsafe_allow_html=True)
-                with l2:
-                    st.markdown(f"<div class='insem-lote-sub'>{linha['local']}</div>", unsafe_allow_html=True)
-                with l3:
-                    st.markdown(f"<div class='insem-lote-main'>{max_disp}</div>", unsafe_allow_html=True)
-                with lqty:
-                    qcols = st.columns([0.7, 0.5, 0.5])
-                    qtd_val, _ = render_stepper(
-                        qcols,
-                        step_key,
-                        min_value=0,
-                        max_value=max_disp,
-                    )
-
-                if qtd_val != qtd:
-                    if qtd_val == 0:
-                        linhas.pop(sid, None)
-                        st.session_state.pop(step_key, None)
-                    else:
-                        linhas[sid]["qty"] = int(qtd_val)
-                    st.session_state["insem_linhas"] = linhas
-
-                with l4:
-                    st.button(
-                        "✕",
-                        key=f"insem_line_remove_{sid}",
-                        width="stretch",
-                        on_click=remover_linha,
-                        args=(sid,),
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            badd1, badd2 = st.columns([2, 2])
-            with badd1:
-                if st.button("Adicionar linha", key="insem_btn_add_line", width="stretch"):
-                    abrir_modal_lotes()
-            with badd2:
-                total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
-                st.markdown(f"<div class='insem-lote-main'>Total: {total_palhetas} palhetas</div>", unsafe_allow_html=True)
-
-        total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
-        total_linhas = sum(1 for v in linhas.values() if int(v.get("qty", 0)) > 0)
-        st.markdown(
-            f"""
-            <div class='insem-summary-bar'>
-                <div class='insem-summary-item'>
-                    <span class='insem-summary-label'>Total palhetas</span>
-                    <span class='insem-summary-value'>{total_palhetas}</span>
-                </div>
-                <div class='insem-summary-item'>
-                    <span class='insem-summary-label'>Lotes</span>
-                    <span class='insem-summary-value'>{total_linhas}</span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("---")
-        if st.button("Registrar inseminação", type="primary", key="btn_registrar_insem_final", width="stretch"):
-            linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
-            if not linhas_finais:
-                st.error("Selecione pelo menos uma linha de lote.")
-            elif not egua:
-                st.error("Nome da égua é obrigatório.")
-            else:
-                registros = []
-                for l in linhas_finais:
-                    registros.append(
-                        {
-                            "garanhao": l.get("garanhao"),
-                            "dono_id": l.get("dono_id"),
-                            "protocolo": l.get("protocolo"),
-                            "palhetas": int(l.get("qty", 0)),
-                            "stock_id": int(l.get("stock_id")),
-                        }
-                    )
-
-                ok = registrar_inseminacao_multiplas(registros, data_insem, egua)
-                if ok:
-                    st.success("Inseminação registrada com sucesso.")
-                    st.session_state["insem_linhas"] = {}
-                    st.rerun()
 
 elif aba == t("menu.owners"):
-    st.header("👥 Gestão de Proprietários")
+    st.header(t("owners.title"))
     
     # Verificar e criar coluna ativo se não existir
     try:
@@ -3189,10 +2813,10 @@ elif aba == t("menu.owners"):
                 cur.execute("ALTER TABLE dono ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
                 cur.execute("UPDATE dono SET ativo = TRUE WHERE ativo IS NULL")
                 conn.commit()
-                st.success("✅ Coluna 'ativo' criada automaticamente!")
+                st.success(t("owners.column_created"))
             cur.close()
     except Exception as e:
-        st.error(f"❌ Erro ao verificar/criar coluna ativo: {e}")
+        st.error(t("owners.column_error", error=e))
     
     # TODO: Implementar desativação automática nas transações de stock
     # atualizar_status_proprietarios()
@@ -3205,46 +2829,46 @@ elif aba == t("menu.owners"):
     # Recarregar proprietários (todos, não apenas ativos) - sempre fresh
     proprietarios_todos = carregar_proprietarios(apenas_ativos=False)
     
-    tab1, tab2 = st.tabs(["📋 Lista", "➕ Adicionar"])
+    tab1, tab2 = st.tabs([t("owners.tab.list"), t("owners.tab.add")])
     
     # TAB 1: Lista
     with tab1:
         if proprietarios_todos.empty:
-            st.info("ℹ️ Nenhum proprietário cadastrado.")
+            st.info(t("owners.none_registered"))
         else:
             # Filtro e Ordenação
             col_f1, col_f2 = st.columns(2)
             
             with col_f1:
-                filtro_status = st.radio("Filtrar:", ["Todos", "Ativos", "Inativos"], horizontal=True)
+                filtro_status = st.radio(t("owners.filter"), [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")], horizontal=True)
             
             with col_f2:
-                ordenar_por = st.selectbox("Ordenar por:", ["Nome", "ID", "Status"])
+                ordenar_por = st.selectbox(t("owners.sort_by"), [t("owners.sort.name"), t("owners.sort.id"), t("owners.sort.status")])
             
             # Aplicar filtro
-            if filtro_status == "Ativos":
+            if filtro_status == t("owners.filter.active"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True].copy()
-            elif filtro_status == "Inativos":
+            elif filtro_status == t("owners.filter.inactive"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False].copy()
             else:
                 props_exibir = proprietarios_todos.copy()
             
             # Aplicar ordenação
-            if ordenar_por == "Nome":
+            if ordenar_por == t("owners.sort.name"):
                 props_exibir = props_exibir.sort_values('nome')
-            elif ordenar_por == "ID":
+            elif ordenar_por == t("owners.sort.id"):
                 props_exibir = props_exibir.sort_values('id')
-            elif ordenar_por == "Status":
+            elif ordenar_por == t("owners.sort.status"):
                 props_exibir = props_exibir.sort_values('ativo', ascending=False)
             
-            st.markdown(f"**{len(props_exibir)} proprietários**")
+            st.markdown(t("owners.count", count=len(props_exibir)))
             st.markdown("---")
             
             # Lista de proprietários (estilo lotes)
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
-                status_text = "ATIVO" if prop.get('ativo', True) else "INATIVO"
+                status_text = t("owners.status.active") if prop.get('ativo', True) else t("owners.status.inactive")
                 
                 # Título do expander com ID | Nome | Status
                 titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
@@ -3256,36 +2880,36 @@ elif aba == t("menu.owners"):
                 with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
-                    tab_det, tab_edit = st.tabs(["📋 Detalhes", "✏️ Editar"])
-                    
+                    tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
+
                     # TAB: Detalhes
                     with tab_det:
                         col1, col2 = st.columns(2)
-                        
+
                         with col1:
-                            st.markdown(f"**🆔 ID:** {prop['id']}")
-                            st.markdown(f"**👤 Nome:** {prop['nome']}")
-                            st.markdown(f"**📧 Email:** {prop.get('email') or 'N/A'}")
-                            st.markdown(f"**📱 Telemóvel:** {prop.get('telemovel') or 'N/A'}")
-                        
+                            st.markdown(f"**🆔 {t('label.id')}:** {prop['id']}")
+                            st.markdown(f"**👤 {t('label.name')}:** {prop['nome']}")
+                            st.markdown(f"**📧 {t('label.email')}:** {prop.get('email') or t('common.na')}")
+                            st.markdown(f"**📱 {t('label.phone')}:** {prop.get('telemovel') or t('common.na')}")
+
                         with col2:
-                            st.markdown(f"**📄 Nome Completo:** {prop.get('nome_completo') or 'N/A'}")
-                            st.markdown(f"**🔢 NIF:** {prop.get('nif') or 'N/A'}")
-                            st.markdown(f"**📍 Morada:** {prop.get('morada') or 'N/A'}")
-                            st.markdown(f"**📮 CP:** {prop.get('codigo_postal') or 'N/A'}")
-                            st.markdown(f"**🏙️ Cidade:** {prop.get('cidade') or 'N/A'}")
-                        
+                            st.markdown(f"**📄 {t('label.full_name')}:** {prop.get('nome_completo') or t('common.na')}")
+                            st.markdown(f"**🔢 {t('label.nif')}:** {prop.get('nif') or t('common.na')}")
+                            st.markdown(f"**📍 {t('label.address')}:** {prop.get('morada') or t('common.na')}")
+                            st.markdown(f"**📮 {t('label.postal_code')}:** {prop.get('codigo_postal') or t('common.na')}")
+                            st.markdown(f"**🏙️ {t('label.city')}:** {prop.get('cidade') or t('common.na')}")
+
                         st.markdown("---")
-                        
+
                         # Botões de ação
                         col_a1, col_a2 = st.columns(2)
-                        
+
                         with col_a1:
                             # Botão de alternar status
                             status_atual = prop.get('ativo', True)
-                            btn_label = "🔴 Desativar" if status_atual else "🟢 Ativar"
+                            btn_label = t("owners.deactivate") if status_atual else t("owners.activate")
                             btn_type = "secondary" if status_atual else "primary"
-                            
+
                             if st.button(btn_label, key=f"status_{prop['id']}", width="stretch", type=btn_type):
                                 # Marcar para manter expandido
                                 st.session_state[f'expand_{prop["id"]}'] = True
@@ -3293,46 +2917,46 @@ elif aba == t("menu.owners"):
                                 # Alternar status
                                 resultado = alternar_status_proprietario(prop['id'])
                                 if resultado is not None:
-                                    novo_status = "ATIVO" if resultado else "INATIVO"
-                                    st.success(f"✅ Status alterado para {novo_status}!")
+                                    novo_status = t("owners.status.active") if resultado else t("owners.status.inactive")
+                                    st.success(t("owners.status_changed", status=novo_status))
                                     # Forçar rerun imediato
                                     time.sleep(0.3)
                                     st.rerun()
                                 else:
-                                    st.error("❌ Erro ao alterar status. Verifique se a coluna 'ativo' existe.")
-                        
+                                    st.error(t("owners.status_error"))
+
                         with col_a2:
-                            if st.button("🗑️ Apagar", key=f"del_{prop['id']}", width="stretch", type="secondary"):
+                            if st.button(t("btn.delete"), key=f"del_{prop['id']}", width="stretch", type="secondary"):
                                 if deletar_proprietario(prop['id']):
                                     if f'expand_{prop["id"]}' in st.session_state:
                                         del st.session_state[f'expand_{prop["id"]}']
-                                    st.success("✅ Apagado!")
+                                    st.success(t("success.deleted"))
                                     st.rerun()
-                    
+
                     # TAB: Editar
                     with tab_edit:
-                        st.markdown("### ✏️ Editar Proprietário")
-                        
+                        st.markdown(f"### {t('owners.edit_title')}")
+
                         with st.form(key=f"form_edit_{prop['id']}"):
                             col1, col2 = st.columns(2)
-                            
+
                             with col1:
-                                nome_e = st.text_input("Nome *", value=prop.get('nome', ''))
-                                email_e = st.text_input("Email", value=prop.get('email', '') or '')
-                                tel_e = st.text_input("Telemóvel", value=prop.get('telemovel', '') or '')
-                                nc_e = st.text_input("Nome Completo", value=prop.get('nome_completo', '') or '')
-                            
+                                nome_e = st.text_input(t("label.name_required"), value=prop.get('nome', ''))
+                                email_e = st.text_input(t("label.email"), value=prop.get('email', '') or '')
+                                tel_e = st.text_input(t("label.phone"), value=prop.get('telemovel', '') or '')
+                                nc_e = st.text_input(t("label.full_name"), value=prop.get('nome_completo', '') or '')
+
                             with col2:
-                                nif_e = st.text_input("NIF", value=prop.get('nif', '') or '')
-                                morada_e = st.text_area("Morada", value=prop.get('morada', '') or '', height=100)
-                                cp_e = st.text_input("Código Postal", value=prop.get('codigo_postal', '') or '')
-                                cidade_e = st.text_input("Cidade", value=prop.get('cidade', '') or '')
-                            
-                            salvar = st.form_submit_button("💾 Guardar Alterações", type="primary", width="stretch")
-                            
+                                nif_e = st.text_input(t("label.nif"), value=prop.get('nif', '') or '')
+                                morada_e = st.text_area(t("label.address"), value=prop.get('morada', '') or '', height=100)
+                                cp_e = st.text_input(t("label.postal_code"), value=prop.get('codigo_postal', '') or '')
+                                cidade_e = st.text_input(t("label.city"), value=prop.get('cidade', '') or '')
+
+                            salvar = st.form_submit_button(t("btn.save_changes"), type="primary", width="stretch")
+
                             if salvar:
                                 if not nome_e:
-                                    st.error("❌ Nome é obrigatório")
+                                    st.error(t("error.name_required"))
                                 else:
                                     dados = {
                                         'nome': nome_e,
@@ -3345,33 +2969,33 @@ elif aba == t("menu.owners"):
                                         'cidade': cidade_e
                                     }
                                     if editar_proprietario(prop['id'], dados):
-                                        st.success("✅ Atualizado!")
+                                        st.success(t("success.updated"))
                                         st.rerun()
     
     # TAB 2: Adicionar
     with tab2:
-        st.markdown("### ➕ Novo Proprietário")
+        st.markdown(f"### {t('owners.new_title')}")
         
         with st.form("form_adicionar"):
             col1, col2 = st.columns(2)
             
             with col1:
-                nome_n = st.text_input("Nome *")
-                email_n = st.text_input("Email")
-                tel_n = st.text_input("Telemóvel")
-                nc_n = st.text_input("Nome Completo")
+                nome_n = st.text_input(t("label.name_required"))
+                email_n = st.text_input(t("label.email"))
+                tel_n = st.text_input(t("label.phone"))
+                nc_n = st.text_input(t("label.full_name"))
             
             with col2:
-                nif_n = st.text_input("NIF")
-                morada_n = st.text_area("Morada", height=100)
-                cp_n = st.text_input("Código Postal")
-                cidade_n = st.text_input("Cidade")
+                nif_n = st.text_input(t("label.nif"))
+                morada_n = st.text_area(t("label.address"), height=100)
+                cp_n = st.text_input(t("label.postal_code"))
+                cidade_n = st.text_input(t("label.city"))
             
-            adicionar = st.form_submit_button("➕ Adicionar", type="primary", width="stretch")
+            adicionar = st.form_submit_button(t("btn.add"), type="primary", width="stretch")
             
             if adicionar:
                 if not nome_n:
-                    st.error("❌ Nome é obrigatório")
+                    st.error(t("error.name_required"))
                 else:
                     dados = {
                         'nome': nome_n,
@@ -3385,163 +3009,168 @@ elif aba == t("menu.owners"):
                     }
                     prop_id = adicionar_proprietario(dados)
                     if prop_id:
-                        st.success(f"✅ '{nome_n}' adicionado!")
+                        st.success(t("owners.added", name=nome_n))
                         st.rerun()
 
 # ------------------------------------------------------------
 # ⚙️ Gestão de Utilizadores (Apenas Administrador)
 # ------------------------------------------------------------
 elif aba == t("menu.users"):
-    st.header("⚙️ Gestão de Utilizadores")
-    
+    st.header(t("users.title"))
+
     usuarios_df = carregar_usuarios()
-    
-    tab1, tab2, tab3 = st.tabs(["📋 Lista de Utilizadores", "➕ Adicionar Utilizador", "🔒 Alterar Password"])
-    
+
+    tab1, tab2, tab3 = st.tabs([
+        t("users.tab.list"),
+        t("users.tab.add"),
+        t("users.tab.change_password"),
+    ])
+
     # TAB 1: Lista
     with tab1:
         if usuarios_df.empty:
-            st.info("ℹ️ Nenhum utilizador cadastrado.")
+            st.info(t("users.none_registered"))
         else:
-            st.markdown(f"### 📋 Total: {len(usuarios_df)} utilizadores")
-            
+            st.markdown(t("users.total", count=len(usuarios_df)))
+
             # Filtros
             col1, col2 = st.columns(2)
             with col1:
                 filtro_nivel = st.multiselect(
-                    "Filtrar por Nível",
+                    t("users.filter_level"),
                     options=usuarios_df["nivel"].unique(),
-                    default=None
+                    default=None,
                 )
             with col2:
                 filtro_status = st.selectbox(
-                    "Status",
-                    ["Todos", "Ativos", "Inativos"]
+                    t("label.status"),
+                    [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")],
                 )
             
             usuarios_filtrado = usuarios_df.copy()
             if filtro_nivel:
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["nivel"].isin(filtro_nivel)]
-            if filtro_status == "Ativos":
+            if filtro_status == t("owners.filter.active"):
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == True]
-            elif filtro_status == "Inativos":
+            elif filtro_status == t("owners.filter.inactive"):
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == False]
             
             st.markdown("---")
             
             for _, usr in usuarios_filtrado.iterrows():
                 status_emoji = "✅" if usr['ativo'] else "❌"
-                with st.expander(f"{status_emoji} {usr['nome_completo']} (@{usr['username']}) - {usr['nivel']}"):
+                with st.expander(t("users.expander", name=usr['nome_completo'], username=usr['username'], level=usr['nivel'], status_icon=status_emoji)):
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        st.markdown(f"**ID:** {usr['id']}")
+                        st.markdown(f"**{t('label.id')}:** {usr['id']}")
                         st.markdown(f"**Username:** {usr['username']}")
-                        st.markdown(f"**Nome:** {usr['nome_completo']}")
-                        st.markdown(f"**Nível:** {usr['nivel']}")
-                        st.markdown(f"**Status:** {'Ativo' if usr['ativo'] else 'Inativo'}")
-                        st.markdown(f"**Criado em:** {usr['created_at']}")
+                        st.markdown(f"**{t('label.name')}:** {usr['nome_completo']}")
+                        st.markdown(f"**{t('label.level')}:** {usr['nivel']}")
+                        st.markdown(f"**{t('label.status')}:** {t('owners.status.active') if usr['ativo'] else t('owners.status.inactive')}")
+                        st.markdown(f"**{t('label.created_at')}:** {usr['created_at']}")
                         if usr['last_login']:
-                            st.markdown(f"**Último login:** {usr['last_login']}")
+                            st.markdown(f"**{t('label.last_login')}:** {usr['last_login']}")
                     
                     with col2:
                         if usr['ativo']:
-                            if st.button("🚫 Desativar", key=f"deactivate_{usr['id']}", type="secondary"):
+                            if st.button(t("users.deactivate"), key=f"deactivate_{usr['id']}", type="secondary"):
                                 if desativar_usuario(usr['id']):
-                                    st.success("✅ Utilizador desativado!")
+                                    st.success(t("users.deactivated"))
                                     st.rerun()
                         else:
-                            if st.button("✅ Ativar", key=f"activate_{usr['id']}", type="primary"):
+                            if st.button(t("users.activate"), key=f"activate_{usr['id']}", type="primary"):
                                 if ativar_usuario(usr['id']):
-                                    st.success("✅ Utilizador ativado!")
+                                    st.success(t("users.activated"))
                                     st.rerun()
     
     # TAB 2: Adicionar
     with tab2:
-        st.markdown("### ➕ Adicionar Novo Utilizador")
+        st.markdown(f"### {t('users.add_new')}")
         
         with st.form("add_usuario"):
-            novo_username = st.text_input("Username *", placeholder="sem espaços, minúsculas")
-            novo_nome = st.text_input("Nome Completo *")
-            novo_nivel = st.selectbox("Nível de Acesso *", ["Administrador", "Gestor", "Visualizador"])
-            nova_password = st.text_input("Password *", type="password", placeholder="Mínimo 6 caracteres")
-            confirma_password = st.text_input("Confirmar Password *", type="password")
+            novo_username = st.text_input(t("users.username_required"), placeholder=t("users.username_placeholder"))
+            novo_nome = st.text_input(t("label.full_name_required"))
+            novo_nivel = st.selectbox(t("users.access_level"), [t("users.level.admin"), t("users.level.manager"), t("users.level.viewer")])
+            nova_password = st.text_input(t("users.password_label"), type="password", placeholder=t("users.password_min"))
+            confirma_password = st.text_input(t("users.password_confirm"), type="password")
             
-            submit = st.form_submit_button("➕ Criar Utilizador", type="primary")
+            submit = st.form_submit_button(t("users.create_user"), type="primary")
             
             if submit:
                 if not novo_username or not novo_nome or not nova_password:
-                    st.error("❌ Preencha todos os campos obrigatórios")
+                    st.error(t("users.fill_required"))
                 elif len(nova_password) < 6:
-                    st.error("❌ Password deve ter pelo menos 6 caracteres")
+                    st.error(t("users.password_min_error"))
                 elif nova_password != confirma_password:
-                    st.error("❌ Passwords não coincidem")
+                    st.error(t("error.passwords_mismatch"))
                 elif " " in novo_username:
-                    st.error("❌ Username não pode conter espaços")
+                    st.error(t("users.username_no_spaces"))
                 else:
                     if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, user['id']):
-                        st.success(f"✅ Utilizador '{novo_username}' criado com sucesso!")
-                        st.info(f"🔐 **Credenciais:**\n\n👤 Username: `{novo_username}`\n\n🔒 Password: `{nova_password}`")
+                        st.success(t("users.created", username=novo_username))
+                        st.info(t("users.credentials", username=novo_username, password=nova_password))
                         # Redirecionar para a lista de utilizadores
                         st.session_state['show_user_tab'] = 0  # Tab lista
                         st.rerun()
         
         st.markdown("---")
-        st.info("""
-        ### 📋 Níveis de Acesso
-        
-        **🔴 Administrador:**
-        - Acesso total ao sistema
-        - Pode adicionar/editar/deletar stock
-        - Pode gerir proprietários
-        - Pode gerir utilizadores
-        - Pode adicionar outros administradores
-        
-        **🟡 Gestor/Veterinário:**
-        - Pode adicionar stock
-        - Pode registrar inseminações
-        - Pode transferir sêmen (interna e externa)
-        - NÃO pode editar ou deletar
-        - NÃO pode gerir utilizadores
-        
-        **🟢 Visualizador:**
-        - Pode ver stock
-        - Pode ver relatórios
-        - NÃO pode adicionar/editar nada
-        """)
+        st.info(t("users.access_levels_info"))
     
     # TAB 3: Alterar Password
     with tab3:
-        st.markdown("### 🔒 Alterar Password de Utilizador")
+        st.markdown(f"### {t('users.change_password_title')}")
         
         if not usuarios_df.empty:
             with st.form("change_password"):
                 usuario_selecionado = st.selectbox(
-                    "Selecionar Utilizador",
+                    t("users.select_user"),
                     options=usuarios_df["id"].tolist(),
                     format_func=lambda x: f"{usuarios_df[usuarios_df['id']==x]['nome_completo'].values[0]} (@{usuarios_df[usuarios_df['id']==x]['username'].values[0]})"
                 )
                 
-                nova_senha = st.text_input("Nova Password *", type="password", placeholder="Mínimo 6 caracteres")
-                confirma_senha = st.text_input("Confirmar Nova Password *", type="password")
+                nova_senha = st.text_input(t("users.new_password"), type="password", placeholder=t("users.password_min"))
+                confirma_senha = st.text_input(t("users.password_confirm_new"), type="password")
                 
-                submit_senha = st.form_submit_button("🔄 Alterar Password", type="primary")
+                submit_senha = st.form_submit_button(t("users.change_password_btn"), type="primary")
                 
                 if submit_senha:
                     if not nova_senha:
-                        st.error("❌ Digite a nova password")
+                        st.error(t("users.password_required"))
                     elif len(nova_senha) < 6:
-                        st.error("❌ Password deve ter pelo menos 6 caracteres")
+                        st.error(t("users.password_min_error"))
                     elif nova_senha != confirma_senha:
-                        st.error("❌ Passwords não coincidem")
+                        st.error(t("error.passwords_mismatch"))
                     else:
                         if alterar_password(usuario_selecionado, nova_senha):
                             usr_nome = usuarios_df[usuarios_df['id']==usuario_selecionado]['nome_completo'].values[0]
-                            st.success(f"✅ Password alterada para {usr_nome}!")
-                            st.info(f"🔐 Nova password: `{nova_senha}`")
+                            st.success(t("users.password_changed", name=usr_nome))
+                            st.info(t("users.new_password_info", password=nova_senha))
 
 # ------------------------------------------------------------
 # Footer
 # ------------------------------------------------------------
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Embriovet Gestor v3.0**")
-st.sidebar.markdown("✅ Sistema com Autenticação")
+st.sidebar.markdown(t("footer.version"))
+st.sidebar.markdown(t("footer.auth"))
+
+if st.session_state.get("i18n_qa_mode"):
+    diagnostics = get_i18n_diagnostics()
+    current_lang = st.session_state.get("lang", "pt-PT")
+    if current_lang == "zz":
+        st.sidebar.markdown(f"⟦qa.footer_language⟧ {current_lang}")
+        st.sidebar.markdown(f"⟦qa.footer_keys⟧ {diagnostics['total_keys']}")
+    else:
+        st.sidebar.markdown(t("qa.footer_language", lang=current_lang))
+        st.sidebar.markdown(t("qa.footer_keys", total=diagnostics["total_keys"]))
+
+    if diagnostics["missing"]:
+        summary = ", ".join([f"{lang}({len(keys)})" for lang, keys in diagnostics["missing"].items()])
+        if current_lang == "zz":
+            st.sidebar.warning(f"⟦qa.footer_missing⟧ {summary}")
+        else:
+            st.sidebar.warning(t("qa.footer_missing", summary=summary))
+    else:
+        if current_lang == "zz":
+            st.sidebar.success("⟦qa.footer_all_translated⟧")
+        else:
+            st.sidebar.success(t("qa.footer_all_translated"))

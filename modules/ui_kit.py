@@ -2,6 +2,48 @@ import streamlit as st
 from modules.i18n import t
 
 
+def inject_design_system():
+    st.markdown(
+        """
+        <style>
+            :root {
+                --ds-font-size: 0.9rem;
+                --ds-radius: 8px;
+                --ds-radius-sm: 6px;
+                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+                --ds-spacing: 0.7rem;
+            }
+            html, body, [data-testid="stAppViewContainer"] {
+                font-size: 14px;
+                color: #0f172a;
+            }
+            section.main > div.block-container {
+                padding-top: 0.8rem;
+                padding-bottom: 1.4rem;
+            }
+            .stButton > button,
+            .stDownloadButton > button,
+            .stTextInput input,
+            .stSelectbox select,
+            .stTextArea textarea,
+            .stNumberInput input,
+            .stDateInput input {
+                border-radius: var(--ds-radius) !important;
+            }
+            .stCard, .app-card {
+                border-radius: var(--ds-radius) !important;
+                box-shadow: var(--ds-shadow-sm);
+            }
+            .stMarkdown {
+                line-height: 1.45;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_reports_css():
     st.markdown(
         """
@@ -21,13 +63,14 @@ def inject_reports_css():
                 margin: 0.35rem 0 0.6rem 0;
             }
             .reports-kpi-item {
-                border: 1px solid #dbe4ee;
-                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                background: #ffffff;
                 color: #334155;
                 border-radius: 8px;
-                padding: 4px 9px;
+                padding: 8px 12px;
                 font-size: 0.78rem;
                 white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
             }
             .reports-kpi-item b { color: #0f172a; }
             .reports-results-head {
@@ -148,7 +191,7 @@ def inject_shell_css(primary_color: str | None):
         f"""
         <style>
             :root {{
-                --radius: 10px;
+                --radius: 8px;
                 --border: #e2e8f0;
                 --muted: #64748b;
                 --bg: #f8fafc;
@@ -159,6 +202,13 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--bg);
                 border-right: 1px solid var(--border);
             }}
+            .sidebar-shell {{
+                background: #f8fafc;
+                padding: 14px 12px;
+                border-radius: 14px;
+                border: 1px solid var(--border);
+                box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
+            }}
             .sidebar-brand {{
                 padding: 12px 12px 8px 12px;
                 border-bottom: 1px solid var(--border);
@@ -166,6 +216,7 @@ def inject_shell_css(primary_color: str | None):
             .sidebar-brand-title {{
                 font-weight: 700;
                 color: var(--text);
+                position: relative;
                 margin: 0;
             }}
             .sidebar-user-card {{
@@ -174,6 +225,7 @@ def inject_shell_css(primary_color: str | None):
                 border: 1px solid var(--border);
                 border-radius: var(--radius);
                 background: #ffffff;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
             }}
             .sidebar-user-name {{
                 font-size: .85rem;
@@ -197,19 +249,19 @@ def inject_shell_css(primary_color: str | None):
                 color: var(--text);
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
-                background: #ffffff;
+                background: #f1f5f9;
                 border-color: var(--border);
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
-                background: #ffffff;
-                border-color: var(--primary);
+                background: #eef2ff;
+                border-color: rgba(37, 99, 235, 0.3);
                 color: var(--primary);
                 position: relative;
             }}
             [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {{
                 content: "";
                 position: absolute;
-                left: -8px;
+                left: 0;
                 top: 6px;
                 bottom: 6px;
                 width: 3px;
@@ -220,7 +272,8 @@ def inject_shell_css(primary_color: str | None):
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 10px 12px;
+                padding: 0 16px;
+                height: 56px;
                 border-bottom: 1px solid var(--border);
                 background: #ffffff;
                 margin-bottom: 10px;
@@ -233,6 +286,7 @@ def inject_shell_css(primary_color: str | None):
             .app-topbar-actions .stButton > button {{
                 font-size: .78rem;
                 padding: 4px 10px;
+                height: 32px;
             }}
             .reports-kpi-item b {{
                 color: var(--primary) !important;

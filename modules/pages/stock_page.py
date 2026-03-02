@@ -1,8 +1,9 @@
 # Typed page module (Fase 3)
+from modules.i18n import t
 
 def run_stock_page(ctx: dict):
     globals().update(ctx)
-    st.header("Estoque Atual")
+    st.header(t("stock.title"))
     inject_stock_css()
     inject_reports_css()
     inject_stepper_css()
@@ -31,22 +32,22 @@ def run_stock_page(ctx: dict):
         else:
             idx_default = 0
 
-        render_zone_title("Zona de seleção", "stock-zone-title")
-        filtro = st.selectbox("Garanhão", garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
+        render_zone_title(t("stock.zone.selection"), "stock-zone-title")
+        filtro = st.selectbox(t("label.garanhao"), garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
 
-        render_zone_title("Zona de filtros", "stock-zone-title")
-        with st.expander("Filtros de consulta", expanded=False):
+        render_zone_title(t("stock.zone.filters"), "stock-zone-title")
+        with st.expander(t("stock.filters_title"), expanded=False):
             f1, f2, f3 = st.columns(3)
             with f1:
                 filtro_props = st.multiselect(
-                    "Proprietários",
+                    t("label.owner_plural"),
                     sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),
                     key="stock_filter_props",
                 )
             with f2:
-                min_palhetas = st.number_input("Mín. palhetas", min_value=0, value=0, step=1, key="stock_filter_min")
+                min_palhetas = st.number_input(t("stock.min_straws"), min_value=0, value=0, step=1, key="stock_filter_min")
             with f3:
-                mostrar_sem_stock = st.checkbox("Incluir lotes vazios", value=False, key="stock_filter_zero")
+                mostrar_sem_stock = st.checkbox(t("stock.include_empty"), value=False, key="stock_filter_zero")
 
         stock_filtrado = filter_stock_view(
             stock,
@@ -59,7 +60,7 @@ def run_stock_page(ctx: dict):
         transf_hist_all = carregar_transferencias()
         transf_ext_hist_all = carregar_transferencias_externas()
 
-        render_zone_title("Zona de resultados", "stock-zone-title")
+        render_zone_title(t("stock.zone.results"), "stock-zone-title")
         render_kpi_strip(stock_kpis(stock_filtrado, to_py))
 
         resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
@@ -71,7 +72,7 @@ def run_stock_page(ctx: dict):
                     height=220,
                 )
 
-        with st.expander("Histórico técnico de transferências do garanhão", expanded=False):
+        with st.expander(t("stock.transfer_history"), expanded=False):
             transf_hist, transf_ext_hist = filter_transfer_history(
                 transf_hist_all,
                 transf_ext_hist_all,
@@ -84,7 +85,7 @@ def run_stock_page(ctx: dict):
                 if not transf_hist.empty:
                     csv_ti = safe_pick(transf_hist, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"])
                     st.download_button(
-                        "CSV Internas",
+                        t("stock.csv_internal"),
                         csv_ti.to_csv(index=False).encode("utf-8"),
                         f"transferencias_internas_{filtro}.csv",
                         "text/csv",
@@ -95,7 +96,7 @@ def run_stock_page(ctx: dict):
                 if not transf_ext_hist.empty:
                     csv_te = safe_pick(transf_ext_hist, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"])
                     st.download_button(
-                        "CSV Externas",
+                        t("stock.csv_external"),
                         csv_te.to_csv(index=False).encode("utf-8"),
                         f"transferencias_externas_{filtro}.csv",
                         "text/csv",
@@ -105,44 +106,44 @@ def run_stock_page(ctx: dict):
 
             if not transf_hist.empty:
                 ex_ti = safe_pick(transf_hist, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False)
-                ex_ti.columns = ["Data", "De", "Para", "Palhetas"]
+                ex_ti.columns = [t("label.date"), t("label.from"), t("label.to"), t("label.straws")] 
                 st.dataframe(ex_ti, width="stretch", hide_index=True, height=220)
             if not transf_ext_hist.empty:
                 ex_te = safe_pick(transf_ext_hist, ["data_transferencia", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False)
-                ex_te.columns = ["Data", "De", "Para", "Tipo", "Palhetas", "Observações"][:len(ex_te.columns)]
+                ex_te.columns = [t("label.date"), t("label.from"), t("label.to"), t("label.type"), t("label.straws"), t("label.notes")] [:len(ex_te.columns)]
                 st.dataframe(ex_te, width="stretch", hide_index=True, height=220)
 
             if transf_hist.empty and transf_ext_hist.empty:
-                st.info("Sem transferências para o filtro atual.")
+                st.info(t("stock.no_transfers"))
 
-        st.markdown("<div class='stock-table-head'>Lotes Detalhados</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='stock-table-head'>{t('stock.lots_detailed')}</div>", unsafe_allow_html=True)
 
         if stock_filtrado.empty:
-            st.info("Sem lotes para o filtro atual.")
+            st.info(t("stock.no_lots_filter"))
 
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
         for _, row in stock_filtrado.iterrows():
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
-            referencia = row.get("origem_externa") or row.get("data_embriovet") or "Sem referência"
-            proprietario_nome = row.get("proprietario_nome", "Sem proprietario")
+            referencia = row.get("origem_externa") or row.get("data_embriovet") or t("common.no_reference")
+            proprietario_nome = row.get("proprietario_nome", t("common.no_owner"))
 
             # Verificar se é o lote recém-adicionado para abrir automaticamente
             expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False
 
-            with st.expander(f"📦 {referencia} — **{proprietario_nome}** — {existencia} palhetas", expanded=expanded):
+            with st.expander(t("stock.expander_title", ref=referencia, owner=proprietario_nome, qty=existencia), expanded=expanded):
 
                 # Tabs: Mostrar conforme permissões
                 if verificar_permissao('Administrador'):
                     # Admin vê tudo: Detalhes, Editar, Transferir
-                    tab1, tab2, tab3 = st.tabs(["📋 Detalhes", "✏️ Editar", "🔄 Transferir"])
+                    tab1, tab2, tab3 = st.tabs([t("stock.tab.details"), t("stock.tab.edit"), t("stock.tab.transfer")])
                 elif verificar_permissao('Gestor'):
                     # Gestor vê: Detalhes, Transferir (sem Editar)
-                    tab1, tab3 = st.tabs(["📋 Detalhes", "🔄 Transferir"])
+                    tab1, tab3 = st.tabs([t("stock.tab.details"), t("stock.tab.transfer")])
                     tab2 = None
                 else:
                     # Visualizador vê apenas: Detalhes
-                    tab1 = st.tabs(["📋 Detalhes"])[0]
+                    tab1 = st.tabs([t("stock.tab.details")])[0]
                     tab2 = None
                     tab3 = None
 
@@ -150,7 +151,7 @@ def run_stock_page(ctx: dict):
                 with tab1:
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.markdown(f"**🏷️ Proprietário:** {proprietario_nome}")
+                        st.markdown(f"**🏷️ {t('label.owner')}:** {proprietario_nome}")
 
                         # Localização estruturada
                         if row.get('contentor_id'):
@@ -160,24 +161,24 @@ def run_stock_page(ctx: dict):
                                     contentor_df = pd.read_sql_query(contentor_query, conn)
                                     if not contentor_df.empty:
                                         contentor_codigo = contentor_df.iloc[0]['codigo']
-                                        canister_num = row.get('canister', 'N/A')
-                                        andar_num = row.get('andar', 'N/A')
-                                        st.markdown(f"**📍 Localização:** {contentor_codigo} | Canister {canister_num} | {andar_num}º")
+                                        canister_num = row.get('canister', t('common.na'))
+                                        andar_num = row.get('andar', t('common.na'))
+                                        st.markdown(f"**📍 {t('label.location')}:** {contentor_codigo} | {t('label.canister')} {canister_num} | {andar_num}º")
                                     else:
-                                        st.markdown(f"**📍 Localização:** N/A")
+                                        st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
                             except Exception:
-                                st.markdown(f"**📍 Localização:** N/A")
+                                st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
                         else:
-                            st.markdown(f"**📍 Localização:** N/A")
+                            st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
 
-                        st.markdown(f"**📜 Certificado:** {row.get('certificado') or 'N/A'}")
-                        st.markdown(f"**✨ Qualidade:** {row.get('qualidade') or 0}%")
+                        st.markdown(f"**📜 {t('stock.certificate_label')}:** {row.get('certificado') or t('common.na')}")
+                        st.markdown(f"**✨ {t('stock.quality_label')}:** {row.get('qualidade') or 0}%")
                     with col2:
-                        st.markdown(f"**🔬 Concentração:** {row.get('concentracao') or 0} milhões/mL")
-                        st.markdown(f"**⚡ Motilidade:** {row.get('motilidade') or 0}%")
-                        st.markdown(f"**💊 Dose:** {row.get('dose') or 'N/A'}")
+                        st.markdown(f"**🔬 {t('stock.concentration_label')}:** {row.get('concentracao') or 0} {t('stock.million_ml')}")
+                        st.markdown(f"**⚡ {t('stock.motility_label')}:** {row.get('motilidade') or 0}%")
+                        st.markdown(f"**💊 {t('stock.dose_label')}:** {row.get('dose') or t('common.na')}")
                         if row.get("observacoes"):
-                            st.markdown(f"**📝 Observações:** {row.get('observacoes')}")
+                            st.markdown(f"**📝 {t('label.notes')}:** {row.get('observacoes')}")
 
                     # Informações de auditoria
                     st.markdown("---")
@@ -189,14 +190,14 @@ def run_stock_page(ctx: dict):
                                 data_criacao = row.get("data_criacao")
                                 if isinstance(data_criacao, str):
                                     data_criacao = datetime.fromisoformat(data_criacao.replace('Z', '+00:00'))
-                                st.markdown(f"**📅 Criado em:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
+                                st.markdown(f"**📅 {t('stock.created_at_label')}:** {data_criacao.strftime('%d/%m/%Y %H:%M')}")
                             except Exception:
-                                st.markdown(f"**📅 Criado em:** {row.get('data_criacao')}")
+                                st.markdown(f"**📅 {t('stock.created_at_label')}:** {row.get('data_criacao')}")
                     with audit_col2:
                         if row.get("criado_por"):
-                            st.markdown(f"**👤 Criado por:** {row.get('criado_por')}")
+                            st.markdown(f"**👤 {t('stock.created_by_label')}:** {row.get('criado_por')}")
 
-                    with st.expander("Histórico técnico deste lote", expanded=False):
+                    with st.expander(t("stock.lot_history"), expanded=False):
                         lote_transf_int, lote_transf_ext = filter_lot_transfer_history(
                             transf_hist_all,
                             transf_ext_hist_all,
@@ -221,22 +222,22 @@ def run_stock_page(ctx: dict):
                             st.dataframe(ex_ext, width="stretch", hide_index=True, height=180)
 
                         if lote_transf_int.empty and lote_transf_ext.empty:
-                            st.info("Sem histórico técnico de transferências para este lote.")
+                            st.info(t("stock.no_transfer_history_lot"))
 
                 # TAB 2: Editar (Apenas Admin)
                 if tab2 is not None:
                     with tab2:
-                        st.markdown("### ✏️ Editar Stock")
+                        st.markdown(f"### {t('stock.edit_title')}")
 
                         # Botão + para adicionar proprietário
-                        if st.button("➕ Novo Proprietário", key=f"btn_add_prop_edit_{row['id']}", help="Adicionar novo proprietário"):
+                        if st.button(t("stock.new_owner"), key=f"btn_add_prop_edit_{row['id']}", help=t("stock.new_owner_help")):
                             modal_adicionar_proprietario()
 
                         # Carregar contentores para edição
                         contentores_df_edit = carregar_contentores()
 
                         with st.form(key=f"edit_form_{row['id']}"):
-                            edit_garanhao = st.text_input("Garanhão", value=row.get("garanhao", ""))
+                            edit_garanhao = st.text_input(t("label.garanhao"), value=row.get("garanhao", ""))
 
                             # Proprietário
                             prop_atual = row.get("dono_id")
@@ -250,7 +251,7 @@ def run_stock_page(ctx: dict):
                                 idx_prop = list(proprietarios["id"]).index(prop_atual)
 
                             edit_proprietario = st.selectbox(
-                                "Proprietário",
+                                t("label.owner"),
                                 options=proprietarios["id"].tolist(),
                                 format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
                                 index=idx_prop,
@@ -259,20 +260,20 @@ def run_stock_page(ctx: dict):
 
                             col1, col2 = st.columns(2)
                             with col1:
-                                edit_data = st.text_input("Data Produção", value=row.get("data_embriovet") or "")
-                                edit_origem = st.text_input("Origem Externa", value=row.get("origem_externa") or "")
-                                edit_palhetas = st.number_input("Palhetas Produzidas", min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
-                                edit_existencia = st.number_input("Existência Atual", min_value=0, value=existencia)
-                                edit_qualidade = st.number_input("Qualidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+                                edit_data = st.text_input(t("stock.prod_date"), value=row.get("data_embriovet") or "")
+                                edit_origem = st.text_input(t("stock.external_origin"), value=row.get("origem_externa") or "")
+                                edit_palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
+                                edit_existencia = st.number_input(t("stock.current_stock"), min_value=0, value=existencia)
+                                edit_qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
 
                             with col2:
-                                edit_concentracao = st.number_input("Concentração", min_value=0, value=int(to_py(row.get("concentracao")) or 0))
-                                edit_motilidade = st.number_input("Motilidade (%)", min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
-                                edit_certificado = st.selectbox("Certificado", ["Sim", "Não"], index=0 if row.get("certificado") == "Sim" else 1)
-                                edit_dose = st.text_input("Dose", value=row.get("dose") or "")
+                                edit_concentracao = st.number_input(t("stock.concentration"), min_value=0, value=int(to_py(row.get("concentracao")) or 0))
+                                edit_motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
+                                edit_certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")], index=0 if row.get("certificado") == "Sim" else 1)
+                                edit_dose = st.text_input(t("stock.dose"), value=row.get("dose") or "")
 
                             st.markdown("---")
-                            st.subheader("📍 Localização Física")
+                            st.subheader(t("stock.location_title"))
 
                             if not contentores_df_edit.empty:
                                 col_loc1, col_loc2, col_loc3 = st.columns(3)
@@ -285,7 +286,7 @@ def run_stock_page(ctx: dict):
 
                                 with col_loc1:
                                     edit_contentor_codigo = st.selectbox(
-                                        "Contentor *",
+                                        t("label.container_required"),
                                         options=contentores_df_edit["codigo"].tolist(),
                                         index=idx_contentor,
                                         key=f"edit_cont_{row['id']}"
@@ -300,7 +301,7 @@ def run_stock_page(ctx: dict):
                                         canister_atual = 1
                                     idx_canister = max(0, min(9, canister_atual - 1))
                                     edit_canister = st.selectbox(
-                                        "Canister *",
+                                        t("label.canister_required"),
                                         options=list(range(1, 11)),
                                         index=idx_canister,
                                         key=f"edit_can_{row['id']}"
@@ -314,7 +315,7 @@ def run_stock_page(ctx: dict):
                                         andar_atual = 1
                                     idx_andar = 0 if andar_atual == 1 else 1
                                     edit_andar = st.radio(
-                                        "Andar *",
+                                        t("label.floor_required"),
                                         options=[1, 2],
                                         format_func=lambda x: f"{x}º",
                                         horizontal=True,
@@ -322,14 +323,14 @@ def run_stock_page(ctx: dict):
                                         key=f"edit_and_{row['id']}"
                                     )
                             else:
-                                st.warning("⚠️ Nenhum contentor disponível. Crie contentores no Mapa primeiro.")
+                                st.warning(t("stock.no_containers"))
                                 edit_contentor_id = None
                                 edit_canister = 1
                                 edit_andar = 1
 
-                            edit_obs = st.text_area("Observações", value=row.get("observacoes") or "")
+                            edit_obs = st.text_area(t("label.notes"), value=row.get("observacoes") or "")
 
-                            submit_edit = st.form_submit_button("💾 Guardar Alterações", type="primary")
+                            submit_edit = st.form_submit_button(t("btn.save_changes"), type="primary")
 
                             if submit_edit:
                                 if editar_stock(row["id"], {
@@ -349,7 +350,7 @@ def run_stock_page(ctx: dict):
                                     "observacoes": edit_obs,
                                     "existencia": edit_existencia
                                 }):
-                                    st.success("✅ Stock atualizado com sucesso!")
+                                    st.success(t("stock.updated_success"))
                                     # Marcar que usou
                                     if 'novo_proprietario_id' in st.session_state:
                                         st.session_state['novo_proprietario_usado'] = True
@@ -411,7 +412,7 @@ def run_stock_page(ctx: dict):
                         )
 
                         # Cabeçalho operacional
-                        localizacao = "N/A"
+                        localizacao = t("common.na")
                         if row.get('contentor_id'):
                             try:
                                 contentor_query = f"SELECT codigo FROM contentores WHERE id = {int(row['contentor_id'])}"
@@ -419,37 +420,41 @@ def run_stock_page(ctx: dict):
                                     contentor_df = pd.read_sql_query(contentor_query, conn)
                                     if not contentor_df.empty:
                                         contentor_codigo = contentor_df.iloc[0]['codigo']
-                                        canister_num = row.get('canister', 'N/A')
-                                        andar_num = row.get('andar', 'N/A')
+                                        canister_num = row.get('canister', t("common.na"))
+                                        andar_num = row.get('andar', t("common.na"))
                                         localizacao = f"{contentor_codigo} C{canister_num} A{andar_num}"
                             except Exception:
-                                localizacao = "N/A"
+                                localizacao = t("common.na")
 
-                        header_texto = (
-                            f"{referencia} · {row.get('garanhao', '—')} · Proprietário: {proprietario_nome} · "
-                            f"Disp: {existencia} · {localizacao}"
+                        header_texto = t(
+                            "stock.lote_header",
+                            data=referencia,
+                            garanhao=row.get('garanhao', '—'),
+                            owner=proprietario_nome,
+                            disp=existencia,
+                            local=localizacao,
                         )
                         st.markdown(f"<div class='transf-header'>{header_texto}</div>", unsafe_allow_html=True)
 
                         # Tipo de operação
                         tipo_transf = st.radio(
-                            "tipo_operacao_transferencia",
-                            ["Transferência Interna", "Saída Externa"],
+                            t("stock.transfer_type"),
+                            [t("stock.transfer_internal"), t("stock.transfer_external")],
                             key=f"tipo_transf_{row['id']}",
                             horizontal=True,
                             label_visibility="collapsed",
                         )
 
-                        if tipo_transf == "Transferência Interna":
+                        if tipo_transf == t("stock.transfer_internal"):
                             h1, h2, h3 = st.columns([2.4, 1.8, 1])
                             with h1:
-                                st.markdown("<div class='transf-grid-head'>Destino</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('stock.destination')}</div>", unsafe_allow_html=True)
                             with h2:
-                                st.markdown("<div class='transf-grid-head'>Quantidade</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.quantity')}</div>", unsafe_allow_html=True)
                             with h3:
-                                st.markdown("<div class='transf-grid-head'>Ação</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.action')}</div>", unsafe_allow_html=True)
 
-                            if st.button("Novo proprietário", key=f"btn_add_prop_transf_{row['id']}", help="Adicionar novo proprietário"):
+                            if st.button(t("stock.new_owner"), key=f"btn_add_prop_transf_{row['id']}", help=t("stock.new_owner_help")):
                                 modal_adicionar_proprietario()
 
                             c_dest, c_val, c_minus, c_plus, c_action = st.columns([2.4, 0.7, 0.5, 0.5, 1])
@@ -461,15 +466,15 @@ def run_stock_page(ctx: dict):
                                 novo_proprietario = None
                                 if ids:
                                     novo_proprietario = st.selectbox(
-                                        "Destino",
+                                        t("stock.destination"),
                                         options=ids,
-                                        format_func=lambda x: proprietarios_dict.get(x, "Desconhecido"),
+                                        format_func=lambda x: proprietarios_dict.get(x, t("common.unknown")),
                                         index=idx_transf,
                                         key=f"transf_select_{row['id']}",
                                         label_visibility="collapsed",
                                     )
                                 else:
-                                    st.caption("Sem proprietários disponíveis.")
+                                    st.caption(t("stock.no_owners_available"))
 
                             step_key = f"stock_transf_int_{row['id']}"
                             if step_key not in st.session_state:
@@ -480,17 +485,19 @@ def run_stock_page(ctx: dict):
                                 step_key,
                                 min_value=1,
                                 max_value=existencia,
-                                invalid_tooltip="Stock insuficiente",
+                                invalid_tooltip=t("stock.insufficient_stock"),
                             )
 
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
                                 btn_disabled = qtd_val < 1 or qtd_val > existencia or not ids or novo_proprietario is None
-                                if st.button("Executar", key=f"btn_transf_{row['id']}", disabled=btn_disabled):
+                                if st.button(t("btn.execute"), key=f"btn_transf_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_parcial(row["id"], novo_proprietario, qtd_val):
                                         restante = max(0, existencia - qtd_val)
-                                        st.session_state[msg_key] = (
-                                            f"✓ {qtd_val} palhetas transferidas. Stock restante: {restante}."
+                                        st.session_state[msg_key] = t(
+                                            "stock.transfer_success",
+                                            qty=qtd_val,
+                                            remaining=restante,
                                         )
                                         if 'novo_proprietario_id' in st.session_state:
                                             st.session_state['novo_proprietario_usado'] = True
@@ -499,7 +506,7 @@ def run_stock_page(ctx: dict):
                             impacto = max(0, qtd_val) * -1
                             previsto = max(0, existencia - qtd_val)
                             st.markdown(
-                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                f"<div class='transf-inline-msg'>{t('stock.impact', qty=impacto, final=previsto)}</div>",
                                 unsafe_allow_html=True,
                             )
                             if st.session_state.get(msg_key):
@@ -509,31 +516,31 @@ def run_stock_page(ctx: dict):
                                 )
 
                         else:
-                            st.markdown("<div class='transf-warning'>⚠ Esta operação remove palhetas do stock.</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='transf-warning'>{t('stock.warning_remove')}</div>", unsafe_allow_html=True)
                             h1, h2, h3, h4, h5 = st.columns([2, 1.2, 1.8, 2, 1])
                             with h1:
-                                st.markdown("<div class='transf-grid-head'>Destinatário</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('stock.recipient')}</div>", unsafe_allow_html=True)
                             with h2:
-                                st.markdown("<div class='transf-grid-head'>Tipo</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.type')}</div>", unsafe_allow_html=True)
                             with h3:
-                                st.markdown("<div class='transf-grid-head'>Quantidade</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.quantity')}</div>", unsafe_allow_html=True)
                             with h4:
-                                st.markdown("<div class='transf-grid-head'>Observações</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.notes')}</div>", unsafe_allow_html=True)
                             with h5:
-                                st.markdown("<div class='transf-grid-head'>Ação</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div class='transf-grid-head'>{t('label.action')}</div>", unsafe_allow_html=True)
 
                             c_dest, c_tipo, c_val, c_minus, c_plus, c_obs, c_action = st.columns([2, 1.2, 0.7, 0.5, 0.5, 2, 1])
                             with c_dest:
                                 destinatario_ext = st.text_input(
-                                    "Destinatário",
-                                    placeholder="Nome do destinatário",
+                                    t("stock.recipient"),
+                                    placeholder=t("stock.recipient_placeholder"),
                                     key=f"dest_ext_{row['id']}",
                                     label_visibility="collapsed",
                                 )
                             with c_tipo:
                                 tipo_saida = st.selectbox(
-                                    "Tipo",
-                                    ["Venda", "Doação", "Exportação", "Outro"],
+                                    t("label.type"),
+                                    [t("stock.type.sale"), t("stock.type.donation"), t("stock.type.export"), t("stock.type.other")],
                                     key=f"tipo_saida_{row['id']}",
                                     label_visibility="collapsed",
                                 )
@@ -547,13 +554,13 @@ def run_stock_page(ctx: dict):
                                 step_ext_key,
                                 min_value=1,
                                 max_value=existencia,
-                                invalid_tooltip="Stock insuficiente",
+                                invalid_tooltip=t("stock.insufficient_stock"),
                             )
 
                             with c_obs:
                                 obs_ext = st.text_input(
-                                    "Observações",
-                                    placeholder="Observações",
+                                    t("label.notes"),
+                                    placeholder=t("label.notes"),
                                     key=f"obs_ext_{row['id']}",
                                     label_visibility="collapsed",
                                 )
@@ -561,18 +568,20 @@ def run_stock_page(ctx: dict):
                             msg_key = f"transf_msg_{row['id']}"
                             with c_action:
                                 btn_disabled = qtd_ext_val < 1 or qtd_ext_val > existencia or not destinatario_ext
-                                if st.button("Confirmar", key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
+                                if st.button(t("btn.confirm"), key=f"btn_transf_ext_{row['id']}", disabled=btn_disabled):
                                     if transferir_palhetas_externo(row["id"], destinatario_ext, qtd_ext_val, tipo_saida, obs_ext):
                                         restante = max(0, existencia - qtd_ext_val)
-                                        st.session_state[msg_key] = (
-                                            f"✓ {qtd_ext_val} palhetas transferidas. Stock restante: {restante}."
+                                        st.session_state[msg_key] = t(
+                                            "stock.transfer_success",
+                                            qty=qtd_ext_val,
+                                            remaining=restante,
                                         )
                                         st.rerun()
 
                             impacto = max(0, qtd_ext_val) * -1
                             previsto = max(0, existencia - qtd_ext_val)
                             st.markdown(
-                                f"<div class='transf-inline-msg'>Impacto: {impacto} palhetas · Stock final previsto: {previsto}</div>",
+                                f"<div class='transf-inline-msg'>{t('stock.impact', qty=impacto, final=previsto)}</div>",
                                 unsafe_allow_html=True,
                             )
                             if st.session_state.get(msg_key):
@@ -581,7 +590,7 @@ def run_stock_page(ctx: dict):
                                     unsafe_allow_html=True,
                                 )
     else:
-        st.info("ℹ️ Nenhum stock cadastrado.")
+        st.info(t("stock.none_registered"))
 
 # ------------------------------------------------------------
 # ➕ Adicionar Stock
