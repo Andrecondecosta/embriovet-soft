@@ -200,8 +200,8 @@ def run_insemination_page(ctx):
             with row_cols[4]:
                 sel_key = f"insem_modal_sel_{sid}"
                 default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["insem_linhas"])
-                    st.checkbox(
-                        t("btn.select"),
+                st.checkbox(
+                    t("btn.select"),
                     key=sel_key,
                     value=default_checked,
                     label_visibility="collapsed",
