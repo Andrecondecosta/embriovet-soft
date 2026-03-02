@@ -1724,7 +1724,14 @@ st.markdown(
     <style>
     [data-testid="stMainMenu"] { display: none !important; }
     footer { display: none !important; }
-    section.main > div.block-container { padding-top: 0.75rem !important; }
+    section.main > div.block-container { padding-top: 0.25rem !important; padding-bottom: 1rem !important; }
+    [data-testid="stSidebar"] { padding-top: 0.25rem !important; }
+    .sidebar-shell { padding-top: 8px !important; }
+    header[data-testid="stHeader"] { height: 48px !important; }
+    [data-testid="stDeployButton"],
+    [data-testid="stToolbar"] [aria-label="Deploy"],
+    [data-testid="stToolbar"] button[title="Deploy"],
+    [data-testid="stToolbar"] a[title="Deploy"] { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
