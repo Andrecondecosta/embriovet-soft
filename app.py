@@ -1729,6 +1729,7 @@ st.markdown(
     div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
     section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
     [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
+    .sidebar-shell { padding-top: 8px !important; }
 
     header[data-testid="stHeader"] { height: 2.6rem !important; }
     header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
