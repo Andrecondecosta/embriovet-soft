@@ -67,7 +67,7 @@ TRANSLATIONS = {
         "login.welcome": "✅ Bem-vindo, {name}!",
         "welcome.title": "EquiCore",
         "welcome.subtitle": "O núcleo digital da sua operação de reprodução equina",
-        "welcome.text": "Gestão de stock, rastreabilidade de palhetas, inseminações e controlo operacional numa única plataforma profissional e segura.",
+        "welcome.text": "Centralize o controlo de stock, rastreabilidade de palhetas, inseminações e histórico técnico numa única plataforma profissional, segura e preparada para crescer com a sua operação.",
         "welcome.start": "Começar configuração",
         "welcome.powered": "Powered by EquiCore Systems",
         "onboarding.title": "Configuração inicial",
