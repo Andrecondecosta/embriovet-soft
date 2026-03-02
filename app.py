@@ -1724,8 +1724,11 @@ st.markdown(
     <style>
     [data-testid="stMainMenu"] { display: none !important; }
     footer { display: none !important; }
+    div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
+    section.main { padding-top: 0 !important; }
     section.main > div.block-container { padding-top: 0.25rem !important; padding-bottom: 1rem !important; }
     [data-testid="stSidebar"] { padding-top: 0.25rem !important; }
+    [data-testid="stSidebar"] > div { padding-top: 0.25rem !important; }
     .sidebar-shell { padding-top: 8px !important; }
     header[data-testid="stHeader"] { height: 48px !important; }
     [data-testid="stDeployButton"],
