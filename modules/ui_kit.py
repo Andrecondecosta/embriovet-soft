@@ -202,6 +202,16 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--bg);
                 border-right: 1px solid var(--border);
             }}
+            [data-testid="stSidebar"][aria-expanded="false"] {{
+                transform: translateX(0%) !important;
+                min-width: 260px !important;
+                width: 260px !important;
+                max-width: 260px !important;
+                visibility: visible !important;
+            }}
+            [data-testid="stSidebar"][aria-expanded="false"] > div {{
+                display: block !important;
+            }}
             .sidebar-shell {{
                 background: #f8fafc;
                 padding: 14px 12px;
