@@ -1806,7 +1806,12 @@ def mostrar_tela_login(app_settings):
                 else:
                     user = autenticar_usuario(username, password)
                     if user:
+                        token = str(uuid.uuid4())
+                        auth_store = get_auth_store()
+                        auth_store[token] = user
                         st.session_state['user'] = user
+                        st.session_state['auth_token'] = token
+                        st.experimental_set_query_params(session=token)
                         st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
