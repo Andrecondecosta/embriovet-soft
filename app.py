@@ -2018,6 +2018,11 @@ if user.get("must_change_password"):
 
 settings_clicked, logout_clicked = render_header(app_settings, user)
 if logout_clicked:
+    token = st.session_state.pop('auth_token', None)
+    if token:
+        auth_store = get_auth_store()
+        auth_store.pop(token, None)
+    st.experimental_set_query_params()
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
