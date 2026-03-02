@@ -1722,10 +1722,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    header[data-testid="stHeader"] { display: none; }
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem; }
-    section.main > div.block-container { padding-top: 1.0rem; }
-    div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+    [data-testid="stMainMenu"] { display: none !important; }
+    footer { display: none !important; }
+    section.main > div.block-container { padding-top: 0.75rem !important; }
     </style>
     """,
     unsafe_allow_html=True,
