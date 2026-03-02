@@ -1724,7 +1724,21 @@ st.markdown(
     <style>
     [data-testid="stMainMenu"] { display: none !important; }
     footer { display: none !important; }
+    header[data-testid="stHeader"] { display: none !important; }
+    div[data-testid="stToolbar"] { display: none !important; }
+
     section.main > div.block-container { padding-top: 0.75rem !important; }
+    [data-testid="stSidebar"] { top: 0 !important; height: 100vh !important; }
+    [data-testid="stSidebar"][aria-expanded="false"] {
+        transform: translateX(0%) !important;
+        min-width: 260px !important;
+        width: 260px !important;
+        max-width: 260px !important;
+        visibility: visible !important;
+    }
+    [data-testid="stSidebar"][aria-expanded="false"] > div { display: block !important; }
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"] { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
