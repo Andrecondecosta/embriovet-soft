@@ -331,6 +331,22 @@ def update_branding_settings(company_name, logo_base64, language, primary_color)
         cur.close()
 
 
+def update_welcome_completed(completed=True):
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE app_settings SET welcome_completed = %s WHERE id = 1",
+                (completed,),
+            )
+            conn.commit()
+            cur.close()
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar welcome_completed: {e}")
+        return False
+
+
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
