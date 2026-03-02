@@ -200,7 +200,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials, theme_key, language
+                       is_initialized, show_initial_credentials, theme_key, language, welcome_completed
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -220,6 +220,7 @@ def get_app_settings():
             "show_initial_credentials": row[5],
             "theme_key": row[6],
             "language": row[7],
+            "welcome_completed": row[8],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
