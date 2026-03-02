@@ -1877,6 +1877,79 @@ def render_change_credentials(user, app_settings):
         st.rerun()
 
 
+def render_welcome_page():
+    st.markdown(
+        f"""
+        <style>
+            header[data-testid="stHeader"] {{ display: none !important; }}
+            section[data-testid="stSidebar"] {{ display: none !important; }}
+            div[data-testid="stAppViewContainer"] {{ padding-top: 0 !important; }}
+            section.main > div.block-container {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }}
+            .welcome-card {{
+                text-align: center;
+                max-width: 720px;
+                padding: 32px 28px;
+            }}
+            .welcome-title {{
+                font-size: 3rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin-bottom: 0.6rem;
+            }}
+            .welcome-subtitle {{
+                font-size: 1.1rem;
+                color: #334155;
+                margin-bottom: 1rem;
+            }}
+            .welcome-text {{
+                font-size: 0.95rem;
+                color: #475569;
+                margin-bottom: 2rem;
+                line-height: 1.6;
+            }}
+            .welcome-footer {{
+                font-size: 0.75rem;
+                color: #94a3b8;
+                margin-top: 1.5rem;
+                text-align: center;
+            }}
+            .welcome-card .stButton > button {{
+                padding: 0.85rem 1.5rem;
+                font-size: 1rem;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_left, col_mid, col_right = st.columns([1, 2, 1])
+    with col_mid:
+        st.markdown(
+            f"""
+            <div class="welcome-card">
+                <div class="welcome-title">{t("welcome.title")}</div>
+                <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
+                <div class="welcome-text">{t("welcome.text")}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(t("welcome.start"), type="primary", width="stretch"):
+            if update_welcome_completed(True):
+                st.rerun()
+        st.markdown(
+            f"<div class='welcome-footer'>{t("welcome.powered")}</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_onboarding(app_settings):
     inject_stock_css()
     inject_reports_css()
