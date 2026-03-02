@@ -200,7 +200,7 @@ def get_app_settings():
             cur.execute(
                 """
                 SELECT id, company_name, logo_base64, primary_color,
-                       is_initialized, show_initial_credentials, theme_key, language
+                       is_initialized, show_initial_credentials, theme_key, language, welcome_completed
                 FROM app_settings
                 WHERE id = 1
                 ORDER BY id
@@ -220,6 +220,7 @@ def get_app_settings():
             "show_initial_credentials": row[5],
             "theme_key": row[6],
             "language": row[7],
+            "welcome_completed": row[8],
         }
     except Exception as e:
         logger.error(f"Erro ao carregar app_settings: {e}")
@@ -235,8 +236,8 @@ def ensure_app_settings():
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO app_settings (id, company_name, theme_key, language)
-                SELECT 1, 'Sistema', 'blue', 'pt-PT'
+                INSERT INTO app_settings (id, company_name, theme_key, language, welcome_completed)
+                SELECT 1, 'Sistema', 'blue', 'pt-PT', FALSE
                 WHERE NOT EXISTS (SELECT 1 FROM app_settings);
                 """
             )
@@ -328,6 +329,22 @@ def update_branding_settings(company_name, logo_base64, language, primary_color)
         )
         conn.commit()
         cur.close()
+
+
+def update_welcome_completed(completed=True):
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE app_settings SET welcome_completed = %s WHERE id = 1",
+                (completed,),
+            )
+            conn.commit()
+            cur.close()
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar welcome_completed: {e}")
+        return False
 
 
 
@@ -1723,51 +1740,23 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    [data-testid="stMainMenu"] { display: none !important; }
-    footer { display: none !important; }
-    div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
-    section.main { padding-top: 0 !important; }
-    section.main > div.block-container { padding-top: 0.25rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebar"] { padding-top: 0.25rem !important; }
-    [data-testid="stSidebar"] > div { padding-top: 0.25rem !important; }
+    [data-testid="stMainMenu"] { display:none !important; }
+    footer { display:none !important; }
+
+    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
+    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
+    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
     .sidebar-shell { padding-top: 8px !important; }
-    header[data-testid="stHeader"] { height: 48px !important; }
-    [data-testid="stDeployButton"],
-    [data-testid="stToolbar"] [aria-label="Deploy"],
-    [data-testid="stToolbar"] button[title="Deploy"],
-    [data-testid="stToolbar"] a[title="Deploy"] { display: none !important; }
+
+    header[data-testid="stHeader"] { height: 2.6rem !important; }
+    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
+
+    .block-container { margin-top: 0 !important; }
+
+    div[data-testid="stToolbar"] > div:last-child { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
-)
-
-st.components.v1.html(
-    """
-    <script>
-    (function() {
-        const hideDeploy = () => {
-            const root = window.parent.document;
-            const header = root.querySelector('header[data-testid="stHeader"]');
-            if (!header) return;
-            header.querySelectorAll('*').forEach(el => {
-                if (el.textContent && el.textContent.trim() === 'Deploy') {
-                    const btn = el.closest('button, a');
-                    if (btn) {
-                        btn.style.display = 'none';
-                    } else {
-                        el.style.display = 'none';
-                    }
-                }
-            });
-        };
-        hideDeploy();
-        const obs = new MutationObserver(hideDeploy);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
-        setTimeout(hideDeploy, 500);
-    })();
-    </script>
-    """,
-    height=0,
 )
 inject_stepper_css()
 inject_stock_css()
@@ -1888,6 +1877,79 @@ def render_change_credentials(user, app_settings):
         st.rerun()
 
 
+def render_welcome_page():
+    st.markdown(
+        """
+        <style>
+            header[data-testid="stHeader"] {{ display: none !important; }}
+            section[data-testid="stSidebar"] {{ display: none !important; }}
+            div[data-testid="stAppViewContainer"] {{ padding-top: 0 !important; }}
+            section.main > div.block-container {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }}
+            .welcome-card {{
+                text-align: center;
+                max-width: 720px;
+                padding: 32px 28px;
+            }}
+            .welcome-title {{
+                font-size: 3rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin-bottom: 0.6rem;
+            }}
+            .welcome-subtitle {{
+                font-size: 1.1rem;
+                color: #334155;
+                margin-bottom: 1rem;
+            }}
+            .welcome-text {{
+                font-size: 0.95rem;
+                color: #475569;
+                margin-bottom: 2rem;
+                line-height: 1.6;
+            }}
+            .welcome-footer {{
+                font-size: 0.75rem;
+                color: #94a3b8;
+                margin-top: 1.5rem;
+                text-align: center;
+            }}
+            .welcome-card .stButton > button {{
+                padding: 0.85rem 1.5rem;
+                font-size: 1rem;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_left, col_mid, col_right = st.columns([1, 2, 1])
+    with col_mid:
+        st.markdown(
+            f"""
+            <div class="welcome-card">
+                <div class="welcome-title">{t("welcome.title")}</div>
+                <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
+                <div class="welcome-text">{t("welcome.text")}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(t("welcome.start"), type="primary", width="stretch"):
+            if update_welcome_completed(True):
+                st.rerun()
+        st.markdown(
+            f"<div class='welcome-footer'>{t('welcome.powered')}</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_onboarding(app_settings):
     inject_stock_css()
     inject_reports_css()
@@ -1991,6 +2053,10 @@ if "lang" not in st.session_state:
 
 inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
+
+if not app_settings.get("welcome_completed", False):
+    render_welcome_page()
+    st.stop()
 
 if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
