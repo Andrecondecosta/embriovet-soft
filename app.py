@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import pool
 import os
+import uuid
 import base64
 import secrets
 from pathlib import Path
@@ -1724,8 +1725,11 @@ st.markdown(
     <style>
     [data-testid="stMainMenu"] { display: none !important; }
     footer { display: none !important; }
+    div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
+    section.main { padding-top: 0 !important; }
     section.main > div.block-container { padding-top: 0.25rem !important; padding-bottom: 1rem !important; }
     [data-testid="stSidebar"] { padding-top: 0.25rem !important; }
+    [data-testid="stSidebar"] > div { padding-top: 0.25rem !important; }
     .sidebar-shell { padding-top: 8px !important; }
     header[data-testid="stHeader"] { height: 48px !important; }
     [data-testid="stDeployButton"],
@@ -1736,6 +1740,35 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+st.components.v1.html(
+    """
+    <script>
+    (function() {
+        const hideDeploy = () => {
+            const root = window.parent.document;
+            const header = root.querySelector('header[data-testid="stHeader"]');
+            if (!header) return;
+            header.querySelectorAll('*').forEach(el => {
+                if (el.textContent && el.textContent.trim() === 'Deploy') {
+                    const btn = el.closest('button, a');
+                    if (btn) {
+                        btn.style.display = 'none';
+                    } else {
+                        el.style.display = 'none';
+                    }
+                }
+            });
+        };
+        hideDeploy();
+        const obs = new MutationObserver(hideDeploy);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(hideDeploy, 500);
+    })();
+    </script>
+    """,
+    height=0,
+)
 inject_stepper_css()
 inject_stock_css()
 inject_reports_css()
@@ -1743,6 +1776,10 @@ inject_reports_css()
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
+@st.cache_resource
+def get_auth_store():
+    return {}
+
 def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
@@ -1769,7 +1806,12 @@ def mostrar_tela_login(app_settings):
                 else:
                     user = autenticar_usuario(username, password)
                     if user:
+                        token = str(uuid.uuid4())
+                        auth_store = get_auth_store()
+                        auth_store[token] = user
                         st.session_state['user'] = user
+                        st.session_state['auth_token'] = token
+                        st.experimental_set_query_params(session=token)
                         st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
@@ -1954,7 +1996,14 @@ if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
 
-# Verificar se está logado
+# Verificar se está logado (restaurar sessão por query param)
+auth_store = get_auth_store()
+params = st.experimental_get_query_params()
+token_param = params.get("session", [None])[0] if params else None
+if 'user' not in st.session_state and token_param and token_param in auth_store:
+    st.session_state['user'] = auth_store[token_param]
+    st.session_state['auth_token'] = token_param
+
 if 'user' not in st.session_state:
     mostrar_tela_login(app_settings)
     st.stop()
@@ -1969,6 +2018,11 @@ if user.get("must_change_password"):
 
 settings_clicked, logout_clicked = render_header(app_settings, user)
 if logout_clicked:
+    token = st.session_state.pop('auth_token', None)
+    if token:
+        auth_store = get_auth_store()
+        auth_store.pop(token, None)
+    st.experimental_set_query_params()
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
