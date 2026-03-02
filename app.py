@@ -3,6 +3,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import pool
 import os
+import uuid
 import base64
 import secrets
 from pathlib import Path
@@ -1775,6 +1776,10 @@ inject_reports_css()
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
+@st.cache_resource
+def get_auth_store():
+    return {}
+
 def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
