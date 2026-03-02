@@ -1879,7 +1879,7 @@ def render_change_credentials(user, app_settings):
 
 def render_welcome_page():
     st.markdown(
-        f"""
+        """
         <style>
             header[data-testid="stHeader"] {{ display: none !important; }}
             section[data-testid="stSidebar"] {{ display: none !important; }}
@@ -1945,7 +1945,7 @@ def render_welcome_page():
             if update_welcome_completed(True):
                 st.rerun()
         st.markdown(
-            f"<div class='welcome-footer'>{t("welcome.powered")}</div>",
+            f"<div class='welcome-footer'>{t('welcome.powered')}</div>",
             unsafe_allow_html=True,
         )
 
