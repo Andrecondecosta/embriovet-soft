@@ -133,7 +133,7 @@ def run_reports_page(ctx: dict):
         if filtros.get("prop"):
             s = s[s["proprietario_nome"].isin(filtros["prop"])]
         i = insem[insem["garanhao"] == garanhao_sel] if not insem.empty else pd.DataFrame()
-        t = transf[transf["garanhao"] == garanhao_sel] if not transf.empty else pd.DataFrame()
+        transf_sel = transf[transf["garanhao"] == garanhao_sel] if not transf.empty else pd.DataFrame()
         te = transf_ext[transf_ext["garanhao"] == garanhao_sel] if not transf_ext.empty else pd.DataFrame()
 
         left, right = st.columns([6, 2])
@@ -144,20 +144,20 @@ def run_reports_page(ctx: dict):
             for nome, df in {
                 t("reports.section.stock"): safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]),
                 t("reports.section.inseminations"): safe_pick(i, ["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]),
-                t("reports.section.transfers_in"): safe_pick(t, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]),
+                t("reports.section.transfers_in"): safe_pick(transf_sel, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]),
                 t("reports.section.transfers_out"): safe_pick(te, ["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"]),
             }.items():
                 if not df.empty:
                     csv += f"\n{nome}:\n{df.to_csv(index=False)}\n"
             st.download_button(t("btn.csv"), csv.encode("utf-8"), f"garanhao_{garanhao_sel}.csv", "text/csv", width="stretch", key="rel_csv_g")
-            pdf = gerar_pdf_garanhao(garanhao_sel, s, i, t, te)
+            pdf = gerar_pdf_garanhao(garanhao_sel, s, i, transf_sel, te)
             if pdf:
                 st.download_button(t("btn.pdf"), pdf, f"garanhao_{garanhao_sel}.pdf", "application/pdf", width="stretch", key="rel_pdf_g")
 
         render_kpi_strip([
             (t("reports.kpi.straws_stock"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
             (t("reports.kpi.inseminations"), len(i)),
-            (t("reports.kpi.transfers_in"), len(t)),
+            (t("reports.kpi.transfers_in"), len(transf_sel)),
             (t("reports.kpi.transfers_out"), len(te)),
         ])
         if not s.empty:
