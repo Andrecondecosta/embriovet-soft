@@ -522,7 +522,7 @@ TRANSLATIONS = {
         "login.welcome": "✅ Welcome, {name}!",
         "welcome.title": "EquiCore",
         "welcome.subtitle": "The digital core of your equine breeding operation",
-        "welcome.text": "Stock management, straw traceability, inseminations and operational control in a single professional and secure platform.",
+        "welcome.text": "Centralize stock control, straw traceability, inseminations and technical history in a single professional, secure platform ready to grow with your operation.",
         "welcome.start": "Start setup",
         "welcome.powered": "Powered by EquiCore Systems",
         "onboarding.title": "Initial setup",
