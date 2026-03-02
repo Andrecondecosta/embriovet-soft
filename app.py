@@ -1739,6 +1739,35 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+st.components.v1.html(
+    """
+    <script>
+    (function() {
+        const hideDeploy = () => {
+            const root = window.parent.document;
+            const header = root.querySelector('header[data-testid="stHeader"]');
+            if (!header) return;
+            header.querySelectorAll('*').forEach(el => {
+                if (el.textContent && el.textContent.trim() === 'Deploy') {
+                    const btn = el.closest('button, a');
+                    if (btn) {
+                        btn.style.display = 'none';
+                    } else {
+                        el.style.display = 'none';
+                    }
+                }
+            });
+        };
+        hideDeploy();
+        const obs = new MutationObserver(hideDeploy);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(hideDeploy, 500);
+    })();
+    </script>
+    """,
+    height=0,
+)
 inject_stepper_css()
 inject_stock_css()
 inject_reports_css()
