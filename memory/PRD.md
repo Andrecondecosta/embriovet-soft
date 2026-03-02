@@ -113,6 +113,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Script/seletores reforçados para ocultar apenas o botão Deploy sem remover header/toolbar
 - Persistência de sessão via query param para manter login após refresh
 - Fluxo inicial com Welcome Page (EquiCore) antes do Setup e coluna welcome_completed
+- CSS global atualizado para espaçamento compacto e ocultar apenas o item Deploy da toolbar
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
