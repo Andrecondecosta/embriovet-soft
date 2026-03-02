@@ -109,6 +109,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Remoção do fallback forçado do sidebar para evitar duplicação do botão de recolher
 - CSS atualizado para esconder Deploy bar e forçar sidebar sempre visível no topo
 - Sidebar voltou ao comportamento nativo do Streamlit (header/toolbar visíveis)
+- CSS ajustado para layout mais compacto (topo do conteúdo/sidebar) e header mais baixo; Deploy oculto
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
