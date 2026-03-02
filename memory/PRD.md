@@ -106,6 +106,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - CSS de fallback para reabrir sidebar mesmo quando colapsado (sem toolbar nativa)
 - CSS global ajustado para não esconder stHeader/stToolbar (mantém botão do sidebar)
 - Correção de variável local `t` em reports_page (UnboundLocalError)
+- Remoção do fallback forçado do sidebar para evitar duplicação do botão de recolher
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
