@@ -975,6 +975,7 @@ TRANSLATIONS = {
         "menu.dashboard": "🏠 Tableau de bord",
         "menu.map": "🗺️ Carte des conteneurs",
         "menu.stock": "📦 Voir le stock",
+        "menu.transfers": "🔄 Transferts",
         "menu.reports": "📈 Rapports",
         "menu.add_stock": "➕ Ajouter stock",
         "menu.import": "📥 Importer le sperme",
