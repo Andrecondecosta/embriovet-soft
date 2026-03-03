@@ -22,6 +22,20 @@ def inject_design_system():
                 padding-top: 0.8rem;
                 padding-bottom: 1.4rem;
             }
+            /* Remover espaçamento de containers vazios */
+            .st-emotion-cache-tn0cau:empty,
+            div[data-testid="stVerticalBlock"]:empty,
+            div[data-testid="column"]:empty {
+                display: none !important;
+                gap: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            /* Remover gap de containers sem conteúdo visível */
+            .st-emotion-cache-tn0cau:not(:has(*:not(:empty))) {
+                gap: 0 !important;
+                margin: 0 !important;
+            }
             .stButton > button,
             .stDownloadButton > button,
             .stTextInput input,
