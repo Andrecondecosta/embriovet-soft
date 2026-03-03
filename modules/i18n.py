@@ -440,6 +440,7 @@ TRANSLATIONS = {
         "users.username_placeholder": "sem espaços, minúsculas",
         "users.username_required": "Nom d'utilisateur *",
         "users.access_level": "Nível de Acesso *",
+        "users.access_levels_title": "📋 Níveis de Acesso - O que cada um pode fazer",
         "users.level.admin": "Administrador",
         "users.level.manager": "Gestor",
         "users.level.viewer": "Visualizador",
