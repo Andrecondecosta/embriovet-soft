@@ -1765,18 +1765,25 @@ st.components.v1.html(
     """
     <script>
     (function() {
-        const hideDeploy = () => {
+        const cleanUi = () => {
             const root = window.parent.document;
             root.querySelectorAll('button, a').forEach(el => {
                 if (el.textContent && el.textContent.trim() === 'Deploy') {
                     el.style.display = 'none';
                 }
             });
+            root.querySelectorAll('div[data-testid="stElementContainer"]').forEach(el => {
+                const hasText = (el.textContent || "").trim().length > 0;
+                const hasInteractive = el.querySelector('input,button,select,textarea,svg,img,canvas,table,hr');
+                if (!hasText && !hasInteractive && el.children.length === 0) {
+                    el.style.display = 'none';
+                }
+            });
         };
-        hideDeploy();
-        const obs = new MutationObserver(hideDeploy);
+        cleanUi();
+        const obs = new MutationObserver(cleanUi);
         obs.observe(window.parent.document.body, { childList: true, subtree: true });
-        setTimeout(hideDeploy, 400);
+        setTimeout(cleanUi, 400);
     })();
     </script>
     """,
