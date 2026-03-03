@@ -309,7 +309,7 @@ def render_header(app_settings, user_info):
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
 
-    st.markdown("<div class='app-topbar'>", unsafe_allow_html=True)
+    st.markdown("<div id='topbar-anchor'></div>", unsafe_allow_html=True)
     col_left, col_right = st.columns([5, 2])
     with col_left:
         if logo:
@@ -341,7 +341,6 @@ def render_header(app_settings, user_info):
         settings_clicked = st.button(t("header.settings"), width="content", key="topbar_settings")
         logout_clicked = st.button(t("header.logout"), width="content", key="topbar_logout")
         st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
     return settings_clicked, logout_clicked
 
