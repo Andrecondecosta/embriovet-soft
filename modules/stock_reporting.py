@@ -37,12 +37,13 @@ def stock_kpis(stock_df, to_py):
             ("qualidade média", "0%"),
         ]
 
-    qualidade_media = round(float(to_py(stock_df["qualidade"].mean()) or 0), 1)
+    qual_series = pd.to_numeric(stock_df["qualidade"], errors="coerce")
+    qualidade_media = round(float(qual_series.mean()) or 0, 1) if qual_series.notna().any() else None
     return [
         ("lotes", len(stock_df)),
         ("palhetas", int(to_py(stock_df["existencia_atual"].sum()) or 0)),
         ("proprietários", stock_df["proprietario_nome"].nunique()),
-        ("qualidade média", f"{qualidade_media}%"),
+        ("qualidade média", f"{qualidade_media}%" if qualidade_media is not None else "—"),
     ]
 
 
