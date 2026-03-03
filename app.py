@@ -2102,7 +2102,7 @@ def mostrar_tela_login(app_settings):
                         auth_store[token] = user
                         st.session_state['user'] = user
                         st.session_state['auth_token'] = token
-                        st.experimental_set_query_params(session=token)
+                        st.query_params.session = token
                         st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
