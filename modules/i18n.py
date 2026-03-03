@@ -47,6 +47,7 @@ TRANSLATIONS = {
         "menu.dashboard": "🏠 Painel",
         "menu.map": "🗺️ Mapa dos Contentores",
         "menu.stock": "📦 Ver Stock",
+        "menu.transfers": "🔄 Transferências",
         "menu.reports": "📈 Relatórios",
         "menu.add_stock": "➕ Adicionar Stock",
         "menu.import": "📥 Importar Sémen",
