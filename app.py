@@ -1744,7 +1744,7 @@ st.markdown(
     footer { display:none !important; }
 
     div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
+    section.main > div.block-container { padding-top: 0rem !important; padding-bottom: 1rem !important; }
     [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
     .sidebar-shell { padding-top: 8px !important; }
 
@@ -1753,81 +1753,16 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
-        /* Sidebar toggle behavior:
-       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
-       - Keep collapsed control in the header visible so users can reopen the sidebar. */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-inject_stepper_css()
-inject_stock_css()
-inject_reports_css()
-
-# ------------------------------------------------------------
-# 🖼️ Interface Streamlit
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Sistema"),
-    layout=os.getenv("APP_LAYOUT", "wide"),
-    initial_sidebar_state="expanded",
-    page_icon="🐴",
-)
-st.markdown(
-    """
-    <style>
-    [data-testid="stMainMenu"] { display:none !important; }
-    footer { display:none !important; }
-
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-
-    header[data-testid="stHeader"] { height: 2.6rem !important; }
-    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
-
-    .block-container { margin-top: 0 !important; }
-
-    /* Sidebar toggle behavior:
-       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
-       - Keep collapsed control in the header visible so users can reopen the sidebar. */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-inject_stepper_css()
-inject_stock_css()
-inject_reports_css()
-
-# ------------------------------------------------------------
-# 🖼️ Interface Streamlit
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Sistema"),
-    layout=os.getenv("APP_LAYOUT", "wide"),
-    initial_sidebar_state="expanded",
-    page_icon="🐴",
-)
-st.markdown(
-    """
-    <style>
-    [data-testid="stMainMenu"] { display:none !important; }
-    footer { display:none !important; }
-
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-
-    header[data-testid="stHeader"] { height: 2.6rem !important; }
-    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
-
-    .block-container { margin-top: 0 !important; }
+    /* Prevent style-injection markdown blocks from adding vertical gaps */
+    div[data-testid="stElementContainer"]:has(style) {
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+    }
+    div[data-testid="stElementContainer"]:has(style) > div[data-testid="stMarkdown"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
 
     /* Sidebar toggle behavior:
        - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
@@ -1886,6 +1821,24 @@ def mostrar_tela_login(app_settings):
                     else:
                         st.error(t("login.invalid"))
 
+
+
+def set_session_query_param(token: str) -> None:
+    """Set session query param using Streamlit stable API."""
+    st.query_params["session"] = token
+
+
+def get_session_query_param():
+    """Read session query param using Streamlit stable API."""
+    session_value = st.query_params.get("session")
+    if isinstance(session_value, list):
+        return session_value[0] if session_value else None
+    return session_value
+
+
+def clear_query_params() -> None:
+    """Clear query params using Streamlit stable API."""
+    st.query_params.clear()
 
 
 def set_session_query_param(token: str) -> None:
