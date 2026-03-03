@@ -118,23 +118,7 @@ def run_dashboard_page(ctx: dict):
         ]
     )
 
-    # Zona C — Alertas
-    render_zone_title(t("dashboard.alerts"), "insem-zone-title")
-    alerts = []
-    if stock_critico and stock_critico > 0:
-        alerts.append(f"⚠ {stock_critico} lotes com stock crítico (≤5)")
-    if motilidade_baixa is not None and motilidade_baixa > 0:
-        alerts.append(f"⚠ {motilidade_baixa} lotes com motilidade < 50")
-
-    if alerts:
-        st.markdown(
-            "<div class='dash-alerts'><ul>" + "".join([f"<li>{a}</li>" for a in alerts]) + "</ul></div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(f"<div class='dash-alerts'>{t('dashboard.no_alerts')}</div>", unsafe_allow_html=True)
-
-    # Zona D — Atividade recente
+    # Zona C — Atividade recente (Alertas removidos)
     render_zone_title(t("dashboard.activity"), "insem-zone-title")
     atividades = []
     try:
