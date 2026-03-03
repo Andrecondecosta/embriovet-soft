@@ -127,11 +127,34 @@ def run_stock_page(ctx: dict):
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
             referencia = row.get("origem_externa") or row.get("data_embriovet") or t("common.no_reference")
             proprietario_nome = row.get("proprietario_nome", t("common.no_owner"))
+            
+            # Buscar localização
+            localizacao = "—"
+            if row.get('contentor_codigo'):
+                contentor = row.get('contentor_codigo')
+                canister = row.get('canister')
+                andar = row.get('andar')
+                if pd.notna(canister) and pd.notna(andar):
+                    localizacao = f"{contentor}/C{int(canister)}/A{int(andar)}"
+                else:
+                    localizacao = contentor
+            elif row.get('local_armazenagem'):
+                localizacao = row.get('local_armazenagem')
+            
+            # Motilidade e Concentração
+            motilidade = int(to_py(row.get("motilidade")) or 0)
+            concentracao = int(to_py(row.get("concentracao")) or 0)
+            
+            # Criar título do expander com todas as informações
+            info_extra = f"📍 {localizacao} | 📊 M:{motilidade}% | 🧬 {concentracao}M/ml"
 
             # Verificar se é o lote recém-adicionado para abrir automaticamente
             expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False
 
-            with st.expander(t("stock.expander_title", ref=referencia, owner=proprietario_nome, qty=existencia), expanded=expanded):
+            with st.expander(
+                f"{referencia} | {proprietario_nome} | {existencia} pal. | {info_extra}",
+                expanded=expanded
+            ):
 
                 # Tabs: Mostrar conforme permissões
                 if verificar_permissao('Administrador'):
