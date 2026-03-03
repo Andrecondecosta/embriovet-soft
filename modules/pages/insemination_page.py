@@ -242,16 +242,61 @@ def run_insemination_page(ctx):
             if st.button(t("btn.close"), key="insem_modal_cancelar", width="stretch"):
                 st.rerun()
 
+    # PÁGINA PRINCIPAL - NOVO FLUXO
     render_zone_title(t("insemination.zone_selection"), "insem-zone-title")
-    csel1, csel2, csel3 = st.columns([2, 2, 1.5])
-    with csel1:
-        data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
-    with csel2:
-        egua = st.text_input(t("label.mare"), key="insem_egua")
-    with csel3:
-        if st.button(t("btn.select_lots"), key="insem_btn_open_modal", width="stretch"):
-            abrir_modal_lotes()
-
+    
+    # 1. CAVALO
+    garanhaos_disponiveis = sorted(stock_disponivel["garanhao"].dropna().unique())
+    idx_gar = 0
+    if st.session_state["insem_garanhao_principal"] and st.session_state["insem_garanhao_principal"] in garanhaos_disponiveis:
+        idx_gar = garanhaos_disponiveis.index(st.session_state["insem_garanhao_principal"])
+    
+    garanhao_selecionado = st.selectbox(
+        t("label.garanhao"),
+        garanhaos_disponiveis,
+        index=idx_gar,
+        key="insem_garanhao_main"
+    )
+    
+    # Se mudou o cavalo, limpar seleção de proprietário e lotes
+    if garanhao_selecionado != st.session_state["insem_garanhao_principal"]:
+        st.session_state["insem_garanhao_principal"] = garanhao_selecionado
+        st.session_state["insem_prop_principal"] = None
+        st.session_state["insem_linhas"] = {}
+        st.rerun()
+    
+    # 2. PROPRIETÁRIO (filtrado pelo cavalo)
+    stock_cavalo = stock_disponivel[stock_disponivel["garanhao"] == garanhao_selecionado]
+    proprietarios_com_stock = sorted(stock_cavalo["proprietario_nome"].dropna().unique())
+    prop_opts = [t("common.all")] + proprietarios_com_stock
+    
+    idx_prop = 0
+    if st.session_state["insem_prop_principal"] and st.session_state["insem_prop_principal"] in proprietarios_com_stock:
+        idx_prop = prop_opts.index(st.session_state["insem_prop_principal"])
+    
+    proprietario_selecionado = st.selectbox(
+        t("label.owner"),
+        prop_opts,
+        index=idx_prop,
+        key="insem_prop_main"
+    )
+    
+    # Atualizar estado do proprietário
+    if proprietario_selecionado == t("common.all"):
+        st.session_state["insem_prop_principal"] = None
+    else:
+        if proprietario_selecionado != st.session_state["insem_prop_principal"]:
+            st.session_state["insem_prop_principal"] = proprietario_selecionado
+            st.session_state["insem_linhas"] = {}  # Limpar lotes ao mudar proprietário
+            st.rerun()
+    
+    # 3. BOTÃO SELECIONAR LOTES
+    if st.button(t("btn.select_lots"), key="insem_btn_open_modal", type="secondary", width="stretch"):
+        abrir_modal_lotes()
+    
+    st.markdown("---")
+    
+    # 4. LOTES SELECIONADOS COM QUANTIDADE EDITÁVEL
     render_zone_title(t("insemination.lines_title"), "insem-zone-title")
     linhas = st.session_state["insem_linhas"]
 
@@ -268,7 +313,7 @@ def run_insemination_page(ctx):
             if step_key not in st.session_state:
                 st.session_state[step_key] = qtd
 
-            l1, l2, lval, lminus, lplus, l4 = st.columns([3.0, 1.1, 0.7, 0.5, 0.5, 0.8])
+            l1, l2, lminus, linput, lplus, l4 = st.columns([3.0, 1.5, 0.5, 0.9, 0.5, 0.8])
             with l1:
                 st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                 st.markdown(
@@ -276,15 +321,15 @@ def run_insemination_page(ctx):
                     unsafe_allow_html=True,
                 )
             with l2:
-                qtd_display = int(st.session_state.get(step_key, qtd) or 0)
                 st.markdown(f"<div class='insem-lote-sub'>{t('label.quantity')}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='insem-lote-main'>{qtd_display}</div>", unsafe_allow_html=True)
 
+            # Stepper editável com campo de input
             qtd_val, _ = render_stepper(
-                [lval, lminus, lplus],
+                [linput, lminus, lplus],
                 step_key,
                 min_value=0,
                 max_value=max_disp,
+                editable=True,
             )
 
             if qtd_val != qtd:
@@ -315,7 +360,18 @@ def run_insemination_page(ctx):
                 f"<div class='insem-lote-main'>{t('label.total')}: {total_palhetas} {t('label.straws')}</div>",
                 unsafe_allow_html=True,
             )
-
+    
+    st.markdown("---")
+    
+    # 5. ÉGUA E DATA
+    render_zone_title(t("insemination.zone_details"), "insem-zone-title")
+    c1, c2 = st.columns(2)
+    with c1:
+        egua = st.text_input(t("label.mare"), key="insem_egua")
+    with c2:
+        data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
+    
+    # RESUMO E BOTÃO FINAL
     total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
     total_linhas = sum(1 for v in linhas.values() if int(v.get("qty", 0)) > 0)
     st.markdown(
