@@ -2171,6 +2171,7 @@ menu_options = [
     t("menu.dashboard"),
     t("menu.map"),
     t("menu.stock"),
+    t("menu.transfers"),
     t("menu.reports"),
 ]
 
