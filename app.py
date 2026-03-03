@@ -52,6 +52,7 @@ from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
+from modules.pages.transfer_page import run_transfer_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
 from modules.i18n import t, get_i18n_diagnostics
@@ -2187,6 +2188,7 @@ menu_options = [
     t("menu.dashboard"),
     t("menu.map"),
     t("menu.stock"),
+    t("menu.transfers"),
     t("menu.reports"),
 ]
 
@@ -2271,6 +2273,10 @@ if aba == t("menu.dashboard"):
 
 if aba == t("menu.stock"):
     run_stock_page({**globals(), **locals()})
+    st.stop()
+
+if aba == t("menu.transfers"):
+    run_transfer_page({**globals(), **locals()})
     st.stop()
 
 if aba == t("menu.reports"):
@@ -3367,7 +3373,7 @@ elif aba == t("menu.users"):
         - ✅ Adicionar Stock, Importar Sémen
         - ✅ Registar Inseminações
         - ✅ **Editar Stock** (alterar dados dos lotes)
-        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ **Página de Transferências** (interno e externo)
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ✅ **Gerir Utilizadores** (criar, editar, desativar)
         - ✅ **Aceder às Definições** (branding, idioma)
@@ -3377,7 +3383,7 @@ elif aba == t("menu.users"):
         - ✅ Adicionar Stock, Importar Sémen
         - ✅ Registar Inseminações
         - ❌ **NÃO pode Editar Stock** (apenas visualizar detalhes)
-        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ **Página de Transferências** (interno e externo)
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
@@ -3388,7 +3394,7 @@ elif aba == t("menu.users"):
         - ❌ NÃO pode Importar Sémen
         - ❌ NÃO pode Registar Inseminações
         - ❌ NÃO pode Editar Stock
-        - ❌ **NÃO pode Transferir Stock**
+        - ❌ **NÃO pode aceder à Página de Transferências**
         - ❌ NÃO pode Gerir Proprietários
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
