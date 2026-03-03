@@ -1753,7 +1753,11 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
-    div[data-testid="stToolbar"] > div:last-child { display: none !important; }
+    /* Sidebar toggle behavior:
+       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
+       - Keep collapsed control in the header visible so users can reopen the sidebar. */
+    [data-testid="stSidebarCollapseButton"] { display: none !important; }
+    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1800,12 +1804,30 @@ def mostrar_tela_login(app_settings):
                         auth_store[token] = user
                         st.session_state['user'] = user
                         st.session_state['auth_token'] = token
-                        st.experimental_set_query_params(session=token)
+                        set_session_query_param(token)
                         st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
                         st.error(t("login.invalid"))
         
+
+
+def set_session_query_param(token: str) -> None:
+    """Set session query param using Streamlit stable API."""
+    st.query_params["session"] = token
+
+
+def get_session_query_param():
+    """Read session query param using Streamlit stable API."""
+    session_value = st.query_params.get("session")
+    if isinstance(session_value, list):
+        return session_value[0] if session_value else None
+    return session_value
+
+
+def clear_query_params() -> None:
+    """Clear query params using Streamlit stable API."""
+    st.query_params.clear()
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
@@ -2064,8 +2086,7 @@ if not app_settings.get("is_initialized"):
 
 # Verificar se está logado (restaurar sessão por query param)
 auth_store = get_auth_store()
-params = st.experimental_get_query_params()
-token_param = params.get("session", [None])[0] if params else None
+token_param = get_session_query_param()
 if 'user' not in st.session_state and token_param and token_param in auth_store:
     st.session_state['user'] = auth_store[token_param]
     st.session_state['auth_token'] = token_param
@@ -2088,7 +2109,7 @@ if logout_clicked:
     if token:
         auth_store = get_auth_store()
         auth_store.pop(token, None)
-    st.experimental_set_query_params()
+    clear_query_params()
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
