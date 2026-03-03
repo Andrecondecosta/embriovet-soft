@@ -7,6 +7,23 @@ def run_stock_page(ctx: dict):
     inject_stock_css()
     inject_reports_css()
     inject_stepper_css()
+    
+    # CSS para reduzir fonte dos expanders
+    st.markdown(
+        """
+        <style>
+            /* Reduzir fonte do título do expander para caber mais informação */
+            div[data-testid="stExpander"] summary p {
+                font-size: 0.85rem !important;
+                line-height: 1.3 !important;
+            }
+            div[data-testid="stExpander"] summary {
+                padding: 8px 12px !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     if not stock.empty:
         garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
