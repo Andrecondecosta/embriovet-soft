@@ -1753,6 +1753,17 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
+    /* Prevent style-injection markdown blocks from adding vertical gaps */
+    div[data-testid="stElementContainer"]:has(style) {
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+    }
+    div[data-testid="stElementContainer"]:has(style) > div[data-testid="stMarkdown"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     /* Sidebar toggle behavior:
        - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
        - Keep collapsed control in the header visible so users can reopen the sidebar. */
