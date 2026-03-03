@@ -1555,7 +1555,7 @@ TRANSLATIONS = {
         "menu.dashboard": "🏠 Übersicht",
         "menu.map": "🗺️ Containerkarte",
         "menu.stock": "📦 Bestand anzeigen",
-        "menu.transfers": "🔄 Transfers",
+        "menu.transfers": "🔄 Int/Ext Transf.",
         "menu.reports": "📈 Berichte",
         "menu.add_stock": "➕ Bestand hinzufügen",
         "menu.import": "📥 Samen importieren",
