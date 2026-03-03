@@ -3356,7 +3356,7 @@ elif aba == t("menu.users"):
         - ✅ Adicionar Stock, Importar Sémen
         - ✅ Registar Inseminações
         - ✅ **Editar Stock** (alterar dados dos lotes)
-        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ **Página de Transferências** (interno e externo)
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ✅ **Gerir Utilizadores** (criar, editar, desativar)
         - ✅ **Aceder às Definições** (branding, idioma)
@@ -3366,7 +3366,7 @@ elif aba == t("menu.users"):
         - ✅ Adicionar Stock, Importar Sémen
         - ✅ Registar Inseminações
         - ❌ **NÃO pode Editar Stock** (apenas visualizar detalhes)
-        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ **Página de Transferências** (interno e externo)
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
@@ -3377,7 +3377,7 @@ elif aba == t("menu.users"):
         - ❌ NÃO pode Importar Sémen
         - ❌ NÃO pode Registar Inseminações
         - ❌ NÃO pode Editar Stock
-        - ❌ **NÃO pode Transferir Stock**
+        - ❌ **NÃO pode aceder à Página de Transferências**
         - ❌ NÃO pode Gerir Proprietários
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
