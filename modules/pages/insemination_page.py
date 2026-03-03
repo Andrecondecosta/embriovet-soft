@@ -123,6 +123,8 @@ def run_insemination_page(ctx):
             "local": lote_local(row),
             "motilidade": int(to_py(row.get("motilidade")) or 0),
             "dose": to_py(row.get("dose")) or "—",
+            "cor": to_py(row.get("cor")) or "",
+            "concentracao": int(to_py(row.get("concentracao")) or 0),
             "protocolo": row.get("data_embriovet") or row.get("origem_externa") or "N/A",
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
         }
@@ -171,13 +173,13 @@ def run_insemination_page(ctx):
 
         st.markdown(f"<div class='insem-modal-head'>{t('insemination.lotes')}</div>", unsafe_allow_html=True)
 
-        header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+        header_cols = st.columns([2.0, 1.5, 1.8, 0.8, 0.6])
         with header_cols[0]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.lote')}</div>", unsafe_allow_html=True)
         with header_cols[1]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.location')}</div>", unsafe_allow_html=True)
         with header_cols[2]:
-            st.markdown(f"<div class='insem-modal-head'>{t('label.motility_dose')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.characteristics')}</div>", unsafe_allow_html=True)
         with header_cols[3]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.available')}</div>", unsafe_allow_html=True)
         with header_cols[4]:
@@ -187,13 +189,21 @@ def run_insemination_page(ctx):
             lote = lote_payload(row)
             sid = lote["stock_id"]
 
-            row_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+            row_cols = st.columns([2.0, 1.5, 1.8, 0.8, 0.6])
             with row_cols[0]:
                 st.caption(f"{lote['ref']}")
             with row_cols[1]:
                 st.caption(lote["local"])
             with row_cols[2]:
-                st.caption(t("insemination.motility_dose", mot=lote['motilidade'], dose=lote['dose']))
+                # Motilidade, Dose, Cor, Concentração
+                caracteristicas = []
+                caracteristicas.append(f"M {lote['motilidade']}%")
+                caracteristicas.append(f"D {lote['dose']}")
+                if lote.get('cor'):
+                    caracteristicas.append(f"Cor: {lote['cor']}")
+                if lote.get('concentracao') and lote.get('concentracao') > 0:
+                    caracteristicas.append(f"{lote['concentracao']}M/ml")
+                st.caption(" · ".join(caracteristicas))
             with row_cols[3]:
                 st.caption(t("insemination.available_value", value=lote['max_disponivel']))
             with row_cols[4]:
@@ -313,7 +323,7 @@ def run_insemination_page(ctx):
             if step_key not in st.session_state:
                 st.session_state[step_key] = qtd
 
-            l1, l2, lminus, linput, lplus, l4 = st.columns([3.0, 1.5, 0.5, 0.9, 0.5, 0.8])
+            l1, l2, linput, l4 = st.columns([3.0, 1.5, 1.9, 0.8])
             with l1:
                 st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                 st.markdown(
@@ -323,14 +333,18 @@ def run_insemination_page(ctx):
             with l2:
                 st.markdown(f"<div class='insem-lote-sub'>{t('label.quantity')}</div>", unsafe_allow_html=True)
 
-            # Stepper editável com campo de input
-            qtd_val, _ = render_stepper(
-                [linput, lminus, lplus],
-                step_key,
-                min_value=0,
-                max_value=max_disp,
-                editable=True,
-            )
+            # Campo de input digitável (sem botões +/- extras)
+            with linput:
+                new_qtd = st.number_input(
+                    "Quantidade",
+                    min_value=0,
+                    max_value=max_disp,
+                    value=int(st.session_state.get(step_key, qtd) or 0),
+                    step=1,
+                    key=step_key,
+                    label_visibility="collapsed",
+                )
+                qtd_val = new_qtd
 
             if qtd_val != qtd:
                 if qtd_val == 0:

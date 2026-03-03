@@ -550,17 +550,20 @@ def editar_proprietario(proprietario_id, dados):
         return False
 
 def carregar_stock(apenas_ativos=True):
-    """Carrega stock completo com informações de proprietario
-
+    """Carrega stock completo com informações de proprietario e contentor
+    
     Args:
         apenas_ativos: Se True, retorna apenas stock de proprietários ativos
     """
     try:
         with get_connection() as conn:
             query = """
-                SELECT e.*, d.nome as proprietario_nome
+                SELECT e.*, 
+                       d.nome as proprietario_nome,
+                       c.codigo as contentor_codigo
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
+                LEFT JOIN contentores c ON e.contentor_id = c.id
                 WHERE e.existencia_atual > 0
             """
             if apenas_ativos:
