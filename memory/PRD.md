@@ -118,6 +118,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Remoção do Deploy via JS sem ocultar toolbar (sidebar volta a abrir/fechar)
 - Topbar ajustada: removida wrapper HTML que criava blocos vazios (alinha conteúdo para cima)
 - Render_header simplificado (sem wrapper de ações) + CSS para ocultar blocos verticais vazios
+- Ajuste de espaçamento: margem menor entre elementos (sem ocultar containers)
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base

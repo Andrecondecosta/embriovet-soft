@@ -289,8 +289,8 @@ def inject_shell_css(primary_color: str | None):
                 padding: 4px 10px;
                 height: 32px;
             }}
-            div[data-testid="stVerticalBlock"]:empty {{
-                display: none;
+            div[data-testid="stElementContainer"] {{
+                margin-bottom: 0.35rem;
             }}
             .reports-kpi-item b {{
                 color: var(--primary) !important;
