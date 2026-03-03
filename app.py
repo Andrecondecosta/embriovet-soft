@@ -353,7 +353,7 @@ def update_welcome_completed(completed=True):
 # ------------------------------------------------------------
 def carregar_proprietarios(apenas_ativos=False):
     """Carrega lista de proprietarios do banco de dados
-    
+
     Args:
         apenas_ativos: Se True, retorna apenas proprietários ativos
     """
@@ -393,10 +393,10 @@ def atualizar_status_proprietarios():
                     WHERE COALESCE(s.total_stock, 0) = 0
                 )
             """)
-            
+
             # NÃO ativar automaticamente - apenas controle manual!
             # Removido: código que ativava automaticamente com stock > 0
-            
+
             conn.commit()
             cur.close()
             return True
@@ -415,14 +415,14 @@ def alternar_status_proprietario(proprietario_id):
         db_pass = os.getenv("DB_PASSWORD", "123")
         db_host = os.getenv("DB_HOST", "localhost")
         db_port = os.getenv("DB_PORT", "5432")
-        
+
         logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
         logger.info(f"🆔 Proprietário ID recebido: {proprietario_id} (tipo: {type(proprietario_id)})")
-        
+
         # Converter ID para int
         prop_id_int = int(proprietario_id)
         logger.info(f"🆔 Proprietário ID convertido: {prop_id_int} (tipo: {type(prop_id_int)})")
-        
+
         # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
         conn = psycopg2.connect(
             dbname=db_name,
@@ -431,56 +431,56 @@ def alternar_status_proprietario(proprietario_id):
             host=db_host,
             port=db_port
         )
-        
+
         # FORÇAR AUTOCOMMIT - COMMIT IMEDIATO APÓS CADA COMANDO
         conn.set_session(autocommit=True)
         cur = conn.cursor()
-        
+
         logger.info(f"✅ AUTOCOMMIT ativado")
-        
+
         # Verificar o valor atual
         sql_select = "SELECT ativo FROM dono WHERE id = %s"
         logger.info(f"📋 SQL SELECT: {sql_select} com id={prop_id_int}")
         cur.execute(sql_select, (prop_id_int,))
         status_antes = cur.fetchone()
         logger.info(f"📋 Status ANTES: {status_antes}")
-        
+
         if not status_antes:
             logger.error(f"❌ Proprietário com ID {prop_id_int} não encontrado!")
             cur.close()
             conn.close()
             return None
-        
+
         # Calcular novo valor
         novo_valor = not status_antes[0]
         logger.info(f"🔄 Novo valor calculado: {novo_valor} (tipo: {type(novo_valor)})")
-        
+
         # UPDATE direto (SEM to_py)
         sql_update = "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo"
         logger.info(f"📝 SQL UPDATE: {sql_update}")
         logger.info(f"📝 Parâmetros: ativo={novo_valor}, id={prop_id_int}")
-        
+
         cur.execute(sql_update, (novo_valor, prop_id_int))
-        
+
         resultado = cur.fetchone()
         logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
-        
+
         if resultado:
             novo_status = resultado[0]
             logger.info(f"✅ UPDATE executado com sucesso. Novo status: {novo_status}")
-            
+
             # Verificar com SELECT
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (prop_id_int,))
             status_verificacao = cur.fetchone()
             logger.info(f"🔍 Verificação final: {status_verificacao}")
-            
+
             # Verificar FORA da conexão Python
             logger.info(f"⚠️ Execute no terminal: psql -U postgres -d embriovet -c \"SELECT id, nome, ativo FROM dono WHERE id={prop_id_int};\"")
-            
+
             cur.close()
             conn.close()
             logger.info(f"🔒 Conexão fechada")
-            
+
             return novo_status
         else:
             if cur:
@@ -489,7 +489,7 @@ def alternar_status_proprietario(proprietario_id):
                 conn.close()
             logger.error(f"❌ UPDATE não retornou resultado")
             return None
-            
+
     except Exception as e:
         logger.error(f"💥 ERRO: {e}")
         import traceback
@@ -507,18 +507,18 @@ def editar_proprietario(proprietario_id, dados):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Verificar se já existe outro proprietário com este nome
             cur.execute(
-                "SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s) AND id != %s", 
+                "SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s) AND id != %s",
                 (to_py(dados.get('nome')), to_py(proprietario_id))
             )
             existe = cur.fetchone()
-            
+
             if existe:
                 st.error(f"❌ Já existe outro proprietário com o nome '{dados.get('nome')}'")
                 return False
-            
+
             cur.execute("""
                 UPDATE dono SET
                     nome = %s,
@@ -551,7 +551,7 @@ def editar_proprietario(proprietario_id, dados):
 
 def carregar_stock(apenas_ativos=True):
     """Carrega stock completo com informações de proprietario
-    
+
     Args:
         apenas_ativos: Se True, retorna apenas stock de proprietários ativos
     """
@@ -595,7 +595,7 @@ def carregar_transferencias():
     try:
         with get_connection() as conn:
             query = """
-                SELECT t.*, 
+                SELECT t.*,
                        e.garanhao,
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
@@ -619,19 +619,19 @@ def carregar_transferencias_externas():
             cur = conn.cursor()
             cur.execute("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
+                    SELECT FROM information_schema.tables
                     WHERE table_name = 'transferencias_externas'
                 );
             """)
             tabela_existe = cur.fetchone()[0]
             cur.close()
-            
+
             if not tabela_existe:
                 logger.warning("Tabela transferencias_externas não existe")
                 return pd.DataFrame()
-            
+
             query = """
-                SELECT te.*, 
+                SELECT te.*,
                        d.nome as proprietario_origem
                 FROM transferencias_externas te
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
@@ -650,7 +650,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
         elements = []
         styles = getSampleStyleSheet()
-        
+
         # Estilo customizado
         titulo_style = ParagraphStyle(
             'CustomTitle',
@@ -660,7 +660,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             spaceAfter=12,
             alignment=1  # Center
         )
-        
+
         subtitulo_style = ParagraphStyle(
             'CustomSubtitle',
             parent=styles['Heading2'],
@@ -668,16 +668,16 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             textColor=colors.HexColor('#2e5c9a'),
             spaceAfter=10
         )
-        
+
         # Título
         elements.append(Paragraph(f"Relatório Completo: {garanhao_nome}", titulo_style))
         elements.append(Paragraph(f"Gerado em: {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
         elements.append(Spacer(1, 0.5*cm))
-        
+
         # STOCK
         if not dados_stock.empty:
             elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
-            
+
             stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
             for _, row in dados_stock.iterrows():
                 stock_data.append([
@@ -687,7 +687,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     f"{int(row.get('qualidade', 0))}%",
                     str(row.get('local_armazenagem', 'N/A'))[:20]
                 ])
-            
+
             t = Table(stock_data, colWidths=[4*cm, 3*cm, 2.5*cm, 2.5*cm, 4*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
@@ -701,11 +701,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # INSEMINAÇÕES
         if not dados_insem.empty:
             elements.append(Paragraph("📝 Histórico de Inseminações", subtitulo_style))
-            
+
             insem_data = [['Data', 'Égua', 'Proprietário', 'Palhetas']]
             for _, row in dados_insem.iterrows():
                 insem_data.append([
@@ -714,7 +714,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_nome', 'N/A'))[:25],
                     str(int(row.get('palhetas_gastas', 0)))
                 ])
-            
+
             t = Table(insem_data, colWidths=[3*cm, 5*cm, 5*cm, 3*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -728,11 +728,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # TRANSFERÊNCIAS INTERNAS
         if not dados_transf_int.empty:
             elements.append(Paragraph("🔄 Transferências Internas", subtitulo_style))
-            
+
             transf_data = [['Data', 'De', 'Para', 'Palhetas']]
             for _, row in dados_transf_int.iterrows():
                 transf_data.append([
@@ -741,7 +741,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_destino', 'N/A'))[:20],
                     str(int(row.get('quantidade', 0)))
                 ])
-            
+
             t = Table(transf_data, colWidths=[3*cm, 4.5*cm, 4.5*cm, 3*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -755,11 +755,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # TRANSFERÊNCIAS EXTERNAS
         if not dados_transf_ext.empty:
             elements.append(Paragraph("📤 Transferências Externas (Vendas/Doações)", subtitulo_style))
-            
+
             for _, row in dados_transf_ext.iterrows():
                 transf_ext_data = [['Data', 'De', 'Para', 'Palhetas', 'Tipo']]
                 transf_ext_data.append([
@@ -769,7 +769,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(int(row.get('quantidade', 0))),
                     str(row.get('tipo', 'N/A'))[:15]
                 ])
-                
+
                 t = Table(transf_ext_data, colWidths=[2.5*cm, 3.5*cm, 3.5*cm, 2.5*cm, 3*cm])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -782,20 +782,20 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     ('GRID', (0, 0), (-1, -1), 1, colors.black)
                 ]))
                 elements.append(t)
-                
+
                 # Adicionar observações se existirem
                 obs = row.get('observacoes', '')
                 if obs and str(obs) != 'nan' and str(obs).strip():
                     obs_style = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, leftIndent=10)
                     elements.append(Paragraph(f"<b>Observações:</b> {str(obs)}", obs_style))
-                
+
                 elements.append(Spacer(1, 0.3*cm))
-        
+
         # Gerar PDF
         doc.build(elements)
         buffer.seek(0)
         return buffer
-        
+
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {e}")
         return None
@@ -827,15 +827,15 @@ def inserir_stock(dados):
         if not dados.get("Garanhão"):
             st.error(t("error.stallion_required"))
             return False
-        
+
         if not dados.get("Contentor"):
             st.error(t("error.container_required"))
             return False
-        
+
         if not dados.get("Canister"):
             st.error(t("error.canister_required"))
             return False
-        
+
         if not dados.get("Andar"):
             st.error(t("error.floor_required"))
             return False
@@ -853,7 +853,7 @@ def inserir_stock(dados):
 
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Obter utilizador atual
             username = st.session_state.get('username', 'desconhecido')
 
@@ -891,7 +891,7 @@ def inserir_stock(dados):
                 """,
                 params,
             )
-            
+
             # Obter ID e garanhão do stock inserido
             result = cur.fetchone()
             stock_id = result[0]
@@ -900,12 +900,12 @@ def inserir_stock(dados):
             conn.commit()
             cur.close()
             logger.info(f"Stock inserido: {dados.get('Garanhão')} (ID: {stock_id})")
-            
+
             # Guardar informações para redirecionamento
             st.session_state['ultimo_stock_id'] = stock_id
             st.session_state['ultimo_garanhao'] = garanhao_nome
             st.session_state['redirecionar_ver_stock'] = True
-            
+
             return True
 
     except Exception as e:
@@ -979,10 +979,10 @@ def registrar_inseminacao(registro):
 
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
-            
+
             logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
             return True
 
@@ -1122,15 +1122,15 @@ def autenticar_usuario(username, password):
                 FROM usuarios
                 WHERE username = %s AND ativo = TRUE
             """, (username,))
-            
+
             resultado = cur.fetchone()
             cur.close()
-            
+
             if not resultado:
                 return None
-            
+
             user_id, username, nome, pwd_hash, nivel, ativo, must_change_password = resultado
-            
+
             # Verificar password
             if verificar_password(password, pwd_hash):
                 # Atualizar last_login
@@ -1141,7 +1141,7 @@ def autenticar_usuario(username, password):
                 """, (user_id,))
                 conn.commit()
                 cur.close()
-                
+
                 return {
                     'id': user_id,
                     'username': username,
@@ -1149,9 +1149,9 @@ def autenticar_usuario(username, password):
                     'nivel': nivel,
                     'must_change_password': must_change_password
                 }
-            
+
             return None
-            
+
     except Exception as e:
         logger.error(f"Erro ao autenticar: {e}")
         return None
@@ -1161,7 +1161,7 @@ def carregar_usuarios():
     try:
         with get_connection() as conn:
             df = pd.read_sql_query("""
-                SELECT id, username, nome_completo, nivel, ativo, 
+                SELECT id, username, nome_completo, nivel, ativo,
                        created_at, last_login
                 FROM usuarios
                 ORDER BY nivel, nome_completo
@@ -1176,25 +1176,25 @@ def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Verificar se username já existe
             cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
             if cur.fetchone():
                 st.error(t("error.username_exists"))
                 return False
-            
+
             password_hash = criar_hash_password(password)
-            
+
             cur.execute("""
                 INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, created_by)
                 VALUES (%s, %s, %s, %s, TRUE, %s)
             """, (username, nome_completo, password_hash, nivel, created_by_id))
-            
+
             conn.commit()
             cur.close()
             logger.info(f"Utilizador criado: {username} ({nivel})")
             return True
-            
+
     except Exception as e:
         logger.error(f"Erro ao adicionar utilizador: {e}")
         st.error(f"Erro ao adicionar utilizador: {e}")
@@ -1251,15 +1251,15 @@ def adicionar_proprietario(dados):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Verificar se já existe proprietário com este nome
             cur.execute("SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s)", (to_py(dados.get('nome')),))
             existe = cur.fetchone()
-            
+
             if existe:
                 st.error(f"❌ Já existe um proprietário com o nome '{dados.get('nome')}'")
                 return None
-            
+
             cur.execute(
                 """
                 INSERT INTO dono (nome, email, telemovel, nome_completo, nif, morada, codigo_postal, cidade, ativo)
@@ -1442,7 +1442,7 @@ def editar_contentor(contentor_id, dados):
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                UPDATE contentores 
+                UPDATE contentores
                 SET codigo = %s, descricao = %s, x = %s, y = %s, w = %s, h = %s
                 WHERE id = %s
             """, (
@@ -1487,27 +1487,27 @@ def deletar_contentor(contentor_id):
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Verificar se tem stock associado
             cur.execute("""
                 SELECT COALESCE(SUM(existencia_atual), 0) as total
                 FROM estoque_dono
                 WHERE contentor_id = %s
             """, (to_py(contentor_id),))
-            
+
             total_stock = cur.fetchone()[0]
-            
+
             if total_stock > 0:
                 st.error(f"❌ Não é possível eliminar: este contentor ainda tem sémen ({total_stock} palhetas).")
                 return False
-            
+
             # Se não tem stock, pode deletar
             cur.execute("DELETE FROM contentores WHERE id = %s", (to_py(contentor_id),))
             conn.commit()
             cur.close()
             logger.info(f"Contentor deletado: ID {contentor_id}")
             return True
-            
+
     except Exception as e:
         logger.error(f"Erro ao deletar contentor: {e}")
         st.error(f"Erro ao deletar contentor: {e}")
@@ -1518,7 +1518,7 @@ def obter_stock_contentor(contentor_id):
     try:
         with get_connection() as conn:
             query = """
-                SELECT 
+                SELECT
                     e.id,
                     e.garanhao,
                     d.nome as proprietario_nome,
@@ -1543,24 +1543,24 @@ def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
     """Aplica filtro de data em um DataFrame"""
     if df.empty:
         return df
-    
+
     if coluna_data not in df.columns:
         return df
-    
+
     df_filtrado = df.copy()
-    
+
     try:
         # Converter coluna para datetime se necessário
         if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
             df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
-        
+
         # Aplicar filtros
         if data_inicio:
             df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
-        
+
         if data_fim:
             df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
-        
+
         return df_filtrado
     except Exception as e:
         logger.error(f"Erro ao aplicar filtro de data: {e}")
@@ -1572,54 +1572,54 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
-            
+
             origem = cur.fetchone()
             if not origem:
                 st.error(t("error.origin_lot_not_found"))
                 return False
-            
-            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
+
+            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext,
              qual, conc, mot, local, cert, dose, obs) = origem
-            
+
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
-            
+
             if quantidade_int <= 0:
                 st.error(t("error.qty_positive"))
                 return False
-            
+
             if quantidade_int > exist_atual:
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
-            
+
             # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
-            
+
             # Verificar se já existe lote do destino com mesmo garanhão
             cur.execute("""
-                SELECT id, existencia_atual 
-                FROM estoque_dono 
+                SELECT id, existencia_atual
+                FROM estoque_dono
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
                 LIMIT 1
             """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id)))
-            
+
             lote_destino = cur.fetchone()
-            
+
             if lote_destino:
                 # Já existe lote, adicionar palhetas
                 cur.execute("""
-                    UPDATE estoque_dono 
+                    UPDATE estoque_dono
                     SET existencia_atual = existencia_atual + %s
                     WHERE id = %s
                 """, (quantidade_int, lote_destino[0]))
@@ -1638,7 +1638,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
                     quantidade_int, quantidade_int
                 ))
-            
+
             # Registrar transferência na tabela de transferências
             cur.execute("""
                 INSERT INTO transferencias (
@@ -1646,16 +1646,16 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                     quantidade, data_transferencia
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
-            
+
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
-            
+
             logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
             return True
-            
+
     except Exception as e:
         logger.error(f"Erro ao transferir palhetas: {e}")
         st.error(f"Erro ao transferir palhetas: {e}")
@@ -1666,37 +1666,37 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
-            
+
             origem = cur.fetchone()
             if not origem:
                 st.error(t("error.origin_lot_not_found"))
                 return False
-            
+
             garanhao, prop_origem_id, exist_atual = origem
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
-            
+
             if quantidade_int <= 0:
                 st.error(t("error.qty_positive"))
                 return False
-            
+
             if quantidade_int > exist_atual:
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
-            
+
             # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
-            
+
             # Registrar transferência externa
             cur.execute("""
                 INSERT INTO transferencias_externas (
@@ -1705,24 +1705,24 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                     data_transferencia
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (
-                to_py(stock_origem_id), 
-                to_py(prop_origem_id), 
+                to_py(stock_origem_id),
+                to_py(prop_origem_id),
                 to_py(garanhao),
-                to_py(destinatario_externo), 
+                to_py(destinatario_externo),
                 quantidade_int,
                 to_py(tipo),
                 to_py(observacoes)
             ))
-            
+
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
-            
+
             logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
             return True
-            
+
     except Exception as e:
         logger.error(f"Erro ao transferir para externo: {e}")
         st.error(f"Erro ao transferir para externo: {e}")
@@ -1788,12 +1788,12 @@ def mostrar_tela_login(app_settings):
     """Exibe tela de login"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
     st.title(t("login.title", company=nome_empresa))
-    
+
     col1, col2, col3 = st.columns([1, 2, 1])
-    
+
     with col2:
         st.markdown(f"### {t('login.auth')}")
-        
+
         with st.form("login_form"):
             label_user = "👤 " + t("auth.username")
             label_pass = "🔒 " + t("auth.password")
@@ -1803,7 +1803,7 @@ def mostrar_tela_login(app_settings):
             password = st.text_input(label_pass, type="password", placeholder=t("auth.password_placeholder"))
 
             submitted = st.form_submit_button(btn_label, type="primary", width="stretch")
-            
+
             if submitted:
                 if not username or not password:
                     st.error(t("login.missing"))
@@ -1820,7 +1820,25 @@ def mostrar_tela_login(app_settings):
                         st.rerun()
                     else:
                         st.error(t("login.invalid"))
-        
+
+
+
+def set_session_query_param(token: str) -> None:
+    """Set session query param using Streamlit stable API."""
+    st.query_params["session"] = token
+
+
+def get_session_query_param():
+    """Read session query param using Streamlit stable API."""
+    session_value = st.query_params.get("session")
+    if isinstance(session_value, list):
+        return session_value[0] if session_value else None
+    return session_value
+
+
+def clear_query_params() -> None:
+    """Clear query params using Streamlit stable API."""
+    st.query_params.clear()
 
 
 def set_session_query_param(token: str) -> None:
@@ -1844,15 +1862,15 @@ def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
     if 'user' not in st.session_state:
         return False
-    
+
     user_nivel = st.session_state['user']['nivel']
-    
+
     niveis = {
         'Administrador': 3,
         'Gestor': 2,
         'Visualizador': 1
     }
-    
+
     return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
 
 
@@ -1865,213 +1883,6 @@ def render_change_credentials(user, app_settings):
         nova_password = st.text_input(t("security.new_password"), type="password")
         confirmar_password = st.text_input(t("security.confirm_password"), type="password")
         submitted = st.form_submit_button(t("security.save"), type="primary", width="stretch")
-
-    if submitted:
-        if not novo_username:
-            st.error(t("error.username_required"))
-            return
-        if not nova_password or not confirmar_password:
-            st.error(t("error.password_required"))
-            return
-        if nova_password != confirmar_password:
-            st.error(t("error.passwords_mismatch"))
-            return
-
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT id FROM usuarios WHERE username = %s AND id <> %s",
-                (novo_username, user["id"]),
-            )
-            if cur.fetchone():
-                cur.close()
-                st.error(t("security.username_exists"))
-                return
-
-            nova_hash = criar_hash_password(nova_password)
-            cur.execute(
-                """
-                UPDATE usuarios
-                SET username = %s,
-                    password_hash = %s,
-                    must_change_password = FALSE,
-                    updated_at = now()
-                WHERE id = %s
-                """,
-                (novo_username, nova_hash, user["id"]),
-            )
-            conn.commit()
-            cur.close()
-
-        update_show_initial_credentials(False)
-        st.session_state['user']['username'] = novo_username
-        st.session_state['user']['must_change_password'] = False
-        st.success(t("security.success"))
-        st.rerun()
-
-
-def render_welcome_page():
-    st.markdown(
-        """
-        <style>
-            header[data-testid="stHeader"] {{ display: none !important; }}
-            section[data-testid="stSidebar"] {{ display: none !important; }}
-            div[data-testid="stAppViewContainer"] {{ padding-top: 0 !important; }}
-            section.main > div.block-container {{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }}
-            .welcome-card {{
-                text-align: center;
-                max-width: 720px;
-                padding: 32px 28px;
-            }}
-            .welcome-title {{
-                font-size: 3rem;
-                font-weight: 700;
-                color: #0f172a;
-                margin-bottom: 0.6rem;
-            }}
-            .welcome-subtitle {{
-                font-size: 1.1rem;
-                color: #334155;
-                margin-bottom: 1rem;
-            }}
-            .welcome-text {{
-                font-size: 0.95rem;
-                color: #475569;
-                margin-bottom: 2rem;
-                line-height: 1.6;
-            }}
-            .welcome-footer {{
-                font-size: 0.75rem;
-                color: #94a3b8;
-                margin-top: 1.5rem;
-                text-align: center;
-            }}
-            .welcome-card .stButton > button {{
-                padding: 0.85rem 1.5rem;
-                font-size: 1rem;
-            }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col_left, col_mid, col_right = st.columns([1, 2, 1])
-    with col_mid:
-        st.markdown(
-            f"""
-            <div class="welcome-card">
-                <div class="welcome-title">{t("welcome.title")}</div>
-                <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
-                <div class="welcome-text">{t("welcome.text")}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button(t("welcome.start"), type="primary", width="stretch"):
-            if update_welcome_completed(True):
-                st.rerun()
-        st.markdown(
-            f"<div class='welcome-footer'>{t('welcome.powered')}</div>",
-            unsafe_allow_html=True,
-        )
-
-
-def render_onboarding(app_settings):
-    inject_stock_css()
-    inject_reports_css()
-
-    st.title(t("onboarding.title"))
-    st.caption(t("onboarding.subtitle"))
-
-    if "onboarding_company_name" not in st.session_state:
-        st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
-    if "onboarding_theme_key" not in st.session_state:
-        st.session_state["onboarding_theme_key"] = app_settings.get("theme_key") or "blue"
-    if "onboarding_admin_username" not in st.session_state:
-        st.session_state["onboarding_admin_username"] = "admin"
-    if "onboarding_admin_password" not in st.session_state:
-        st.session_state["onboarding_admin_password"] = secrets.token_urlsafe(8)
-
-    if app_settings.get("logo_base64") and "onboarding_logo_base64" not in st.session_state:
-        st.session_state["onboarding_logo_base64"] = app_settings.get("logo_base64")
-
-    logo_preview = st.session_state.get("onboarding_logo_base64")
-    nome_preview = st.session_state.get("onboarding_company_name")
-
-    if logo_preview:
-        st.markdown(
-            f"""
-            <div style='display:flex; align-items:center; gap:12px; margin-bottom:8px;'>
-                <img src='{logo_preview}' style='height:36px;'/>
-                <h3 style='margin:0;'>{nome_preview}</h3>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    render_zone_title(t("onboarding.zone_brand"), "insem-zone-title")
-    col_a1, col_a2 = st.columns([2, 1.2])
-    with col_a1:
-        company_name = st.text_input(t("onboarding.company"), key="onboarding_company_name")
-    with col_a2:
-        theme_key = st.radio(
-            t("onboarding.theme"),
-            options=list(THEMES.keys()),
-            format_func=lambda k: k.capitalize(),
-            key="onboarding_theme_key",
-            horizontal=True,
-        )
-        preview_color = THEMES.get(theme_key, THEMES["blue"])
-        st.markdown(
-            f"<div style='width:100%; height:10px; border-radius:6px; background:{preview_color}; border:1px solid #e2e8f0;'></div>",
-            unsafe_allow_html=True,
-        )
-
-    logo_file = st.file_uploader(t("onboarding.logo"), type=["png", "jpg", "jpeg"])
-    if logo_file is not None:
-        logo_bytes = logo_file.read()
-        if logo_bytes:
-            encoded = base64.b64encode(logo_bytes).decode("utf-8")
-            st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
-
-    render_zone_title(t("onboarding.zone_admin"), "insem-zone-title")
-    admin_username = st.text_input(t("onboarding.admin_user"), key="onboarding_admin_username")
-    admin_password = st.text_input(t("onboarding.admin_password"), key="onboarding_admin_password")
-    st.caption(t("onboarding.temp_note"))
-
-    render_zone_title(t("onboarding.zone_confirm"), "insem-zone-title")
-    cred_text = f"Username: {admin_username}\nPassword: {admin_password}"
-    st.markdown(f"**{t('onboarding.credentials')}**")
-    st.code(cred_text)
-
-    cred_js = cred_text.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n")
-    st.components.v1.html(
-        f"""
-        <button style='padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-weight:600;'
-                onclick="navigator.clipboard.writeText(`{cred_js}`)">Copiar</button>
-        """,
-        height=40,
-    )
-
-    if st.button(t("onboarding.finish"), type="primary", width="stretch"):
-        if not company_name:
-            st.error(t("msg.require_company"))
-            return
-        if not admin_username or not admin_password:
-            st.error(t("msg.require_admin"))
-            return
-
-        logo_base64 = st.session_state.get("onboarding_logo_base64")
-        primary_color = THEMES.get(theme_key, THEMES["blue"])
-        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
-        ensure_admin_user_exists(admin_username, admin_password)
         st.success(t("onboarding.done"))
         st.rerun()
 
@@ -2162,7 +1973,7 @@ aba = render_sidebar(app_settings, user, menu_options, active_key)
 def modal_adicionar_proprietario():
     """Modal para adicionar novo proprietário rapidamente"""
     novo_nome = st.text_input(t("owners.name_required"), key="modal_novo_prop")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button(t("btn.add"), type="primary", width="stretch"):
@@ -2170,7 +1981,7 @@ def modal_adicionar_proprietario():
                 st.error(t("error.name_required"))
             else:
                 # Criar dados mínimos
-                dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
+                dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None,
                               'nome_completo': None, 'nif': None, 'morada': None,
                               'codigo_postal': None, 'cidade': None}
                 prop_id = adicionar_proprietario(dados_novo)
@@ -2239,23 +2050,23 @@ elif aba == t("menu.add_stock"):
     else:
         # Carregar contentores
         contentores_df = carregar_contentores()
-        
+
         if contentores_df.empty:
             st.warning(t("add_stock.no_containers"))
         else:
             # Botão + fora do form
             if st.button(t("stock.new_owner"), key="btn_add_prop_stock", help=t("stock.new_owner_help")):
                 modal_adicionar_proprietario()
-            
+
             with st.form("novo_stock"):
                 garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
-                
+
                 # Verificar se há proprietário recém-adicionado
                 if 'novo_proprietario_id' in st.session_state:
                     idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
                 else:
                     idx_default = 0
-                
+
                 proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
 
                 dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
@@ -2275,7 +2086,7 @@ elif aba == t("menu.add_stock"):
 
                 st.markdown("---")
                 st.subheader(t("stock.location_title"))
-                
+
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
                     contentor_selecionado = st.selectbox(
@@ -2284,14 +2095,14 @@ elif aba == t("menu.add_stock"):
                         help=t("add_stock.container_help")
                     )
                     contentor_id = int(contentores_df.loc[contentores_df["codigo"] == contentor_selecionado, "id"].iloc[0])
-                
+
                 with col_loc2:
                     canister = st.selectbox(
                         t("label.canister_required"),
                         options=list(range(1, 11)),
                         help=t("add_stock.canister_help")
                     )
-                
+
                 with col_loc3:
                     andar = st.radio(
                         t("label.floor_required"),
@@ -2957,14 +2768,14 @@ elif aba == t("menu.register_insemination"):
 
 elif aba == t("menu.owners"):
     st.header(t("owners.title"))
-    
+
     # Verificar e criar coluna ativo se não existir
     try:
         with get_connection() as conn:
             cur = conn.cursor()
             # Verificar se a coluna existe
             cur.execute("""
-                SELECT column_name FROM information_schema.columns 
+                SELECT column_name FROM information_schema.columns
                 WHERE table_name='dono' AND column_name='ativo'
             """)
             if not cur.fetchone():
@@ -2976,20 +2787,20 @@ elif aba == t("menu.owners"):
             cur.close()
     except Exception as e:
         st.error(t("owners.column_error", error=e))
-    
+
     # TODO: Implementar desativação automática nas transações de stock
     # atualizar_status_proprietarios()
-    
+
     # Limpar cache se houver mudança de status
     if 'status_changed' in st.session_state:
         del st.session_state['status_changed']
         st.cache_data.clear()
-    
+
     # Recarregar proprietários (todos, não apenas ativos) - sempre fresh
     proprietarios_todos = carregar_proprietarios(apenas_ativos=False)
-    
+
     tab1, tab2 = st.tabs([t("owners.tab.list"), t("owners.tab.add")])
-    
+
     # TAB 1: Lista
     with tab1:
         if proprietarios_todos.empty:
@@ -2997,13 +2808,13 @@ elif aba == t("menu.owners"):
         else:
             # Filtro e Ordenação
             col_f1, col_f2 = st.columns(2)
-            
+
             with col_f1:
                 filtro_status = st.radio(t("owners.filter"), [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")], horizontal=True)
-            
+
             with col_f2:
                 ordenar_por = st.selectbox(t("owners.sort_by"), [t("owners.sort.name"), t("owners.sort.id"), t("owners.sort.status")])
-            
+
             # Aplicar filtro
             if filtro_status == t("owners.filter.active"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == True].copy()
@@ -3011,7 +2822,7 @@ elif aba == t("menu.owners"):
                 props_exibir = proprietarios_todos[proprietarios_todos['ativo'] == False].copy()
             else:
                 props_exibir = proprietarios_todos.copy()
-            
+
             # Aplicar ordenação
             if ordenar_por == t("owners.sort.name"):
                 props_exibir = props_exibir.sort_values('nome')
@@ -3019,25 +2830,25 @@ elif aba == t("menu.owners"):
                 props_exibir = props_exibir.sort_values('id')
             elif ordenar_por == t("owners.sort.status"):
                 props_exibir = props_exibir.sort_values('ativo', ascending=False)
-            
+
             st.markdown(t("owners.count", count=len(props_exibir)))
             st.markdown("---")
-            
+
             # Lista de proprietários (estilo lotes)
             for _, prop in props_exibir.iterrows():
                 # Status
                 status_icon = "🟢" if prop.get('ativo', True) else "🔴"
                 status_text = t("owners.status.active") if prop.get('ativo', True) else t("owners.status.inactive")
-                
+
                 # Título do expander com ID | Nome | Status
                 titulo = f"**{prop['id']}** | {prop['nome']} | {status_icon} {status_text}"
-                
+
                 # Verificar se este expander deve estar expandido
                 expandido = st.session_state.get(f'expand_{prop["id"]}', False)
-                
+
                 # Expander
                 with st.expander(titulo, expanded=expandido):
-                    
+
                     # Tabs: Detalhes e Editar
                     tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
 
@@ -3130,28 +2941,28 @@ elif aba == t("menu.owners"):
                                     if editar_proprietario(prop['id'], dados):
                                         st.success(t("success.updated"))
                                         st.rerun()
-    
+
     # TAB 2: Adicionar
     with tab2:
         st.markdown(f"### {t('owners.new_title')}")
-        
+
         with st.form("form_adicionar"):
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 nome_n = st.text_input(t("label.name_required"))
                 email_n = st.text_input(t("label.email"))
                 tel_n = st.text_input(t("label.phone"))
                 nc_n = st.text_input(t("label.full_name"))
-            
+
             with col2:
                 nif_n = st.text_input(t("label.nif"))
                 morada_n = st.text_area(t("label.address"), height=100)
                 cp_n = st.text_input(t("label.postal_code"))
                 cidade_n = st.text_input(t("label.city"))
-            
+
             adicionar = st.form_submit_button(t("btn.add"), type="primary", width="stretch")
-            
+
             if adicionar:
                 if not nome_n:
                     st.error(t("error.name_required"))
@@ -3205,7 +3016,7 @@ elif aba == t("menu.users"):
                     t("label.status"),
                     [t("owners.filter.all"), t("owners.filter.active"), t("owners.filter.inactive")],
                 )
-            
+
             usuarios_filtrado = usuarios_df.copy()
             if filtro_nivel:
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["nivel"].isin(filtro_nivel)]
@@ -3213,9 +3024,9 @@ elif aba == t("menu.users"):
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == True]
             elif filtro_status == t("owners.filter.inactive"):
                 usuarios_filtrado = usuarios_filtrado[usuarios_filtrado["ativo"] == False]
-            
+
             st.markdown("---")
-            
+
             for _, usr in usuarios_filtrado.iterrows():
                 status_emoji = "✅" if usr['ativo'] else "❌"
                 with st.expander(t("users.expander", name=usr['nome_completo'], username=usr['username'], level=usr['nivel'], status_icon=status_emoji)):
@@ -3229,7 +3040,7 @@ elif aba == t("menu.users"):
                         st.markdown(f"**{t('label.created_at')}:** {usr['created_at']}")
                         if usr['last_login']:
                             st.markdown(f"**{t('label.last_login')}:** {usr['last_login']}")
-                    
+
                     with col2:
                         if usr['ativo']:
                             if st.button(t("users.deactivate"), key=f"deactivate_{usr['id']}", type="secondary"):
@@ -3241,20 +3052,20 @@ elif aba == t("menu.users"):
                                 if ativar_usuario(usr['id']):
                                     st.success(t("users.activated"))
                                     st.rerun()
-    
+
     # TAB 2: Adicionar
     with tab2:
         st.markdown(f"### {t('users.add_new')}")
-        
+
         with st.form("add_usuario"):
             novo_username = st.text_input(t("users.username_required"), placeholder=t("users.username_placeholder"))
             novo_nome = st.text_input(t("label.full_name_required"))
             novo_nivel = st.selectbox(t("users.access_level"), [t("users.level.admin"), t("users.level.manager"), t("users.level.viewer")])
             nova_password = st.text_input(t("users.password_label"), type="password", placeholder=t("users.password_min"))
             confirma_password = st.text_input(t("users.password_confirm"), type="password")
-            
+
             submit = st.form_submit_button(t("users.create_user"), type="primary")
-            
+
             if submit:
                 if not novo_username or not novo_nome or not nova_password:
                     st.error(t("users.fill_required"))
@@ -3271,14 +3082,14 @@ elif aba == t("menu.users"):
                         # Redirecionar para a lista de utilizadores
                         st.session_state['show_user_tab'] = 0  # Tab lista
                         st.rerun()
-        
+
         st.markdown("---")
         st.info(t("users.access_levels_info"))
-    
+
     # TAB 3: Alterar Password
     with tab3:
         st.markdown(f"### {t('users.change_password_title')}")
-        
+
         if not usuarios_df.empty:
             with st.form("change_password"):
                 usuario_selecionado = st.selectbox(
@@ -3286,12 +3097,12 @@ elif aba == t("menu.users"):
                     options=usuarios_df["id"].tolist(),
                     format_func=lambda x: f"{usuarios_df[usuarios_df['id']==x]['nome_completo'].values[0]} (@{usuarios_df[usuarios_df['id']==x]['username'].values[0]})"
                 )
-                
+
                 nova_senha = st.text_input(t("users.new_password"), type="password", placeholder=t("users.password_min"))
                 confirma_senha = st.text_input(t("users.password_confirm_new"), type="password")
-                
+
                 submit_senha = st.form_submit_button(t("users.change_password_btn"), type="primary")
-                
+
                 if submit_senha:
                     if not nova_senha:
                         st.error(t("users.password_required"))
