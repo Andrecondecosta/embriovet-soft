@@ -289,6 +289,9 @@ def inject_shell_css(primary_color: str | None):
                 padding: 4px 10px;
                 height: 32px;
             }}
+            div[data-testid="stVerticalBlock"]:empty {{
+                display: none;
+            }}
             .reports-kpi-item b {{
                 color: var(--primary) !important;
             }}
@@ -337,10 +340,8 @@ def render_header(app_settings, user_info):
             )
 
     with col_right:
-        st.markdown("<div class='app-topbar-actions'>", unsafe_allow_html=True)
         settings_clicked = st.button(t("header.settings"), width="content", key="topbar_settings")
         logout_clicked = st.button(t("header.logout"), width="content", key="topbar_logout")
-        st.markdown("</div>", unsafe_allow_html=True)
 
     return settings_clicked, logout_clicked
 
