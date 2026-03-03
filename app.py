@@ -684,7 +684,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_nome', 'N/A'))[:30],
                     str(row.get('data_embriovet', 'N/A'))[:10],
                     str(int(row.get('existencia_atual', 0))),
-                    f"{int(row.get('qualidade', 0))}%",
+                    str(row.get('qualidade', '—')),
                     str(row.get('local_armazenagem', 'N/A'))[:20]
                 ])
             
