@@ -351,23 +351,24 @@ def render_sidebar(app_settings, user_info, menu_items, active_key):
     user_name = (user_info or {}).get("nome") or "Utilizador"
     nivel = (user_info or {}).get("nivel") or ""
 
-    st.sidebar.markdown(
-        "<div class='sidebar-brand'>",
-        unsafe_allow_html=True,
-    )
     if logo:
-        st.sidebar.markdown(
-            f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>",
-            unsafe_allow_html=True,
-        )
+        brand_media = f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>"
     else:
         initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
-        st.sidebar.markdown(
-            f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>",
-            unsafe_allow_html=True,
+        brand_media = (
+            f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); "
+            f"display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>"
         )
-    st.sidebar.markdown(f"<div class='sidebar-brand-title'>{company_name}</div>", unsafe_allow_html=True)
-    st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+    st.sidebar.markdown(
+        f"""
+        <div class='sidebar-brand'>
+            {brand_media}
+            <div class='sidebar-brand-title'>{company_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.sidebar.markdown(
         f"""
