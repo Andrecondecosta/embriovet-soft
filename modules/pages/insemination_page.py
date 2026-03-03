@@ -123,6 +123,8 @@ def run_insemination_page(ctx):
             "local": lote_local(row),
             "motilidade": int(to_py(row.get("motilidade")) or 0),
             "dose": to_py(row.get("dose")) or "—",
+            "cor": to_py(row.get("cor")) or "",
+            "concentracao": int(to_py(row.get("concentracao")) or 0),
             "protocolo": row.get("data_embriovet") or row.get("origem_externa") or "N/A",
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
         }
