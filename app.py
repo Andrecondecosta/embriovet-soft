@@ -52,6 +52,7 @@ from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.reports_page import run_reports_page
 from modules.pages.insemination_page import run_insemination_page
+from modules.pages.transfer_page import run_transfer_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
 from modules.i18n import t, get_i18n_diagnostics
