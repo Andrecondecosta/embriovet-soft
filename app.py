@@ -1743,6 +1743,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
     page_icon="🐴",
 )
+
+# Consolidar todo o CSS em um único bloco para evitar containers vazios
 st.markdown(
     """
     <style>
@@ -1759,13 +1761,8 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
+    /* Ocultar botão Deploy sem criar container visível */
     </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.components.v1.html(
-    """
     <script>
     (function() {
         const hideDeploy = () => {
@@ -1783,8 +1780,11 @@ st.components.v1.html(
     })();
     </script>
     """,
-    height=0,
+    unsafe_allow_html=True,
 )
+
+# Injetar design system e CSS globais uma única vez
+inject_design_system()
 inject_stepper_css()
 inject_stock_css()
 inject_reports_css()
