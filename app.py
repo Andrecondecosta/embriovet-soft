@@ -2258,6 +2258,10 @@ if aba == t("menu.stock"):
     run_stock_page({**globals(), **locals()})
     st.stop()
 
+if aba == t("menu.transfers"):
+    run_transfer_page({**globals(), **locals()})
+    st.stop()
+
 if aba == t("menu.reports"):
     run_reports_page({**globals(), **locals()})
     st.stop()
