@@ -78,10 +78,10 @@ def run_insemination_page(ctx):
 
     if "insem_linhas" not in st.session_state:
         st.session_state["insem_linhas"] = {}
-    if "insem_garanhao_modal" not in st.session_state:
-        st.session_state["insem_garanhao_modal"] = None
-    if "insem_prop_modal" not in st.session_state:
-        st.session_state["insem_prop_modal"] = "Todos"
+    if "insem_garanhao_principal" not in st.session_state:
+        st.session_state["insem_garanhao_principal"] = None
+    if "insem_prop_principal" not in st.session_state:
+        st.session_state["insem_prop_principal"] = None
     if "insem_show_success" not in st.session_state:
         st.session_state["insem_show_success"] = False
 
