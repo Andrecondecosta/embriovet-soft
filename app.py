@@ -2102,7 +2102,7 @@ def mostrar_tela_login(app_settings):
                         auth_store[token] = user
                         st.session_state['user'] = user
                         st.session_state['auth_token'] = token
-                        set_session_query_param(token)
+                        st.query_params.session = token
                         st.success(t("login.welcome", name=user["nome"]))
                         st.rerun()
                     else:
@@ -2376,8 +2376,7 @@ if not app_settings.get("is_initialized"):
 
 # Verificar se está logado (restaurar sessão por query param)
 auth_store = get_auth_store()
-params = st.experimental_get_query_params()
-token_param = params.get("session", [None])[0] if params else None
+token_param = st.query_params.get("session", None)
 if 'user' not in st.session_state and token_param and token_param in auth_store:
     st.session_state['user'] = auth_store[token_param]
     st.session_state['auth_token'] = token_param
@@ -2400,7 +2399,7 @@ if logout_clicked:
     if token:
         auth_store = get_auth_store()
         auth_store.pop(token, None)
-    clear_query_params()
+    st.query_params.clear()
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
