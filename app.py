@@ -27,6 +27,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
 from modules.ui_kit import (
+    inject_all_css_consolidated,
     inject_design_system,
     inject_reports_css,
     inject_stock_css,
