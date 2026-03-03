@@ -569,7 +569,7 @@ TRANSLATIONS = {
         "menu.dashboard": "🏠 Dashboard",
         "menu.map": "🗺️ Container Map",
         "menu.stock": "📦 View Stock",
-        "menu.transfers": "🔄 Transfers",
+        "menu.transfers": "🔄 Int/Ext Transf.",
         "menu.reports": "📈 Reports",
         "menu.add_stock": "➕ Add Stock",
         "menu.import": "📥 Import Semen",
