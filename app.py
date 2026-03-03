@@ -1756,10 +1756,31 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
-    div[data-testid="stToolbar"] > div:last-child { display: none !important; }
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+st.components.v1.html(
+    """
+    <script>
+    (function() {
+        const hideDeploy = () => {
+            const root = window.parent.document;
+            root.querySelectorAll('button, a').forEach(el => {
+                if (el.textContent && el.textContent.trim() === 'Deploy') {
+                    el.style.display = 'none';
+                }
+            });
+        };
+        hideDeploy();
+        const obs = new MutationObserver(hideDeploy);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(hideDeploy, 400);
+    })();
+    </script>
+    """,
+    height=0,
 )
 inject_stepper_css()
 inject_stock_css()
