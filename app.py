@@ -2236,7 +2236,8 @@ elif aba == t("menu.add_stock"):
                     data = st.text_input(t("stock.prod_date"))
                     origem = st.text_input(t("stock.external_origin"))
                     palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
-                    qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=0)
+                    qualidade = st.text_input(t("stock.quality_text"))
+                    cor = st.text_input(t("stock.color"))
                     concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
 
                 with col2:
@@ -2290,14 +2291,15 @@ elif aba == t("menu.add_stock"):
                                 "Data": data,
                                 "Origem": origem,
                                 "Palhetas": palhetas_int,
-                                "Qualidade": int(to_py(qualidade) or 0),
-                                "Concentração": int(to_py(concentracao) or 0),
+                                "Qualidade": to_py(qualidade),
+                                "Concentração": to_py(concentracao),
                                 "Motilidade": int(to_py(motilidade) or 0),
                                 "Certificado": certificado,
                                 "Dose": dose,
                                 "Contentor": contentor_id,
                                 "Canister": canister,
                                 "Andar": andar,
+                                "Cor": to_py(cor),
                                 "Observações": observacoes,
                             }
                         )
