@@ -118,23 +118,7 @@ def run_dashboard_page(ctx: dict):
         ]
     )
 
-    # Zona C — Alertas
-    render_zone_title(t("dashboard.alerts"), "insem-zone-title")
-    alerts = []
-    if stock_critico and stock_critico > 0:
-        alerts.append(f"⚠ {stock_critico} lotes com stock crítico (≤5)")
-    if motilidade_baixa is not None and motilidade_baixa > 0:
-        alerts.append(f"⚠ {motilidade_baixa} lotes com motilidade < 50")
-
-    if alerts:
-        st.markdown(
-            "<div class='dash-alerts'><ul>" + "".join([f"<li>{a}</li>" for a in alerts]) + "</ul></div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(f"<div class='dash-alerts'>{t('dashboard.no_alerts')}</div>", unsafe_allow_html=True)
-
-    # Zona D — Atividade recente
+    # Zona C — Atividade recente (Alertas removidos)
     render_zone_title(t("dashboard.activity"), "insem-zone-title")
     atividades = []
     try:
@@ -170,25 +154,38 @@ def run_dashboard_page(ctx: dict):
                     atividades = cur.fetchall()
 
             if not atividades:
+                # Buscar transferências e inseminações com nomes dos proprietários
                 cur.execute(
                     """
                     SELECT data_transferencia AS ts,
-                           '—' AS usuario,
+                           COALESCE(u.nome, '—') AS usuario,
                            'Transferência interna' AS acao,
-                           'Qtd ' || quantidade || ' | Origem ' || proprietario_origem_id || ' → Dest ' || proprietario_destino_id AS detalhe
-                    FROM transferencias
+                           'Qtd ' || t.quantidade || ' | ' || 
+                           COALESCE(d1.nome, 'Origem ' || t.proprietario_origem_id) || ' → ' || 
+                           COALESCE(d2.nome, 'Dest ' || t.proprietario_destino_id) AS detalhe
+                    FROM transferencias t
+                    LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
+                    LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
+                    LEFT JOIN usuarios u ON t.criado_por = u.nome
                     UNION ALL
                     SELECT data_transferencia AS ts,
-                           '—' AS usuario,
+                           COALESCE(u.nome, '—') AS usuario,
                            'Transferência externa' AS acao,
-                           'Qtd ' || quantidade || ' | Dest ' || destinatario_externo AS detalhe
-                    FROM transferencias_externas
+                           'Qtd ' || te.quantidade || ' | ' || 
+                           COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe
+                    FROM transferencias_externas te
+                    LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+                    LEFT JOIN usuarios u ON te.criado_por = u.nome
                     UNION ALL
-                    SELECT data_inseminacao AS ts,
-                           '—' AS usuario,
+                    SELECT i.data_inseminacao AS ts,
+                           COALESCE(u.nome, '—') AS usuario,
                            'Inseminação' AS acao,
-                           'Égua ' || egua || ' | Palhetas ' || palhetas_gastas AS detalhe
-                    FROM inseminacoes
+                           'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
+                           COALESCE(d.nome, 'Proprietário ' || i.dono_id) || ' | ' ||
+                           i.palhetas_gastas || ' palhetas' AS detalhe
+                    FROM inseminacoes i
+                    LEFT JOIN dono d ON i.dono_id = d.id
+                    LEFT JOIN usuarios u ON i.criado_por = u.nome
                     ORDER BY ts DESC
                     LIMIT 10
                     """
