@@ -313,7 +313,7 @@ def run_insemination_page(ctx):
             if step_key not in st.session_state:
                 st.session_state[step_key] = qtd
 
-            l1, l2, lminus, linput, lplus, l4 = st.columns([3.0, 1.5, 0.5, 0.9, 0.5, 0.8])
+            l1, l2, linput, l4 = st.columns([3.0, 1.5, 1.9, 0.8])
             with l1:
                 st.markdown(f"<div class='insem-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
                 st.markdown(
@@ -323,14 +323,18 @@ def run_insemination_page(ctx):
             with l2:
                 st.markdown(f"<div class='insem-lote-sub'>{t('label.quantity')}</div>", unsafe_allow_html=True)
 
-            # Stepper editável com campo de input
-            qtd_val, _ = render_stepper(
-                [linput, lminus, lplus],
-                step_key,
-                min_value=0,
-                max_value=max_disp,
-                editable=True,
-            )
+            # Campo de input digitável (sem botões +/- extras)
+            with linput:
+                new_qtd = st.number_input(
+                    "Quantidade",
+                    min_value=0,
+                    max_value=max_disp,
+                    value=int(st.session_state.get(step_key, qtd) or 0),
+                    step=1,
+                    key=step_key,
+                    label_visibility="collapsed",
+                )
+                qtd_val = new_qtd
 
             if qtd_val != qtd:
                 if qtd_val == 0:
