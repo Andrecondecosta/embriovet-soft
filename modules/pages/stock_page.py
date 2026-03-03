@@ -158,12 +158,13 @@ def run_stock_page(ctx: dict):
             elif row.get('local_armazenagem'):
                 localizacao = row.get('local_armazenagem')
             
-            # Motilidade e Concentração
+            # Motilidade, Concentração e Cor
             motilidade = int(to_py(row.get("motilidade")) or 0)
             concentracao = int(to_py(row.get("concentracao")) or 0)
+            cor = to_py(row.get("cor")) or "—"
             
             # Criar título do expander com todas as informações
-            info_extra = f"📍 {localizacao} | 📊 M:{motilidade}% | 🧬 {concentracao}M/ml"
+            info_extra = f"📍 {localizacao} | 🎨 {cor} | 📊 M:{motilidade}% | 🧬 {concentracao}M/ml"
 
             # Verificar se é o lote recém-adicionado para abrir automaticamente
             expanded = (stock_id_expandir == row["id"]) if stock_id_expandir else False

@@ -1953,25 +1953,144 @@ def get_auth_store():
     return {}
 
 def mostrar_tela_login(app_settings):
-    """Exibe tela de login"""
+    """Exibe tela de login com design premium"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
-    st.title(t("login.title", company=nome_empresa))
-
+    logo_base64 = (app_settings or {}).get("logo_base64")
+    cor_primaria = (app_settings or {}).get("primary_color") or "#3b82f6"
+    
+    # CSS Premium para a página de login
+    st.markdown(
+        f"""
+        <style>
+            /* Esconder elementos do Streamlit */
+            #MainMenu, footer, header {{visibility: hidden;}}
+            
+            /* Fundo gradiente premium */
+            .stApp {{
+                background: linear-gradient(135deg, {cor_primaria}15 0%, {cor_primaria}05 100%);
+            }}
+            
+            /* Card de login */
+            .login-card {{
+                background: white;
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+                border: 1px solid rgba(0, 0, 0, 0.06);
+                max-width: 440px;
+                margin: 60px auto;
+            }}
+            
+            /* Logo */
+            .login-logo {{
+                text-align: center;
+                margin-bottom: 24px;
+            }}
+            
+            .login-logo img {{
+                max-width: 120px;
+                height: auto;
+                border-radius: 12px;
+            }}
+            
+            /* Título */
+            .login-title {{
+                text-align: center;
+                font-size: 1.75rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin-bottom: 8px;
+            }}
+            
+            .login-subtitle {{
+                text-align: center;
+                font-size: 0.95rem;
+                color: #64748b;
+                margin-bottom: 32px;
+            }}
+            
+            /* Inputs mais bonitos */
+            .stTextInput input {{
+                border-radius: 10px !important;
+                border: 1.5px solid #e2e8f0 !important;
+                padding: 12px 16px !important;
+                font-size: 0.95rem !important;
+                transition: all 0.2s ease !important;
+            }}
+            
+            .stTextInput input:focus {{
+                border-color: {cor_primaria} !important;
+                box-shadow: 0 0 0 3px {cor_primaria}20 !important;
+            }}
+            
+            /* Botão premium */
+            .stButton > button {{
+                border-radius: 10px !important;
+                padding: 12px 24px !important;
+                font-weight: 600 !important;
+                font-size: 1rem !important;
+                background: linear-gradient(135deg, {cor_primaria} 0%, {cor_primaria}dd 100%) !important;
+                border: none !important;
+                box-shadow: 0 4px 12px {cor_primaria}40 !important;
+                transition: all 0.2s ease !important;
+            }}
+            
+            .stButton > button:hover {{
+                transform: translateY(-2px) !important;
+                box-shadow: 0 6px 20px {cor_primaria}50 !important;
+            }}
+            
+            /* Footer do card */
+            .login-footer {{
+                text-align: center;
+                margin-top: 24px;
+                padding-top: 24px;
+                border-top: 1px solid #f1f5f9;
+                font-size: 0.85rem;
+                color: #94a3b8;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Centralizar o formulário
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown(f"### {t('login.auth')}")
+        st.markdown("<div class='login-card'>", unsafe_allow_html=True)
+        
+        # Logo
+        if logo_base64:
+            st.markdown(
+                f"<div class='login-logo'><img src='data:image/png;base64,{logo_base64}' /></div>",
+                unsafe_allow_html=True
+            )
+        
+        # Título
+        st.markdown(f"<div class='login-title'>{nome_empresa}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='login-subtitle'>{t('login.subtitle')}</div>", unsafe_allow_html=True)
+        
+        # Formulário
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input(
+                t("auth.username"),
+                placeholder=t("auth.username_placeholder"),
+                label_visibility="collapsed"
+            )
+            password = st.text_input(
+                t("auth.password"),
+                type="password",
+                placeholder=t("auth.password_placeholder"),
+                label_visibility="collapsed"
+            )
 
-        with st.form("login_form"):
-            label_user = "👤 " + t("auth.username")
-            label_pass = "🔒 " + t("auth.password")
-            btn_label = "🚀 " + t("auth.login")
-
-            username = st.text_input(label_user, placeholder=t("auth.username_placeholder"))
-            password = st.text_input(label_pass, type="password", placeholder=t("auth.password_placeholder"))
-
-            submitted = st.form_submit_button(btn_label, type="primary", width="stretch")
-
+            submitted = st.form_submit_button(
+                t("auth.login"),
+                type="primary",
+                use_container_width=True
+            )
+            
             if submitted:
                 if not username or not password:
                     st.error(t("login.missing"))
@@ -1988,25 +2107,15 @@ def mostrar_tela_login(app_settings):
                         st.rerun()
                     else:
                         st.error(t("login.invalid"))
-
-
-
-def set_session_query_param(token: str) -> None:
-    """Set session query param using Streamlit stable API."""
-    st.query_params["session"] = token
-
-
-def get_session_query_param():
-    """Read session query param using Streamlit stable API."""
-    session_value = st.query_params.get("session")
-    if isinstance(session_value, list):
-        return session_value[0] if session_value else None
-    return session_value
-
-
-def clear_query_params() -> None:
-    """Clear query params using Streamlit stable API."""
-    st.query_params.clear()
+        
+        # Footer
+        st.markdown(
+            f"<div class='login-footer'>🔒 {t('login.secure')}</div>",
+            unsafe_allow_html=True
+        )
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
