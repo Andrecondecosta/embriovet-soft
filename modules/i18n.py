@@ -1422,6 +1422,7 @@ TRANSLATIONS = {
         "insemination.available_value": "Verf {value}",
         "insemination.no_lotes_selected": "Keine ausgewählten Chargen verfügbar.",
         "insemination.zone_selection": "Auswahlbereich",
+        "insemination.zone_details": "Besamungsdetails",
         "insemination.lines_title": "Besamungslinien",
         "insemination.no_lotes_selected_hint": "Keine Charge ausgewählt. Klicken Sie auf 'Chargen auswählen'.",
         "insemination.available_inline": "Verf {value}",
