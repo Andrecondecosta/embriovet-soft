@@ -363,19 +363,75 @@ def run_transfer_page(ctx):
         
         if tipo_transferencia == t("transfer.internal"):
             # Transferência Interna
+            st.markdown(f"**{t('transfer.destination_owner')}**")
+            
+            # Botão para adicionar novo proprietário
+            if st.button(t("stock.new_owner"), key="transfer_btn_new_owner"):
+                modal_adicionar_proprietario()
+            
             prop_destino_opts = sorted(proprietarios["nome"].tolist())
             proprietario_destino = st.selectbox(
                 t("transfer.destination_owner"),
                 prop_destino_opts,
-                key="transfer_dest_interno"
+                key="transfer_dest_interno",
+                label_visibility="collapsed"
             )
             
+            # Perguntar se muda de localização
+            st.markdown("---")
+            muda_localizacao = st.radio(
+                t("transfer.change_location"),
+                [t("transfer.keep_location"), t("transfer.new_location")],
+                key="transfer_muda_loc",
+                horizontal=True
+            )
+            
+            contentor_id_destino = None
+            canister_destino = None
+            andar_destino = None
+            
+            if muda_localizacao == t("transfer.new_location"):
+                st.markdown(f"**{t('transfer.new_location_details')}**")
+                
+                # Buscar contentores
+                contentores_list = contentores["codigo"].tolist() if not contentores.empty else []
+                if contentores_list:
+                    contentor_codigo = st.selectbox(
+                        t("label.container"),
+                        contentores_list,
+                        key="transfer_contentor"
+                    )
+                    contentor_id_destino = contentores[contentores["codigo"] == contentor_codigo]["id"].iloc[0]
+                else:
+                    st.warning(t("transfer.no_containers"))
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    canister_destino = st.number_input(
+                        t("label.canister"),
+                        min_value=1,
+                        max_value=20,
+                        value=1,
+                        key="transfer_canister"
+                    )
+                with c2:
+                    andar_destino = st.number_input(
+                        t("label.floor"),
+                        min_value=1,
+                        max_value=20,
+                        value=1,
+                        key="transfer_andar"
+                    )
+            
+            st.markdown("---")
             if st.button(t("btn.execute_transfer"), type="primary", width="stretch"):
                 linhas_finais = [v for v in st.session_state["transfer_linhas"].values() if int(v.get("qty", 0)) > 0]
                 if not linhas_finais:
                     st.error(t("error.select_lot_line"))
                 elif not proprietario_destino:
                     st.error(t("transfer.error_no_destination"))
+                elif muda_localizacao == t("transfer.new_location") and not contentor_id_destino:
+                    st.error(t("transfer.error_no_container"))
                 else:
                     # Executar transferência interna
                     dest_id = proprietarios[proprietarios["nome"] == proprietario_destino]["id"].iloc[0]
@@ -391,7 +447,14 @@ def run_transfer_page(ctx):
                             continue
                         
                         try:
-                            transferir_stock_interno(origem_id, dest_id, stock_id, qtd)
+                            # Se muda localização, passar novos parâmetros
+                            if muda_localizacao == t("transfer.new_location"):
+                                transferir_stock_interno_com_localizacao(
+                                    origem_id, dest_id, stock_id, qtd,
+                                    contentor_id_destino, canister_destino, andar_destino
+                                )
+                            else:
+                                transferir_stock_interno(origem_id, dest_id, stock_id, qtd)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False
@@ -405,6 +468,20 @@ def run_transfer_page(ctx):
             destinatario_externo = st.text_input(
                 t("transfer.external_recipient"),
                 key="transfer_dest_externo"
+            )
+            
+            # Motivo da transferência
+            motivo = st.selectbox(
+                t("transfer.reason"),
+                [t("stock.type.sale"), t("stock.type.donation"), t("stock.type.export"), t("stock.type.other")],
+                key="transfer_motivo"
+            )
+            
+            # Observações
+            observacoes = st.text_area(
+                t("label.notes"),
+                key="transfer_observacoes",
+                height=80
             )
             
             if st.button(t("btn.execute_transfer"), type="primary", width="stretch"):
@@ -422,7 +499,7 @@ def run_transfer_page(ctx):
                         qtd = linha["qty"]
                         
                         try:
-                            transferir_stock_externo(origem_id, destinatario_externo, stock_id, qtd)
+                            transferir_stock_externo(origem_id, destinatario_externo, stock_id, qtd, motivo, observacoes)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False
