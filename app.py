@@ -2889,9 +2889,9 @@ elif aba == t("menu.import"):
                                 palhetas_produzidas, qualidade, concentracao, motilidade,
                                 certificado, dose, observacoes,
                                 quantidade_inicial, existencia_atual,
-                                contentor_id, canister, andar,
+                                contentor_id, canister, andar, cor,
                                 criado_por, data_criacao
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                             RETURNING id
                             """,
                             (
@@ -2901,7 +2901,7 @@ elif aba == t("menu.import"):
                                 to_py(linha.get("origem_externa")),
                                 to_py(linha.get("existencia_atual")),
                                 to_py(linha.get("qualidade")),
-                                None,
+                                to_py(linha.get("concentracao")),
                                 to_py(linha.get("motilidade")),
                                 to_py(linha.get("certificado")),
                                 to_py(linha.get("dose")),
@@ -2911,6 +2911,7 @@ elif aba == t("menu.import"):
                                 to_py(linha.get("contentor_id")),
                                 to_py(linha.get("canister")),
                                 to_py(linha.get("andar")),
+                                to_py(linha.get("cor")),
                                 to_py(criado_por),
                             ),
                         )
