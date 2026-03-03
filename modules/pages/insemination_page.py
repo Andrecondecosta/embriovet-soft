@@ -140,8 +140,11 @@ def run_insemination_page(ctx):
         st.warning(t("insemination.no_lotes_available"))
         return
 
-    if st.session_state["insem_garanhao_modal"] is None:
-        st.session_state["insem_garanhao_modal"] = sorted(stock_disponivel["garanhao"].dropna().unique())[0]
+    # Inicializar garanhao padrão se necessário
+    if st.session_state["insem_garanhao_principal"] is None:
+        garanhaos_unicos = sorted(stock_disponivel["garanhao"].dropna().unique())
+        if garanhaos_unicos:
+            st.session_state["insem_garanhao_principal"] = garanhaos_unicos[0]
 
     @st.dialog(t("insemination.select_lots_title"), width="large")
     def abrir_modal_lotes():
