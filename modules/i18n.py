@@ -1585,6 +1585,8 @@ TRANSLATIONS = {
         "stock.straws_produced": "Produzierte Strohhalme",
         "stock.current_stock": "Aktueller Bestand",
         "stock.quality_pct": "Qualität (%)",
+        "stock.quality_text": "Qualität (Text)",
+        "stock.color": "Farbe",
         "stock.concentration": "Konzentration",
         "stock.motility_pct": "Motilität (%)",
         "stock.certificate": "Zertifikat",
