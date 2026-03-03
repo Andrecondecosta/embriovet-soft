@@ -268,7 +268,8 @@ def inject_shell_css(primary_color: str | None):
                 border-radius: 3px;
                 background: var(--primary);
             }}
-            .app-topbar {{
+            #topbar-anchor { height: 0; }
+            #topbar-anchor + div [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -277,7 +278,7 @@ def inject_shell_css(primary_color: str | None):
                 border-bottom: 1px solid var(--border);
                 background: #ffffff;
                 margin-bottom: 10px;
-            }}
+            }
             .app-topbar-title {{
                 font-size: 1.05rem;
                 font-weight: 700;
@@ -308,7 +309,7 @@ def render_header(app_settings, user_info):
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
 
-    st.markdown("<div class='app-topbar'>", unsafe_allow_html=True)
+    st.markdown("<div id='topbar-anchor'></div>", unsafe_allow_html=True)
     col_left, col_right = st.columns([5, 2])
     with col_left:
         if logo:
@@ -340,7 +341,6 @@ def render_header(app_settings, user_info):
         settings_clicked = st.button(t("header.settings"), width="content", key="topbar_settings")
         logout_clicked = st.button(t("header.logout"), width="content", key="topbar_logout")
         st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
     return settings_clicked, logout_clicked
 
