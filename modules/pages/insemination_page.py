@@ -320,6 +320,7 @@ def run_insemination_page(ctx):
 
             st.markdown("<div class='insem-line'>", unsafe_allow_html=True)
             step_key = f"insem_step_{sid}"
+            # Apenas inicializar se não existir
             if step_key not in st.session_state:
                 st.session_state[step_key] = qtd
 
@@ -339,7 +340,6 @@ def run_insemination_page(ctx):
                     "Quantidade",
                     min_value=0,
                     max_value=max_disp,
-                    value=int(st.session_state.get(step_key, qtd) or 0),
                     step=1,
                     key=step_key,
                     label_visibility="collapsed",
