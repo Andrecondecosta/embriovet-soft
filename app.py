@@ -1579,7 +1579,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
             
@@ -1589,7 +1589,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 return False
             
             (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs) = origem
+             qual, conc, mot, local, cert, dose, obs, cor) = origem
             
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
@@ -1633,13 +1633,13 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                         garanhao, dono_id, data_embriovet, origem_externa,
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
-                        quantidade_inicial, existencia_atual
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        quantidade_inicial, existencia_atual, cor
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
                     quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
-                    quantidade_int, quantidade_int
+                    quantidade_int, quantidade_int, to_py(cor)
                 ))
             
             # Registrar transferência na tabela de transferências
