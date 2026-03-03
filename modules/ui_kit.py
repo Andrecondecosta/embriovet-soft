@@ -268,7 +268,8 @@ def inject_shell_css(primary_color: str | None):
                 border-radius: 3px;
                 background: var(--primary);
             }}
-            .app-topbar {{
+            #topbar-anchor { height: 0; }
+            #topbar-anchor + div [data-testid="stHorizontalBlock"] {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -277,7 +278,7 @@ def inject_shell_css(primary_color: str | None):
                 border-bottom: 1px solid var(--border);
                 background: #ffffff;
                 margin-bottom: 10px;
-            }}
+            }
             .app-topbar-title {{
                 font-size: 1.05rem;
                 font-weight: 700;
