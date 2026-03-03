@@ -172,7 +172,8 @@ def run_stock_page(ctx: dict):
                             st.markdown(f"**📍 {t('label.location')}:** {t('common.na')}")
 
                         st.markdown(f"**📜 {t('stock.certificate_label')}:** {row.get('certificado') or t('common.na')}")
-                        st.markdown(f"**✨ {t('stock.quality_label')}:** {row.get('qualidade') or 0}%")
+                        st.markdown(f"**✨ {t('stock.quality_label')}:** {row.get('qualidade') or '—'}")
+                        st.markdown(f"**🎨 {t('stock.color')}:** {row.get('cor') or '—'}")
                     with col2:
                         st.markdown(f"**🔬 {t('stock.concentration_label')}:** {row.get('concentracao') or 0} {t('stock.million_ml')}")
                         st.markdown(f"**⚡ {t('stock.motility_label')}:** {row.get('motilidade') or 0}%")
@@ -264,13 +265,14 @@ def run_stock_page(ctx: dict):
                                 edit_origem = st.text_input(t("stock.external_origin"), value=row.get("origem_externa") or "")
                                 edit_palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=int(to_py(row.get("palhetas_produzidas")) or 0))
                                 edit_existencia = st.number_input(t("stock.current_stock"), min_value=0, value=existencia)
-                                edit_qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=int(to_py(row.get("qualidade")) or 0))
+                                edit_qualidade = st.text_input(t("stock.quality_text"), value=row.get("qualidade") or "")
 
                             with col2:
                                 edit_concentracao = st.number_input(t("stock.concentration"), min_value=0, value=int(to_py(row.get("concentracao")) or 0))
                                 edit_motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=int(to_py(row.get("motilidade")) or 0))
                                 edit_certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")], index=0 if row.get("certificado") == "Sim" else 1)
                                 edit_dose = st.text_input(t("stock.dose"), value=row.get("dose") or "")
+                                edit_cor = st.text_input(t("stock.color"), value=row.get("cor") or "")
 
                             st.markdown("---")
                             st.subheader(t("stock.location_title"))
@@ -341,6 +343,7 @@ def run_stock_page(ctx: dict):
                                     "palhetas_produzidas": edit_palhetas,
                                     "qualidade": edit_qualidade,
                                     "concentracao": edit_concentracao,
+                                    "cor": edit_cor,
                                     "motilidade": edit_motilidade,
                                     "contentor_id": edit_contentor_id,
                                     "canister": edit_canister,

@@ -684,7 +684,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_nome', 'N/A'))[:30],
                     str(row.get('data_embriovet', 'N/A'))[:10],
                     str(int(row.get('existencia_atual', 0))),
-                    f"{int(row.get('qualidade', 0))}%",
+                    str(row.get('qualidade', '—')),
                     str(row.get('local_armazenagem', 'N/A'))[:20]
                 ])
 
@@ -874,6 +874,7 @@ def inserir_stock(dados):
                 to_py(dados.get("Contentor")),
                 to_py(dados.get("Canister")),
                 to_py(dados.get("Andar")),
+                to_py(dados.get("Cor")),
                 username
             )
 
@@ -884,9 +885,9 @@ def inserir_stock(dados):
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual,
-                    contentor_id, canister, andar,
+                    contentor_id, canister, andar, cor,
                     criado_por, data_criacao
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id, garanhao
                 """,
                 params,
@@ -1343,7 +1344,8 @@ def editar_stock(stock_id, dados):
                     existencia_atual = %s,
                     contentor_id = %s,
                     canister = %s,
-                    andar = %s
+                    andar = %s,
+                    cor = %s
                 WHERE id = %s
                 """,
                 (
@@ -1362,6 +1364,7 @@ def editar_stock(stock_id, dados):
                     to_py(dados.get("contentor_id")),
                     to_py(dados.get("canister")),
                     to_py(dados.get("andar")),
+                    to_py(dados.get("cor")),
                     to_py(stock_id),
                 ),
             )
@@ -1576,7 +1579,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
 
@@ -1584,10 +1587,10 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             if not origem:
                 st.error(t("error.origin_lot_not_found"))
                 return False
-
-            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext,
-             qual, conc, mot, local, cert, dose, obs) = origem
-
+            
+            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
+             qual, conc, mot, local, cert, dose, obs, cor) = origem
+            
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
 
@@ -1630,13 +1633,13 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                         garanhao, dono_id, data_embriovet, origem_externa,
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
-                        quantidade_inicial, existencia_atual
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        quantidade_inicial, existencia_atual, cor
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
                     quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
-                    quantidade_int, quantidade_int
+                    quantidade_int, quantidade_int, to_py(cor)
                 ))
 
             # Registrar transferência na tabela de transferências
@@ -1930,6 +1933,215 @@ def render_change_credentials(user, app_settings):
         nova_password = st.text_input(t("security.new_password"), type="password")
         confirmar_password = st.text_input(t("security.confirm_password"), type="password")
         submitted = st.form_submit_button(t("security.save"), type="primary", width="stretch")
+
+    if submitted:
+        if not novo_username:
+            st.error(t("error.username_required"))
+            return
+        if not nova_password or not confirmar_password:
+            st.error(t("error.password_required"))
+            return
+        if nova_password != confirmar_password:
+            st.error(t("error.passwords_mismatch"))
+            return
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM usuarios WHERE username = %s AND id <> %s",
+                (novo_username, user["id"]),
+            )
+            if cur.fetchone():
+                cur.close()
+                st.error(t("security.username_exists"))
+                return
+
+            nova_hash = criar_hash_password(nova_password)
+            cur.execute(
+                """
+                UPDATE usuarios
+                SET username = %s,
+                    password_hash = %s,
+                    must_change_password = FALSE,
+                    updated_at = now()
+                WHERE id = %s
+                """,
+                (novo_username, nova_hash, user["id"]),
+            )
+            conn.commit()
+            cur.close()
+
+        update_show_initial_credentials(False)
+        st.session_state['user']['username'] = novo_username
+        st.session_state['user']['must_change_password'] = False
+        st.success(t("security.success"))
+        st.rerun()
+
+
+def render_welcome_page():
+    st.markdown(
+        """
+        <style>
+            header[data-testid="stHeader"] { display: none !important; }
+            div[data-testid="stToolbar"] { display: none !important; }
+            section[data-testid="stSidebar"] { display: none !important; }
+            div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
+            section.main > div.block-container { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+            .welcome-wrapper {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #f8fafc;
+            }
+            .welcome-card {
+                max-width: 680px;
+                text-align: center;
+                padding: 40px 24px;
+            }
+            .welcome-title {
+                font-size: 42px;
+                font-weight: 700;
+                color: #0f172a;
+                margin-bottom: 16px;
+            }
+            .welcome-subtitle {
+                font-size: 20px;
+                font-weight: 500;
+                color: #334155;
+                margin-bottom: 20px;
+            }
+            .welcome-description {
+                font-size: 16px;
+                color: #64748b;
+                margin-bottom: 32px;
+                line-height: 1.6;
+            }
+            .welcome-footer {
+                font-size: 12px;
+                color: #94a3b8;
+                margin-top: 24px;
+            }
+            .welcome-card .stButton > button {
+                width: 100%;
+                height: 52px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='welcome-wrapper'><div class='welcome-card'>", unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="welcome-title">{t("welcome.title")}</div>
+        <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
+        <div class="welcome-description">{t("welcome.text")}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button(t("welcome.start"), type="primary", width="stretch"):
+        if update_welcome_completed(True):
+            st.rerun()
+    st.markdown(
+        f"<div class='welcome-footer'>{t('welcome.powered')}</div></div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_onboarding(app_settings):
+    inject_stock_css()
+    inject_reports_css()
+
+    st.title(t("onboarding.title"))
+    st.caption(t("onboarding.subtitle"))
+
+    if "onboarding_company_name" not in st.session_state:
+        st.session_state["onboarding_company_name"] = app_settings.get("company_name") or ""
+    if "onboarding_theme_key" not in st.session_state:
+        st.session_state["onboarding_theme_key"] = app_settings.get("theme_key") or "blue"
+    if "onboarding_admin_username" not in st.session_state:
+        st.session_state["onboarding_admin_username"] = "admin"
+    if "onboarding_admin_password" not in st.session_state:
+        st.session_state["onboarding_admin_password"] = secrets.token_urlsafe(8)
+
+    if app_settings.get("logo_base64") and "onboarding_logo_base64" not in st.session_state:
+        st.session_state["onboarding_logo_base64"] = app_settings.get("logo_base64")
+
+    logo_preview = st.session_state.get("onboarding_logo_base64")
+    nome_preview = st.session_state.get("onboarding_company_name")
+
+    if logo_preview:
+        st.markdown(
+            f"""
+            <div style='display:flex; align-items:center; gap:12px; margin-bottom:8px;'>
+                <img src='{logo_preview}' style='height:36px;'/>
+                <h3 style='margin:0;'>{nome_preview}</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    render_zone_title(t("onboarding.zone_brand"), "insem-zone-title")
+    col_a1, col_a2 = st.columns([2, 1.2])
+    with col_a1:
+        company_name = st.text_input(t("onboarding.company"), key="onboarding_company_name")
+    with col_a2:
+        theme_key = st.radio(
+            t("onboarding.theme"),
+            options=list(THEMES.keys()),
+            format_func=lambda k: k.capitalize(),
+            key="onboarding_theme_key",
+            horizontal=True,
+        )
+        preview_color = THEMES.get(theme_key, THEMES["blue"])
+        st.markdown(
+            f"<div style='width:100%; height:10px; border-radius:6px; background:{preview_color}; border:1px solid #e2e8f0;'></div>",
+            unsafe_allow_html=True,
+        )
+
+    logo_file = st.file_uploader(t("onboarding.logo"), type=["png", "jpg", "jpeg"])
+    if logo_file is not None:
+        logo_bytes = logo_file.read()
+        if logo_bytes:
+            encoded = base64.b64encode(logo_bytes).decode("utf-8")
+            st.session_state["onboarding_logo_base64"] = f"data:{logo_file.type};base64,{encoded}"
+
+    render_zone_title(t("onboarding.zone_admin"), "insem-zone-title")
+    admin_username = st.text_input(t("onboarding.admin_user"), key="onboarding_admin_username")
+    admin_password = st.text_input(t("onboarding.admin_password"), key="onboarding_admin_password")
+    st.caption(t("onboarding.temp_note"))
+
+    render_zone_title(t("onboarding.zone_confirm"), "insem-zone-title")
+    cred_text = f"Username: {admin_username}\nPassword: {admin_password}"
+    st.markdown(f"**{t('onboarding.credentials')}**")
+    st.code(cred_text)
+
+    cred_js = cred_text.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n")
+    st.components.v1.html(
+        f"""
+        <button style='padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-weight:600;'
+                onclick="navigator.clipboard.writeText(`{cred_js}`)">Copiar</button>
+        """,
+        height=40,
+    )
+
+    if st.button(t("onboarding.finish"), type="primary", width="stretch"):
+        if not company_name:
+            st.error(t("msg.require_company"))
+            return
+        if not admin_username or not admin_password:
+            st.error(t("msg.require_admin"))
+            return
+
+        logo_base64 = st.session_state.get("onboarding_logo_base64")
+        primary_color = THEMES.get(theme_key, THEMES["blue"])
+        finalize_app_settings(app_settings["id"], company_name, logo_base64, primary_color, theme_key)
+        ensure_admin_user_exists(admin_username, admin_password)
         st.success(t("onboarding.done"))
         st.rerun()
 
@@ -2123,7 +2335,8 @@ elif aba == t("menu.add_stock"):
                     data = st.text_input(t("stock.prod_date"))
                     origem = st.text_input(t("stock.external_origin"))
                     palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
-                    qualidade = st.number_input(t("stock.quality_pct"), min_value=0, max_value=100, value=0)
+                    qualidade = st.text_input(t("stock.quality_text"))
+                    cor = st.text_input(t("stock.color"))
                     concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
 
                 with col2:
@@ -2177,14 +2390,15 @@ elif aba == t("menu.add_stock"):
                                 "Data": data,
                                 "Origem": origem,
                                 "Palhetas": palhetas_int,
-                                "Qualidade": int(to_py(qualidade) or 0),
-                                "Concentração": int(to_py(concentracao) or 0),
+                                "Qualidade": to_py(qualidade),
+                                "Concentração": to_py(concentracao),
                                 "Motilidade": int(to_py(motilidade) or 0),
                                 "Certificado": certificado,
                                 "Dose": dose,
                                 "Contentor": contentor_id,
                                 "Canister": canister,
                                 "Andar": andar,
+                                "Cor": to_py(cor),
                                 "Observações": observacoes,
                             }
                         )
@@ -2284,13 +2498,15 @@ elif aba == t("menu.import"):
         "existencia_atual",
         "dose",
         "motilidade",
+        "qualidade",
+        "concentracao",
+        "cor",
         "proprietario_nome",
         "contentor_codigo",
         "canister",
         "andar",
         "observacoes",
         "certificado",
-        "qualidade",
     ]
 
     template_df = pd.DataFrame(columns=template_cols)
@@ -2324,6 +2540,10 @@ elif aba == t("menu.import"):
         "palhetas": "existencia_atual",
         "dose": "dose",
         "motilidade": "motilidade",
+        "concentracao": "concentracao",
+        "concentração": "concentracao",
+        "cor": "cor",
+        "color": "cor",
         "proprietario_nome": "proprietario_nome",
         "proprietario": "proprietario_nome",
         "dono": "proprietario_nome",
@@ -2395,6 +2615,14 @@ elif aba == t("menu.import"):
         except Exception:
             return None
 
+    def parse_float(valor):
+        try:
+            if pd.isna(valor):
+                return None
+            return float(valor)
+        except Exception:
+            return None
+
     def validate_import_df(df, row_nums, cont_map):
         errors = {}
         errors_list = []
@@ -2434,11 +2662,17 @@ elif aba == t("menu.import"):
             qualidade = row.get("qualidade")
             qualidade_val = None
             if qualidade not in [None, "", "nan"] and not pd.isna(qualidade):
-                qualidade_val = parse_int(qualidade)
-                if qualidade_val is None:
-                    add_error("qualidade", t("import.error.quality_invalid"))
-                elif qualidade_val < 0 or qualidade_val > 100:
-                    add_error("qualidade", t("import.error.quality_range"))
+                qualidade_val = str(qualidade).strip()
+
+            conc_val = None
+            if not pd.isna(row.get("concentracao")):
+                conc_val = parse_float(row.get("concentracao"))
+                if conc_val is None:
+                    add_error("concentracao", t("import.error.concentration_invalid"))
+
+            cor_val = None
+            if not pd.isna(row.get("cor")):
+                cor_val = str(row.get("cor")).strip() or None
 
             cont_code = str(row.get("contentor_codigo", "")).strip()
             cont_key = cont_code.upper()
@@ -2505,6 +2739,8 @@ elif aba == t("menu.import"):
                         "observacoes": observacoes or None,
                         "certificado": certificado or None,
                         "qualidade": qualidade_val,
+                        "concentracao": conc_val,
+                        "cor": cor_val,
                     }
                 )
 
@@ -2542,7 +2778,7 @@ elif aba == t("menu.import"):
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
                 norm_df["__row"] = raw_df.index + 2
-                for opt in ["observacoes", "certificado", "qualidade"]:
+                for opt in ["observacoes", "certificado", "qualidade", "concentracao", "cor"]:
                     if opt not in norm_df.columns:
                         norm_df[opt] = ""
 
@@ -2553,6 +2789,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                     "proprietario_nome",
                     "contentor_codigo",
                     "canister",
@@ -2594,6 +2832,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                     "proprietario_nome",
                     "contentor_codigo",
                     "canister",
@@ -2608,6 +2848,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                 ]
                 col_order = compact_cols if compact_view else full_cols
                 col_order = [c for c in col_order if c in editor_df.columns]
@@ -2744,9 +2986,9 @@ elif aba == t("menu.import"):
                                 palhetas_produzidas, qualidade, concentracao, motilidade,
                                 certificado, dose, observacoes,
                                 quantidade_inicial, existencia_atual,
-                                contentor_id, canister, andar,
+                                contentor_id, canister, andar, cor,
                                 criado_por, data_criacao
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                             RETURNING id
                             """,
                             (
@@ -2756,7 +2998,7 @@ elif aba == t("menu.import"):
                                 to_py(linha.get("origem_externa")),
                                 to_py(linha.get("existencia_atual")),
                                 to_py(linha.get("qualidade")),
-                                None,
+                                to_py(linha.get("concentracao")),
                                 to_py(linha.get("motilidade")),
                                 to_py(linha.get("certificado")),
                                 to_py(linha.get("dose")),
@@ -2766,6 +3008,7 @@ elif aba == t("menu.import"):
                                 to_py(linha.get("contentor_id")),
                                 to_py(linha.get("canister")),
                                 to_py(linha.get("andar")),
+                                to_py(linha.get("cor")),
                                 to_py(criado_por),
                             ),
                         )
