@@ -91,8 +91,10 @@ def run_insemination_page(ctx):
         if st.button(t("btn.ok"), type="primary", width="stretch"):
             st.session_state["insem_linhas"] = {}
             st.session_state["insem_egua"] = ""
+            st.session_state["insem_garanhao_principal"] = None
+            st.session_state["insem_prop_principal"] = None
             for k in list(st.session_state.keys()):
-                if k.startswith("insem_modal_qtd_") or k.startswith("insem_step_") or k.startswith("insem_line_input_"):
+                if k.startswith("insem_modal_qtd_") or k.startswith("insem_step_") or k.startswith("insem_line_input_") or k.startswith("insem_modal_sel_"):
                     st.session_state.pop(k, None)
             st.session_state["insem_show_success"] = False
             st.rerun()
