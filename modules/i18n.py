@@ -1401,6 +1401,7 @@ TRANSLATIONS = {
         "label.owner": "Eigentümer",
         "label.lote": "Charge",
         "label.location": "Standort",
+        "label.characteristics": "Merkmale",
         "label.motility_dose": "Motilität / Dosis",
         "label.available": "Verfügbar",
         "label.insemination_date": "Besamungsdatum",
