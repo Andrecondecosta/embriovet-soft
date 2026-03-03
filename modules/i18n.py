@@ -903,6 +903,7 @@ TRANSLATIONS = {
         "users.username_placeholder": "no spaces, lowercase",
         "users.username_required": "Username *",
         "users.access_level": "Access Level *",
+        "users.access_levels_title": "📋 Access Levels - What each one can do",
         "users.level.admin": "Administrator",
         "users.level.manager": "Manager",
         "users.level.viewer": "Viewer",
