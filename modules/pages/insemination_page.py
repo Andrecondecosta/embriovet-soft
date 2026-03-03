@@ -148,23 +148,17 @@ def run_insemination_page(ctx):
 
     @st.dialog(t("insemination.select_lots_title"), width="large")
     def abrir_modal_lotes():
-        st.markdown(f"<div class='insem-modal-head'>{t('common.filters')}</div>", unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            gar_opts = sorted(stock_disponivel["garanhao"].dropna().unique())
-            idx_g = gar_opts.index(st.session_state["insem_garanhao_modal"]) if st.session_state["insem_garanhao_modal"] in gar_opts else 0
-            gar_sel = st.selectbox(t("label.garanhao"), gar_opts, index=idx_g, key="insem_modal_garanhao")
-        with c2:
-            base_prop = stock_disponivel[stock_disponivel["garanhao"] == gar_sel]
-            prop_opts = ["Todos"] + sorted(base_prop["proprietario_nome"].dropna().unique())
-            idx_p = prop_opts.index(st.session_state.get("insem_prop_modal", "Todos")) if st.session_state.get("insem_prop_modal", "Todos") in prop_opts else 0
-            prop_sel = st.selectbox(t("label.owner"), prop_opts, index=idx_p, key="insem_modal_prop")
-
-        st.session_state["insem_garanhao_modal"] = gar_sel
-        st.session_state["insem_prop_modal"] = prop_sel
-
+        # Usar filtros da página principal
+        gar_sel = st.session_state.get("insem_garanhao_principal")
+        prop_sel = st.session_state.get("insem_prop_principal")
+        
+        if not gar_sel:
+            st.warning(t("warning.select_garanhao_first"))
+            return
+        
+        # Filtrar lotes
         modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
-        if prop_sel != "Todos":
+        if prop_sel:  # Se proprietário foi selecionado
             modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
 
         if "data_embriovet" in modal_df.columns:
