@@ -2665,7 +2665,7 @@ elif aba == t("menu.import"):
             else:
                 norm_df = pd.DataFrame({key: raw_df[col_map[key]] for key in col_map})
                 norm_df["__row"] = raw_df.index + 2
-                for opt in ["observacoes", "certificado", "qualidade"]:
+                for opt in ["observacoes", "certificado", "qualidade", "concentracao", "cor"]:
                     if opt not in norm_df.columns:
                         norm_df[opt] = ""
 
@@ -2676,6 +2676,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                     "proprietario_nome",
                     "contentor_codigo",
                     "canister",
