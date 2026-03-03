@@ -874,6 +874,7 @@ def inserir_stock(dados):
                 to_py(dados.get("Contentor")),
                 to_py(dados.get("Canister")),
                 to_py(dados.get("Andar")),
+                to_py(dados.get("Cor")),
                 username
             )
 
@@ -884,9 +885,9 @@ def inserir_stock(dados):
                     palhetas_produzidas, qualidade, concentracao, motilidade,
                     certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual,
-                    contentor_id, canister, andar,
+                    contentor_id, canister, andar, cor,
                     criado_por, data_criacao
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id, garanhao
                 """,
                 params,
