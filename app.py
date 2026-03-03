@@ -1756,90 +1756,31 @@ st.markdown(
 
     .block-container { margin-top: 0 !important; }
 
-        /* Sidebar toggle behavior:
-       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
-       - Keep collapsed control in the header visible so users can reopen the sidebar. */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
     </style>
     """,
     unsafe_allow_html=True,
 )
-inject_stepper_css()
-inject_stock_css()
-inject_reports_css()
 
-# ------------------------------------------------------------
-# 🖼️ Interface Streamlit
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Sistema"),
-    layout=os.getenv("APP_LAYOUT", "wide"),
-    initial_sidebar_state="expanded",
-    page_icon="🐴",
-)
-st.markdown(
+st.components.v1.html(
     """
-    <style>
-    [data-testid="stMainMenu"] { display:none !important; }
-    footer { display:none !important; }
-
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-
-    header[data-testid="stHeader"] { height: 2.6rem !important; }
-    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
-
-    .block-container { margin-top: 0 !important; }
-
-    /* Sidebar toggle behavior:
-       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
-       - Keep collapsed control in the header visible so users can reopen the sidebar. */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
-    </style>
+    <script>
+    (function() {
+        const hideDeploy = () => {
+            const root = window.parent.document;
+            root.querySelectorAll('button, a').forEach(el => {
+                if (el.textContent && el.textContent.trim() === 'Deploy') {
+                    el.style.display = 'none';
+                }
+            });
+        };
+        hideDeploy();
+        const obs = new MutationObserver(hideDeploy);
+        obs.observe(window.parent.document.body, { childList: true, subtree: true });
+        setTimeout(hideDeploy, 400);
+    })();
+    </script>
     """,
-    unsafe_allow_html=True,
-)
-inject_stepper_css()
-inject_stock_css()
-inject_reports_css()
-
-# ------------------------------------------------------------
-# 🖼️ Interface Streamlit
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title=os.getenv("APP_TITLE", "Sistema"),
-    layout=os.getenv("APP_LAYOUT", "wide"),
-    initial_sidebar_state="expanded",
-    page_icon="🐴",
-)
-st.markdown(
-    """
-    <style>
-    [data-testid="stMainMenu"] { display:none !important; }
-    footer { display:none !important; }
-
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-
-    header[data-testid="stHeader"] { height: 2.6rem !important; }
-    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
-
-    .block-container { margin-top: 0 !important; }
-
-    /* Sidebar toggle behavior:
-       - Hide collapse button rendered inside the sidebar to avoid duplicate arrows.
-       - Keep collapsed control in the header visible so users can reopen the sidebar. */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: flex !important; visibility: visible !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
+    height=0,
 )
 inject_stepper_css()
 inject_stock_css()

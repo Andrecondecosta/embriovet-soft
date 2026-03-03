@@ -115,6 +115,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Fluxo inicial com Welcome Page (EquiCore) antes do Setup e coluna welcome_completed
 - CSS global atualizado para espaçamento compacto e ocultar apenas o item Deploy da toolbar
 - Lotes agora suportam cor e qualidade em texto (migration 006) + import/template atualizados
+- Remoção do Deploy via JS sem ocultar toolbar (sidebar volta a abrir/fechar)
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
