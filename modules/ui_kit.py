@@ -22,32 +22,28 @@ def inject_design_system():
                 padding-top: 0.8rem;
                 padding-bottom: 1.4rem;
             }
-            /* Esconder containers vazios do Streamlit */
-            div[data-testid="stElementContainer"]:empty {
-                display: none !important;
-                height: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            /* Esconder stElementContainer que só contém divs vazios */
-            div[data-testid="stElementContainer"]:not(:has(*:not(div:empty))) {
-                display: none !important;
-                height: 0 !important;
-                margin: 0 !important;
-            }
-            /* Esconder outros containers vazios */
-            .st-emotion-cache-tn0cau:empty,
+            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
-            div[data-testid="column"]:empty {
+            .stElementContainer:empty {
                 display: none !important;
+                height: 0px !important;
+                min-height: 0px !important;
+                max-height: 0px !important;
+                margin: 0px !important;
+                padding: 0px !important;
+                overflow: hidden !important;
+                line-height: 0 !important;
+                font-size: 0 !important;
+                visibility: hidden !important;
             }
-            /* Remover gap e margem de containers sem conteúdo visível */
-            .stElementContainer:empty,
-            .st-emotion-cache-tn0cau:empty {
-                gap: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                min-height: 0 !important;
+            /* Ocultar containers que só têm espaços em branco */
+            div[data-testid="stElementContainer"]:not(:has(img)):not(:has(button)):not(:has(input)):not(:has(select)):not(:has(canvas)):not(:has(svg)):not(:has(iframe)):not(:has(video)) {
+                line-height: 0 !important;
+            }
+            div[data-testid="stElementContainer"]:not(:has(*)) {
+                display: none !important;
+                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
