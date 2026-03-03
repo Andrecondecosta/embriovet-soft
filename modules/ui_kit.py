@@ -19,7 +19,7 @@ def inject_design_system():
                 color: #0f172a;
             }
             section.main > div.block-container {
-                padding-top: 0.8rem;
+                padding-top: 0.1rem;
                 padding-bottom: 1.4rem;
             }
             .stButton > button,
