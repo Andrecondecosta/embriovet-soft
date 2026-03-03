@@ -1584,7 +1584,8 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
+                       contentor_id, canister, andar
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
 
@@ -1594,7 +1595,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 return False
             
             (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs, cor) = origem
+             qual, conc, mot, local, cert, dose, obs, cor, contentor_id, canister, andar) = origem
             
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
@@ -1613,15 +1614,19 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
-
-            # Verificar se já existe lote do destino com mesmo garanhão
+            
+            # Verificar se já existe lote do destino com mesmo garanhão e mesma localização
             cur.execute("""
                 SELECT id, existencia_atual
                 FROM estoque_dono
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
+                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
+                AND COALESCE(canister, 0) = COALESCE(%s, 0)
+                AND COALESCE(andar, 0) = COALESCE(%s, 0)
                 LIMIT 1
-            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id)))
-
+            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id),
+                  to_py(contentor_id), to_py(canister), to_py(andar)))
+            
             lote_destino = cur.fetchone()
 
             if lote_destino:
@@ -1632,19 +1637,21 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                     WHERE id = %s
                 """, (quantidade_int, lote_destino[0]))
             else:
-                # Criar novo lote para o destino
+                # Criar novo lote para o destino (mantém mesma localização)
                 cur.execute("""
                     INSERT INTO estoque_dono (
                         garanhao, dono_id, data_embriovet, origem_externa,
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
-                        quantidade_inicial, existencia_atual, cor
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        quantidade_inicial, existencia_atual, cor,
+                        contentor_id, canister, andar
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
                     quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
-                    quantidade_int, quantidade_int, to_py(cor)
+                    quantidade_int, quantidade_int, to_py(cor),
+                    to_py(contentor_id), to_py(canister), to_py(andar)
                 ))
 
             # Registrar transferência na tabela de transferências
@@ -1666,6 +1673,110 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
 
     except Exception as e:
         logger.error(f"Erro ao transferir palhetas: {e}")
+        st.error(f"Erro ao transferir palhetas: {e}")
+        return False
+
+# Alias para compatibilidade
+transferir_stock_interno = transferir_palhetas_parcial
+
+def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, stock_origem_id, quantidade,
+                                              contentor_id_novo, canister_novo, andar_novo):
+    """Transfere palhetas para outro proprietário e muda a localização"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Buscar dados do lote origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
+            
+            origem = cur.fetchone()
+            if not origem:
+                st.error(t("error.origin_lot_not_found"))
+                return False
+            
+            (garanhao, prop_origem_db, exist_atual, data_emb, origem_ext, 
+             qual, conc, mot, local, cert, dose, obs, cor) = origem
+            
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            
+            if quantidade_int <= 0:
+                st.error(t("error.qty_positive"))
+                return False
+            
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+            
+            # Atualizar stock origem (diminuir)
+            cur.execute("""
+                UPDATE estoque_dono 
+                SET existencia_atual = existencia_atual - %s
+                WHERE id = %s
+            """, (quantidade_int, to_py(stock_origem_id)))
+            
+            # Verificar se já existe lote do destino com mesmo garanhão e mesma NOVA localização
+            cur.execute("""
+                SELECT id, existencia_atual 
+                FROM estoque_dono 
+                WHERE garanhao = %s AND dono_id = %s AND id != %s
+                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
+                AND COALESCE(canister, 0) = COALESCE(%s, 0)
+                AND COALESCE(andar, 0) = COALESCE(%s, 0)
+                LIMIT 1
+            """, (to_py(garanhao), to_py(prop_destino_id), to_py(stock_origem_id),
+                  to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)))
+            
+            lote_destino = cur.fetchone()
+            
+            if lote_destino:
+                # Já existe lote na nova localização, adicionar palhetas
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade_int, lote_destino[0]))
+            else:
+                # Criar novo lote para o destino com NOVA localização
+                cur.execute("""
+                    INSERT INTO estoque_dono (
+                        garanhao, dono_id, data_embriovet, origem_externa,
+                        palhetas_produzidas, qualidade, concentracao, motilidade,
+                        local_armazenagem, certificado, dose, observacoes,
+                        quantidade_inicial, existencia_atual, cor,
+                        contentor_id, canister, andar
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_py(garanhao), to_py(prop_destino_id), to_py(data_emb), to_py(origem_ext),
+                    quantidade_int, to_py(qual), to_py(conc), to_py(mot),
+                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
+                    quantidade_int, quantidade_int, to_py(cor),
+                    to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)
+                ))
+            
+            # Registrar transferência na tabela de transferências
+            cur.execute("""
+                INSERT INTO transferencias (
+                    estoque_id, proprietario_origem_id, proprietario_destino_id,
+                    quantidade, data_transferencia
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int))
+            
+            conn.commit()
+            cur.close()
+            
+            # Verificar e desativar proprietários com stock = 0
+            atualizar_status_proprietarios()
+            
+            logger.info(f"Transferência com mudança de local: {quantidade_int} palhetas de {prop_origem_id} para {prop_destino_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao transferir palhetas com nova localização: {e}")
         st.error(f"Erro ao transferir palhetas: {e}")
         return False
 
@@ -1735,6 +1846,9 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
         logger.error(f"Erro ao transferir para externo: {e}")
         st.error(f"Erro ao transferir para externo: {e}")
         return False
+
+# Alias para compatibilidade
+transferir_stock_externo = transferir_palhetas_externo
 
 # ------------------------------------------------------------
 # 🖼️ Interface Streamlit
