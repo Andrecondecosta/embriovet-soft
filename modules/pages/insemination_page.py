@@ -171,13 +171,13 @@ def run_insemination_page(ctx):
 
         st.markdown(f"<div class='insem-modal-head'>{t('insemination.lotes')}</div>", unsafe_allow_html=True)
 
-        header_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+        header_cols = st.columns([2.0, 1.5, 1.8, 0.8, 0.6])
         with header_cols[0]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.lote')}</div>", unsafe_allow_html=True)
         with header_cols[1]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.location')}</div>", unsafe_allow_html=True)
         with header_cols[2]:
-            st.markdown(f"<div class='insem-modal-head'>{t('label.motility_dose')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='insem-modal-head'>{t('label.characteristics')}</div>", unsafe_allow_html=True)
         with header_cols[3]:
             st.markdown(f"<div class='insem-modal-head'>{t('label.available')}</div>", unsafe_allow_html=True)
         with header_cols[4]:
@@ -187,13 +187,21 @@ def run_insemination_page(ctx):
             lote = lote_payload(row)
             sid = lote["stock_id"]
 
-            row_cols = st.columns([2.4, 1.8, 1.2, 0.8, 0.6])
+            row_cols = st.columns([2.0, 1.5, 1.8, 0.8, 0.6])
             with row_cols[0]:
                 st.caption(f"{lote['ref']}")
             with row_cols[1]:
                 st.caption(lote["local"])
             with row_cols[2]:
-                st.caption(t("insemination.motility_dose", mot=lote['motilidade'], dose=lote['dose']))
+                # Motilidade, Dose, Cor, Concentração
+                caracteristicas = []
+                caracteristicas.append(f"M {lote['motilidade']}%")
+                caracteristicas.append(f"D {lote['dose']}")
+                if lote.get('cor'):
+                    caracteristicas.append(f"Cor: {lote['cor']}")
+                if lote.get('concentracao') and lote.get('concentracao') > 0:
+                    caracteristicas.append(f"{lote['concentracao']}M/ml")
+                st.caption(" · ".join(caracteristicas))
             with row_cols[3]:
                 st.caption(t("insemination.available_value", value=lote['max_disponivel']))
             with row_cols[4]:
