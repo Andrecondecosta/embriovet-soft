@@ -1760,11 +1760,41 @@ st.markdown(
     header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
 
     .block-container { margin-top: 0 !important; }
+    
+    /* Forçar altura zero em containers vazios */
+    div[data-testid="stElementContainer"]:empty {
+        display: none !important;
+        height: 0px !important;
+        min-height: 0px !important;
+        max-height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
+        line-height: 0px !important;
+    }
+    
+    /* Remover espaçamento de elementos sem conteúdo texto */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"]:not(:has(*)) {
+        display: none !important;
+    }
 
-    /* Ocultar botão Deploy sem criar container visível */
     </style>
     <script>
     (function() {
+        // Remover containers vazios diretamente do DOM
+        const removeEmptyContainers = () => {
+            const containers = document.querySelectorAll('[data-testid="stElementContainer"]');
+            containers.forEach(container => {
+                // Se o container está vazio ou só contém whitespace
+                if (!container.textContent.trim() && !container.querySelector('img, button, input, select, textarea, canvas, svg, iframe')) {
+                    container.style.display = 'none';
+                    container.style.height = '0px';
+                    container.style.margin = '0px';
+                    container.style.padding = '0px';
+                }
+            });
+        };
+        
+        // Ocultar botão Deploy
         const hideDeploy = () => {
             const root = window.parent.document;
             root.querySelectorAll('button, a').forEach(el => {
@@ -1773,10 +1803,23 @@ st.markdown(
                 }
             });
         };
+        
+        // Executar imediatamente
+        removeEmptyContainers();
         hideDeploy();
-        const obs = new MutationObserver(hideDeploy);
-        obs.observe(window.parent.document.body, { childList: true, subtree: true });
-        setTimeout(hideDeploy, 400);
+        
+        // Observar mudanças e re-executar
+        const obs = new MutationObserver(() => {
+            removeEmptyContainers();
+            hideDeploy();
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+        
+        // Executar novamente após um delay para garantir
+        setTimeout(() => {
+            removeEmptyContainers();
+            hideDeploy();
+        }, 500);
     })();
     </script>
     """,
