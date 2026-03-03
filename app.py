@@ -2399,7 +2399,7 @@ if logout_clicked:
     if token:
         auth_store = get_auth_store()
         auth_store.pop(token, None)
-    st.experimental_set_query_params()
+    st.query_params.clear()
     del st.session_state['user']
     st.rerun()
 if settings_clicked:
