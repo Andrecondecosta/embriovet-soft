@@ -1826,11 +1826,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Injetar design system e CSS globais uma única vez
-inject_design_system()
-inject_stepper_css()
-inject_stock_css()
-inject_reports_css()
+# Injetar TODO o CSS consolidado em um único bloco
+inject_all_css_consolidated()
 
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
