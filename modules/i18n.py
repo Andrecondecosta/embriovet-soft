@@ -671,6 +671,8 @@ TRANSLATIONS = {
         "stock.straws_produced": "Straws produced",
         "stock.current_stock": "Current stock",
         "stock.quality_pct": "Quality (%)",
+        "stock.quality_text": "Quality (text)",
+        "stock.color": "Color",
         "stock.concentration": "Concentration",
         "stock.motility_pct": "Motility (%)",
         "stock.certificate": "Certificate",
