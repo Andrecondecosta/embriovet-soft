@@ -3359,8 +3359,43 @@ elif aba == t("menu.users"):
                         st.rerun()
 
         st.markdown("---")
-        st.info(t("users.access_levels_info"))
-
+        st.markdown(f"### {t('users.access_levels_title')}")
+        
+        st.markdown(f"""
+        **🔴 {t('users.level.admin')}** (Nível 3 - Acesso Total)
+        - ✅ Ver Dashboard, Mapa, Stock e Relatórios
+        - ✅ Adicionar Stock, Importar Sémen
+        - ✅ Registar Inseminações
+        - ✅ **Editar Stock** (alterar dados dos lotes)
+        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ Gerir Proprietários (adicionar, editar, desativar)
+        - ✅ **Gerir Utilizadores** (criar, editar, desativar)
+        - ✅ **Aceder às Definições** (branding, idioma)
+        
+        **🟡 {t('users.level.manager')}** (Nível 2 - Gestão Operacional)
+        - ✅ Ver Dashboard, Mapa, Stock e Relatórios
+        - ✅ Adicionar Stock, Importar Sémen
+        - ✅ Registar Inseminações
+        - ❌ **NÃO pode Editar Stock** (apenas visualizar detalhes)
+        - ✅ **Transferir Stock** (interno e externo)
+        - ✅ Gerir Proprietários (adicionar, editar, desativar)
+        - ❌ NÃO pode Gerir Utilizadores
+        - ❌ NÃO pode aceder às Definições
+        
+        **🟢 {t('users.level.viewer')}** (Nível 1 - Apenas Visualização)
+        - ✅ Ver Dashboard, Mapa, Stock e Relatórios
+        - ❌ NÃO pode Adicionar Stock
+        - ❌ NÃO pode Importar Sémen
+        - ❌ NÃO pode Registar Inseminações
+        - ❌ NÃO pode Editar Stock
+        - ❌ **NÃO pode Transferir Stock**
+        - ❌ NÃO pode Gerir Proprietários
+        - ❌ NÃO pode Gerir Utilizadores
+        - ❌ NÃO pode aceder às Definições
+        """)
+        
+        st.info("💡 **Nota:** O primeiro utilizador criado no sistema é sempre Administrador.")
+    
     # TAB 3: Alterar Password
     with tab3:
         st.markdown(f"### {t('users.change_password_title')}")
