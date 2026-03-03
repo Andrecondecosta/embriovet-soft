@@ -553,14 +553,14 @@ def editar_proprietario(proprietario_id, dados):
 
 def carregar_stock(apenas_ativos=True):
     """Carrega stock completo com informações de proprietario e contentor
-    
+
     Args:
         apenas_ativos: Se True, retorna apenas stock de proprietários ativos
     """
     try:
         with get_connection() as conn:
             query = """
-                SELECT e.*, 
+                SELECT e.*,
                        d.nome as proprietario_nome,
                        c.codigo as contentor_codigo
                 FROM estoque_dono e
@@ -1593,10 +1593,10 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             if not origem:
                 st.error(t("error.origin_lot_not_found"))
                 return False
-            
-            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
+
+            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext,
              qual, conc, mot, local, cert, dose, obs, cor, contentor_id, canister, andar) = origem
-            
+
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
 
@@ -1614,7 +1614,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
-            
+
             # Verificar se já existe lote do destino com mesmo garanhão e mesma localização
             cur.execute("""
                 SELECT id, existencia_atual
@@ -1626,7 +1626,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 LIMIT 1
             """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id),
                   to_py(contentor_id), to_py(canister), to_py(andar)))
-            
+
             lote_destino = cur.fetchone()
 
             if lote_destino:
@@ -1685,44 +1685,44 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            
+
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
-            
+
             origem = cur.fetchone()
             if not origem:
                 st.error(t("error.origin_lot_not_found"))
                 return False
-            
-            (garanhao, prop_origem_db, exist_atual, data_emb, origem_ext, 
+
+            (garanhao, prop_origem_db, exist_atual, data_emb, origem_ext,
              qual, conc, mot, local, cert, dose, obs, cor) = origem
-            
+
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
-            
+
             if quantidade_int <= 0:
                 st.error(t("error.qty_positive"))
                 return False
-            
+
             if quantidade_int > exist_atual:
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
-            
+
             # Atualizar stock origem (diminuir)
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
                 WHERE id = %s
             """, (quantidade_int, to_py(stock_origem_id)))
-            
+
             # Verificar se já existe lote do destino com mesmo garanhão e mesma NOVA localização
             cur.execute("""
-                SELECT id, existencia_atual 
-                FROM estoque_dono 
+                SELECT id, existencia_atual
+                FROM estoque_dono
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
                 AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
                 AND COALESCE(canister, 0) = COALESCE(%s, 0)
@@ -1730,13 +1730,13 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                 LIMIT 1
             """, (to_py(garanhao), to_py(prop_destino_id), to_py(stock_origem_id),
                   to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)))
-            
+
             lote_destino = cur.fetchone()
-            
+
             if lote_destino:
                 # Já existe lote na nova localização, adicionar palhetas
                 cur.execute("""
-                    UPDATE estoque_dono 
+                    UPDATE estoque_dono
                     SET existencia_atual = existencia_atual + %s
                     WHERE id = %s
                 """, (quantidade_int, lote_destino[0]))
@@ -1757,7 +1757,7 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                     quantidade_int, quantidade_int, to_py(cor),
                     to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)
                 ))
-            
+
             # Registrar transferência na tabela de transferências
             cur.execute("""
                 INSERT INTO transferencias (
@@ -1765,16 +1765,16 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                     quantidade, data_transferencia
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int))
-            
+
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
-            
+
             logger.info(f"Transferência com mudança de local: {quantidade_int} palhetas de {prop_origem_id} para {prop_destino_id}")
             return True
-            
+
     except Exception as e:
         logger.error(f"Erro ao transferir palhetas com nova localização: {e}")
         st.error(f"Erro ao transferir palhetas: {e}")
@@ -1876,7 +1876,7 @@ st.markdown(
     header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
 
     .block-container { margin-top: 0 !important; }
-    
+
     /* Forçar altura zero em containers vazios */
     div[data-testid="stElementContainer"]:empty {
         display: none !important;
@@ -1887,7 +1887,7 @@ st.markdown(
         padding: 0px !important;
         line-height: 0px !important;
     }
-    
+
     /* Remover espaçamento de elementos sem conteúdo texto */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"]:not(:has(*)) {
         display: none !important;
@@ -1909,7 +1909,7 @@ st.markdown(
                 }
             });
         };
-        
+
         // Ocultar botão Deploy
         const hideDeploy = () => {
             const root = window.parent.document;
@@ -1919,18 +1919,18 @@ st.markdown(
                 }
             });
         };
-        
+
         // Executar imediatamente
         removeEmptyContainers();
         hideDeploy();
-        
+
         // Observar mudanças e re-executar
         const obs = new MutationObserver(() => {
             removeEmptyContainers();
             hideDeploy();
         });
         obs.observe(document.body, { childList: true, subtree: true });
-        
+
         // Executar novamente após um delay para garantir
         setTimeout(() => {
             removeEmptyContainers();
@@ -1957,19 +1957,19 @@ def mostrar_tela_login(app_settings):
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
     logo_base64 = (app_settings or {}).get("logo_base64")
     cor_primaria = (app_settings or {}).get("primary_color") or "#3b82f6"
-    
+
     # CSS Premium para a página de login
     st.markdown(
         f"""
         <style>
             /* Esconder elementos do Streamlit */
             #MainMenu, footer, header {{visibility: hidden;}}
-            
+
             /* Fundo gradiente premium */
             .stApp {{
                 background: linear-gradient(135deg, {cor_primaria}15 0%, {cor_primaria}05 100%);
             }}
-            
+
             /* Card de login */
             .login-card {{
                 background: white;
@@ -1980,19 +1980,19 @@ def mostrar_tela_login(app_settings):
                 max-width: 440px;
                 margin: 60px auto;
             }}
-            
+
             /* Logo */
             .login-logo {{
                 text-align: center;
                 margin-bottom: 24px;
             }}
-            
+
             .login-logo img {{
                 max-width: 120px;
                 height: auto;
                 border-radius: 12px;
             }}
-            
+
             /* Título */
             .login-title {{
                 text-align: center;
@@ -2001,14 +2001,14 @@ def mostrar_tela_login(app_settings):
                 color: #0f172a;
                 margin-bottom: 8px;
             }}
-            
+
             .login-subtitle {{
                 text-align: center;
                 font-size: 0.95rem;
                 color: #64748b;
                 margin-bottom: 32px;
             }}
-            
+
             /* Inputs mais bonitos */
             .stTextInput input {{
                 border-radius: 10px !important;
@@ -2017,12 +2017,12 @@ def mostrar_tela_login(app_settings):
                 font-size: 0.95rem !important;
                 transition: all 0.2s ease !important;
             }}
-            
+
             .stTextInput input:focus {{
                 border-color: {cor_primaria} !important;
                 box-shadow: 0 0 0 3px {cor_primaria}20 !important;
             }}
-            
+
             /* Botão premium */
             .stButton > button {{
                 border-radius: 10px !important;
@@ -2034,12 +2034,12 @@ def mostrar_tela_login(app_settings):
                 box-shadow: 0 4px 12px {cor_primaria}40 !important;
                 transition: all 0.2s ease !important;
             }}
-            
+
             .stButton > button:hover {{
                 transform: translateY(-2px) !important;
                 box-shadow: 0 6px 20px {cor_primaria}50 !important;
             }}
-            
+
             /* Footer do card */
             .login-footer {{
                 text-align: center;
@@ -2053,24 +2053,24 @@ def mostrar_tela_login(app_settings):
         """,
         unsafe_allow_html=True,
     )
-    
+
     # Centralizar o formulário
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
         st.markdown("<div class='login-card'>", unsafe_allow_html=True)
-        
+
         # Logo
         if logo_base64:
             st.markdown(
                 f"<div class='login-logo'><img src='data:image/png;base64,{logo_base64}' /></div>",
                 unsafe_allow_html=True
             )
-        
+
         # Título
         st.markdown(f"<div class='login-title'>{nome_empresa}</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='login-subtitle'>{t('login.subtitle')}</div>", unsafe_allow_html=True)
-        
+
         # Formulário
         with st.form("login_form", clear_on_submit=False):
             username = st.text_input(
@@ -2090,7 +2090,7 @@ def mostrar_tela_login(app_settings):
                 type="primary",
                 use_container_width=True
             )
-            
+
             if submitted:
                 if not username or not password:
                     st.error(t("login.missing"))
@@ -2107,15 +2107,15 @@ def mostrar_tela_login(app_settings):
                         st.rerun()
                     else:
                         st.error(t("login.invalid"))
-        
+
         # Footer
         st.markdown(
             f"<div class='login-footer'>🔒 {t('login.secure')}</div>",
             unsafe_allow_html=True
         )
-        
+
         st.markdown("</div>", unsafe_allow_html=True)
-        
+
 
 def verificar_permissao(nivel_minimo):
     """Verifica se o usuário tem permissão mínima necessária"""
@@ -2376,7 +2376,8 @@ if not app_settings.get("is_initialized"):
 
 # Verificar se está logado (restaurar sessão por query param)
 auth_store = get_auth_store()
-token_param = get_session_query_param()
+params = st.experimental_get_query_params()
+token_param = params.get("session", [None])[0] if params else None
 if 'user' not in st.session_state and token_param and token_param in auth_store:
     st.session_state['user'] = auth_store[token_param]
     st.session_state['auth_token'] = token_param
@@ -3590,7 +3591,7 @@ elif aba == t("menu.users"):
 
         st.markdown("---")
         st.markdown(f"### {t('users.access_levels_title')}")
-        
+
         st.markdown(f"""
         **🔴 {t('users.level.admin')}** (Nível 3 - Acesso Total)
         - ✅ Ver Dashboard, Mapa, Stock e Relatórios
@@ -3601,7 +3602,7 @@ elif aba == t("menu.users"):
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ✅ **Gerir Utilizadores** (criar, editar, desativar)
         - ✅ **Aceder às Definições** (branding, idioma)
-        
+
         **🟡 {t('users.level.manager')}** (Nível 2 - Gestão Operacional)
         - ✅ Ver Dashboard, Mapa, Stock e Relatórios
         - ✅ Adicionar Stock, Importar Sémen
@@ -3611,7 +3612,7 @@ elif aba == t("menu.users"):
         - ✅ Gerir Proprietários (adicionar, editar, desativar)
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
-        
+
         **🟢 {t('users.level.viewer')}** (Nível 1 - Apenas Visualização)
         - ✅ Ver Dashboard, Mapa, Stock e Relatórios
         - ❌ NÃO pode Adicionar Stock
@@ -3623,9 +3624,9 @@ elif aba == t("menu.users"):
         - ❌ NÃO pode Gerir Utilizadores
         - ❌ NÃO pode aceder às Definições
         """)
-        
+
         st.info("💡 **Nota:** O primeiro utilizador criado no sistema é sempre Administrador.")
-    
+
     # TAB 3: Alterar Password
     with tab3:
         st.markdown(f"### {t('users.change_password_title')}")
