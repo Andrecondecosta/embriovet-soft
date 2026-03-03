@@ -117,6 +117,7 @@ Substituir localização em texto livre por estrutura física com `contentores`,
 - Lotes agora suportam cor e qualidade em texto (migration 006) + import/template atualizados
 - Remoção do Deploy via JS sem ocultar toolbar (sidebar volta a abrir/fechar)
 - Topbar ajustada: removida wrapper HTML que criava blocos vazios (alinha conteúdo para cima)
+- Render_header simplificado (sem wrapper de ações) + CSS para ocultar blocos verticais vazios
 
 ## Testes e validação
 - Teste automatizado anterior (iteration_3): **PASS 100% frontend** para persistência base
