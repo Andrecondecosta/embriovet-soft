@@ -214,6 +214,8 @@ TRANSLATIONS = {
         "stock.straws_produced": "Palhetas Produzidas",
         "stock.current_stock": "Existência Atual",
         "stock.quality_pct": "Qualidade (%)",
+        "stock.quality_text": "Qualidade (texto)",
+        "stock.color": "Cor",
         "stock.concentration": "Concentração",
         "stock.motility_pct": "Motilidade (%)",
         "stock.certificate": "Certificado",
