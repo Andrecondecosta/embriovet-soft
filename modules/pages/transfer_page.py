@@ -319,6 +319,18 @@ def run_transfer_page(ctx):
                     label_visibility="collapsed",
                 )
                 qtd_val = new_qtd
+                # Reduzir altura do campo usando CSS inline
+                st.markdown(
+                    """
+                    <style>
+                    div[data-testid="stNumberInput"] input {
+                        height: 38px !important;
+                        padding: 4px 8px !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
 
             if qtd_val != qtd:
                 if qtd_val == 0:
