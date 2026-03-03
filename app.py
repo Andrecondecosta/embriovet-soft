@@ -2401,13 +2401,15 @@ elif aba == t("menu.import"):
         "existencia_atual",
         "dose",
         "motilidade",
+        "qualidade",
+        "concentracao",
+        "cor",
         "proprietario_nome",
         "contentor_codigo",
         "canister",
         "andar",
         "observacoes",
         "certificado",
-        "qualidade",
     ]
 
     template_df = pd.DataFrame(columns=template_cols)
@@ -2441,6 +2443,10 @@ elif aba == t("menu.import"):
         "palhetas": "existencia_atual",
         "dose": "dose",
         "motilidade": "motilidade",
+        "concentracao": "concentracao",
+        "concentração": "concentracao",
+        "cor": "cor",
+        "color": "cor",
         "proprietario_nome": "proprietario_nome",
         "proprietario": "proprietario_nome",
         "dono": "proprietario_nome",
