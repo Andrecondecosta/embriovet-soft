@@ -1829,6 +1829,7 @@ TRANSLATIONS = {
         "users.username_placeholder": "keine Leerzeichen, klein",
         "users.username_required": "Benutzername *",
         "users.access_level": "Zugriffsstufe *",
+        "users.access_levels_title": "📋 Zugriffsstufen - Was jeder tun kann",
         "users.level.admin": "Administrator",
         "users.level.manager": "Manager",
         "users.level.viewer": "Viewer",
