@@ -2518,6 +2518,14 @@ elif aba == t("menu.import"):
         except Exception:
             return None
 
+    def parse_float(valor):
+        try:
+            if pd.isna(valor):
+                return None
+            return float(valor)
+        except Exception:
+            return None
+
     def validate_import_df(df, row_nums, cont_map):
         errors = {}
         errors_list = []
@@ -2557,11 +2565,17 @@ elif aba == t("menu.import"):
             qualidade = row.get("qualidade")
             qualidade_val = None
             if qualidade not in [None, "", "nan"] and not pd.isna(qualidade):
-                qualidade_val = parse_int(qualidade)
-                if qualidade_val is None:
-                    add_error("qualidade", t("import.error.quality_invalid"))
-                elif qualidade_val < 0 or qualidade_val > 100:
-                    add_error("qualidade", t("import.error.quality_range"))
+                qualidade_val = str(qualidade).strip()
+
+            conc_val = None
+            if not pd.isna(row.get("concentracao")):
+                conc_val = parse_float(row.get("concentracao"))
+                if conc_val is None:
+                    add_error("concentracao", t("import.error.concentration_invalid"))
+
+            cor_val = None
+            if not pd.isna(row.get("cor")):
+                cor_val = str(row.get("cor")).strip() or None
 
             cont_code = str(row.get("contentor_codigo", "")).strip()
             cont_key = cont_code.upper()
@@ -2628,6 +2642,8 @@ elif aba == t("menu.import"):
                         "observacoes": observacoes or None,
                         "certificado": certificado or None,
                         "qualidade": qualidade_val,
+                        "concentracao": conc_val,
+                        "cor": cor_val,
                     }
                 )
 
