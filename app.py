@@ -1847,6 +1847,9 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
         st.error(f"Erro ao transferir para externo: {e}")
         return False
 
+# Alias para compatibilidade
+transferir_stock_externo = transferir_palhetas_externo
+
 # ------------------------------------------------------------
 # 🖼️ Interface Streamlit
 # ------------------------------------------------------------
