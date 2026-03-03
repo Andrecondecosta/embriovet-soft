@@ -961,6 +961,7 @@ TRANSLATIONS = {
         "insemination.available_value": "Disp {value}",
         "insemination.no_lotes_selected": "Aucun lot sélectionné disponible.",
         "insemination.zone_selection": "Zone de sélection",
+        "insemination.zone_details": "Détails de l'insémination",
         "insemination.lines_title": "Lignes d'insémination",
         "insemination.no_lotes_selected_hint": "Aucun lot sélectionné. Cliquez sur 'Sélectionner lots'.",
         "insemination.available_inline": "Disp {value}",
