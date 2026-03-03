@@ -1344,7 +1344,8 @@ def editar_stock(stock_id, dados):
                     existencia_atual = %s,
                     contentor_id = %s,
                     canister = %s,
-                    andar = %s
+                    andar = %s,
+                    cor = %s
                 WHERE id = %s
                 """,
                 (
@@ -1363,6 +1364,7 @@ def editar_stock(stock_id, dados):
                     to_py(dados.get("contentor_id")),
                     to_py(dados.get("canister")),
                     to_py(dados.get("andar")),
+                    to_py(dados.get("cor")),
                     to_py(stock_id),
                 ),
             )
