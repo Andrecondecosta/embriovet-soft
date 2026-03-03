@@ -34,7 +34,7 @@ def stock_kpis(stock_df, to_py):
             ("lotes", 0),
             ("palhetas", 0),
             ("proprietários", 0),
-            ("qualidade média", "0%"),
+            ("qualidade média", "—"),
         ]
 
     qual_series = pd.to_numeric(stock_df["qualidade"], errors="coerce")
