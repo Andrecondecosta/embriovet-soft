@@ -139,7 +139,7 @@ def inject_stepper_css():
     )
 
 
-def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
+def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip="", editable=False):
     if key not in st.session_state:
         st.session_state[key] = min_value
 
@@ -157,30 +157,68 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip=""):
     tooltip = invalid_tooltip if invalid and invalid_tooltip else ""
     cls = "stepper-value invalid" if invalid else "stepper-value"
 
-    value_col, minus_col, plus_col = cols
+    if editable:
+        # Modo editável: input + botões -/+
+        input_col, minus_col, plus_col = cols
+        
+        with minus_col:
+            st.button(
+                "−",
+                key=f"{key}_minus",
+                on_click=step,
+                args=(-1,),
+                disabled=min_value is not None and value <= min_value,
+                help="Diminuir",
+                width="stretch",
+            )
+        with input_col:
+            new_value = st.number_input(
+                "Quantidade",
+                min_value=min_value if min_value is not None else 0,
+                max_value=max_value if max_value is not None else 9999,
+                value=value,
+                step=1,
+                key=f"{key}_input",
+                label_visibility="collapsed",
+            )
+            if new_value != value:
+                st.session_state[key] = new_value
+        with plus_col:
+            st.button(
+                "+",
+                key=f"{key}_plus",
+                on_click=step,
+                args=(1,),
+                disabled=max_value is not None and value >= max_value,
+                help="Aumentar",
+                width="stretch",
+            )
+    else:
+        # Modo original: display + botões -/+
+        value_col, minus_col, plus_col = cols
 
-    with value_col:
-        st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
-    with minus_col:
-        st.button(
-            "−",
-            key=f"{key}_minus",
-            on_click=step,
-            args=(-1,),
-            disabled=min_value is not None and value <= min_value,
-            help="Diminuir quantidade",
-            width="stretch",
-        )
-    with plus_col:
-        st.button(
-            "+",
-            key=f"{key}_plus",
-            on_click=step,
-            args=(1,),
-            disabled=max_value is not None and value >= max_value,
-            help="Aumentar quantidade",
-            width="stretch",
-        )
+        with value_col:
+            st.markdown(f"<div class='{cls}' title='{tooltip}'>{value}</div>", unsafe_allow_html=True)
+        with minus_col:
+            st.button(
+                "−",
+                key=f"{key}_minus",
+                on_click=step,
+                args=(-1,),
+                disabled=min_value is not None and value <= min_value,
+                help="Diminuir quantidade",
+                width="stretch",
+            )
+        with plus_col:
+            st.button(
+                "+",
+                key=f"{key}_plus",
+                on_click=step,
+                args=(1,),
+                disabled=max_value is not None and value >= max_value,
+                help="Aumentar quantidade",
+                width="stretch",
+            )
 
     return value, invalid
 
