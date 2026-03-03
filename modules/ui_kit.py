@@ -2,6 +2,140 @@ import streamlit as st
 from modules.i18n import t
 
 
+def inject_all_css_consolidated():
+    """Injetar TODO o CSS em um único bloco para evitar containers vazios"""
+    st.markdown(
+        """
+        <style>
+            /* Design System Global */
+            :root {
+                --ds-font-size: 0.9rem;
+                --ds-radius: 8px;
+                --ds-radius-sm: 6px;
+                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+                --ds-spacing: 0.7rem;
+            }
+            html, body, [data-testid="stAppViewContainer"] {
+                font-size: 14px;
+                color: #0f172a;
+            }
+            section.main > div.block-container {
+                padding-top: 0.8rem;
+                padding-bottom: 1.4rem;
+            }
+            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            div[data-testid="stElementContainer"]:empty,
+            div[data-testid="stVerticalBlock"]:empty,
+            .stElementContainer:empty {
+                display: none !important;
+                height: 0px !important;
+                min-height: 0px !important;
+                max-height: 0px !important;
+                margin: 0px !important;
+                padding: 0px !important;
+                overflow: hidden !important;
+                line-height: 0 !important;
+                font-size: 0 !important;
+                visibility: hidden !important;
+            }
+            div[data-testid="stElementContainer"]:not(:has(*)) {
+                display: none !important;
+                height: 0 !important;
+            }
+            .stButton > button,
+            .stDownloadButton > button,
+            .stTextInput input,
+            .stSelectbox select,
+            .stTextArea textarea,
+            .stNumberInput input,
+            .stDateInput input {
+                border-radius: var(--ds-radius) !important;
+            }
+            .stCard, .app-card {
+                border-radius: var(--ds-radius) !important;
+                box-shadow: var(--ds-shadow-sm);
+            }
+            .stMarkdown {
+                line-height: 1.45;
+            }
+            
+            /* Reports CSS */
+            .reports-zone-title {
+                font-size: 0.78rem;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                color: #64748b;
+                margin: 0.25rem 0 0.35rem 0;
+                font-weight: 700;
+            }
+            .reports-kpi-strip {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin: 0.35rem 0 0.6rem 0;
+            }
+            .reports-kpi-item {
+                border: 1px solid #e2e8f0;
+                background: #ffffff;
+                color: #334155;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 0.78rem;
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+            }
+            .reports-kpi-item b { color: #0f172a; }
+            .reports-results-head {
+                margin-top: 0.2rem;
+                margin-bottom: 0.15rem;
+            }
+            
+            /* Stock CSS */
+            .stock-zone-title {
+                font-size: .78rem;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                color: #64748b;
+                margin: .2rem 0 .35rem 0;
+                font-weight: 700;
+            }
+            .stock-toolbar {
+                border: 1px solid #dbe4ee;
+                border-radius: 8px;
+                background: #f8fafc;
+                padding: 6px 8px;
+                margin-bottom: 6px;
+            }
+            .stock-table-head {
+                font-size: .95rem;
+                font-weight: 600;
+                color: #0f172a;
+                margin: .2rem 0 .25rem 0;
+            }
+            
+            /* Stepper CSS */
+            .stepper-value {
+                font-weight: 600;
+                font-size: .85rem;
+                padding: 2px 6px;
+                text-align: center;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                background: #f8fafc;
+                min-width: 32px;
+            }
+            .stepper-value.invalid {
+                color: #b91c1c;
+                border-color: #fecaca;
+                background: #fee2e2;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_design_system():
     st.markdown(
         """
@@ -22,32 +156,28 @@ def inject_design_system():
                 padding-top: 0.8rem;
                 padding-bottom: 1.4rem;
             }
-            /* Esconder containers vazios do Streamlit */
-            div[data-testid="stElementContainer"]:empty {
-                display: none !important;
-                height: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            /* Esconder stElementContainer que só contém divs vazios */
-            div[data-testid="stElementContainer"]:not(:has(*:not(div:empty))) {
-                display: none !important;
-                height: 0 !important;
-                margin: 0 !important;
-            }
-            /* Esconder outros containers vazios */
-            .st-emotion-cache-tn0cau:empty,
+            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
-            div[data-testid="column"]:empty {
+            .stElementContainer:empty {
                 display: none !important;
+                height: 0px !important;
+                min-height: 0px !important;
+                max-height: 0px !important;
+                margin: 0px !important;
+                padding: 0px !important;
+                overflow: hidden !important;
+                line-height: 0 !important;
+                font-size: 0 !important;
+                visibility: hidden !important;
             }
-            /* Remover gap e margem de containers sem conteúdo visível */
-            .stElementContainer:empty,
-            .st-emotion-cache-tn0cau:empty {
-                gap: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                min-height: 0 !important;
+            /* Ocultar containers que só têm espaços em branco */
+            div[data-testid="stElementContainer"]:not(:has(img)):not(:has(button)):not(:has(input)):not(:has(select)):not(:has(canvas)):not(:has(svg)):not(:has(iframe)):not(:has(video)) {
+                line-height: 0 !important;
+            }
+            div[data-testid="stElementContainer"]:not(:has(*)) {
+                display: none !important;
+                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
