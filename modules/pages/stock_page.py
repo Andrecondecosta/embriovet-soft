@@ -173,6 +173,7 @@ def run_stock_page(ctx: dict):
 
                         st.markdown(f"**📜 {t('stock.certificate_label')}:** {row.get('certificado') or t('common.na')}")
                         st.markdown(f"**✨ {t('stock.quality_label')}:** {row.get('qualidade') or '—'}")
+                        st.markdown(f"**🎨 {t('stock.color')}:** {row.get('cor') or '—'}")
                     with col2:
                         st.markdown(f"**🔬 {t('stock.concentration_label')}:** {row.get('concentracao') or 0} {t('stock.million_ml')}")
                         st.markdown(f"**⚡ {t('stock.motility_label')}:** {row.get('motilidade') or 0}%")
