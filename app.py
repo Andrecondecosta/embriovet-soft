@@ -2719,6 +2719,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                     "proprietario_nome",
                     "contentor_codigo",
                     "canister",
@@ -2733,6 +2735,8 @@ elif aba == t("menu.import"):
                     "dose",
                     "motilidade",
                     "qualidade",
+                    "concentracao",
+                    "cor",
                 ]
                 col_order = compact_cols if compact_view else full_cols
                 col_order = [c for c in col_order if c in editor_df.columns]
