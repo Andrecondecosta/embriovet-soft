@@ -2359,6 +2359,7 @@ try:
     proprietarios = carregar_proprietarios(apenas_ativos=True)  # Apenas ativos por padrão
     stock = carregar_stock(apenas_ativos=True)  # Apenas de proprietários ativos
     insem = carregar_inseminacoes()
+    contentores = carregar_contentores(apenas_ativos=True)  # Carregar contentores
 except Exception as e:
     st.error(t("error.load_data", error=e))
     st.stop()
