@@ -295,6 +295,7 @@ def run_transfer_page(ctx):
 
             st.markdown("<div class='transfer-line'>", unsafe_allow_html=True)
             step_key = f"transfer_step_{sid}"
+            # Apenas inicializar se não existir
             if step_key not in st.session_state:
                 st.session_state[step_key] = qtd
 
@@ -309,11 +310,11 @@ def run_transfer_page(ctx):
                 st.markdown(f"<div class='transfer-lote-sub'>{t('label.quantity')}</div>", unsafe_allow_html=True)
 
             with linput:
+                # Usar o session_state como fonte única de verdade
                 new_qtd = st.number_input(
                     "Quantidade",
                     min_value=0,
                     max_value=max_disp,
-                    value=int(st.session_state.get(step_key, qtd) or 0),
                     step=1,
                     key=step_key,
                     label_visibility="collapsed",
