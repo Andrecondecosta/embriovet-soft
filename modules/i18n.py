@@ -477,6 +477,7 @@ TRANSLATIONS = {
         "label.owner": "Owner",
         "label.lote": "Lot",
         "label.location": "Location",
+        "label.characteristics": "Characteristics",
         "label.motility_dose": "Motility / Dose",
         "label.available": "Available",
         "label.insemination_date": "Insemination date",
