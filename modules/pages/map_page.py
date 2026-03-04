@@ -198,104 +198,132 @@ def run_map_page(ctx: dict):
             st.markdown(
                 """
                 <style>
+                    /* Reduzir padding global para dar mais espaço ao mapa */
                     .main .block-container {
-                        padding-top: 0.35rem !important;
+                        padding-top: 0.5rem !important;
+                        max-width: 100% !important;
                     }
+                    
+                    /* Botões modernos e elegantes */
+                    div[data-testid="stButton"] > button {
+                        border-radius: 8px !important;
+                        font-weight: 500 !important;
+                        font-size: 0.9rem !important;
+                        padding: 8px 20px !important;
+                        transition: all 0.2s ease !important;
+                        border: 1px solid #e2e8f0 !important;
+                    }
+                    
+                    div[data-testid="stButton"] > button:hover {
+                        transform: translateY(-1px) !important;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+                    }
+                    
+                    /* Botão primário (Salvar) */
+                    div[data-testid="stButton"] > button[kind="primary"] {
+                        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+                        border: none !important;
+                        color: white !important;
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+                    }
+                    
+                    div[data-testid="stButton"] > button[kind="primary"]:hover {
+                        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4) !important;
+                    }
+                    
+                    /* Toolbar premium */
+                    .map-toolbar-shell {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+                        padding: 12px 16px;
+                        margin-bottom: 12px;
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+                    }
+                    
+                    .map-toolbar-kpis {
+                        display: flex;
+                        gap: 16px;
+                        align-items: center;
+                        font-size: 0.85rem;
+                        color: #64748b;
+                    }
+                    
+                    .map-toolbar-kpis b {
+                        color: #0f172a;
+                        font-weight: 600;
+                    }
+                    
+                    /* Container do mapa - altura otimizada */
+                    .map-workspace {
+                        max-height: 65vh;
+                        overflow: hidden;
+                        border-radius: 12px;
+                        border: 1px solid #e2e8f0;
+                        background: #ffffff;
+                        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+                    }
+                    
+                    /* Mobile responsive */
                     @media (max-width: 900px) {
                         .main .block-container {
-                            padding-left: 0 !important;
-                            padding-right: 0 !important;
-                            padding-top: 0.1rem !important;
-                        }
-                        div[data-testid="stHeadingWithActionElements"] {
-                            margin-bottom: 0.1rem !important;
-                            padding-bottom: 0 !important;
-                        }
-                        div[data-testid="stAppViewContainer"] h1 {
-                            font-size: 1.72rem !important;
-                            line-height: 1.03 !important;
-                            margin-top: 0 !important;
-                            margin-bottom: 0.1rem !important;
-                        }
-                        div[data-testid="stHorizontalBlock"] {
-                            gap: 0.35rem !important;
-                        }
-                        div[data-testid="stButton"] > button {
-                            min-height: 2.35rem !important;
-                            font-size: 0.95rem !important;
+                            padding-left: 8px !important;
+                            padding-right: 8px !important;
                             padding-top: 0.3rem !important;
-                            padding-bottom: 0.3rem !important;
+                        }
+                        
+                        div[data-testid="stButton"] > button {
+                            min-height: 38px !important;
+                            font-size: 0.85rem !important;
+                            padding: 6px 12px !important;
+                        }
+                        
+                        .map-toolbar-shell {
+                            padding: 8px 12px;
+                            margin-bottom: 8px;
+                            border-radius: 8px;
+                        }
+                        
+                        .map-toolbar-kpis {
+                            font-size: 0.75rem;
+                            gap: 10px;
+                            flex-wrap: wrap;
+                        }
+                        
+                        .map-workspace {
+                            max-height: 55vh;
+                            border-radius: 8px;
+                        }
+                        
+                        div[data-testid="stAppViewContainer"] h1 {
+                            font-size: 1.5rem !important;
+                            margin-bottom: 0.5rem !important;
                         }
                     }
+                    
+                    /* Esconder elementos técnicos */
                     div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_js_eval"]) {
                         height: 0 !important;
                         min-height: 0 !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         overflow: hidden !important;
+                        display: none !important;
                     }
+                    
                     iframe[title*="streamlit_js_eval"] {
                         height: 0 !important;
                         min-height: 0 !important;
-                        border: 0 !important;
-                        margin: 0 !important;
+                        display: none !important;
                     }
-                    .map-tech-context {
-                        font-size: 12px;
-                        color: #64748b;
-                        line-height: 1.45;
-                        margin-top: 0;
-                        margin-bottom: 2px;
-                    }
-                    .map-tech-context-inline {
-                        font-size: 11px;
-                        color: #64748b;
-                        opacity: 0.95;
-                    }
-                    .map-toolbar-shell {
-                        border: 1px solid #d1d5db;
-                        border-radius: 8px;
-                        background: #f8fafc;
-                        padding: 6px 10px;
-                        margin-bottom: 4px;
-                        position: sticky;
-                        top: 0;
-                        z-index: 80;
-                        backdrop-filter: blur(4px);
-                    }
-                    .map-toolbar-kpis {
-                        display: flex;
-                        gap: 10px;
-                        align-items: center;
-                        font-size: 11px;
-                        color: #475569;
-                    }
-                    @media (max-width: 900px) {
-                        .map-tech-context {
-                            font-size: 10px;
-                            line-height: 1.2;
-                            margin-bottom: 1px;
-                        }
-                        .map-toolbar-shell {
-                            padding: 4px 7px;
-                            margin-bottom: 2px;
-                            border-radius: 6px;
-                        }
-                        .map-toolbar-kpis {
-                            font-size: 10px;
-                            gap: 6px;
-                            flex-wrap: wrap;
-                        }
-                    }
-                    .map-toolbar-kpis b {
-                        color: #0f172a;
-                    }
-                    div[data-testid="stVerticalBlock"]:has(.map-toolbar-shell) {
-                        background: transparent;
-                        border: none;
-                        border-radius: 0;
-                        padding: 0;
-                        margin: 0;
+                    
+                    /* Painel de detalhes elegante */
+                    .contentor-detail-panel {
+                        background: white;
+                        border-radius: 10px;
+                        padding: 16px;
+                        border: 1px solid #e2e8f0;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
                     }
                 </style>
                 """,
@@ -303,40 +331,45 @@ def run_map_page(ctx: dict):
             )
 
             with st.container():
+                # Toolbar com KPIs
+                st.markdown(
+                    f"""
+                    <div class='map-toolbar-shell'>
+                        <div class='map-toolbar-kpis'>
+                            <span>📍 <b>{total_contentores}</b> Contentores</span>
+                            <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
+                            <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao'] else '👁️ Visualização'}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                
+                # Botões de ação
                 if is_mobile:
-                    st.markdown(f"<div class='map-tech-context'>{t('map.tech_context')}</div>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button(t("btn.add"), key="map_add_btn_mobile", width="stretch")
+                        criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", use_container_width=True)
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button(t("btn.save"), key="map_save_btn_mobile", type="primary", width="stretch")
+                            salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_mobile", width="stretch")
+                            ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", use_container_width=True)
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button(t("btn.cancel"), key="map_cancel_btn_mobile", width="stretch")
+                            cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", use_container_width=True)
                 else:
-                    st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-                    bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
+                    bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
                     with bar_btn1:
-                        criar_novo = st.button(t("map.add_container_button"), key="map_add_btn_desktop", width="stretch")
+                        criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", use_container_width=True)
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button(t("map.save_layout"), key="map_save_btn_desktop", type="primary", width="stretch")
+                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_desktop", width="stretch")
+                            ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", use_container_width=True)
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button(t("map.cancel_edit"), key="map_cancel_btn_desktop", width="stretch")
+                            cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", use_container_width=True)
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -859,10 +892,13 @@ def run_map_page(ctx: dict):
             )
             mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
 
+            # Renderizar mapa com altura otimizada e responsiva
+            st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
             if is_mobile:
-                components.html(mapa_render, height=355)
+                components.html(mapa_render, height=450, scrolling=False)
             else:
-                components.html(mapa_render, height=505)
+                components.html(mapa_render, height=550, scrolling=False)
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # Mostrar lista de contentores abaixo do mapa
             st.markdown(f"<div class='inv-contentores-head'>{t('map.inventory_title')}</div>", unsafe_allow_html=True)
