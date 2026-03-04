@@ -484,63 +484,67 @@ def run_map_page(ctx: dict):
 
             mapa_html = """
             <style>
+                * {
+                    box-sizing: border-box;
+                    margin: 0;
+                    padding: 0;
+                }
+                
                 :root {
-                    --map-bg: #f4f6f8;
-                    --map-border: #cbd5e1;
-                    --card-bg: #f8fafc;
-                    --card-border: #475569;
-                    --text-main: #0f172a;
+                    --primary: #3b82f6;
+                    --primary-dark: #2563eb;
+                    --bg-main: #ffffff;
+                    --bg-canvas: #f8fafc;
+                    --border: #e2e8f0;
+                    --border-dark: #cbd5e1;
+                    --text: #0f172a;
                     --text-muted: #64748b;
+                    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                    --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+                }
+
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                    background: var(--bg-main);
+                    overflow: hidden;
                 }
 
                 #mapa-wrapper {
-                    position: relative;
                     width: 100%;
-                    border: 1px solid var(--map-border);
-                    border-radius: 8px;
-                    background: var(--map-bg);
-                    padding: 10px;
-                    overflow: hidden;
-                    font-family: 'Courier New', monospace;
-                }
-
-                #mapa-wrapper.mobile {
-                    padding: 4px;
-                    border-radius: 6px;
-                    margin-bottom: 2px;
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    background: var(--bg-canvas);
                 }
 
                 #mapa-area {
                     position: relative;
-                    width: min(100%, 720px);
-                    margin: 0 auto;
-                    aspect-ratio: 900 / 550;
-                    border: 2px solid #64748b;
-                    background: #fff;
-                    background-image:
-                        linear-gradient(rgba(15,23,42,.05) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(15,23,42,.05) 1px, transparent 1px);
-                    background-size: 50px 50px;
-                    overflow: hidden;
-                }
-
-                #mapa-wrapper.mobile #mapa-area {
                     width: 100%;
-                    max-width: 100%;
-                    margin: 0;
+                    flex: 1;
+                    background: var(--bg-main);
+                    background-image:
+                        linear-gradient(var(--border) 1px, transparent 1px),
+                        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+                    background-size: 40px 40px;
+                    overflow: hidden;
+                    touch-action: none;
                 }
 
                 .cont-box {
                     position: absolute;
-                    border: 2px solid var(--card-border);
-                    background: var(--card-bg);
-                    color: var(--text-main);
+                    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+                    border: 2px solid var(--primary);
+                    border-radius: 12px;
+                    box-shadow: var(--shadow);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
+                    padding: 12px;
                     user-select: none;
-                    transition: box-shadow .2s ease, transform .2s ease;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    min-width: 100px;
+                    min-height: 100px;
                 }
 
                 .cont-box.clickable {
@@ -548,132 +552,262 @@ def run_map_page(ctx: dict):
                 }
 
                 .cont-box.draggable {
-                    cursor: move;
-                }
-
-                .cont-box:hover {
-                    box-shadow: 0 8px 16px rgba(2, 6, 23, .14);
-                    transform: translateY(-1px);
-                    z-index: 50;
+                    cursor: grab;
                 }
 
                 .cont-box.dragging {
-                    opacity: .9;
-                    z-index: 999;
+                    cursor: grabbing !important;
+                    opacity: 0.85;
+                    z-index: 1000;
+                    box-shadow: var(--shadow-lg);
+                    transform: scale(1.05) rotate(2deg);
+                }
+
+                .cont-box:hover {
+                    transform: translateY(-4px) scale(1.02);
+                    box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.3);
+                    border-color: var(--primary-dark);
+                    z-index: 100;
                 }
 
                 .cont-codigo {
-                    font-size: 12px;
+                    font-size: 0.875rem;
                     font-weight: 700;
-                    margin-bottom: 3px;
+                    color: var(--primary-dark);
+                    margin-bottom: 4px;
+                    letter-spacing: 0.5px;
+                    text-transform: uppercase;
                 }
 
                 .cont-qtd {
-                    font-size: 20px;
+                    font-size: 2rem;
                     font-weight: 800;
+                    color: var(--text);
                     line-height: 1;
+                    margin-bottom: 2px;
                 }
 
                 .cont-label {
-                    font-size: 10px;
+                    font-size: 0.65rem;
                     color: var(--text-muted);
                     text-transform: uppercase;
-                    letter-spacing: .3px;
-                }
-
-                .mobile .cont-codigo {
-                    font-size: 11px;
-                }
-
-                .mobile .cont-qtd {
-                    font-size: 18px;
-                }
-
-                .mobile .cont-label {
-                    font-size: 9px;
+                    letter-spacing: 0.8px;
+                    font-weight: 600;
                 }
 
                 #mapa-status {
-                    margin-top: 8px;
-                    font-size: 11px;
+                    padding: 8px 16px;
+                    background: var(--bg-main);
+                    border-top: 1px solid var(--border);
+                    font-size: 0.75rem;
                     color: var(--text-muted);
+                    text-align: center;
+                    font-weight: 500;
                 }
 
-                .mobile #mapa-status {
-                    margin-top: 4px;
-                    font-size: 10px;
-                    line-height: 1.1;
-                }
-
+                /* Modal Overlay */
                 #inv-overlay {
-                    position: absolute;
+                    position: fixed;
                     inset: 0;
-                    background: rgba(15, 23, 42, .28);
+                    background: rgba(0, 0, 0, 0.6);
+                    backdrop-filter: blur(4px);
                     display: none;
                     z-index: 2000;
+                    animation: fadeIn 0.2s ease;
                 }
 
-                #inv-panel {
-                    position: absolute;
-                    top: 0;
-                    right: 0;
-                    width: 360px;
-                    height: 100%;
-                    background: #fff;
-                    border-left: 1px solid #d1d5db;
-                    padding: 14px;
-                    overflow-y: auto;
-                }
-
-                .mobile #inv-panel {
-                    width: 100%;
-                    border-left: none;
-                }
-
-                .inv-head {
+                #inv-overlay.visible {
                     display: flex;
                     align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 10px;
+                    justify-content: center;
+                    padding: 20px;
                 }
 
-                .inv-title {
-                    font-size: 16px;
+                /* Modal Panel Premium */
+                #inv-panel {
+                    background: var(--bg-main);
+                    border-radius: 16px;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                    width: 100%;
+                    max-width: 600px;
+                    max-height: 85vh;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+
+                @keyframes slideUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(20px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0) scale(1);
+                    }
+                }
+
+                /* Modal Header */
+                .inv-header {
+                    padding: 20px 24px;
+                    border-bottom: 1px solid var(--border);
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+                    color: white;
+                }
+
+                .inv-header h2 {
+                    font-size: 1.5rem;
                     font-weight: 700;
-                    color: #111827;
+                    margin-bottom: 4px;
                 }
 
-                .inv-close {
-                    border: 1px solid #cbd5e1;
-                    background: #fff;
-                    border-radius: 6px;
-                    padding: 4px 8px;
-                    cursor: pointer;
+                .inv-header p {
+                    font-size: 0.875rem;
+                    opacity: 0.9;
                 }
 
-                .inv-summary {
-                    font-size: 12px;
-                    color: #334155;
-                    margin-bottom: 10px;
+                /* Modal Body */
+                .inv-body {
+                    padding: 24px;
+                    overflow-y: auto;
+                    flex: 1;
+                }
+
+                .inv-section {
+                    margin-bottom: 24px;
+                }
+
+                .inv-section-title {
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    color: var(--text-muted);
+                    margin-bottom: 12px;
                 }
 
                 .inv-lote {
-                    border: 1px solid #e2e8f0;
-                    border-radius: 8px;
-                    padding: 8px;
+                    background: var(--bg-canvas);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 12px 16px;
                     margin-bottom: 8px;
-                    background: #f8fafc;
-                    font-size: 12px;
-                    line-height: 1.35;
+                    transition: all 0.2s ease;
+                }
+
+                .inv-lote:hover {
+                    border-color: var(--primary);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+                    transform: translateX(4px);
+                }
+
+                .inv-lote-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    font-size: 0.875rem;
+                }
+
+                .inv-lote-label {
+                    color: var(--text-muted);
+                    font-weight: 500;
+                }
+
+                .inv-lote-value {
+                    color: var(--text);
+                    font-weight: 600;
+                }
+
+                /* Modal Footer */
+                .inv-footer {
+                    padding: 16px 24px;
+                    border-top: 1px solid var(--border);
+                    background: var(--bg-canvas);
+                }
+
+                .btn-close {
+                    width: 100%;
+                    padding: 12px 24px;
+                    background: var(--primary);
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                .btn-close:hover {
+                    background: var(--primary-dark);
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+                }
+
+                /* Mobile Optimizations */
+                @media (max-width: 640px) {
+                    .cont-box {
+                        min-width: 80px;
+                        min-height: 80px;
+                        padding: 8px;
+                        border-radius: 8px;
+                    }
+
+                    .cont-codigo {
+                        font-size: 0.75rem;
+                    }
+
+                    .cont-qtd {
+                        font-size: 1.5rem;
+                    }
+
+                    .cont-label {
+                        font-size: 0.6rem;
+                    }
+
+                    #inv-panel {
+                        max-width: 100%;
+                        border-radius: 12px 12px 0 0;
+                    }
+
+                    .inv-header h2 {
+                        font-size: 1.25rem;
+                    }
+
+                    .inv-body {
+                        padding: 16px;
+                    }
+
+                    .inv-lote-row {
+                        font-size: 0.8rem;
+                    }
                 }
             </style>
 
             <div id="mapa-wrapper" class="__MOBILE_CLASS__">
-                <div id="mapa-area"></div>
+                <div id="mapa-area">
+                </div>
                 <div id="mapa-status">__STATUS_TEXT__</div>
+            </div>
 
-                <div id="inv-overlay">
-                    <div id="inv-panel"></div>
+            <!-- Modal de Inventário Premium -->
+            <div id="inv-overlay">
+                <div id="inv-panel">
+                    <div class="inv-header">
+                        <h2 id="inv-titulo">Contentor</h2>
+                        <p id="inv-subtitulo"></p>
+                    </div>
+                    <div class="inv-body" id="inv-body"></div>
+                    <div class="inv-footer">
+                        <button class="btn-close" onclick="fecharModal()">Fechar</button>
+                    </div>
                 </div>
             </div>
 
@@ -681,194 +815,170 @@ def run_map_page(ctx: dict):
                 const contentores = __CONTENTORES_DATA__;
                 const isEditMode = __EDIT_MODE__;
                 const isMobile = __IS_MOBILE__;
-                const baseW = 900;
-                const baseH = 550;
-
-                const wrapper = document.getElementById('mapa-wrapper');
                 const mapaArea = document.getElementById('mapa-area');
                 const statusBar = document.getElementById('mapa-status');
                 const invOverlay = document.getElementById('inv-overlay');
                 const invPanel = document.getElementById('inv-panel');
+                const invBody = document.getElementById('inv-body');
+                const invTitulo = document.getElementById('inv-titulo');
+                const invSubtitulo = document.getElementById('inv-subtitulo');
 
-                let scale = 1;
-                let draggedEl = null;
-                let draggedMeta = null;
-                let offsetX = 0;
-                let offsetY = 0;
-                let moved = false;
-                let lastPersistAt = 0;
-
-                function esc(v) {
-                    return String(v ?? '').replace(/[&<>"']/g, (c) => ({
-                        '&': '&amp;',
-                        '<': '&lt;',
-                        '>': '&gt;',
-                        '"': '&quot;',
-                        "'": '&#39;'
-                    }[c]));
-                }
+                let dragInfo = null;
+                let areaScale = 1;
 
                 function computeScale() {
                     const rect = mapaArea.getBoundingClientRect();
-                    scale = rect.width / baseW;
-                    if (!scale || scale <= 0) scale = 1;
+                    areaScale = rect.width / (isMobile ? 375 : 900);
                 }
 
-                function openInventory(cont) {
-                    const lotes = Array.isArray(cont.lotes) ? cont.lotes : [];
-                    const lotesHtml = lotes.length === 0
-                        ? '<div class="inv-lote">Sem lotes neste contentor.</div>'
-                        : lotes.map(l => `
-                            <div class="inv-lote">
-                                <b>Garanhão:</b> ${esc(l.garanhao)}<br/>
-                                <b>Proprietário:</b> ${esc(l.proprietario)}<br/>
-                                <b>Quantidade:</b> ${esc(l.quantidade)}<br/>
-                                <b>Canister:</b> ${esc(l.canister)} | <b>Andar:</b> ${esc(l.andar)}<br/>
-                                <b>Observações:</b> ${esc(l.observacoes || '—')}
-                            </div>
-                        `).join('');
+                function criarContentor(c) {
+                    const box = document.createElement('div');
+                    box.className = 'cont-box';
+                    if (!isEditMode) box.classList.add('clickable');
+                    if (isEditMode) box.classList.add('draggable');
 
-                    invPanel.innerHTML = `
-                        <div class="inv-head">
-                            <div class="inv-title">${esc(cont.codigo)}</div>
-                            <button class="inv-close" id="inv-close-btn">Fechar</button>
-                        </div>
-                        <div class="inv-summary">
-                            <b>Total de palhetas:</b> ${esc(cont.palhetas)}<br/>
-                            <b>Total de lotes:</b> ${esc(lotes.length)}
-                        </div>
-                        ${lotesHtml}
-                    `;
-
-                    invOverlay.style.display = 'block';
-                    const closeBtn = document.getElementById('inv-close-btn');
-                    if (closeBtn) closeBtn.addEventListener('click', closeInventory);
-                }
-
-                function closeInventory() {
-                    invOverlay.style.display = 'none';
-                }
-
-                invOverlay.addEventListener('click', (e) => {
-                    if (e.target === invOverlay) closeInventory();
-                });
-
-                function guardarPosicaoPendente(id, x, y) {
-                    try {
-                        let storageRef = window.localStorage;
-                        try {
-                            if (window.parent && window.parent.localStorage) {
-                                storageRef = window.parent.localStorage;
-                            }
-                        } catch (e) {
-                            storageRef = window.localStorage;
-                        }
-
-                        const atual = JSON.parse(storageRef.getItem('contentor_layout_pending') || '{}');
-                        atual[String(id)] = { x, y };
-                        storageRef.setItem('contentor_layout_pending', JSON.stringify(atual));
-
-                        try {
-                            if (window.parent && window.parent.postMessage) {
-                                window.parent.postMessage({
-                                    type: 'CONTENTOR_LAYOUT_UPDATE',
-                                    id: id,
-                                    x: x,
-                                    y: y
-                                }, '*');
-                            }
-                        } catch (e) {}
-
-                        statusBar.textContent = 'Alteração pendente.';
-                    } catch (err) {
-                        console.error('Erro ao guardar posição pendente:', err);
-                        statusBar.textContent = 'Falha ao guardar posição pendente.';
-                    }
-                }
-
-                function criarContentor(cont) {
-                    const div = document.createElement('div');
-                    div.className = `cont-box ${isEditMode ? 'draggable' : 'clickable'}`;
-                    div.id = `cont-${cont.id}`;
-
-                    const wPx = Math.max(40, Math.round(cont.w * scale));
-                    const hPx = Math.max(40, Math.round(cont.h * scale));
-                    const xPx = Math.round(cont.x * scale);
-                    const yPx = Math.round(cont.y * scale);
-
-                    div.style.width = wPx + 'px';
-                    div.style.height = hPx + 'px';
-                    div.style.left = xPx + 'px';
-                    div.style.top = yPx + 'px';
-
-                    div.innerHTML = `
-                        <div class="cont-codigo">${esc(cont.codigo)}</div>
-                        <div class="cont-qtd">${esc(cont.palhetas)}</div>
+                    box.innerHTML = `
+                        <div class="cont-codigo">${c.codigo}</div>
+                        <div class="cont-qtd">${c.total_palhetas}</div>
                         <div class="cont-label">palhetas</div>
                     `;
 
-                    div.addEventListener('mousedown', (e) => {
-                        if (!isEditMode) return;
-                        if (e.button !== 0) return;
-                        moved = false;
-                        draggedEl = div;
-                        draggedMeta = cont;
-                        draggedEl.classList.add('dragging');
+                    const baseW = isMobile ? 80 : 100;
+                    const baseH = isMobile ? 80 : 100;
+                    box.style.left = (c.pos_x * areaScale) + 'px';
+                    box.style.top = (c.pos_y * areaScale) + 'px';
+                    box.style.width = baseW + 'px';
+                    box.style.height = baseH + 'px';
 
-                        const rect = draggedEl.getBoundingClientRect();
-                        offsetX = e.clientX - rect.left;
-                        offsetY = e.clientY - rect.top;
-                        e.preventDefault();
-                    });
+                    if (isEditMode) {
+                        box.addEventListener('mousedown', startDrag);
+                        box.addEventListener('touchstart', startDrag, {passive: false});
+                    } else {
+                        box.addEventListener('click', () => mostrarInventario(c));
+                    }
 
-                    div.addEventListener('click', () => {
-                        if (isEditMode) return;
-                        openInventory(cont);
-                    });
-
-                    mapaArea.appendChild(div);
+                    mapaArea.appendChild(box);
                 }
 
-                document.addEventListener('mousemove', (e) => {
-                    if (!draggedEl || !isEditMode) return;
-                    moved = true;
+                function startDrag(e) {
+                    e.preventDefault();
+                    const box = e.currentTarget;
+                    box.classList.add('dragging');
+                    const rect = box.getBoundingClientRect();
+                    const areaRect = mapaArea.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-                    const mapRect = mapaArea.getBoundingClientRect();
-                    let x = e.clientX - mapRect.left - offsetX;
-                    let y = e.clientY - mapRect.top - offsetY;
+                    dragInfo = {
+                        box: box,
+                        offsetX: clientX - rect.left,
+                        offsetY: clientY - rect.top,
+                        areaLeft: areaRect.left,
+                        areaTop: areaRect.top,
+                        areaW: areaRect.width,
+                        areaH: areaRect.height
+                    };
 
-                    const w = parseInt(draggedEl.style.width, 10);
-                    const h = parseInt(draggedEl.style.height, 10);
-                    x = Math.max(0, Math.min(x, mapRect.width - w));
-                    y = Math.max(0, Math.min(y, mapRect.height - h));
+                    document.addEventListener('mousemove', onDrag);
+                    document.addEventListener('mouseup', endDrag);
+                    document.addEventListener('touchmove', onDrag, {passive: false});
+                    document.addEventListener('touchend', endDrag);
+                }
 
-                    draggedEl.style.left = Math.round(x) + 'px';
-                    draggedEl.style.top = Math.round(y) + 'px';
-                    statusBar.textContent = `Movendo... X=${Math.round(x / scale)} | Y=${Math.round(y / scale)}`;
+                function onDrag(e) {
+                    if (!dragInfo) return;
+                    e.preventDefault();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-                    const now = Date.now();
-                    if (draggedMeta && (now - lastPersistAt) > 180) {
-                        const xCanonLive = Math.max(0, Math.min(Math.round(x / scale), baseW - draggedMeta.w));
-                        const yCanonLive = Math.max(0, Math.min(Math.round(y / scale), baseH - draggedMeta.h));
-                        guardarPosicaoPendente(draggedMeta.id, xCanonLive, yCanonLive);
-                        lastPersistAt = now;
+                    let newX = clientX - dragInfo.areaLeft - dragInfo.offsetX;
+                    let newY = clientY - dragInfo.areaTop - dragInfo.offsetY;
+
+                    newX = Math.max(0, Math.min(newX, dragInfo.areaW - dragInfo.box.offsetWidth));
+                    newY = Math.max(0, Math.min(newY, dragInfo.areaH - dragInfo.box.offsetHeight));
+
+                    dragInfo.box.style.left = newX + 'px';
+                    dragInfo.box.style.top = newY + 'px';
+                }
+
+                function endDrag(e) {
+                    if (!dragInfo) return;
+                    dragInfo.box.classList.remove('dragging');
+                    
+                    const finalX = parseInt(dragInfo.box.style.left) / areaScale;
+                    const finalY = parseInt(dragInfo.box.style.top) / areaScale;
+
+                    try {
+                        const layoutData = JSON.parse(localStorage.getItem('contentor_layout_pending') || '{}');
+                        const codigo = dragInfo.box.querySelector('.cont-codigo').textContent;
+                        layoutData[codigo] = {x: Math.round(finalX), y: Math.round(finalY)};
+                        localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                    } catch (err) {
+                        console.error('Erro ao salvar posição:', err);
                     }
+
+                    document.removeEventListener('mousemove', onDrag);
+                    document.removeEventListener('mouseup', endDrag);
+                    document.removeEventListener('touchmove', onDrag);
+                    document.removeEventListener('touchend', endDrag);
+                    dragInfo = null;
+                }
+
+                function mostrarInventario(cont) {
+                    invTitulo.textContent = `Contentor ${cont.codigo}`;
+                    invSubtitulo.textContent = `${cont.total_palhetas} palhetas no total`;
+                    
+                    let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
+                    
+                    if (cont.lotes && cont.lotes.length > 0) {
+                        cont.lotes.forEach(lote => {
+                            html += `
+                                <div class="inv-lote">
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">🐴 Garanhão:</span>
+                                        <span class="inv-lote-value">${lote.garanhao}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">👤 Proprietário:</span>
+                                        <span class="inv-lote-value">${lote.proprietario}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">📍 Localização:</span>
+                                        <span class="inv-lote-value">C${lote.canister} / A${lote.andar}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">🧬 Palhetas:</span>
+                                        <span class="inv-lote-value">${lote.palhetas}</span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhum lote neste contentor</p>';
+                    }
+                    
+                    html += '</div>';
+                    invBody.innerHTML = html;
+                    invOverlay.classList.add('visible');
+                }
+
+                function fecharModal() {
+                    invOverlay.classList.remove('visible');
+                }
+
+                invOverlay.addEventListener('click', (e) => {
+                    if (e.target === invOverlay) fecharModal();
                 });
 
-                document.addEventListener('mouseup', () => {
-                    if (!draggedEl || !isEditMode || !draggedMeta) return;
-
-                    const xPx = parseInt(draggedEl.style.left, 10);
-                    const yPx = parseInt(draggedEl.style.top, 10);
-                    const xCanon = Math.max(0, Math.min(Math.round(xPx / scale), baseW - draggedMeta.w));
-                    const yCanon = Math.max(0, Math.min(Math.round(yPx / scale), baseH - draggedMeta.h));
-
-                    draggedEl.classList.remove('dragging');
-                    draggedEl = null;
-
-                    guardarPosicaoPendente(draggedMeta.id, xCanon, yCanon);
-
-                    draggedMeta = null;
+                window.addEventListener('resize', () => {
+                    computeScale();
+                    contentores.forEach((c, i) => {
+                        const box = mapaArea.children[i];
+                        if (box) {
+                            box.style.left = (c.pos_x * areaScale) + 'px';
+                            box.style.top = (c.pos_y * areaScale) + 'px';
+                        }
+                    });
                 });
 
                 computeScale();
@@ -879,7 +989,6 @@ def run_map_page(ctx: dict):
                 }
             </script>
             """
-
             import streamlit.components.v1 as components
             mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
             mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
