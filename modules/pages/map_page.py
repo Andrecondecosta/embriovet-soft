@@ -892,10 +892,13 @@ def run_map_page(ctx: dict):
             )
             mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
 
+            # Renderizar mapa com altura otimizada e responsiva
+            st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
             if is_mobile:
-                components.html(mapa_render, height=355)
+                components.html(mapa_render, height=450, scrolling=False)
             else:
-                components.html(mapa_render, height=505)
+                components.html(mapa_render, height=550, scrolling=False)
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # Mostrar lista de contentores abaixo do mapa
             st.markdown(f"<div class='inv-contentores-head'>{t('map.inventory_title')}</div>", unsafe_allow_html=True)
