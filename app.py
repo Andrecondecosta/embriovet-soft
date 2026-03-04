@@ -2528,7 +2528,8 @@ if aba == t("menu.settings"):
 # ------------------------------------------------------------
 elif aba == t("menu.add_stock"):
     st.header(t("add_stock.title"))
-    inject_add_stock_form_css()
+    primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+    inject_add_stock_form_css(primary_color=primary)
 
     if proprietarios.empty:
         st.warning(t("add_stock.no_owners"))
@@ -2549,7 +2550,7 @@ elif aba == t("menu.add_stock"):
             
             with st.form("novo_stock"):
                 # SEÇÃO 1: IDENTIDADE
-                st.markdown('<div class="form-card"><div class="form-section-header">Identificação</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
                 col_id1, col_id2 = st.columns(2)
                 
                 with col_id1:
@@ -2570,7 +2571,7 @@ elif aba == t("menu.add_stock"):
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 # SEÇÃO 2: DADOS TÉCNICOS
-                st.markdown('<div class="form-card"><div class="form-section-header">Dados Técnicos</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-card"><div class="form-section-header">🔬 Dados Técnicos</div>', unsafe_allow_html=True)
                 col_tec1, col_tec2, col_tec3, col_tec4 = st.columns(4)
                 
                 with col_tec1:
@@ -2590,7 +2591,7 @@ elif aba == t("menu.add_stock"):
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 # SEÇÃO 3: PRODUÇÃO
-                st.markdown('<div class="form-card"><div class="form-section-header">Produção</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-card"><div class="form-section-header">📦 Produção</div>', unsafe_allow_html=True)
                 col_prod1, col_prod2, col_prod3 = st.columns(3)
                 
                 with col_prod1:
@@ -2602,7 +2603,7 @@ elif aba == t("menu.add_stock"):
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 # SEÇÃO 4: LOCALIZAÇÃO
-                st.markdown('<div class="form-card"><div class="form-section-header">Localização</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-card"><div class="form-section-header">📍 Localização no Contentor</div>', unsafe_allow_html=True)
                 
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
@@ -2631,7 +2632,7 @@ elif aba == t("menu.add_stock"):
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 # OBSERVAÇÕES E SUBMIT
-                st.markdown('<div class="form-card"><div class="form-section-header">Observações</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-card"><div class="form-section-header">💬 Observações</div>', unsafe_allow_html=True)
                 observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"), label_visibility="collapsed")
                 st.markdown('</div>', unsafe_allow_html=True)
 

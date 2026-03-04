@@ -292,45 +292,146 @@ def inject_stepper_css():
     )
 
 
-def inject_add_stock_form_css():
+def inject_add_stock_form_css(primary_color="#E85D4A"):
     st.markdown(
-        """
+        f"""
         <style>
-            .form-card {
-                background: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                padding: 20px;
-                margin-bottom: 16px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            }
-            .form-section-header {
-                color: #64748b;
-                font-size: 0.75rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                margin-bottom: 16px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .form-section-header::after {
-                content: '';
-                flex: 1;
-                height: 1px;
-                background: #f1f5f9;
-                margin-left: 8px;
-            }
-            /* Botão de adicionar proprietário flutuando ou destacado */
-            .new-owner-btn {
-                margin-bottom: 1rem;
-                text-align: right;
-            }
+        /* ═══════════════════════════════════════
+           ADD STOCK — Premium Form Design
+        ═══════════════════════════════════════ */
+
+        /* Section header — accent left border */
+        .form-section-header {{
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: #475569;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            border-left: 3px solid {primary_color};
+            padding-left: 9px;
+            margin: 0 0 12px 0;
+            line-height: 1.4;
+        }}
+
+        /* Section card — subtle card around each group */
+        .form-card {{
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px 18px 6px 18px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }}
+
+        /* Main Streamlit form container — borderless, transparent */
+        [data-testid="stForm"] {{
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+        }}
+
+        /* Input & selectbox labels — condensed uppercase */
+        [data-testid="stForm"] .stTextInput label p,
+        [data-testid="stForm"] .stSelectbox label p,
+        [data-testid="stForm"] .stNumberInput label p,
+        [data-testid="stForm"] .stTextArea label p,
+        [data-testid="stForm"] .stRadio label p {{
+            font-size: 0.72rem !important;
+            font-weight: 700 !important;
+            color: #64748b !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-bottom: 3px !important;
+        }}
+
+        /* Inputs — stronger border + subtle focus ring */
+        [data-testid="stForm"] input,
+        [data-testid="stForm"] textarea,
+        [data-testid="stForm"] .stSelectbox > div > div {{
+            border-radius: 7px !important;
+        }}
+        [data-testid="stForm"] input:focus {{
+            border-color: {primary_color} !important;
+            box-shadow: 0 0 0 3px {primary_color}22 !important;
+        }}
+
+        /* Number input — center align value */
+        [data-testid="stForm"] [data-testid="stNumberInput"] input {{
+            text-align: center !important;
+            font-weight: 600 !important;
+            font-size: 1rem !important;
+        }}
+
+        /* Radio floor — pill style */
+        [data-testid="stForm"] [data-testid="stRadio"] > div {{
+            gap: 8px;
+        }}
+        [data-testid="stForm"] [data-testid="stRadio"] label {{
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 4px 14px !important;
+            font-weight: 600 !important;
+            font-size: .85rem !important;
+            transition: all .15s;
+        }}
+        [data-testid="stForm"] [data-testid="stRadio"] label:has(input:checked) {{
+            background: {primary_color}18 !important;
+            border-color: {primary_color} !important;
+            color: {primary_color} !important;
+        }}
+
+        /* Submit button — full-width primary */
+        [data-testid="stFormSubmitButton"] button {{
+            background: {primary_color} !important;
+            border-color: {primary_color} !important;
+            color: #fff !important;
+            font-weight: 700 !important;
+            font-size: 0.92rem !important;
+            height: 44px !important;
+            border-radius: 8px !important;
+            letter-spacing: 0.03em;
+            transition: opacity 0.15s ease, transform 0.1s ease;
+            margin-top: 6px;
+        }}
+        [data-testid="stFormSubmitButton"] button:hover {{
+            opacity: 0.88 !important;
+            transform: translateY(-1px);
+        }}
+        [data-testid="stFormSubmitButton"] button:active {{
+            transform: translateY(0);
+        }}
+
+        /* "+ Novo Proprietário" button — outline style */
+        [data-testid="stButton"][id="btn_add_prop_stock"] button,
+        div:has(+ div [data-testid="stForm"]) button {{
+            border: 1.5px solid {primary_color} !important;
+            color: {primary_color} !important;
+            background: transparent !important;
+            font-size: 0.78rem !important;
+            font-weight: 600 !important;
+            border-radius: 6px !important;
+            padding: 4px 12px !important;
+            transition: background .15s;
+        }}
+
+        /* Observations section gap */
+        .form-obs {{
+            margin-top: 4px;
+        }}
+
+        /* Max width for the form area */
+        .main [data-testid="stForm"] {{
+            max-width: 860px;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
     )
+
 
 
 
