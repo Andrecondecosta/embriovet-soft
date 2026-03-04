@@ -463,7 +463,7 @@ def run_transfer_page(ctx):
                             # Se muda localização, passar novos parâmetros
                             if muda_localizacao == t("transfer.new_location"):
                                 transferir_stock_interno_com_localizacao(
-                                    stock_id, dest_id, qtd,
+                                    origem_id, dest_id, stock_id, qtd,
                                     contentor_id_destino, canister_destino, andar_destino
                                 )
                             else:
