@@ -484,63 +484,67 @@ def run_map_page(ctx: dict):
 
             mapa_html = """
             <style>
+                * {
+                    box-sizing: border-box;
+                    margin: 0;
+                    padding: 0;
+                }
+                
                 :root {
-                    --map-bg: #f4f6f8;
-                    --map-border: #cbd5e1;
-                    --card-bg: #f8fafc;
-                    --card-border: #475569;
-                    --text-main: #0f172a;
+                    --primary: #3b82f6;
+                    --primary-dark: #2563eb;
+                    --bg-main: #ffffff;
+                    --bg-canvas: #f8fafc;
+                    --border: #e2e8f0;
+                    --border-dark: #cbd5e1;
+                    --text: #0f172a;
                     --text-muted: #64748b;
+                    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                    --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+                }
+
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                    background: var(--bg-main);
+                    overflow: hidden;
                 }
 
                 #mapa-wrapper {
-                    position: relative;
                     width: 100%;
-                    border: 1px solid var(--map-border);
-                    border-radius: 8px;
-                    background: var(--map-bg);
-                    padding: 10px;
-                    overflow: hidden;
-                    font-family: 'Courier New', monospace;
-                }
-
-                #mapa-wrapper.mobile {
-                    padding: 4px;
-                    border-radius: 6px;
-                    margin-bottom: 2px;
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    background: var(--bg-canvas);
                 }
 
                 #mapa-area {
                     position: relative;
-                    width: min(100%, 720px);
-                    margin: 0 auto;
-                    aspect-ratio: 900 / 550;
-                    border: 2px solid #64748b;
-                    background: #fff;
-                    background-image:
-                        linear-gradient(rgba(15,23,42,.05) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(15,23,42,.05) 1px, transparent 1px);
-                    background-size: 50px 50px;
-                    overflow: hidden;
-                }
-
-                #mapa-wrapper.mobile #mapa-area {
                     width: 100%;
-                    max-width: 100%;
-                    margin: 0;
+                    flex: 1;
+                    background: var(--bg-main);
+                    background-image:
+                        linear-gradient(var(--border) 1px, transparent 1px),
+                        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+                    background-size: 40px 40px;
+                    overflow: hidden;
+                    touch-action: none;
                 }
 
                 .cont-box {
                     position: absolute;
-                    border: 2px solid var(--card-border);
-                    background: var(--card-bg);
-                    color: var(--text-main);
+                    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+                    border: 2px solid var(--primary);
+                    border-radius: 12px;
+                    box-shadow: var(--shadow);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
+                    padding: 12px;
                     user-select: none;
-                    transition: box-shadow .2s ease, transform .2s ease;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    min-width: 100px;
+                    min-height: 100px;
                 }
 
                 .cont-box.clickable {
@@ -548,56 +552,244 @@ def run_map_page(ctx: dict):
                 }
 
                 .cont-box.draggable {
-                    cursor: move;
-                }
-
-                .cont-box:hover {
-                    box-shadow: 0 8px 16px rgba(2, 6, 23, .14);
-                    transform: translateY(-1px);
-                    z-index: 50;
+                    cursor: grab;
                 }
 
                 .cont-box.dragging {
-                    opacity: .9;
-                    z-index: 999;
+                    cursor: grabbing !important;
+                    opacity: 0.85;
+                    z-index: 1000;
+                    box-shadow: var(--shadow-lg);
+                    transform: scale(1.05) rotate(2deg);
+                }
+
+                .cont-box:hover {
+                    transform: translateY(-4px) scale(1.02);
+                    box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.3);
+                    border-color: var(--primary-dark);
+                    z-index: 100;
                 }
 
                 .cont-codigo {
-                    font-size: 12px;
+                    font-size: 0.875rem;
                     font-weight: 700;
-                    margin-bottom: 3px;
+                    color: var(--primary-dark);
+                    margin-bottom: 4px;
+                    letter-spacing: 0.5px;
+                    text-transform: uppercase;
                 }
 
                 .cont-qtd {
-                    font-size: 20px;
+                    font-size: 2rem;
                     font-weight: 800;
+                    color: var(--text);
                     line-height: 1;
+                    margin-bottom: 2px;
                 }
 
                 .cont-label {
-                    font-size: 10px;
+                    font-size: 0.65rem;
                     color: var(--text-muted);
                     text-transform: uppercase;
-                    letter-spacing: .3px;
-                }
-
-                .mobile .cont-codigo {
-                    font-size: 11px;
-                }
-
-                .mobile .cont-qtd {
-                    font-size: 18px;
-                }
-
-                .mobile .cont-label {
-                    font-size: 9px;
+                    letter-spacing: 0.8px;
+                    font-weight: 600;
                 }
 
                 #mapa-status {
-                    margin-top: 8px;
-                    font-size: 11px;
+                    padding: 8px 16px;
+                    background: var(--bg-main);
+                    border-top: 1px solid var(--border);
+                    font-size: 0.75rem;
                     color: var(--text-muted);
+                    text-align: center;
+                    font-weight: 500;
                 }
+
+                /* Modal Overlay */
+                #inv-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.6);
+                    backdrop-filter: blur(4px);
+                    display: none;
+                    z-index: 2000;
+                    animation: fadeIn 0.2s ease;
+                }
+
+                #inv-overlay.visible {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+
+                /* Modal Panel Premium */
+                #inv-panel {
+                    background: var(--bg-main);
+                    border-radius: 16px;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                    width: 100%;
+                    max-width: 600px;
+                    max-height: 85vh;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+
+                @keyframes slideUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(20px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0) scale(1);
+                    }
+                }
+
+                /* Modal Header */
+                .inv-header {
+                    padding: 20px 24px;
+                    border-bottom: 1px solid var(--border);
+                    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+                    color: white;
+                }
+
+                .inv-header h2 {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    margin-bottom: 4px;
+                }
+
+                .inv-header p {
+                    font-size: 0.875rem;
+                    opacity: 0.9;
+                }
+
+                /* Modal Body */
+                .inv-body {
+                    padding: 24px;
+                    overflow-y: auto;
+                    flex: 1;
+                }
+
+                .inv-section {
+                    margin-bottom: 24px;
+                }
+
+                .inv-section-title {
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    color: var(--text-muted);
+                    margin-bottom: 12px;
+                }
+
+                .inv-lote {
+                    background: var(--bg-canvas);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 12px 16px;
+                    margin-bottom: 8px;
+                    transition: all 0.2s ease;
+                }
+
+                .inv-lote:hover {
+                    border-color: var(--primary);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+                    transform: translateX(4px);
+                }
+
+                .inv-lote-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 12px;
+                    font-size: 0.875rem;
+                }
+
+                .inv-lote-label {
+                    color: var(--text-muted);
+                    font-weight: 500;
+                }
+
+                .inv-lote-value {
+                    color: var(--text);
+                    font-weight: 600;
+                }
+
+                /* Modal Footer */
+                .inv-footer {
+                    padding: 16px 24px;
+                    border-top: 1px solid var(--border);
+                    background: var(--bg-canvas);
+                }
+
+                .btn-close {
+                    width: 100%;
+                    padding: 12px 24px;
+                    background: var(--primary);
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                .btn-close:hover {
+                    background: var(--primary-dark);
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+                }
+
+                /* Mobile Optimizations */
+                @media (max-width: 640px) {
+                    .cont-box {
+                        min-width: 80px;
+                        min-height: 80px;
+                        padding: 8px;
+                        border-radius: 8px;
+                    }
+
+                    .cont-codigo {
+                        font-size: 0.75rem;
+                    }
+
+                    .cont-qtd {
+                        font-size: 1.5rem;
+                    }
+
+                    .cont-label {
+                        font-size: 0.6rem;
+                    }
+
+                    #inv-panel {
+                        max-width: 100%;
+                        border-radius: 12px 12px 0 0;
+                    }
+
+                    .inv-header h2 {
+                        font-size: 1.25rem;
+                    }
+
+                    .inv-body {
+                        padding: 16px;
+                    }
+
+                    .inv-lote-row {
+                        font-size: 0.8rem;
+                    }
+                }
+            </style>"""
 
                 .mobile #mapa-status {
                     margin-top: 4px;
