@@ -2425,8 +2425,8 @@ if verificar_permissao('Gestor'):
     menu_secundario.append(t("menu.import"))
     menu_secundario.append(t("menu.owners"))
 
-# Ver Stock e Relatórios sempre no menu principal
-menu_principal.insert(2, t("menu.stock"))
+# Ver Stock e Relatórios sempre no menu principal (para todos)
+menu_principal.append(t("menu.stock"))
 menu_principal.append(t("menu.reports"))
 
 # Administrador tem acesso a mais opções secundárias
