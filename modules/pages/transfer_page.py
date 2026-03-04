@@ -165,28 +165,43 @@ def run_transfer_page(ctx):
 
         st.markdown(f"<div class='transfer-zone-title'>{t('transfer.available_lots')}</div>", unsafe_allow_html=True)
 
-        header_cols = st.columns([2.5, 1.8, 0.8, 0.6])
+        header_cols = st.columns([2.0, 1.5, 1.2, 0.8, 0.6])
         with header_cols[0]:
             st.markdown(f"<div class='transfer-zone-title'>{t('label.lote')}</div>", unsafe_allow_html=True)
         with header_cols[1]:
-            st.markdown(f"<div class='transfer-zone-title'>{t('label.location')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='transfer-zone-title'>{t('label.owner')}</div>", unsafe_allow_html=True)
         with header_cols[2]:
-            st.markdown(f"<div class='transfer-zone-title'>{t('label.available')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='transfer-zone-title'>{t('label.characteristics')}</div>", unsafe_allow_html=True)
         with header_cols[3]:
+            st.markdown(f"<div class='transfer-zone-title'>{t('label.available')}</div>", unsafe_allow_html=True)
+        with header_cols[4]:
             st.markdown(f"<div class='transfer-zone-title'>{t('btn.select')}</div>", unsafe_allow_html=True)
 
         for _, row in modal_df.iterrows():
             lote = lote_payload(row)
             sid = lote["stock_id"]
+            
+            # Preparar características
+            caracteristicas = []
+            if lote.get('qualidade') and lote['qualidade'] != "—":
+                caracteristicas.append(f"Q:{lote['qualidade']}")
+            if lote.get('concentracao') and lote['concentracao'] != "—":
+                caracteristicas.append(f"C:{lote['concentracao']}")
+            if lote.get('motilidade') and lote['motilidade'] != "—":
+                caracteristicas.append(f"M:{lote['motilidade']}%")
+            carac_text = " · ".join(caracteristicas) if caracteristicas else "—"
 
-            row_cols = st.columns([2.5, 1.8, 0.8, 0.6])
+            row_cols = st.columns([2.0, 1.5, 1.2, 0.8, 0.6])
             with row_cols[0]:
-                st.caption(f"{lote['ref']}")
+                st.caption(f"📦 {lote['ref']}")
+                st.caption(f"📍 {lote['local']}")
             with row_cols[1]:
-                st.caption(lote["local"])
+                st.caption(f"👤 {lote['proprietario_nome']}")
             with row_cols[2]:
-                st.caption(f"{lote['max_disponivel']} pal.")
+                st.caption(carac_text)
             with row_cols[3]:
+                st.caption(f"{lote['max_disponivel']} pal.")
+            with row_cols[4]:
                 sel_key = f"transfer_modal_sel_{sid}"
                 default_checked = bool(st.session_state.get(sel_key, False) or str(sid) in st.session_state["transfer_linhas"])
                 st.checkbox(
