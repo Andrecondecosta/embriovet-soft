@@ -5,6 +5,112 @@ import altair as alt
 from modules.i18n import t
 
 
+def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade):
+    """
+    Reverte uma ação (transferência ou inseminação) e elimina o registo.
+    Devolve as palhetas ao estado anterior.
+    """
+    try:
+        with globals()['get_connection']() as conn:
+            cur = conn.cursor()
+            
+            if tipo == "transfer_internal":
+                # Transferência interna: devolver palhetas ao proprietário origem
+                # 1. Adicionar palhetas de volta ao lote de origem
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade, estoque_id))
+                
+                # 2. Buscar e remover palhetas do destino
+                cur.execute("""
+                    SELECT id, existencia_atual, garanhao, data_embriovet, origem_externa
+                    FROM estoque_dono 
+                    WHERE dono_id = %s AND garanhao = (
+                        SELECT garanhao FROM estoque_dono WHERE id = %s
+                    )
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (prop_destino_id, estoque_id))
+                
+                lote_destino = cur.fetchone()
+                if lote_destino:
+                    lote_dest_id, exist_dest, garanhao, data_emb, origem_ext = lote_destino
+                    nova_quantidade = int(exist_dest) - int(quantidade)
+                    
+                    if nova_quantidade <= 0:
+                        # Eliminar o lote se ficar zerado
+                        cur.execute("DELETE FROM estoque_dono WHERE id = %s", (lote_dest_id,))
+                    else:
+                        # Reduzir quantidade
+                        cur.execute("""
+                            UPDATE estoque_dono 
+                            SET existencia_atual = %s
+                            WHERE id = %s
+                        """, (nova_quantidade, lote_dest_id))
+                
+                # 3. Eliminar registo de transferência
+                cur.execute("DELETE FROM transferencias WHERE id = %s", (action_id,))
+                
+            elif tipo == "transfer_external":
+                # Transferência externa: devolver palhetas ao lote original
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade, estoque_id))
+                
+                # Eliminar registo
+                cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (action_id,))
+                
+            elif tipo == "insemination":
+                # Inseminação: devolver palhetas ao proprietário
+                # Buscar dados da inseminação
+                cur.execute("""
+                    SELECT garanhao, dono_id, palhetas_gastas 
+                    FROM inseminacoes 
+                    WHERE id = %s
+                """, (action_id,))
+                
+                insem_data = cur.fetchone()
+                if insem_data:
+                    garanhao, dono_id, palhetas_gastas = insem_data
+                    
+                    # Procurar um lote deste garanhão e proprietário para devolver
+                    cur.execute("""
+                        SELECT id FROM estoque_dono 
+                        WHERE garanhao = %s AND dono_id = %s 
+                        ORDER BY id DESC 
+                        LIMIT 1
+                    """, (garanhao, dono_id))
+                    
+                    lote_existe = cur.fetchone()
+                    if lote_existe:
+                        # Adicionar palhetas ao lote existente
+                        cur.execute("""
+                            UPDATE estoque_dono 
+                            SET existencia_atual = existencia_atual + %s
+                            WHERE id = %s
+                        """, (palhetas_gastas, lote_existe[0]))
+                    # Se não houver lote, as palhetas foram perdidas (não podemos reverter completamente)
+                
+                # Eliminar registo de inseminação
+                cur.execute("DELETE FROM inseminacoes WHERE id = %s", (action_id,))
+            
+            conn.commit()
+            cur.close()
+            
+            # Atualizar status dos proprietários
+            globals()['atualizar_status_proprietarios']()
+            
+            return True
+            
+    except Exception as e:
+        globals()['logger'].error(f"Erro ao reverter ação: {e}")
+        return False
+
+
 def run_dashboard_page(ctx: dict):
     globals().update(ctx)
 
@@ -219,7 +325,13 @@ def run_dashboard_page(ctx: dict):
                        'Transferência interna' AS acao,
                        'Qtd ' || t.quantidade || ' | ' || 
                        COALESCE(d1.nome, 'Origem ID ' || t.proprietario_origem_id) || ' → ' || 
-                       COALESCE(d2.nome, 'Dest ID ' || t.proprietario_destino_id) AS detalhe
+                       COALESCE(d2.nome, 'Dest ID ' || t.proprietario_destino_id) AS detalhe,
+                       'transfer_internal' AS tipo,
+                       t.id AS action_id,
+                       t.estoque_id,
+                       t.proprietario_origem_id,
+                       t.proprietario_destino_id,
+                       t.quantidade
                 FROM transferencias t
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
@@ -228,7 +340,13 @@ def run_dashboard_page(ctx: dict):
                        '—' AS usuario,
                        'Transferência externa' AS acao,
                        'Qtd ' || te.quantidade || ' | ' || 
-                       COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe
+                       COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe,
+                       'transfer_external' AS tipo,
+                       te.id AS action_id,
+                       te.estoque_id,
+                       te.proprietario_origem_id,
+                       NULL::integer AS proprietario_destino_id,
+                       te.quantidade
                 FROM transferencias_externas te
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 UNION ALL
@@ -237,7 +355,13 @@ def run_dashboard_page(ctx: dict):
                        'Inseminação' AS acao,
                        'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
                        COALESCE(d.nome, 'Proprietário ID ' || i.dono_id) || ' | ' ||
-                       i.palhetas_gastas || ' palhetas' AS detalhe
+                       i.palhetas_gastas || ' palhetas' AS detalhe,
+                       'insemination' AS tipo,
+                       i.id AS action_id,
+                       NULL::integer AS estoque_id,
+                       i.dono_id AS proprietario_origem_id,
+                       NULL::integer AS proprietario_destino_id,
+                       i.palhetas_gastas AS quantidade
                 FROM inseminacoes i
                 LEFT JOIN dono d ON i.dono_id = d.id
                 ORDER BY ts DESC
@@ -256,15 +380,103 @@ def run_dashboard_page(ctx: dict):
             return val.strftime("%d/%m/%Y %H:%M") if isinstance(val, datetime) else val.strftime("%d/%m/%Y")
         return str(val)
 
-    rows_activity = []
-    for ts, usuario, acao, detalhe in atividades:
-        rows_activity.append({"Hora": fmt_ts(ts), "Utilizador": usuario or "—", "Ação": acao or "—", "Detalhe": detalhe or "—"})
-
-    df_activity = pd.DataFrame(rows_activity)
-    if df_activity.empty:
-        st.info("Sem atividade recente registada.")
+    # Verificar se é administrador
+    is_admin = verificar_permissao('Administrador')
+    
+    if atividades:
+        # Headers da tabela
+        if is_admin:
+            header_cols = st.columns([1.2, 0.8, 1.5, 4.5, 0.3, 0.3])
+        else:
+            header_cols = st.columns([1.2, 0.8, 1.5, 5.4])
+        
+        with header_cols[0]:
+            st.markdown("**Hora**")
+        with header_cols[1]:
+            st.markdown("**Utilizador**")
+        with header_cols[2]:
+            st.markdown("**Ação**")
+        with header_cols[3]:
+            st.markdown("**Detalhe**")
+        if is_admin:
+            with header_cols[4]:
+                st.markdown("")
+            with header_cols[5]:
+                st.markdown("")
+        
+        st.markdown("---")
+        
+        # Linhas da tabela
+        for idx, row_data in enumerate(atividades):
+            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
+            
+            if is_admin:
+                cols = st.columns([1.2, 0.8, 1.5, 4.5, 0.3, 0.3])
+            else:
+                cols = st.columns([1.2, 0.8, 1.5, 5.4])
+            
+            with cols[0]:
+                st.caption(fmt_ts(ts))
+            with cols[1]:
+                st.caption(usuario or "—")
+            with cols[2]:
+                st.caption(acao or "—")
+            with cols[3]:
+                st.caption(detalhe or "—")
+            
+            if is_admin:
+                with cols[4]:
+                    if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
+                        if tipo == "insemination":
+                            st.session_state['edit_insemination_id'] = action_id
+                            st.session_state['aba_selecionada'] = t("menu.register_insemination")
+                            st.rerun()
+                        elif tipo in ["transfer_internal", "transfer_external"]:
+                            st.session_state['edit_transfer_id'] = action_id
+                            st.session_state['edit_transfer_type'] = tipo
+                            st.session_state['aba_selecionada'] = t("menu.transfers")
+                            st.rerun()
+                
+                with cols[5]:
+                    if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter"):
+                        st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
+                        st.rerun()
+                
+                # Dialog de confirmação
+                if st.session_state.get(f'confirm_delete_{tipo}_{action_id}', False):
+                    @st.dialog("Confirmar Eliminação")
+                    def confirm_delete_dialog():
+                        st.warning(f"⚠️ **Atenção!** Esta ação vai:")
+                        st.markdown(f"""
+                        - Eliminar o registo de **{acao}**
+                        - Reverter **{quantidade} palhetas** ao estado anterior
+                        """)
+                        
+                        col_confirm1, col_confirm2 = st.columns(2)
+                        with col_confirm1:
+                            if st.button("✅ Confirmar", type="primary", use_container_width=True):
+                                sucesso = reverter_acao(
+                                    tipo, 
+                                    action_id, 
+                                    estoque_id,
+                                    prop_origem_id,
+                                    prop_destino_id,
+                                    quantidade
+                                )
+                                if sucesso:
+                                    st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                    st.success("✅ Ação revertida com sucesso!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Erro ao reverter ação")
+                        with col_confirm2:
+                            if st.button("❌ Cancelar", use_container_width=True):
+                                st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                st.rerun()
+                    
+                    confirm_delete_dialog()
     else:
-        st.dataframe(df_activity, use_container_width=True, hide_index=True, height=220)
+        st.info("Sem atividade recente registada.")
 
     # Ações rápidas
     st.markdown(f"<div class='dash-section-title'>{t('dashboard.actions')}</div>", unsafe_allow_html=True)
