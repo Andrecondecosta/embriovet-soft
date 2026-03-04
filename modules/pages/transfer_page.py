@@ -223,7 +223,7 @@ def run_transfer_page(ctx):
                     if sid not in linhas:
                         linhas[sid] = {
                             **lote,
-                            "qty": 1,
+                            "qty": lote["max_disponivel"],  # Iniciar com o máximo disponível
                         }
 
                 st.session_state["transfer_linhas"] = linhas
