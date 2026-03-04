@@ -575,22 +575,39 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         unsafe_allow_html=True,
     )
 
-    # Menu Principal
-    idx_principal = menu_principal.index(active_key) if active_key in menu_principal else -1
-    if idx_principal >= 0:
-        aba = st.sidebar.radio("Menu Principal", menu_principal, index=idx_principal, label_visibility="collapsed")
-        return aba
+    # Menu Principal (sempre mostrado)
+    idx_principal = menu_principal.index(active_key) if active_key in menu_principal else 0
+    aba_principal = st.sidebar.radio(
+        "Menu Principal", 
+        menu_principal, 
+        index=idx_principal, 
+        label_visibility="collapsed",
+        key="menu_principal_radio"
+    )
     
-    # Menu Secundário (com expander)
+    # Menu Secundário (sempre mostrado em expander se houver itens)
+    aba_secundaria = None
     if menu_secundario:
         with st.sidebar.expander("⚙️ Mais opções", expanded=(active_key in menu_secundario)):
             idx_secundario = menu_secundario.index(active_key) if active_key in menu_secundario else 0
-            aba = st.radio("Menu Secundário", menu_secundario, index=idx_secundario, label_visibility="collapsed", key="menu_secundario_radio")
-            return aba
+            aba_secundaria = st.radio(
+                "Menu Secundário", 
+                menu_secundario, 
+                index=idx_secundario, 
+                label_visibility="collapsed",
+                key="menu_secundario_radio"
+            )
     
-    # Se chegou aqui, mostrar menu principal por padrão
-    aba = st.sidebar.radio("Menu Principal", menu_principal, index=0, label_visibility="collapsed")
-    return aba
+    # Retornar a aba que foi selecionada
+    # Se o active_key está no menu secundário e o expander foi clicado, retornar aba_secundaria
+    # Caso contrário, retornar aba_principal
+    if aba_secundaria and aba_secundaria != menu_secundario[menu_secundario.index(active_key) if active_key in menu_secundario else 0]:
+        return aba_secundaria
+    elif aba_principal != menu_principal[idx_principal]:
+        return aba_principal
+    else:
+        # Manter a seleção atual
+        return active_key if active_key else aba_principal
 
 
 def render_zone_title(title: str, cls: str = "reports-zone-title"):
