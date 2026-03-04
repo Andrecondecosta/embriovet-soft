@@ -384,109 +384,134 @@ def run_dashboard_page(ctx: dict):
     is_admin = verificar_permissao('Administrador')
     
     if atividades:
-        # Criar dataframe com coluna de ações
+        # Criar dataframe normal (sem coluna de ações)
         rows_activity = []
+        activity_metadata = []
         
         for row_data in atividades:
             ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
             
-            row_dict = {
+            rows_activity.append({
                 "Hora": fmt_ts(ts), 
                 "Utilizador": usuario or "—", 
                 "Ação": acao or "—", 
                 "Detalhe": detalhe or "—"
-            }
+            })
             
-            # Adicionar coluna de ações para admin (coluna estreita)
-            if is_admin:
-                row_dict[""] = "⋮"  # Sem título para economizar espaço
-            
-            rows_activity.append(row_dict)
+            activity_metadata.append({
+                "ts": ts,
+                "usuario": usuario,
+                "acao": acao,
+                "detalhe": detalhe,
+                "tipo": tipo,
+                "action_id": action_id,
+                "estoque_id": estoque_id,
+                "prop_origem_id": prop_origem_id,
+                "prop_destino_id": prop_destino_id,
+                "quantidade": quantidade
+            })
         
         df_activity = pd.DataFrame(rows_activity)
         
-        # Configurar larguras das colunas
-        column_config = {}
-        if is_admin:
-            column_config[""] = st.column_config.TextColumn(
-                "",
-                width="small",  # Coluna estreita
-                help="Ações disponíveis"
-            )
-        
-        # Mostrar apenas o dataframe
+        # Mostrar dataframe normal
         st.dataframe(
             df_activity, 
             use_container_width=True, 
             hide_index=True, 
-            height=220,
-            column_config=column_config,
-            on_select="rerun",
-            selection_mode="single-row"
+            height=220
         )
         
-        # Capturar seleção de linha para mostrar menu
-        if is_admin and "selection" in st.session_state and st.session_state.selection:
-            selected_rows = st.session_state.selection.get("rows", [])
-            if selected_rows:
-                idx = selected_rows[0]
-                if idx < len(atividades):
-                    ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = atividades[idx]
+        # Se for admin, adicionar botão para abrir modal de gestão
+        if is_admin:
+            if st.button("✏️", key="manage_logs_btn", help="Gerir logs"):
+                st.session_state['show_logs_modal'] = True
+                st.rerun()
+            
+            # Modal com todos os logs
+            if st.session_state.get('show_logs_modal', False):
+                @st.dialog("📋 Gerir Logs de Atividade", width="large")
+                def logs_management_modal():
+                    st.markdown("Clique num registo para editar ou eliminar:")
+                    st.markdown("---")
                     
-                    # Mostrar menu de ações em popover
-                    with st.popover("🔧 Ações disponíveis", use_container_width=False):
-                        st.markdown(f"**{acao}**")
-                        st.caption(f"{fmt_ts(ts)} - {detalhe}")
-                        st.markdown("---")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            if st.button("✏️ Editar", key=f"edit_{tipo}_{action_id}", use_container_width=True):
-                                if tipo == "insemination":
-                                    st.session_state['edit_insemination_id'] = action_id
-                                    st.session_state['aba_selecionada'] = t("menu.register_insemination")
-                                    st.rerun()
-                                elif tipo in ["transfer_internal", "transfer_external"]:
-                                    st.session_state['edit_transfer_id'] = action_id
-                                    st.session_state['edit_transfer_type'] = tipo
-                                    st.session_state['aba_selecionada'] = t("menu.transfers")
-                                    st.rerun()
-                        
-                        with col2:
-                            if st.button("🗑️ Eliminar", key=f"delete_{tipo}_{action_id}", use_container_width=True, type="secondary"):
-                                st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
-                                st.rerun()
-                        
-                        # Dialog de confirmação
-                        if st.session_state.get(f'confirm_delete_{tipo}_{action_id}', False):
-                            @st.dialog("⚠️ Confirmar Eliminação")
-                            def confirm_delete_dialog():
-                                st.warning("**Esta ação é irreversível!**")
-                                st.markdown(f"""
-                                **O que vai acontecer:**
-                                - ❌ Registo de **{acao}** será eliminado
-                                - ↩️ **{quantidade} palhetas** serão revertidas ao estado anterior
+                    for idx, metadata in enumerate(activity_metadata):
+                        with st.container():
+                            col1, col2 = st.columns([8, 2])
+                            
+                            with col1:
+                                st.markdown(f"**{metadata['acao']}** · {fmt_ts(metadata['ts'])}")
+                                st.caption(f"{metadata['detalhe']}")
+                            
+                            with col2:
+                                edit_col, delete_col = st.columns(2)
                                 
-                                Tem a certeza que deseja continuar?
-                                """)
+                                with edit_col:
+                                    if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", help="Editar"):
+                                        tipo = metadata['tipo']
+                                        action_id = metadata['action_id']
+                                        
+                                        if tipo == "insemination":
+                                            st.session_state['edit_insemination_id'] = action_id
+                                            st.session_state['aba_selecionada'] = t("menu.register_insemination")
+                                        elif tipo in ["transfer_internal", "transfer_external"]:
+                                            st.session_state['edit_transfer_id'] = action_id
+                                            st.session_state['edit_transfer_type'] = tipo
+                                            st.session_state['aba_selecionada'] = t("menu.transfers")
+                                        
+                                        st.session_state['show_logs_modal'] = False
+                                        st.rerun()
                                 
-                                col_confirm1, col_confirm2 = st.columns(2)
-                                with col_confirm1:
-                                    if st.button("✅ Sim, eliminar", type="primary", use_container_width=True):
-                                        sucesso = reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade)
-                                        if sucesso:
-                                            st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
-                                            st.success("✅ Ação revertida com sucesso!")
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ Erro ao reverter ação")
-                                with col_confirm2:
-                                    if st.button("Cancelar", use_container_width=True):
-                                        st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                with delete_col:
+                                    if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", help="Eliminar"):
+                                        st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
                                         st.rerun()
                             
-                            confirm_delete_dialog()
+                            st.markdown("---")
+                            
+                            # Dialog de confirmação para eliminação
+                            if st.session_state.get(f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}', False):
+                                @st.dialog("⚠️ Confirmar Eliminação")
+                                def confirm_delete_dialog():
+                                    st.warning("**Esta ação é irreversível!**")
+                                    st.markdown(f"""
+                                    **O que vai acontecer:**
+                                    - ❌ Registo de **{metadata['acao']}** será eliminado
+                                    - ↩️ **{metadata['quantidade']} palhetas** serão revertidas ao estado anterior
+                                    
+                                    Tem a certeza que deseja continuar?
+                                    """)
+                                    
+                                    col_confirm1, col_confirm2 = st.columns(2)
+                                    with col_confirm1:
+                                        if st.button("✅ Sim, eliminar", type="primary", use_container_width=True):
+                                            sucesso = reverter_acao(
+                                                metadata['tipo'], 
+                                                metadata['action_id'], 
+                                                metadata['estoque_id'],
+                                                metadata['prop_origem_id'],
+                                                metadata['prop_destino_id'],
+                                                metadata['quantidade']
+                                            )
+                                            if sucesso:
+                                                st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = False
+                                                st.session_state['show_logs_modal'] = False
+                                                st.success("✅ Ação revertida com sucesso!")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ Erro ao reverter ação")
+                                    with col_confirm2:
+                                        if st.button("Cancelar", use_container_width=True):
+                                            st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = False
+                                            st.rerun()
+                                
+                                confirm_delete_dialog()
+                    
+                    st.markdown("---")
+                    if st.button("Fechar", use_container_width=True):
+                        st.session_state['show_logs_modal'] = False
+                        st.rerun()
+                
+                logs_management_modal()
     else:
         st.info("Sem atividade recente registada.")
 
