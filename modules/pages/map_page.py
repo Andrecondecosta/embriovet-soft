@@ -599,8 +599,8 @@ def run_map_page(ctx: dict):
                 }
                 
                 :root {
-                    --primary: #3b82f6;
-                    --primary-dark: #2563eb;
+                    --primary: """ + primary_color + """;
+                    --primary-dark: """ + primary_color + """;
                     --bg-main: #ffffff;
                     --bg-canvas: #f8fafc;
                     --border: #e2e8f0;
