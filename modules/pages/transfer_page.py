@@ -5,6 +5,15 @@ import pandas as pd
 
 def run_transfer_page(ctx):
     globals().update(ctx)
+    
+    # DEBUG: Verificar se as funções existem no contexto
+    import inspect
+    if 'transferir_stock_interno' in globals():
+        sig = inspect.signature(globals()['transferir_stock_interno'])
+        st.sidebar.write(f"🔍 DEBUG interno: {sig}")
+    if 'transferir_stock_externo' in globals():
+        sig = inspect.signature(globals()['transferir_stock_externo'])
+        st.sidebar.write(f"🔍 DEBUG externo: {sig}")
 
     st.header(t("transfer.title"))
 
