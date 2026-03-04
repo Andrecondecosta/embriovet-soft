@@ -1,0 +1,110 @@
+{
+  "project_name": "EquiCore / Embriovet - Stock Form Redesign",
+  "design_philosophy": {
+    "theme": "Light",
+    "core_concept": "High-Density Professional SaaS Data Entry",
+    "primary_color": "#1D4ED8",
+    "accent_color": "#E85D4A",
+    "background_color": "#F8FAFC",
+    "card_background": "#FFFFFF",
+    "text_color": "#0F172A",
+    "muted_text": "#64748B",
+    "border_color": "#E2E8F0",
+    "font_family": "system-ui, -apple-system, sans-serif"
+  },
+  "typography": {
+    "section_header": {
+      "size": "0.75rem",
+      "weight": "700",
+      "transform": "uppercase",
+      "letter_spacing": "0.05em",
+      "color": "var(--muted-text)"
+    },
+    "label": {
+      "size": "0.875rem",
+      "weight": "500",
+      "color": "var(--text-color)"
+    }
+  },
+  "layout_strategy": {
+    "grid_system": "Use st.columns for high-density horizontal stacking.",
+    "grouping": "Wrap related fields in visual 'Cards' using CSS containers.",
+    "spacing": "Compact vertical spacing (gap-4 or gap-6 in Tailwind terms).",
+    "sections": [
+      {
+        "id": "identity",
+        "title": "Identificação",
+        "fields": ["Garanhão", "Proprietário"]
+      },
+      {
+        "id": "technical",
+        "title": "Dados Técnicos",
+        "fields": ["Motilidade", "Concentração", "Qualidade", "Cor", "Certificado"]
+      },
+      {
+        "id": "production",
+        "title": "Produção",
+        "fields": ["Data", "Palhetas", "Dose", "Origem"]
+      },
+      {
+        "id": "location",
+        "title": "Localização",
+        "fields": ["Contentor", "Canister", "Andar"]
+      }
+    ]
+  },
+  "css_classes": {
+    "form_card": {
+      "selector": ".form-card",
+      "properties": "background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"
+    },
+    "form_header": {
+      "selector": ".form-section-header",
+      "properties": "font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #64748B; letter-spacing: 0.05em; margin-bottom: 12px; border-bottom: 1px solid #F1F5F9; padding-bottom: 8px;"
+    },
+    "new_owner_btn": {
+      "selector": ".new-owner-btn",
+      "properties": "float: right; margin-top: -40px;"
+    },
+    "submit_btn": {
+      "selector": "div[data-testid='stFormSubmitButton'] button",
+      "properties": "width: 100%; background-color: #1D4ED8; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 6px;"
+    }
+  },
+  "implementation_steps": [
+    {
+      "file": "modules/ui_kit.py",
+      "action": "add_function",
+      "function_name": "inject_add_stock_form_css",
+      "description": "Add a function to inject the specific CSS for the form layout."
+    },
+    {
+      "file": "app.py",
+      "action": "refactor_block",
+      "block_identifier": "elif aba == t(\"menu.add_stock\"):",
+      "instructions": [
+        "Call inject_add_stock_form_css() at the beginning of the block.",
+        "Remove the 'Novo Proprietário' button from its current position and place it strategically (or keep it but styled).",
+        "Inside st.form('novo_stock'):",
+        "Create 4 visual sections using st.markdown('<div class=\"form-card\">', unsafe_allow_html=True) ... st.markdown('</div>', unsafe_allow_html=True).",
+        "Inside each card, use st.columns to arrange fields side-by-side.",
+        "Section 1 (Identity): Col 1 (Garanhão - 100%), Col 2 (Proprietário - 100%). OR Row 1: Garanhão (2/3), Proprietário (1/3).",
+        "Section 2 (Technical): 3 Columns. Col 1: Motilidade, Concentração. Col 2: Qualidade, Cor. Col 3: Certificado.",
+        "Section 3 (Production): 4 Columns. Data, Palhetas, Dose, Origem.",
+        "Section 4 (Location): 3 Columns. Contentor, Canister, Andar.",
+        "Ensure all inputs use 'width=stretch' if available or rely on column width.",
+        "Add a submit button at the end, outside the cards but inside the form."
+      ]
+    }
+  ],
+  "code_snippets": {
+    "css_injection": "def inject_add_stock_form_css():\n    st.markdown(\"\"\"\n    <style>\n        .form-card {\n            background: #ffffff;\n            border: 1px solid #e2e8f0;\n            border-radius: 8px;\n            padding: 20px;\n            margin-bottom: 16px;\n            box-shadow: 0 1px 3px rgba(0,0,0,0.04);\n        }\n        .form-section-header {\n            color: #64748b;\n            font-size: 0.75rem;\n            font-weight: 700;\n            text-transform: uppercase;\n            letter-spacing: 0.05em;\n            margin-bottom: 16px;\n            display: flex;\n            align-items: center;\n            gap: 8px;\n        }\n        .form-section-header::after {\n            content: '';\n            flex: 1;\n            height: 1px;\n            background: #f1f5f9;\n            margin-left: 8px;\n        }\n    </style>\n    \"\"\", unsafe_allow_html=True)"
+  },
+  "image_urls": {},
+  "universal_guidelines": [
+    "Always use st.columns for layout.",
+    "Group related inputs.",
+    "Use uppercase, small, bold headers for sections.",
+    "Maintain high contrast for readability."
+  ]
+}

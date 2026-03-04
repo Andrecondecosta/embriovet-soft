@@ -462,12 +462,14 @@ def run_transfer_page(ctx):
                         try:
                             # Se muda localização, passar novos parâmetros
                             if muda_localizacao == t("transfer.new_location"):
+                                st.write(f"DEBUG: Chamando com_localizacao - Args: origem={origem_id}, dest={dest_id}, stock={stock_id}, qty={qtd}")
                                 transferir_stock_interno_com_localizacao(
                                     origem_id, dest_id, stock_id, qtd,
                                     contentor_id_destino, canister_destino, andar_destino
                                 )
                             else:
-                                transferir_stock_interno(origem_id, dest_id, stock_id, qtd)
+                                st.write(f"DEBUG: Chamando interno - Args: stock={stock_id}, dest={dest_id}, qty={qtd}")
+                                transferir_stock_interno(stock_id, dest_id, qtd)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False
@@ -507,12 +509,12 @@ def run_transfer_page(ctx):
                     # Executar transferência externa
                     sucesso = True
                     for linha in linhas_finais:
-                        origem_id = linha["dono_id"]
                         stock_id = linha["stock_id"]
                         qtd = linha["qty"]
                         
                         try:
-                            transferir_stock_externo(origem_id, destinatario_externo, stock_id, qtd, motivo, observacoes)
+                            st.write(f"DEBUG: Chamando externo - Args: stock={stock_id}, dest={destinatario_externo}, qty={qtd}, tipo={motivo}, obs={observacoes}")
+                            transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False

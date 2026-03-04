@@ -1,7 +1,7 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Problema Original
-Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas.
+Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas, e importação inteligente com criação automática de entidades.
 
 ## Arquitetura
 - **Framework:** Streamlit (Python) + PostgreSQL (psycopg2)
@@ -10,10 +10,24 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
   - `modules/ui_kit.py` — Sistema de design, CSS global, sidebar, header
   - `modules/i18n.py` — Sistema de internacionalização (t() function)
   - `modules/migration_runner.py` — Migrações automáticas SQL
-  - `modules/pages/` — Uma página por ficheiro
+  - `modules/pages/` — Uma página por ficheiro (incluindo import_page.py)
 - **DB Migrations:** `/app/migrations/*.sql`
 
 ## Funcionalidades Implementadas
+
+### Mapa dos Contentores (`map_page.py`) — Corrigido Feb 2026
+- **Contentores não apareciam**: CSS `html,body { height: 100% }` em falta no iframe; `#mapa-wrapper` passou de `height: 100%` para `height: 100vh`
+- **Propriedades JavaScript erradas**: `c.pos_x` → `c.x`, `c.pos_y` → `c.y`, `c.total_palhetas` → `c.palhetas`, `lote.palhetas` → `lote.quantidade`
+- **Botões com chaves i18n em bruto**: adicionadas chaves `btn.cancel = "Cancelar"` e `btn.create_container = "Criar Contentor"` para PT-PT e EN
+
+### Importação Inteligente (`import_page.py`) — NOVO Feb 2026
+- **Wizard de 4 passos**: Ficheiro → Entidades → Validar → Relatório
+- **Passo 1:** Upload CSV/XLSX com download de template, pré-visualização
+- **Passo 2:** Detecção automática de proprietários/contentores desconhecidos; criação imediata no fluxo (sem sair da página) ou mapeamento para existentes
+- **Passo 3:** `st.data_editor` editável com erros destacados; KPIs de validação (linhas/válidas/erros)
+- **Ajuste histórico de data:** `data_criacao` definida como 1 Jan do ano do documento (não data de importação)
+- **Relatório:** Download CSV do resultado; botão "Nova Importação"
+- Testado com 100% de sucesso (iteration_22)
 
 ### Autenticação & Sessão
 - Login com username/password (hash bcrypt)
