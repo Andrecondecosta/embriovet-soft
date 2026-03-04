@@ -559,7 +559,7 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
             unsafe_allow_html=True,
         )
     else:
-        initials = "".join([p[0] for p in company_name.split()[:2) if p]) or "S"
+        initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
         st.sidebar.markdown(
             f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>",
             unsafe_allow_html=True,
