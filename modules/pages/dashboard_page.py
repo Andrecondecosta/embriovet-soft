@@ -384,48 +384,71 @@ def run_dashboard_page(ctx: dict):
     is_admin = verificar_permissao('Administrador')
     
     if atividades:
-        # Criar tabela customizada com botões integrados
-        # Headers
-        if is_admin:
-            header_cols = st.columns([1.3, 0.9, 1.8, 5.2, 0.35, 0.35])
-        else:
-            header_cols = st.columns([1.3, 0.9, 1.8, 5.9])
+        # Criar dataframe original
+        rows_activity = []
+        activity_metadata = []
         
-        with header_cols[0]:
-            st.markdown("**Hora**")
-        with header_cols[1]:
-            st.markdown("**Utilizador**")
-        with header_cols[2]:
-            st.markdown("**Ação**")
-        with header_cols[3]:
-            st.markdown("**Detalhe**")
-        if is_admin:
-            with header_cols[4]:
-                st.markdown("")
-            with header_cols[5]:
-                st.markdown("")
-        
-        st.markdown("---")
-        
-        # Linhas da tabela
-        for idx, row_data in enumerate(atividades):
+        for row_data in atividades:
             ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
-            
-            if is_admin:
-                cols = st.columns([1.3, 0.9, 1.8, 5.2, 0.35, 0.35])
-            else:
-                cols = st.columns([1.3, 0.9, 1.8, 5.9])
-            
-            with cols[0]:
-                st.caption(fmt_ts(ts))
-            with cols[1]:
-                st.caption(usuario or "—")
-            with cols[2]:
-                st.caption(acao or "—")
-            with cols[3]:
-                st.caption(detalhe or "—")
-            
-            if is_admin:
+            rows_activity.append({
+                "Hora": fmt_ts(ts), 
+                "Utilizador": usuario or "—", 
+                "Ação": acao or "—", 
+                "Detalhe": detalhe or "—"
+            })
+            activity_metadata.append({
+                "tipo": tipo,
+                "action_id": action_id,
+                "estoque_id": estoque_id,
+                "prop_origem_id": prop_origem_id,
+                "prop_destino_id": prop_destino_id,
+                "quantidade": quantidade,
+                "acao": acao
+            })
+        
+        df_activity = pd.DataFrame(rows_activity)
+        
+        # Mostrar dataframe original
+        if is_admin:
+            # Adicionar colunas vazias para os botões
+            df_display = df_activity.copy()
+            df_display["✏️"] = ""
+            df_display["🗑️"] = ""
+            st.dataframe(
+                df_display, 
+                use_container_width=True, 
+                hide_index=True, 
+                height=220
+            )
+        else:
+            st.dataframe(
+                df_activity, 
+                use_container_width=True, 
+                hide_index=True, 
+                height=220
+            )
+        
+        # Se for admin, renderizar botões discretos abaixo
+        if is_admin:
+            st.markdown("<div style='margin-top: -10px;'>", unsafe_allow_html=True)
+            for idx, metadata in enumerate(activity_metadata):
+                tipo = metadata["tipo"]
+                action_id = metadata["action_id"]
+                
+                # Criar linha de botões muito compacta
+                cols = st.columns([1.2, 0.9, 1.8, 5.2, 0.4, 0.4])
+                
+                # Espaço vazio para alinhar com a tabela
+                with cols[0]:
+                    st.markdown("")
+                with cols[1]:
+                    st.markdown("")
+                with cols[2]:
+                    st.markdown("")
+                with cols[3]:
+                    st.markdown("")
+                
+                # Botões
                 with cols[4]:
                     if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
                         if tipo == "insemination":
@@ -449,8 +472,8 @@ def run_dashboard_page(ctx: dict):
                     def confirm_delete_dialog():
                         st.warning(f"⚠️ **Atenção!** Esta ação vai:")
                         st.markdown(f"""
-                        - Eliminar o registo de **{acao}**
-                        - Reverter **{quantidade} palhetas** ao estado anterior
+                        - Eliminar o registo de **{metadata['acao']}**
+                        - Reverter **{metadata['quantidade']} palhetas** ao estado anterior
                         """)
                         
                         col_confirm1, col_confirm2 = st.columns(2)
@@ -459,10 +482,10 @@ def run_dashboard_page(ctx: dict):
                                 sucesso = reverter_acao(
                                     tipo, 
                                     action_id, 
-                                    estoque_id,
-                                    prop_origem_id,
-                                    prop_destino_id,
-                                    quantidade
+                                    metadata['estoque_id'],
+                                    metadata['prop_origem_id'],
+                                    metadata['prop_destino_id'],
+                                    metadata['quantidade']
                                 )
                                 if sucesso:
                                     st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
@@ -476,6 +499,8 @@ def run_dashboard_page(ctx: dict):
                                 st.rerun()
                     
                     confirm_delete_dialog()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("Sem atividade recente registada.")
 
