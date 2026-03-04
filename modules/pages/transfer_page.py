@@ -500,30 +500,34 @@ def run_transfer_page(ctx):
                     st.error(t("transfer.error_no_container"))
                 else:
                     # Executar transferência interna
-                    dest_id = proprietarios[proprietarios["nome"] == proprietario_destino]["id"].iloc[0]
-                    sucesso = True
-                    for linha in linhas_finais:
-                        origem_id = linha["dono_id"]
-                        stock_id = linha["stock_id"]
-                        qtd = linha["qty"]
-                        
-                        if origem_id == dest_id:
-                            st.error(f"Erro: Origem e destino são iguais para o lote {linha['ref']}")
-                            sucesso = False
-                            continue
-                        
-                        try:
-                            # Se muda localização, passar novos parâmetros
-                            if muda_localizacao == t("transfer.new_location"):
-                                transferir_stock_interno_com_localizacao(
-                                    origem_id, dest_id, stock_id, qtd,
-                                    contentor_id_destino, canister_destino, andar_destino
-                                )
-                            else:
-                                transferir_stock_interno(stock_id, dest_id, qtd)
-                        except Exception as e:
-                            st.error(f"Erro ao transferir {linha['ref']}: {e}")
-                            sucesso = False
+                    if not proprietario_destino:
+                        st.error("Por favor, selecione um proprietário de destino válido.")
+                        sucesso = False
+                    else:
+                        dest_id = proprietarios[proprietarios["nome"] == proprietario_destino]["id"].iloc[0]
+                        sucesso = True
+                        for linha in linhas_finais:
+                            origem_id = linha["dono_id"]
+                            stock_id = linha["stock_id"]
+                            qtd = linha["qty"]
+                            
+                            if origem_id == dest_id:
+                                st.error(f"⚠️ Não é possível transferir o lote **{linha['ref']}** para o mesmo proprietário (**{linha['proprietario_nome']}**). Por favor, selecione um proprietário diferente.")
+                                sucesso = False
+                                continue
+                            
+                            try:
+                                # Se muda localização, passar novos parâmetros
+                                if muda_localizacao == t("transfer.new_location"):
+                                    transferir_stock_interno_com_localizacao(
+                                        origem_id, dest_id, stock_id, qtd,
+                                        contentor_id_destino, canister_destino, andar_destino
+                                    )
+                                else:
+                                    transferir_stock_interno(stock_id, dest_id, qtd)
+                            except Exception as e:
+                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
+                                sucesso = False
                     
                     if sucesso:
                         st.session_state["transfer_show_success"] = True
