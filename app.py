@@ -2512,9 +2512,6 @@ if aba == t("menu.stock"):
     st.stop()
 
 if aba == t("menu.transfers"):
-    import inspect
-    st.sidebar.write(f"🔍 APP.PY interno: {inspect.signature(transferir_stock_interno)}")
-    st.sidebar.write(f"🔍 APP.PY externo: {inspect.signature(transferir_stock_externo)}")
     run_transfer_page({**globals(), **locals()})
     st.stop()
 

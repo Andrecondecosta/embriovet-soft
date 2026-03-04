@@ -5,15 +5,6 @@ import pandas as pd
 
 def run_transfer_page(ctx):
     globals().update(ctx)
-    
-    # DEBUG: Verificar se as funções existem no contexto
-    import inspect
-    if 'transferir_stock_interno' in globals():
-        sig = inspect.signature(globals()['transferir_stock_interno'])
-        st.sidebar.write(f"🔍 DEBUG interno: {sig}")
-    if 'transferir_stock_externo' in globals():
-        sig = inspect.signature(globals()['transferir_stock_externo'])
-        st.sidebar.write(f"🔍 DEBUG externo: {sig}")
 
     st.header(t("transfer.title"))
 
@@ -111,6 +102,9 @@ def run_transfer_page(ctx):
             "ref": lote_ref(row),
             "local": lote_local(row),
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
+            "qualidade": to_py(row.get("qualidade")) or "—",
+            "concentracao": to_py(row.get("concentracao")) or "—",
+            "motilidade": to_py(row.get("motilidade")) or "—",
         }
 
     def remover_linha(lote_id):
@@ -229,7 +223,7 @@ def run_transfer_page(ctx):
                     if sid not in linhas:
                         linhas[sid] = {
                             **lote,
-                            "qty": 1,
+                            "qty": lote["max_disponivel"],  # Iniciar com o máximo disponível
                         }
 
                 st.session_state["transfer_linhas"] = linhas
@@ -310,9 +304,25 @@ def run_transfer_page(ctx):
 
             l1, l2, linput, l4 = st.columns([3.0, 1.5, 1.9, 0.8])
             with l1:
+                # Mostrar nome do proprietário se filtro "Todos" está selecionado
+                proprietario_atual = st.session_state.get("transfer_proprietario")
+                if not proprietario_atual:
+                    st.markdown(f"<div class='transfer-lote-main'>👤 {linha['proprietario_nome']}</div>", unsafe_allow_html=True)
+                
                 st.markdown(f"<div class='transfer-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
+                
+                # Mostrar características técnicas
+                caracteristicas = []
+                if linha.get('qualidade') and linha['qualidade'] != "—":
+                    caracteristicas.append(f"Qual: {linha['qualidade']}")
+                if linha.get('concentracao') and linha['concentracao'] != "—":
+                    caracteristicas.append(f"Conc: {linha['concentracao']}")
+                if linha.get('motilidade') and linha['motilidade'] != "—":
+                    caracteristicas.append(f"Mot: {linha['motilidade']}%")
+                
+                carac_text = " · ".join(caracteristicas) if caracteristicas else ""
                 st.markdown(
-                    f"<div class='transfer-lote-sub'>{linha['proprietario_nome']} · Disponível: {max_disp}</div>",
+                    f"<div class='transfer-lote-sub'>Disponível: {max_disp} pal.{' · ' + carac_text if carac_text else ''}</div>",
                     unsafe_allow_html=True,
                 )
             with l2:
@@ -471,13 +481,11 @@ def run_transfer_page(ctx):
                         try:
                             # Se muda localização, passar novos parâmetros
                             if muda_localizacao == t("transfer.new_location"):
-                                st.write(f"DEBUG: Chamando com_localizacao - Args: origem={origem_id}, dest={dest_id}, stock={stock_id}, qty={qtd}")
                                 transferir_stock_interno_com_localizacao(
                                     origem_id, dest_id, stock_id, qtd,
                                     contentor_id_destino, canister_destino, andar_destino
                                 )
                             else:
-                                st.write(f"DEBUG: Chamando interno - Args: stock={stock_id}, dest={dest_id}, qty={qtd}")
                                 transferir_stock_interno(stock_id, dest_id, qtd)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
@@ -522,7 +530,6 @@ def run_transfer_page(ctx):
                         qtd = linha["qty"]
                         
                         try:
-                            st.write(f"DEBUG: Chamando externo - Args: stock={stock_id}, dest={destinatario_externo}, qty={qtd}, tipo={motivo}, obs={observacoes}")
                             transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
