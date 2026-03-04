@@ -313,7 +313,17 @@ def run_dashboard_page(ctx: dict):
                 st.info("Sem dados de proprietários")
 
     # Atividade recente
-    st.markdown(f"<div class='dash-section-title'>{t('dashboard.activity')}</div>", unsafe_allow_html=True)
+    col_title, col_btn = st.columns([8, 1])
+    with col_title:
+        st.markdown(f"<div class='dash-section-title'>{t('dashboard.activity')}</div>", unsafe_allow_html=True)
+    
+    # Botão de gestão para admin
+    if verificar_permissao('Administrador'):
+        with col_btn:
+            if st.button("✏️", key="manage_logs_title_btn", help="Gerir logs"):
+                st.session_state['show_logs_modal'] = True
+                st.rerun()
+    
     atividades = []
     try:
         with get_connection() as conn:
