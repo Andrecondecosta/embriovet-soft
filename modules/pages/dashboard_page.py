@@ -397,20 +397,30 @@ def run_dashboard_page(ctx: dict):
                 "Detalhe": detalhe or "—"
             }
             
-            # Adicionar coluna de ações para admin
+            # Adicionar coluna de ações para admin (coluna estreita)
             if is_admin:
-                row_dict["Ações"] = "⋮"
+                row_dict[""] = "⋮"  # Sem título para economizar espaço
             
             rows_activity.append(row_dict)
         
         df_activity = pd.DataFrame(rows_activity)
         
-        # Mostrar apenas o dataframe - sem elementos abaixo
+        # Configurar larguras das colunas
+        column_config = {}
+        if is_admin:
+            column_config[""] = st.column_config.TextColumn(
+                "",
+                width="small",  # Coluna estreita
+                help="Ações disponíveis"
+            )
+        
+        # Mostrar apenas o dataframe
         st.dataframe(
             df_activity, 
             use_container_width=True, 
             hide_index=True, 
             height=220,
+            column_config=column_config,
             on_select="rerun",
             selection_mode="single-row"
         )
