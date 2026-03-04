@@ -2407,33 +2407,41 @@ if settings_clicked:
     st.rerun()
 
 # Menu lateral adaptado às permissões
-menu_options = [
+# Menu Principal (sempre visível)
+menu_principal = [
     t("menu.dashboard"),
-    t("menu.map"),
-    t("menu.stock"),
-    t("menu.transfers"),
-    t("menu.reports"),
 ]
 
-if verificar_permissao('Gestor'):
-    menu_options.insert(2, t("menu.add_stock"))
-    menu_options.insert(3, t("menu.import"))
-    menu_options.insert(4, t("menu.register_insemination"))
-    menu_options.append(t("menu.owners"))
+# Menu Secundário (dentro do expander)
+menu_secundario = [
+    t("menu.map"),
+]
 
+# Adicionar opções baseadas em permissões
+if verificar_permissao('Gestor'):
+    menu_principal.append(t("menu.add_stock"))
+    menu_principal.append(t("menu.register_insemination"))
+    menu_principal.append(t("menu.transfers"))
+    menu_secundario.append(t("menu.import"))
+    menu_secundario.append(t("menu.owners"))
+
+# Ver Stock e Relatórios sempre no menu principal (para todos)
+menu_principal.append(t("menu.stock"))
+menu_principal.append(t("menu.reports"))
+
+# Administrador tem acesso a mais opções secundárias
 if verificar_permissao('Administrador'):
-    menu_options.append(t("menu.users"))
-    menu_options.append(t("menu.settings"))
+    menu_secundario.append(t("menu.users"))
+    menu_secundario.append(t("menu.settings"))
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
-    idx_aba = menu_options.index(st.session_state['aba_selecionada']) if st.session_state['aba_selecionada'] in menu_options else 0
+    active_key = st.session_state['aba_selecionada']
     del st.session_state['aba_selecionada']
 else:
-    idx_aba = 0
+    active_key = menu_principal[0]
 
-active_key = menu_options[idx_aba] if menu_options else ""
-aba = render_sidebar(app_settings, user, menu_options, active_key)
+aba = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário

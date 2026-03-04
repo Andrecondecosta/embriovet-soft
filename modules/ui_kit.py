@@ -541,7 +541,7 @@ def render_header(app_settings, user_info):
     return settings_clicked, logout_clicked
 
 
-def render_sidebar(app_settings, user_info, menu_items, active_key):
+def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, active_key):
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
     user_name = (user_info or {}).get("nome") or "Utilizador"
@@ -575,8 +575,21 @@ def render_sidebar(app_settings, user_info, menu_items, active_key):
         unsafe_allow_html=True,
     )
 
-    idx = menu_items.index(active_key) if active_key in menu_items else 0
-    aba = st.sidebar.radio("Menu", menu_items, index=idx, label_visibility="collapsed")
+    # Menu Principal
+    idx_principal = menu_principal.index(active_key) if active_key in menu_principal else -1
+    if idx_principal >= 0:
+        aba = st.sidebar.radio("Menu Principal", menu_principal, index=idx_principal, label_visibility="collapsed")
+        return aba
+    
+    # Menu Secundário (com expander)
+    if menu_secundario:
+        with st.sidebar.expander("⚙️ Mais opções", expanded=(active_key in menu_secundario)):
+            idx_secundario = menu_secundario.index(active_key) if active_key in menu_secundario else 0
+            aba = st.radio("Menu Secundário", menu_secundario, index=idx_secundario, label_visibility="collapsed", key="menu_secundario_radio")
+            return aba
+    
+    # Se chegou aqui, mostrar menu principal por padrão
+    aba = st.sidebar.radio("Menu Principal", menu_principal, index=0, label_visibility="collapsed")
     return aba
 
 
