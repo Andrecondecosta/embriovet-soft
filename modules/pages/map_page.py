@@ -599,8 +599,7 @@ def run_map_page(ctx: dict):
 
                 #mapa-wrapper {
                     width: 100%;
-                    height: 100vh;
-                    min-height: 500px;
+                    height: 100%;
                     display: flex;
                     flex-direction: column;
                     background: var(--bg-canvas);
