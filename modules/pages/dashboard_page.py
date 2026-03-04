@@ -274,15 +274,73 @@ def run_dashboard_page(ctx: dict):
             return val.strftime("%d/%m/%Y %H:%M") if isinstance(val, datetime) else val.strftime("%d/%m/%Y")
         return str(val)
 
-    rows_activity = []
-    for ts, usuario, acao, detalhe in atividades:
-        rows_activity.append({"Hora": fmt_ts(ts), "Utilizador": usuario or "—", "Ação": acao or "—", "Detalhe": detalhe or "—"})
-
-    df_activity = pd.DataFrame(rows_activity)
-    if df_activity.empty:
-        st.info("Sem atividade recente registada.")
+    if atividades:
+        # Verificar se é administrador
+        is_admin = verificar_permissao('Administrador')
+        
+        for idx, row in enumerate(atividades):
+            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row
+            
+            col1, col2, col3, col4 = st.columns([1.5, 1, 3, 1.2] if is_admin else [1.5, 1, 4, 0.1])
+            
+            with col1:
+                st.caption(f"🕒 {fmt_ts(ts)}")
+            with col2:
+                st.caption(f"**{acao}**")
+            with col3:
+                st.caption(detalhe)
+            
+            if is_admin:
+                with col4:
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
+                            # Redirecionar para página de edição
+                            if tipo == "insemination":
+                                st.session_state['edit_insemination_id'] = action_id
+                                st.session_state['aba_selecionada'] = t("menu.register_insemination")
+                                st.rerun()
+                            elif tipo in ["transfer_internal", "transfer_external"]:
+                                st.session_state['edit_transfer_id'] = action_id
+                                st.session_state['edit_transfer_type'] = tipo
+                                st.session_state['aba_selecionada'] = t("menu.transfers")
+                                st.rerun()
+                    
+                    with btn_col2:
+                        if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter"):
+                            st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
+                            st.rerun()
+            
+            # Dialog de confirmação
+            if is_admin and st.session_state.get(f'confirm_delete_{tipo}_{action_id}', False):
+                @st.dialog(f"Confirmar Eliminação")
+                def confirm_delete_dialog():
+                    st.warning(f"⚠️ **Atenção!** Esta ação vai:")
+                    st.markdown(f"""
+                    - Eliminar o registo de **{acao}**
+                    - Reverter **{quantidade} palhetas** ao estado anterior
+                    """)
+                    
+                    col_confirm1, col_confirm2 = st.columns(2)
+                    with col_confirm1:
+                        if st.button("✅ Confirmar", type="primary", use_container_width=True):
+                            sucesso = reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade)
+                            if sucesso:
+                                st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                st.success("✅ Ação revertida com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao reverter ação")
+                    with col_confirm2:
+                        if st.button("❌ Cancelar", use_container_width=True):
+                            st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                            st.rerun()
+                
+                confirm_delete_dialog()
+            
+            st.markdown("---")
     else:
-        st.dataframe(df_activity, use_container_width=True, hide_index=True, height=220)
+        st.info("Sem atividade recente registada.")
 
     # Ações rápidas
     st.markdown(f"<div class='dash-section-title'>{t('dashboard.actions')}</div>", unsafe_allow_html=True)
