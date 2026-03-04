@@ -102,6 +102,9 @@ def run_transfer_page(ctx):
             "ref": lote_ref(row),
             "local": lote_local(row),
             "max_disponivel": int(to_py(row.get("existencia_atual")) or 0),
+            "qualidade": to_py(row.get("qualidade")) or "—",
+            "concentracao": to_py(row.get("concentracao")) or "—",
+            "motilidade": to_py(row.get("motilidade")) or "—",
         }
 
     def remover_linha(lote_id):
