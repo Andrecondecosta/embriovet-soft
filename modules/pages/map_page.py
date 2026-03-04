@@ -276,6 +276,7 @@ def run_map_page(ctx: dict):
             ativar_edicao = False
             cancelar_edicao = False
             salvar_layout = False
+            reorganizar = False
 
             st.markdown(
                 """
@@ -452,6 +453,9 @@ def run_map_page(ctx: dict):
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
                             cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", use_container_width=True)
+                    with bar_btn4:
+                        if not st.session_state["mapa_modo_edicao"]:
+                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", use_container_width=True, help="Distribui todos os contentores em grelha automática")
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -477,6 +481,21 @@ def run_map_page(ctx: dict):
                     )
                 st.session_state["mapa_salvar_layout_pendente"] = False
                 st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.rerun()
+
+            if reorganizar:
+                # Distribui contentores em grelha automática
+                BOX_W, BOX_H, MARGIN = 115, 110, 10
+                COLS = max(1, min(7, len(contentores_df)))
+                ok = 0
+                for i, (_, row) in enumerate(contentores_df.iterrows()):
+                    col_idx = i % COLS
+                    row_idx = i // COLS
+                    nx = MARGIN + col_idx * BOX_W
+                    ny = MARGIN + row_idx * BOX_H
+                    if atualizar_posicao_contentor(int(row['id']), nx, ny):
+                        ok += 1
+                st.success(t("map.reorganized", count=ok))
                 st.rerun()
 
             if salvar_layout:
@@ -572,6 +591,13 @@ def run_map_page(ctx: dict):
                     padding: 0;
                 }
                 
+                html, body {
+                    height: 100%;
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                }
+                
                 :root {
                     --primary: #3b82f6;
                     --primary-dark: #2563eb;
@@ -588,7 +614,6 @@ def run_map_page(ctx: dict):
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
                     background: var(--bg-main);
-                    overflow: hidden;
                 }
 
                 #mapa-wrapper {
@@ -916,19 +941,20 @@ def run_map_page(ctx: dict):
                 function criarContentor(c) {
                     const box = document.createElement('div');
                     box.className = 'cont-box';
+                    box.dataset.contId = String(c.id);
                     if (!isEditMode) box.classList.add('clickable');
                     if (isEditMode) box.classList.add('draggable');
 
                     box.innerHTML = `
                         <div class="cont-codigo">${c.codigo}</div>
-                        <div class="cont-qtd">${c.total_palhetas}</div>
+                        <div class="cont-qtd">${c.palhetas}</div>
                         <div class="cont-label">palhetas</div>
                     `;
 
                     const baseW = isMobile ? 80 : 100;
                     const baseH = isMobile ? 80 : 100;
-                    box.style.left = (c.pos_x * areaScale) + 'px';
-                    box.style.top = (c.pos_y * areaScale) + 'px';
+                    box.style.left = (c.x * areaScale) + 'px';
+                    box.style.top = (c.y * areaScale) + 'px';
                     box.style.width = baseW + 'px';
                     box.style.height = baseH + 'px';
 
@@ -989,12 +1015,13 @@ def run_map_page(ctx: dict):
                     
                     const finalX = parseInt(dragInfo.box.style.left) / areaScale;
                     const finalY = parseInt(dragInfo.box.style.top) / areaScale;
+                    const contId = dragInfo.box.dataset.contId;
 
                     try {
-                        const layoutData = JSON.parse(localStorage.getItem('contentor_layout_pending') || '{}');
-                        const codigo = dragInfo.box.querySelector('.cont-codigo').textContent;
-                        layoutData[codigo] = {x: Math.round(finalX), y: Math.round(finalY)};
-                        localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                        const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                        const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                        layoutData[contId] = {x: Math.round(finalX), y: Math.round(finalY)};
+                        targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
                     } catch (err) {
                         console.error('Erro ao salvar posição:', err);
                     }
@@ -1008,7 +1035,7 @@ def run_map_page(ctx: dict):
 
                 function mostrarInventario(cont) {
                     invTitulo.textContent = `Contentor ${cont.codigo}`;
-                    invSubtitulo.textContent = `${cont.total_palhetas} palhetas no total`;
+                    invSubtitulo.textContent = `${cont.palhetas} palhetas no total`;
                     
                     let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
                     
@@ -1030,7 +1057,7 @@ def run_map_page(ctx: dict):
                                     </div>
                                     <div class="inv-lote-row">
                                         <span class="inv-lote-label">🧬 Palhetas:</span>
-                                        <span class="inv-lote-value">${lote.palhetas}</span>
+                                        <span class="inv-lote-value">${lote.quantidade}</span>
                                     </div>
                                 </div>
                             `;
@@ -1057,8 +1084,8 @@ def run_map_page(ctx: dict):
                     contentores.forEach((c, i) => {
                         const box = mapaArea.children[i];
                         if (box) {
-                            box.style.left = (c.pos_x * areaScale) + 'px';
-                            box.style.top = (c.pos_y * areaScale) + 'px';
+                            box.style.left = (c.x * areaScale) + 'px';
+                            box.style.top = (c.y * areaScale) + 'px';
                         }
                     });
                 });
@@ -1086,9 +1113,9 @@ def run_map_page(ctx: dict):
             # Renderizar mapa com altura otimizada e responsiva
             st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
             if is_mobile:
-                components.html(mapa_render, height=450, scrolling=False)
+                components.html(mapa_render, height=340, scrolling=False)
             else:
-                components.html(mapa_render, height=550, scrolling=False)
+                components.html(mapa_render, height=400, scrolling=False)
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Mostrar lista de contentores abaixo do mapa
