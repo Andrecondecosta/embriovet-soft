@@ -721,7 +721,7 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
 
     # Inicializar _nav_last_active ANTES de renderizar widgets
     if not st.session_state.get("_nav_last_active"):
-        default = menu_secundario[0] if menu_secundario else menu_principal[0]
+        default = menu_principal[0] if menu_principal else (menu_secundario[0] if menu_secundario else None)
         st.session_state["_nav_last_active"] = default
 
     # Consumir redirect externo
