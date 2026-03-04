@@ -219,7 +219,13 @@ def run_dashboard_page(ctx: dict):
                        'Transferência interna' AS acao,
                        'Qtd ' || t.quantidade || ' | ' || 
                        COALESCE(d1.nome, 'Origem ID ' || t.proprietario_origem_id) || ' → ' || 
-                       COALESCE(d2.nome, 'Dest ID ' || t.proprietario_destino_id) AS detalhe
+                       COALESCE(d2.nome, 'Dest ID ' || t.proprietario_destino_id) AS detalhe,
+                       'transfer_internal' AS tipo,
+                       t.id AS action_id,
+                       t.estoque_id,
+                       t.proprietario_origem_id,
+                       t.proprietario_destino_id,
+                       t.quantidade
                 FROM transferencias t
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
@@ -228,7 +234,13 @@ def run_dashboard_page(ctx: dict):
                        '—' AS usuario,
                        'Transferência externa' AS acao,
                        'Qtd ' || te.quantidade || ' | ' || 
-                       COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe
+                       COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe,
+                       'transfer_external' AS tipo,
+                       te.id AS action_id,
+                       te.estoque_id,
+                       te.proprietario_origem_id,
+                       NULL::integer AS proprietario_destino_id,
+                       te.quantidade
                 FROM transferencias_externas te
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 UNION ALL
@@ -237,7 +249,13 @@ def run_dashboard_page(ctx: dict):
                        'Inseminação' AS acao,
                        'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
                        COALESCE(d.nome, 'Proprietário ID ' || i.dono_id) || ' | ' ||
-                       i.palhetas_gastas || ' palhetas' AS detalhe
+                       i.palhetas_gastas || ' palhetas' AS detalhe,
+                       'insemination' AS tipo,
+                       i.id AS action_id,
+                       NULL::integer AS estoque_id,
+                       i.dono_id AS proprietario_origem_id,
+                       NULL::integer AS proprietario_destino_id,
+                       i.palhetas_gastas AS quantidade
                 FROM inseminacoes i
                 LEFT JOIN dono d ON i.dono_id = d.id
                 ORDER BY ts DESC
