@@ -570,52 +570,45 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         unsafe_allow_html=True,
     )
 
-    # --- Callbacks on_change: registam clique explícito do utilizador ---
+    # --- Callbacks ---
     def _on_principal_change():
-        st.session_state["_nav_last_active"] = st.session_state.get("menu_principal_radio")
+        selected = st.session_state.get("menu_principal_radio")
+        if selected:
+            st.session_state["_nav_last_active"] = selected
 
-    def _on_secundaria_change():
-        st.session_state["_nav_last_active"] = st.session_state.get("menu_secundario_radio")
-
-    # Consumir redirect externo (ex: ações rápidas do Dashboard)
-    redirect_target = st.session_state.pop("_nav_redirect_active", None)
-    if redirect_target:
-        st.session_state["_nav_last_active"] = redirect_target
-
-    # Inicializar ANTES de renderizar widgets (evita re-renders espontâneos)
+    # Inicializar _nav_last_active ANTES de renderizar widgets
     if not st.session_state.get("_nav_last_active"):
         default = menu_secundario[0] if menu_secundario else menu_principal[0]
         st.session_state["_nav_last_active"] = default
 
+    # Consumir redirect externo
+    redirect_target = st.session_state.pop("_nav_redirect_active", None)
+    if redirect_target:
+        st.session_state["_nav_last_active"] = redirect_target
+
     current_page = st.session_state["_nav_last_active"]
 
-    # Calcular índice inicial dos rádios com base na página activa
-    idx_principal = menu_principal.index(current_page) if current_page in menu_principal else 0
-    idx_secundario = 0
-    if menu_secundario:
-        idx_secundario = menu_secundario.index(current_page) if current_page in menu_secundario else 0
+    # ---- Menu Principal: botões estilizados ----
+    for item in menu_principal:
+        is_active = current_page == item
+        btn_style = "primary" if is_active else "secondary"
+        if st.sidebar.button(item, key=f"_nav_pri_{item}", use_container_width=True, type=btn_style):
+            st.session_state["_nav_last_active"] = item
+            st.session_state["aba_selecionada"] = item
+            st.rerun()
 
-    st.sidebar.radio(
-        "Menu Principal",
-        menu_principal,
-        index=idx_principal,
-        label_visibility="collapsed",
-        key="menu_principal_radio",
-        on_change=_on_principal_change,
-    )
-
-    # Menu Secundário (expander colapsável)
+    # ---- Menu Secundário: botões dentro do expander ----
     if menu_secundario:
         expanded = current_page in menu_secundario
         with st.sidebar.expander("Mais opções", expanded=expanded):
-            st.radio(
-                "Menu Secundário",
-                menu_secundario,
-                index=idx_secundario,
-                label_visibility="collapsed",
-                key="menu_secundario_radio",
-                on_change=_on_secundaria_change,
-            )
+            for item in menu_secundario:
+                is_active = current_page == item
+                label = f"▶ {item}" if is_active else item
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(label, key=f"_nav_sec_{item}", use_container_width=True, type=btn_type):
+                    st.session_state["_nav_last_active"] = item
+                    st.session_state["aba_selecionada"] = item
+                    st.rerun()
 
     return st.session_state["_nav_last_active"]
 
