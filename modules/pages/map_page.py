@@ -789,15 +789,10 @@ def run_map_page(ctx: dict):
                         font-size: 0.8rem;
                     }
                 }
-            </style>"""
+            </style>
 
-                .mobile #mapa-status {
-                    margin-top: 4px;
-                    font-size: 10px;
-                    line-height: 1.1;
-                }
-
-                #inv-overlay {
+            <div id="mapa-wrapper" class="__MOBILE_CLASS__">
+                <div id="mapa-area">"""
                     position: absolute;
                     inset: 0;
                     background: rgba(15, 23, 42, .28);
