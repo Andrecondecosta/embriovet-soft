@@ -542,6 +542,8 @@ def render_header(app_settings, user_info):
 
 
 def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, active_key):
+    import streamlit as st
+    
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
     user_name = (user_info or {}).get("nome") or "Utilizador"
@@ -557,7 +559,7 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
             unsafe_allow_html=True,
         )
     else:
-        initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
+        initials = "".join([p[0] for p in company_name.split()[:2) if p]) or "S"
         st.sidebar.markdown(
             f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>",
             unsafe_allow_html=True,
@@ -575,8 +577,12 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         unsafe_allow_html=True,
     )
 
+    # Inicializar seleção atual
+    if 'menu_selecionado' not in st.session_state:
+        st.session_state['menu_selecionado'] = active_key if active_key else menu_principal[0]
+    
     # Menu Principal (sempre mostrado)
-    idx_principal = menu_principal.index(active_key) if active_key in menu_principal else 0
+    idx_principal = menu_principal.index(st.session_state['menu_selecionado']) if st.session_state['menu_selecionado'] in menu_principal else 0
     aba_principal = st.sidebar.radio(
         "Menu Principal", 
         menu_principal, 
@@ -585,11 +591,15 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         key="menu_principal_radio"
     )
     
+    # Se clicou em item do menu principal, atualizar
+    if aba_principal != st.session_state['menu_selecionado']:
+        st.session_state['menu_selecionado'] = aba_principal
+        st.rerun()
+    
     # Menu Secundário (sempre mostrado em expander se houver itens)
-    aba_secundaria = None
     if menu_secundario:
-        with st.sidebar.expander("⚙️ Mais opções", expanded=(active_key in menu_secundario)):
-            idx_secundario = menu_secundario.index(active_key) if active_key in menu_secundario else 0
+        with st.sidebar.expander("⚙️ Mais opções", expanded=(st.session_state['menu_selecionado'] in menu_secundario)):
+            idx_secundario = menu_secundario.index(st.session_state['menu_selecionado']) if st.session_state['menu_selecionado'] in menu_secundario else 0
             aba_secundaria = st.radio(
                 "Menu Secundário", 
                 menu_secundario, 
@@ -597,17 +607,13 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
                 label_visibility="collapsed",
                 key="menu_secundario_radio"
             )
+            
+            # Se clicou em item do menu secundário, atualizar
+            if aba_secundaria != st.session_state['menu_selecionado']:
+                st.session_state['menu_selecionado'] = aba_secundaria
+                st.rerun()
     
-    # Retornar a aba que foi selecionada
-    # Se o active_key está no menu secundário e o expander foi clicado, retornar aba_secundaria
-    # Caso contrário, retornar aba_principal
-    if aba_secundaria and aba_secundaria != menu_secundario[menu_secundario.index(active_key) if active_key in menu_secundario else 0]:
-        return aba_secundaria
-    elif aba_principal != menu_principal[idx_principal]:
-        return aba_principal
-    else:
-        # Manter a seleção atual
-        return active_key if active_key else aba_principal
+    return st.session_state['menu_selecionado']
 
 
 def render_zone_title(title: str, cls: str = "reports-zone-title"):
