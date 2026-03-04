@@ -15,6 +15,11 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 
 ## Funcionalidades Implementadas
 
+### Mapa dos Contentores (`map_page.py`) — Corrigido Feb 2026
+- **Contentores não apareciam**: CSS `html,body { height: 100% }` em falta no iframe; `#mapa-wrapper` passou de `height: 100%` para `height: 100vh`
+- **Propriedades JavaScript erradas**: `c.pos_x` → `c.x`, `c.pos_y` → `c.y`, `c.total_palhetas` → `c.palhetas`, `lote.palhetas` → `lote.quantidade`
+- **Botões com chaves i18n em bruto**: adicionadas chaves `btn.cancel = "Cancelar"` e `btn.create_container = "Criar Contentor"` para PT-PT e EN
+
 ### Importação Inteligente (`import_page.py`) — NOVO Feb 2026
 - **Wizard de 4 passos**: Ficheiro → Entidades → Validar → Relatório
 - **Passo 1:** Upload CSV/XLSX com download de template, pré-visualização
