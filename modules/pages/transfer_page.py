@@ -304,9 +304,25 @@ def run_transfer_page(ctx):
 
             l1, l2, linput, l4 = st.columns([3.0, 1.5, 1.9, 0.8])
             with l1:
+                # Mostrar nome do proprietário se filtro "Todos" está selecionado
+                proprietario_atual = st.session_state.get("transfer_proprietario")
+                if not proprietario_atual:
+                    st.markdown(f"<div class='transfer-lote-main'>👤 {linha['proprietario_nome']}</div>", unsafe_allow_html=True)
+                
                 st.markdown(f"<div class='transfer-lote-main'>{linha['ref']} · {linha['local']}</div>", unsafe_allow_html=True)
+                
+                # Mostrar características técnicas
+                caracteristicas = []
+                if linha.get('qualidade') and linha['qualidade'] != "—":
+                    caracteristicas.append(f"Qual: {linha['qualidade']}")
+                if linha.get('concentracao') and linha['concentracao'] != "—":
+                    caracteristicas.append(f"Conc: {linha['concentracao']}")
+                if linha.get('motilidade') and linha['motilidade'] != "—":
+                    caracteristicas.append(f"Mot: {linha['motilidade']}%")
+                
+                carac_text = " · ".join(caracteristicas) if caracteristicas else ""
                 st.markdown(
-                    f"<div class='transfer-lote-sub'>{linha['proprietario_nome']} · Disponível: {max_disp}</div>",
+                    f"<div class='transfer-lote-sub'>Disponível: {max_disp} pal.{' · ' + carac_text if carac_text else ''}</div>",
                     unsafe_allow_html=True,
                 )
             with l2:
