@@ -331,40 +331,45 @@ def run_map_page(ctx: dict):
             )
 
             with st.container():
+                # Toolbar com KPIs
+                st.markdown(
+                    f"""
+                    <div class='map-toolbar-shell'>
+                        <div class='map-toolbar-kpis'>
+                            <span>📍 <b>{total_contentores}</b> Contentores</span>
+                            <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
+                            <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao'] else '👁️ Visualização'}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                
+                # Botões de ação
                 if is_mobile:
-                    st.markdown(f"<div class='map-tech-context'>{t('map.tech_context')}</div>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button(t("btn.add"), key="map_add_btn_mobile", width="stretch")
+                        criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", use_container_width=True)
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button(t("btn.save"), key="map_save_btn_mobile", type="primary", width="stretch")
+                            salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_mobile", width="stretch")
+                            ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", use_container_width=True)
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button(t("btn.cancel"), key="map_cancel_btn_mobile", width="stretch")
+                            cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", use_container_width=True)
                 else:
-                    st.markdown(
-                        f"<div class='map-toolbar-shell'><div class='map-toolbar-kpis'><span class='map-tech-context-inline'>Sistema de localização física e inventário de sémen equino</span><span><b>{total_contentores}</b> contentores</span><span><b>{int(total_palhetas_geral)}</b> palhetas</span><span>{'modo edição ativo' if st.session_state['mapa_modo_edicao'] else 'modo normal'}</span></div></div>",
-                        unsafe_allow_html=True,
-                    )
-                    bar_btn1, bar_btn2, bar_btn3 = st.columns([1, 1, 1])
+                    bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
                     with bar_btn1:
-                        criar_novo = st.button(t("map.add_container_button"), key="map_add_btn_desktop", width="stretch")
+                        criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", use_container_width=True)
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button(t("map.save_layout"), key="map_save_btn_desktop", type="primary", width="stretch")
+                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", use_container_width=True)
                         else:
-                            ativar_edicao = st.button(t("map.edit_map"), key="map_edit_btn_desktop", width="stretch")
+                            ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", use_container_width=True)
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button(t("map.cancel_edit"), key="map_cancel_btn_desktop", width="stretch")
+                            cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", use_container_width=True)
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
