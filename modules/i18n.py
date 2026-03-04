@@ -349,7 +349,7 @@ TRANSLATIONS = {
         "add_stock.section.technical": "Dados Técnicos",
         "add_stock.section.production": "Produção",
         "add_stock.stallion_placeholder": "Nome do garanhão",
-        "add_stock.no_owners": "⚠️ Nenhum proprietário cadastrado.","⚠️ Nenhum proprietário cadastrado.",
+        "add_stock.no_owners": "⚠️ Nenhum proprietário cadastrado.",
         "add_stock.add_first_owner": "➕ Adicionar Primeiro Proprietário",
         "add_stock.no_containers": "⚠️ Nenhum contentor cadastrado. Por favor, crie contentores primeiro no Mapa.",
         "add_stock.required_name": "Nome obrigatório",
