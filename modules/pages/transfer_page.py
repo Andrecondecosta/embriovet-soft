@@ -463,11 +463,11 @@ def run_transfer_page(ctx):
                             # Se muda localização, passar novos parâmetros
                             if muda_localizacao == t("transfer.new_location"):
                                 transferir_stock_interno_com_localizacao(
-                                    origem_id, dest_id, stock_id, qtd,
+                                    stock_id, dest_id, qtd,
                                     contentor_id_destino, canister_destino, andar_destino
                                 )
                             else:
-                                transferir_stock_interno(origem_id, dest_id, stock_id, qtd)
+                                transferir_stock_interno(stock_id, dest_id, qtd)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False
@@ -507,12 +507,11 @@ def run_transfer_page(ctx):
                     # Executar transferência externa
                     sucesso = True
                     for linha in linhas_finais:
-                        origem_id = linha["dono_id"]
                         stock_id = linha["stock_id"]
                         qtd = linha["qty"]
                         
                         try:
-                            transferir_stock_externo(origem_id, destinatario_externo, stock_id, qtd, motivo, observacoes)
+                            transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
                         except Exception as e:
                             st.error(f"Erro ao transferir {linha['ref']}: {e}")
                             sucesso = False
