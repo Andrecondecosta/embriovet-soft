@@ -428,6 +428,7 @@ TRANSLATIONS = {
         "import.date_adjustment_done": "{count} registo(s) com data de criação ajustada para 1 jan do respetivo ano.",
         "import.report_zone": "Relatório Detalhado",
         "import.no_report": "Nenhuma importação registada nesta sessão.",
+        "map.reorganized": "{count} contentor(es) reorganizados em grelha.",
         "error.container_required": "❌ Contentor é obrigatório",
         "error.canister_required": "❌ Canister é obrigatório",
         "error.floor_required": "❌ Andar é obrigatório",

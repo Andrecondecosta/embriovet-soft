@@ -276,6 +276,7 @@ def run_map_page(ctx: dict):
             ativar_edicao = False
             cancelar_edicao = False
             salvar_layout = False
+            reorganizar = False
 
             st.markdown(
                 """
@@ -452,6 +453,9 @@ def run_map_page(ctx: dict):
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
                             cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", use_container_width=True)
+                    with bar_btn4:
+                        if not st.session_state["mapa_modo_edicao"]:
+                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", use_container_width=True, help="Distribui todos os contentores em grelha automática")
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True
@@ -477,6 +481,21 @@ def run_map_page(ctx: dict):
                     )
                 st.session_state["mapa_salvar_layout_pendente"] = False
                 st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.rerun()
+
+            if reorganizar:
+                # Distribui contentores em grelha automática
+                BOX_W, BOX_H, MARGIN = 115, 110, 10
+                COLS = max(1, min(7, len(contentores_df)))
+                ok = 0
+                for i, (_, row) in enumerate(contentores_df.iterrows()):
+                    col_idx = i % COLS
+                    row_idx = i // COLS
+                    nx = MARGIN + col_idx * BOX_W
+                    ny = MARGIN + row_idx * BOX_H
+                    if atualizar_posicao_contentor(int(row['id']), nx, ny):
+                        ok += 1
+                st.success(t("map.reorganized", count=ok))
                 st.rerun()
 
             if salvar_layout:
@@ -1094,9 +1113,9 @@ def run_map_page(ctx: dict):
             # Renderizar mapa com altura otimizada e responsiva
             st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
             if is_mobile:
-                components.html(mapa_render, height=450, scrolling=False)
+                components.html(mapa_render, height=340, scrolling=False)
             else:
-                components.html(mapa_render, height=550, scrolling=False)
+                components.html(mapa_render, height=400, scrolling=False)
             st.markdown("</div>", unsafe_allow_html=True)
 
             # Mostrar lista de contentores abaixo do mapa
