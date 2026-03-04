@@ -2438,8 +2438,10 @@ if verificar_permissao('Administrador'):
 if 'aba_selecionada' in st.session_state:
     active_key = st.session_state['aba_selecionada']
     del st.session_state['aba_selecionada']
+    # Sinalizar redirect para o render_sidebar
+    st.session_state['_nav_redirect_active'] = active_key
 else:
-    active_key = menu_principal[0]
+    active_key = st.session_state.get("_nav_last_active", menu_principal[0])
 
 aba = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 
