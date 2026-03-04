@@ -6,6 +6,72 @@ def run_map_page(ctx: dict):
     # Carregar contentores
     contentores_df = carregar_contentores()
 
+    # Cabeçalho da página
+    primary_color = (app_settings or {}).get("primary_color") or "#1D4ED8"
+    st.markdown(
+        f"""
+        <style>
+            .map-page-header {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+                margin-bottom: 10px;
+                box-shadow: 0 2px 8px rgba(15,23,42,0.05);
+            }}
+            .map-page-title {{
+                font-size: 1rem;
+                font-weight: 700;
+                color: #0f172a;
+                margin: 0;
+            }}
+            .map-page-subtitle {{
+                font-size: .75rem;
+                color: #64748b;
+                margin-top: 2px;
+            }}
+            .map-empty-state {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 60px 40px;
+                border: 2px dashed #e2e8f0;
+                border-radius: 12px;
+                text-align: center;
+                color: #64748b;
+                margin-top: 20px;
+            }}
+            .map-empty-icon {{
+                font-size: 3rem;
+                margin-bottom: 16px;
+                opacity: 0.6;
+            }}
+            .map-empty-title {{
+                font-size: 1rem;
+                font-weight: 600;
+                color: #334155;
+                margin-bottom: 8px;
+            }}
+            .map-empty-text {{
+                font-size: .85rem;
+                color: #94a3b8;
+                max-width: 320px;
+            }}
+        </style>
+        <div class='map-page-header'>
+            <div>
+                <div class='map-page-title'>Mapa dos Contentores</div>
+                <div class='map-page-subtitle'>Gerir localizações físicas e stock por contentor</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     if "mapa_modo_edicao" not in st.session_state:
         st.session_state["mapa_modo_edicao"] = False
 
@@ -148,7 +214,23 @@ def run_map_page(ctx: dict):
 
     # Área do mapa
     if contentores_df.empty:
-        st.info(t("map.no_containers"))
+        # Botão para adicionar mesmo sem contentores
+        col_empty1, col_empty2, col_empty3 = st.columns([1, 2, 1])
+        with col_empty2:
+            st.markdown(
+                """
+                <div class='map-empty-state'>
+                    <div class='map-empty-icon'>&#128230;</div>
+                    <div class='map-empty-title'>Nenhum contentor registado</div>
+                    <div class='map-empty-text'>Adicione o primeiro contentor para começar a gerir as localizações físicas do seu stock.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown("")
+            if st.button("+ Adicionar Primeiro Contentor", type="primary", use_container_width=True):
+                st.session_state['modal_novo_contentor'] = True
+                st.rerun()
     else:
         if modo_visualizacao:
             total_contentores = len(contentores_df)

@@ -21,7 +21,7 @@ def inject_all_css_consolidated():
                 color: #0f172a;
             }
             section.main > div.block-container {
-                padding-top: 0.8rem;
+                padding-top: 0.4rem !important;
                 padding-bottom: 1.4rem;
             }
             /* Forçar remoção de todos os containers vazios - AGRESSIVO */
@@ -153,7 +153,7 @@ def inject_design_system():
                 color: #0f172a;
             }
             section.main > div.block-container {
-                padding-top: 0.8rem;
+                padding-top: 0.4rem !important;
                 padding-bottom: 1.4rem;
             }
             /* Forçar remoção de todos os containers vazios - AGRESSIVO */
@@ -170,10 +170,6 @@ def inject_design_system():
                 line-height: 0 !important;
                 font-size: 0 !important;
                 visibility: hidden !important;
-            }
-            /* Ocultar containers que só têm espaços em branco */
-            div[data-testid="stElementContainer"]:not(:has(img)):not(:has(button)):not(:has(input)):not(:has(select)):not(:has(canvas)):not(:has(svg)):not(:has(iframe)):not(:has(video)) {
-                line-height: 0 !important;
             }
             div[data-testid="stElementContainer"]:not(:has(*)) {
                 display: none !important;
@@ -543,16 +539,13 @@ def render_header(app_settings, user_info):
 
 def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, active_key):
     import streamlit as st
-    
+
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
     user_name = (user_info or {}).get("nome") or "Utilizador"
     nivel = (user_info or {}).get("nivel") or ""
 
-    st.sidebar.markdown(
-        "<div class='sidebar-brand'>",
-        unsafe_allow_html=True,
-    )
+    st.sidebar.markdown("<div class='sidebar-brand'>", unsafe_allow_html=True)
     if logo:
         st.sidebar.markdown(
             f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>",
@@ -577,33 +570,47 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         unsafe_allow_html=True,
     )
 
-    # Menu Principal (sempre mostrado)
-    idx_principal = menu_principal.index(active_key) if active_key in menu_principal else 0
-    aba_principal = st.sidebar.radio(
-        "Menu Principal", 
-        menu_principal, 
-        index=idx_principal, 
-        label_visibility="collapsed",
-        key="menu_principal_radio"
-    )
-    
-    # Menu Secundário (sempre mostrado em expander se houver itens)
-    aba_secundaria = None
+    # --- Callbacks ---
+    def _on_principal_change():
+        selected = st.session_state.get("menu_principal_radio")
+        if selected:
+            st.session_state["_nav_last_active"] = selected
+
+    # Inicializar _nav_last_active ANTES de renderizar widgets
+    if not st.session_state.get("_nav_last_active"):
+        default = menu_secundario[0] if menu_secundario else menu_principal[0]
+        st.session_state["_nav_last_active"] = default
+
+    # Consumir redirect externo
+    redirect_target = st.session_state.pop("_nav_redirect_active", None)
+    if redirect_target:
+        st.session_state["_nav_last_active"] = redirect_target
+
+    current_page = st.session_state["_nav_last_active"]
+
+    # ---- Menu Principal: botões estilizados ----
+    for item in menu_principal:
+        is_active = current_page == item
+        btn_style = "primary" if is_active else "secondary"
+        if st.sidebar.button(item, key=f"_nav_pri_{item}", use_container_width=True, type=btn_style):
+            st.session_state["_nav_last_active"] = item
+            st.session_state["aba_selecionada"] = item
+            st.rerun()
+
+    # ---- Menu Secundário: botões dentro do expander ----
     if menu_secundario:
-        with st.sidebar.expander("⚙️ Mais opções", expanded=(active_key in menu_secundario)):
-            idx_secundario = menu_secundario.index(active_key) if active_key in menu_secundario else 0
-            aba_secundaria = st.radio(
-                "Menu Secundário", 
-                menu_secundario, 
-                index=idx_secundario, 
-                label_visibility="collapsed",
-                key="menu_secundario_radio"
-            )
-    
-    # Retornar a aba secundária se foi clicada, senão retornar a principal
-    if aba_secundaria:
-        return aba_secundaria
-    return aba_principal
+        expanded = current_page in menu_secundario
+        with st.sidebar.expander("Mais opções", expanded=expanded):
+            for item in menu_secundario:
+                is_active = current_page == item
+                label = f"▶ {item}" if is_active else item
+                btn_type = "primary" if is_active else "secondary"
+                if st.button(label, key=f"_nav_sec_{item}", use_container_width=True, type=btn_type):
+                    st.session_state["_nav_last_active"] = item
+                    st.session_state["aba_selecionada"] = item
+                    st.rerun()
+
+    return st.session_state["_nav_last_active"]
 
 
 def render_zone_title(title: str, cls: str = "reports-zone-title"):

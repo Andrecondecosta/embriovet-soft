@@ -1,4 +1,104 @@
-# PRD — Embriovet Gestor (Mapa dos Contentores)
+# PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
+
+## Problema Original
+Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas.
+
+## Arquitetura
+- **Framework:** Streamlit (Python) + PostgreSQL (psycopg2)
+- **Entrada:** `/app/app.py` — Router central, lógica de sessão, menus
+- **Módulos core:**
+  - `modules/ui_kit.py` — Sistema de design, CSS global, sidebar, header
+  - `modules/i18n.py` — Sistema de internacionalização (t() function)
+  - `modules/migration_runner.py` — Migrações automáticas SQL
+  - `modules/pages/` — Uma página por ficheiro
+- **DB Migrations:** `/app/migrations/*.sql`
+
+## Funcionalidades Implementadas
+
+### Autenticação & Sessão
+- Login com username/password (hash bcrypt)
+- Sessão persistente via query param `?session=TOKEN`
+- Forçar alteração de password no 1º login
+- Fluxo de onboarding para nova base de dados
+
+### Mapa dos Contentores (`map_page.py`)
+- Mapa visual interactivo com grid HTML/CSS
+- Drag-and-drop para editar posições (modo edição)
+- Modal de inventário ao clicar num contentor
+- KPI bar (nº contentores, total palhetas)
+- Header premium com subtítulo
+- Estado vazio melhorado com botão de onboarding
+- Adição e edição de contentores
+
+### Dashboard (`dashboard_page.py`)
+- KPI cards: Total Straws, Active Lots, Inseminations Today, Critical Stock
+- **Gráficos Altair**: Palhetas por Contentor + Palhetas por Proprietário
+- Tabela de actividade recente (transferências + inseminações)
+- Quick Actions (Nova Inseminação, Nova Transferência, Import, Ver Mapa)
+
+### Navegação Sidebar (`ui_kit.py → render_sidebar`)
+- Botões (não radio) para ambos os menus
+- Menu principal: Dashboard, Add Stock, Register Insemination, Int/Ext Transf., View Stock, Reports
+- Menu secundário (expander "Mais opções"): Container Map, Import Semen, Owner Management, User Management, Settings
+- `_nav_last_active` tracking + `aba_selecionada` + `st.rerun()` para navegação 100% funcional
+- Página default: Container Map
+
+### Gestão de Stock (`stock_page.py`)
+- Ver stock com detalhes por lote (local, motilidade, concentração, cor)
+- Header informativo por lote
+
+### Transferências (`transfer_page.py`)
+- Página dedicada: transferências internas e externas
+- Criar novo proprietário durante transferência
+
+### Inseminações (`insemination_page.py`)
+- Fluxo sequencial: Cavalo → Proprietário → Lotes → Quantidade
+- Detalhes de lote com cor e concentração
+
+### Relatórios (`reports_page.py`)
+- Filtros por proprietário, garanhão, datas
+
+### Definições (`settings_page.py`)
+- White-labeling: nome, logo, cor primária
+- Escolha de idioma (pt-PT, en, fr, de)
+
+### Design System
+- CSS global injectado em bloco único
+- Spacing reduzido (padding-top: 0.4rem)
+- Containers vazios ocultos (anti-spacing fix)
+- Tema consistente com variáveis CSS
+
+### i18n
+- Suporte completo: pt-PT, en, fr, de
+- Todos os textos UI via `t()` function
+
+### Migrações DB
+- Sistema automático via `migration_runner.py`
+- Ficheiros SQL em `/app/migrations/`
+
+## Estado Actual
+- **App:** FUNCIONAL (100% testes passados — iteration_21.json)
+- **Navegação:** Totalmente funcional (botões primários + secundários)
+- **Gráficos Dashboard:** Funcionais (Altair v5)
+- **Mapa:** Funcional com header premium
+
+## Backlog / Próximas Tarefas
+
+### P1 — Próximas
+- [ ] Completar página "Definições": preview do logo em tempo real + painel i18n
+- [ ] Verificar persistência de sessão após F5 (refresh do browser)
+
+### P2 — Futuro
+- [ ] Novos relatórios (por contentor, localização, ocupação)
+- [ ] Testar regra de segurança: contentor com stock > 0 não pode ser apagado
+- [ ] Extrair "Gestão de Proprietários" de app.py para módulo próprio
+- [ ] Extrair "Gestão de Utilizadores" de app.py para módulo próprio
+- [ ] Upgrade Altair v5→v6 para compatibilidade Vega-Lite
+
+## Credenciais de Teste
+- Admin: `admin` / `admin123`
+- DB: Ver `/app/.env` → DATABASE_URL
+t Gestor (Mapa dos Contentores)
 
 ## Problema original
 Substituir localização em texto livre por estrutura física com `contentores`, `canister` e `andar`, incluindo mapa visual com arrastar/soltar e persistência de posição.
