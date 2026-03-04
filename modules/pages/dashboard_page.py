@@ -384,71 +384,50 @@ def run_dashboard_page(ctx: dict):
     is_admin = verificar_permissao('Administrador')
     
     if atividades:
-        # Criar dataframe
-        rows_activity = []
-        for row_data in atividades:
-            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
-            rows_activity.append({
-                "Hora": fmt_ts(ts), 
-                "Utilizador": usuario or "—", 
-                "Ação": acao or "—", 
-                "Detalhe": detalhe or "—",
-                "_tipo": tipo,
-                "_action_id": action_id,
-                "_estoque_id": estoque_id,
-                "_prop_origem_id": prop_origem_id,
-                "_prop_destino_id": prop_destino_id,
-                "_quantidade": quantidade
-            })
-        
-        df_activity = pd.DataFrame(rows_activity)
-        
-        # Mostrar dataframe
-        st.dataframe(
-            df_activity[["Hora", "Utilizador", "Ação", "Detalhe"]], 
-            use_container_width=True, 
-            hide_index=True, 
-            height=220
-        )
-        
-        # Se for admin, adicionar ícones clicáveis (sem background de botão)
+        # Criar tabela customizada com botões integrados
+        # Headers
         if is_admin:
-            st.markdown("""
-                <style>
-                .log-action-btn {
-                    background: none;
-                    border: none;
-                    padding: 0;
-                    margin: 0 4px;
-                    cursor: pointer;
-                    font-size: 18px;
-                    line-height: 1;
-                }
-                .log-action-btn:hover {
-                    opacity: 0.7;
-                }
-                </style>
-            """, unsafe_allow_html=True)
+            header_cols = st.columns([1.3, 0.9, 1.8, 5.2, 0.35, 0.35])
+        else:
+            header_cols = st.columns([1.3, 0.9, 1.8, 5.9])
+        
+        with header_cols[0]:
+            st.markdown("**Hora**")
+        with header_cols[1]:
+            st.markdown("**Utilizador**")
+        with header_cols[2]:
+            st.markdown("**Ação**")
+        with header_cols[3]:
+            st.markdown("**Detalhe**")
+        if is_admin:
+            with header_cols[4]:
+                st.markdown("")
+            with header_cols[5]:
+                st.markdown("")
+        
+        st.markdown("---")
+        
+        # Linhas da tabela
+        for idx, row_data in enumerate(atividades):
+            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
             
-            for idx, row in df_activity.iterrows():
-                tipo = row["_tipo"]
-                action_id = row["_action_id"]
-                
-                # Usar colunas responsivas
-                cols = st.columns([1.5, 1, 2, 5, 0.4, 0.4])
-                
-                with cols[0]:
-                    st.caption(row['Hora'])
-                with cols[1]:
-                    st.caption(row['Utilizador'])
-                with cols[2]:
-                    st.caption(row['Ação'])
-                with cols[3]:
-                    st.caption(row['Detalhe'])
+            if is_admin:
+                cols = st.columns([1.3, 0.9, 1.8, 5.2, 0.35, 0.35])
+            else:
+                cols = st.columns([1.3, 0.9, 1.8, 5.9])
+            
+            with cols[0]:
+                st.caption(fmt_ts(ts))
+            with cols[1]:
+                st.caption(usuario or "—")
+            with cols[2]:
+                st.caption(acao or "—")
+            with cols[3]:
+                st.caption(detalhe or "—")
+            
+            if is_admin:
                 with cols[4]:
-                    # Botão sem fundo
-                    if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar", 
-                                type="secondary", use_container_width=True):
+                    if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
                         if tipo == "insemination":
                             st.session_state['edit_insemination_id'] = action_id
                             st.session_state['aba_selecionada'] = t("menu.register_insemination")
@@ -458,9 +437,9 @@ def run_dashboard_page(ctx: dict):
                             st.session_state['edit_transfer_type'] = tipo
                             st.session_state['aba_selecionada'] = t("menu.transfers")
                             st.rerun()
+                
                 with cols[5]:
-                    if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter",
-                                type="secondary", use_container_width=True):
+                    if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter"):
                         st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
                         st.rerun()
                 
@@ -470,8 +449,8 @@ def run_dashboard_page(ctx: dict):
                     def confirm_delete_dialog():
                         st.warning(f"⚠️ **Atenção!** Esta ação vai:")
                         st.markdown(f"""
-                        - Eliminar o registo de **{row['Ação']}**
-                        - Reverter **{row['_quantidade']} palhetas** ao estado anterior
+                        - Eliminar o registo de **{acao}**
+                        - Reverter **{quantidade} palhetas** ao estado anterior
                         """)
                         
                         col_confirm1, col_confirm2 = st.columns(2)
@@ -480,10 +459,10 @@ def run_dashboard_page(ctx: dict):
                                 sucesso = reverter_acao(
                                     tipo, 
                                     action_id, 
-                                    row['_estoque_id'],
-                                    row['_prop_origem_id'],
-                                    row['_prop_destino_id'],
-                                    row['_quantidade']
+                                    estoque_id,
+                                    prop_origem_id,
+                                    prop_destino_id,
+                                    quantidade
                                 )
                                 if sucesso:
                                     st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
