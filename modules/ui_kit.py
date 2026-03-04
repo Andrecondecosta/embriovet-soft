@@ -292,6 +292,48 @@ def inject_stepper_css():
     )
 
 
+def inject_add_stock_form_css():
+    st.markdown(
+        """
+        <style>
+            .form-card {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 16px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            }
+            .form-section-header {
+                color: #64748b;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .form-section-header::after {
+                content: '';
+                flex: 1;
+                height: 1px;
+                background: #f1f5f9;
+                margin-left: 8px;
+            }
+            /* Botão de adicionar proprietário flutuando ou destacado */
+            .new-owner-btn {
+                margin-bottom: 1rem;
+                text-align: right;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+
 def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip="", editable=False):
     if key not in st.session_state:
         st.session_state[key] = min_value

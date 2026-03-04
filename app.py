@@ -39,6 +39,7 @@ from modules.ui_kit import (
     inject_shell_css,
     render_header,
     render_sidebar,
+    inject_add_stock_form_css,
 )
 from migration_runner import run_migrations
 from modules.stock_reporting import (
@@ -2527,6 +2528,7 @@ if aba == t("menu.settings"):
 # ------------------------------------------------------------
 elif aba == t("menu.add_stock"):
     st.header(t("add_stock.title"))
+    inject_add_stock_form_css()
 
     if proprietarios.empty:
         st.warning(t("add_stock.no_owners"))
@@ -2539,39 +2541,68 @@ elif aba == t("menu.add_stock"):
         if contentores_df.empty:
             st.warning(t("add_stock.no_containers"))
         else:
-            # Botão + fora do form
-            if st.button(t("stock.new_owner"), key="btn_add_prop_stock", help=t("stock.new_owner_help")):
-                modal_adicionar_proprietario()
+            # Botão + fora do form (Alinhado à direita)
+            col_act1, col_act2 = st.columns([6, 2])
+            with col_act2:
+                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), use_container_width=True):
+                    modal_adicionar_proprietario()
             
             with st.form("novo_stock"):
-                garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
+                # SEÇÃO 1: IDENTIDADE
+                st.markdown('<div class="form-card"><div class="form-section-header">Identificação</div>', unsafe_allow_html=True)
+                col_id1, col_id2 = st.columns(2)
                 
-                # Verificar se há proprietário recém-adicionado
-                if 'novo_proprietario_id' in st.session_state:
-                    idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
-                else:
-                    idx_default = 0
+                with col_id1:
+                    garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
                 
-                proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
+                with col_id2:
+                    # Verificar se há proprietário recém-adicionado
+                    if 'novo_proprietario_id' in st.session_state:
+                        try:
+                            idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+                        except ValueError:
+                            idx_default = 0
+                    else:
+                        idx_default = 0
+                    
+                    proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
+                    dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    data = st.text_input(t("stock.prod_date"))
-                    origem = st.text_input(t("stock.external_origin"))
-                    palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
-                    qualidade = st.text_input(t("stock.quality_text"))
-                    cor = st.text_input(t("stock.color"))
-                    concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
-
-                with col2:
+                # SEÇÃO 2: DADOS TÉCNICOS
+                st.markdown('<div class="form-card"><div class="form-section-header">Dados Técnicos</div>', unsafe_allow_html=True)
+                col_tec1, col_tec2, col_tec3, col_tec4 = st.columns(4)
+                
+                with col_tec1:
                     motilidade = st.number_input(t("stock.motility_pct"), min_value=0, max_value=100, value=0)
+                with col_tec2:
+                    concentracao = st.number_input(t("stock.concentration"), min_value=0, value=0)
+                with col_tec3:
+                    qualidade = st.text_input(t("stock.quality_text"))
+                with col_tec4:
+                    cor = st.text_input(t("stock.color"))
+                
+                col_tec5, col_tec6 = st.columns(2)
+                with col_tec5:
                     certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")])
+                with col_tec6:
                     dose = st.text_input(t("stock.dose"))
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown("---")
-                st.subheader(t("stock.location_title"))
+                # SEÇÃO 3: PRODUÇÃO
+                st.markdown('<div class="form-card"><div class="form-section-header">Produção</div>', unsafe_allow_html=True)
+                col_prod1, col_prod2, col_prod3 = st.columns(3)
+                
+                with col_prod1:
+                    data = st.text_input(t("stock.prod_date"))
+                with col_prod2:
+                    palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
+                with col_prod3:
+                    origem = st.text_input(t("stock.external_origin"))
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # SEÇÃO 4: LOCALIZAÇÃO
+                st.markdown('<div class="form-card"><div class="form-section-header">Localização</div>', unsafe_allow_html=True)
                 
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
@@ -2597,9 +2628,14 @@ elif aba == t("menu.add_stock"):
                         horizontal=True,
                         help=t("add_stock.floor_help")
                     )
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"))
-                submitted = st.form_submit_button(t("btn.save"))
+                # OBSERVAÇÕES E SUBMIT
+                st.markdown('<div class="form-card"><div class="form-section-header">Observações</div>', unsafe_allow_html=True)
+                observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"), label_visibility="collapsed")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                submitted = st.form_submit_button(t("btn.save"), type="primary", use_container_width=True)
 
                 if submitted:
                     palhetas_int = int(to_py(palhetas) or 0)
