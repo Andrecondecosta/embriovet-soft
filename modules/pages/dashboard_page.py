@@ -380,73 +380,107 @@ def run_dashboard_page(ctx: dict):
             return val.strftime("%d/%m/%Y %H:%M") if isinstance(val, datetime) else val.strftime("%d/%m/%Y")
         return str(val)
 
-    if atividades:
-        # Verificar se é administrador
-        is_admin = verificar_permissao('Administrador')
+    # Verificar se é administrador
+    is_admin = verificar_permissao('Administrador')
+    
+    rows_activity = []
+    for row_data in atividades:
+        ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
         
-        for idx, row in enumerate(atividades):
-            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row
+        row_dict = {
+            "Hora": fmt_ts(ts), 
+            "Utilizador": usuario or "—", 
+            "Ação": acao or "—", 
+            "Detalhe": detalhe or "—"
+        }
+        
+        # Adicionar dados ocultos para os botões
+        if is_admin:
+            row_dict["_tipo"] = tipo
+            row_dict["_action_id"] = action_id
+            row_dict["_estoque_id"] = estoque_id
+            row_dict["_prop_origem_id"] = prop_origem_id
+            row_dict["_prop_destino_id"] = prop_destino_id
+            row_dict["_quantidade"] = quantidade
+        
+        rows_activity.append(row_dict)
+
+    df_activity = pd.DataFrame(rows_activity)
+    
+    if df_activity.empty:
+        st.info("Sem atividade recente registada.")
+    else:
+        # Mostrar dataframe
+        st.dataframe(
+            df_activity[["Hora", "Utilizador", "Ação", "Detalhe"]], 
+            use_container_width=True, 
+            hide_index=True, 
+            height=220
+        )
+        
+        # Se for admin, mostrar botões abaixo para cada linha
+        if is_admin and not df_activity.empty:
+            st.markdown("---")
+            st.caption("**Ações de Administrador:**")
             
-            col1, col2, col3, col4 = st.columns([1.5, 1, 3, 1.2] if is_admin else [1.5, 1, 4, 0.1])
-            
-            with col1:
-                st.caption(f"🕒 {fmt_ts(ts)}")
-            with col2:
-                st.caption(f"**{acao}**")
-            with col3:
-                st.caption(detalhe)
-            
-            if is_admin:
-                with col4:
-                    btn_col1, btn_col2 = st.columns(2)
-                    with btn_col1:
-                        if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
-                            # Redirecionar para página de edição
-                            if tipo == "insemination":
-                                st.session_state['edit_insemination_id'] = action_id
-                                st.session_state['aba_selecionada'] = t("menu.register_insemination")
-                                st.rerun()
-                            elif tipo in ["transfer_internal", "transfer_external"]:
-                                st.session_state['edit_transfer_id'] = action_id
-                                st.session_state['edit_transfer_type'] = tipo
-                                st.session_state['aba_selecionada'] = t("menu.transfers")
-                                st.rerun()
-                    
-                    with btn_col2:
-                        if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter"):
-                            st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
+            for idx, row in df_activity.iterrows():
+                tipo = row.get("_tipo")
+                action_id = row.get("_action_id")
+                
+                col1, col2, col3 = st.columns([8, 1, 1])
+                with col1:
+                    st.caption(f"{row['Hora']} - {row['Ação']} - {row['Detalhe'][:80]}...")
+                with col2:
+                    if st.button("✏️", key=f"edit_{tipo}_{action_id}_{idx}", help="Editar"):
+                        # Redirecionar para página de edição
+                        if tipo == "insemination":
+                            st.session_state['edit_insemination_id'] = action_id
+                            st.session_state['aba_selecionada'] = t("menu.register_insemination")
                             st.rerun()
-            
-            # Dialog de confirmação
-            if is_admin and st.session_state.get(f'confirm_delete_{tipo}_{action_id}', False):
-                @st.dialog(f"Confirmar Eliminação")
-                def confirm_delete_dialog():
-                    st.warning(f"⚠️ **Atenção!** Esta ação vai:")
-                    st.markdown(f"""
-                    - Eliminar o registo de **{acao}**
-                    - Reverter **{quantidade} palhetas** ao estado anterior
-                    """)
-                    
-                    col_confirm1, col_confirm2 = st.columns(2)
-                    with col_confirm1:
-                        if st.button("✅ Confirmar", type="primary", use_container_width=True):
-                            sucesso = reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade)
-                            if sucesso:
-                                st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
-                                st.success("✅ Ação revertida com sucesso!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Erro ao reverter ação")
-                    with col_confirm2:
-                        if st.button("❌ Cancelar", use_container_width=True):
-                            st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                        elif tipo in ["transfer_internal", "transfer_external"]:
+                            st.session_state['edit_transfer_id'] = action_id
+                            st.session_state['edit_transfer_type'] = tipo
+                            st.session_state['aba_selecionada'] = t("menu.transfers")
                             st.rerun()
                 
-                confirm_delete_dialog()
-            
-            st.markdown("---")
-    else:
-        st.info("Sem atividade recente registada.")
+                with col3:
+                    if st.button("🗑️", key=f"delete_{tipo}_{action_id}_{idx}", help="Eliminar e Reverter"):
+                        st.session_state[f'confirm_delete_{tipo}_{action_id}'] = True
+                        st.rerun()
+                
+                # Dialog de confirmação
+                if st.session_state.get(f'confirm_delete_{tipo}_{action_id}', False):
+                    @st.dialog(f"Confirmar Eliminação")
+                    def confirm_delete_dialog():
+                        st.warning(f"⚠️ **Atenção!** Esta ação vai:")
+                        st.markdown(f"""
+                        - Eliminar o registo de **{row['Ação']}**
+                        - Reverter **{row.get('_quantidade')} palhetas** ao estado anterior
+                        """)
+                        
+                        col_confirm1, col_confirm2 = st.columns(2)
+                        with col_confirm1:
+                            if st.button("✅ Confirmar", type="primary", use_container_width=True):
+                                sucesso = reverter_acao(
+                                    tipo, 
+                                    action_id, 
+                                    row.get('_estoque_id'),
+                                    row.get('_prop_origem_id'),
+                                    row.get('_prop_destino_id'),
+                                    row.get('_quantidade')
+                                )
+                                if sucesso:
+                                    st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                    st.success("✅ Ação revertida com sucesso!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Erro ao reverter ação")
+                        with col_confirm2:
+                            if st.button("❌ Cancelar", use_container_width=True):
+                                st.session_state[f'confirm_delete_{tipo}_{action_id}'] = False
+                                st.rerun()
+                    
+                    confirm_delete_dialog()
 
     # Ações rápidas
     st.markdown(f"<div class='dash-section-title'>{t('dashboard.actions')}</div>", unsafe_allow_html=True)
