@@ -792,8 +792,203 @@ def run_map_page(ctx: dict):
             </style>
 
             <div id="mapa-wrapper" class="__MOBILE_CLASS__">
-                <div id="mapa-area">"""
-                    position: absolute;
+                <div id="mapa-area">
+                </div>
+                <div id="mapa-status">__STATUS_TEXT__</div>
+            </div>
+
+            <!-- Modal de Inventário Premium -->
+            <div id="inv-overlay">
+                <div id="inv-panel">
+                    <div class="inv-header">
+                        <h2 id="inv-titulo">Contentor</h2>
+                        <p id="inv-subtitulo"></p>
+                    </div>
+                    <div class="inv-body" id="inv-body"></div>
+                    <div class="inv-footer">
+                        <button class="btn-close" onclick="fecharModal()">Fechar</button>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const contentores = __CONTENTORES_DATA__;
+                const isEditMode = __EDIT_MODE__;
+                const isMobile = __IS_MOBILE__;
+                const mapaArea = document.getElementById('mapa-area');
+                const statusBar = document.getElementById('mapa-status');
+                const invOverlay = document.getElementById('inv-overlay');
+                const invPanel = document.getElementById('inv-panel');
+                const invBody = document.getElementById('inv-body');
+                const invTitulo = document.getElementById('inv-titulo');
+                const invSubtitulo = document.getElementById('inv-subtitulo');
+
+                let dragInfo = null;
+                let areaScale = 1;
+
+                function computeScale() {
+                    const rect = mapaArea.getBoundingClientRect();
+                    areaScale = rect.width / (isMobile ? 375 : 900);
+                }
+
+                function criarContentor(c) {
+                    const box = document.createElement('div');
+                    box.className = 'cont-box';
+                    if (!isEditMode) box.classList.add('clickable');
+                    if (isEditMode) box.classList.add('draggable');
+
+                    box.innerHTML = `
+                        <div class="cont-codigo">${c.codigo}</div>
+                        <div class="cont-qtd">${c.total_palhetas}</div>
+                        <div class="cont-label">palhetas</div>
+                    `;
+
+                    const baseW = isMobile ? 80 : 100;
+                    const baseH = isMobile ? 80 : 100;
+                    box.style.left = (c.pos_x * areaScale) + 'px';
+                    box.style.top = (c.pos_y * areaScale) + 'px';
+                    box.style.width = baseW + 'px';
+                    box.style.height = baseH + 'px';
+
+                    if (isEditMode) {
+                        box.addEventListener('mousedown', startDrag);
+                        box.addEventListener('touchstart', startDrag, {passive: false});
+                    } else {
+                        box.addEventListener('click', () => mostrarInventario(c));
+                    }
+
+                    mapaArea.appendChild(box);
+                }
+
+                function startDrag(e) {
+                    e.preventDefault();
+                    const box = e.currentTarget;
+                    box.classList.add('dragging');
+                    const rect = box.getBoundingClientRect();
+                    const areaRect = mapaArea.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    dragInfo = {
+                        box: box,
+                        offsetX: clientX - rect.left,
+                        offsetY: clientY - rect.top,
+                        areaLeft: areaRect.left,
+                        areaTop: areaRect.top,
+                        areaW: areaRect.width,
+                        areaH: areaRect.height
+                    };
+
+                    document.addEventListener('mousemove', onDrag);
+                    document.addEventListener('mouseup', endDrag);
+                    document.addEventListener('touchmove', onDrag, {passive: false});
+                    document.addEventListener('touchend', endDrag);
+                }
+
+                function onDrag(e) {
+                    if (!dragInfo) return;
+                    e.preventDefault();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    let newX = clientX - dragInfo.areaLeft - dragInfo.offsetX;
+                    let newY = clientY - dragInfo.areaTop - dragInfo.offsetY;
+
+                    newX = Math.max(0, Math.min(newX, dragInfo.areaW - dragInfo.box.offsetWidth));
+                    newY = Math.max(0, Math.min(newY, dragInfo.areaH - dragInfo.box.offsetHeight));
+
+                    dragInfo.box.style.left = newX + 'px';
+                    dragInfo.box.style.top = newY + 'px';
+                }
+
+                function endDrag(e) {
+                    if (!dragInfo) return;
+                    dragInfo.box.classList.remove('dragging');
+                    
+                    const finalX = parseInt(dragInfo.box.style.left) / areaScale;
+                    const finalY = parseInt(dragInfo.box.style.top) / areaScale;
+
+                    try {
+                        const layoutData = JSON.parse(localStorage.getItem('contentor_layout_pending') || '{}');
+                        const codigo = dragInfo.box.querySelector('.cont-codigo').textContent;
+                        layoutData[codigo] = {x: Math.round(finalX), y: Math.round(finalY)};
+                        localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                    } catch (err) {
+                        console.error('Erro ao salvar posição:', err);
+                    }
+
+                    document.removeEventListener('mousemove', onDrag);
+                    document.removeEventListener('mouseup', endDrag);
+                    document.removeEventListener('touchmove', onDrag);
+                    document.removeEventListener('touchend', endDrag);
+                    dragInfo = null;
+                }
+
+                function mostrarInventario(cont) {
+                    invTitulo.textContent = `Contentor ${cont.codigo}`;
+                    invSubtitulo.textContent = `${cont.total_palhetas} palhetas no total`;
+                    
+                    let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
+                    
+                    if (cont.lotes && cont.lotes.length > 0) {
+                        cont.lotes.forEach(lote => {
+                            html += `
+                                <div class="inv-lote">
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">🐴 Garanhão:</span>
+                                        <span class="inv-lote-value">${lote.garanhao}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">👤 Proprietário:</span>
+                                        <span class="inv-lote-value">${lote.proprietario}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">📍 Localização:</span>
+                                        <span class="inv-lote-value">C${lote.canister} / A${lote.andar}</span>
+                                    </div>
+                                    <div class="inv-lote-row">
+                                        <span class="inv-lote-label">🧬 Palhetas:</span>
+                                        <span class="inv-lote-value">${lote.palhetas}</span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhum lote neste contentor</p>';
+                    }
+                    
+                    html += '</div>';
+                    invBody.innerHTML = html;
+                    invOverlay.classList.add('visible');
+                }
+
+                function fecharModal() {
+                    invOverlay.classList.remove('visible');
+                }
+
+                invOverlay.addEventListener('click', (e) => {
+                    if (e.target === invOverlay) fecharModal();
+                });
+
+                window.addEventListener('resize', () => {
+                    computeScale();
+                    contentores.forEach((c, i) => {
+                        const box = mapaArea.children[i];
+                        if (box) {
+                            box.style.left = (c.pos_x * areaScale) + 'px';
+                            box.style.top = (c.pos_y * areaScale) + 'px';
+                        }
+                    });
+                });
+
+                computeScale();
+                contentores.forEach(criarContentor);
+
+                if (!isEditMode) {
+                    statusBar.textContent = 'Clique num contentor para ver o inventário.';
+                }
+            </script>
+            """
                     inset: 0;
                     background: rgba(15, 23, 42, .28);
                     display: none;
