@@ -5,6 +5,112 @@ import altair as alt
 from modules.i18n import t
 
 
+def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade):
+    """
+    Reverte uma ação (transferência ou inseminação) e elimina o registo.
+    Devolve as palhetas ao estado anterior.
+    """
+    try:
+        with globals()['get_connection']() as conn:
+            cur = conn.cursor()
+            
+            if tipo == "transfer_internal":
+                # Transferência interna: devolver palhetas ao proprietário origem
+                # 1. Adicionar palhetas de volta ao lote de origem
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade, estoque_id))
+                
+                # 2. Buscar e remover palhetas do destino
+                cur.execute("""
+                    SELECT id, existencia_atual, garanhao, data_embriovet, origem_externa
+                    FROM estoque_dono 
+                    WHERE dono_id = %s AND garanhao = (
+                        SELECT garanhao FROM estoque_dono WHERE id = %s
+                    )
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (prop_destino_id, estoque_id))
+                
+                lote_destino = cur.fetchone()
+                if lote_destino:
+                    lote_dest_id, exist_dest, garanhao, data_emb, origem_ext = lote_destino
+                    nova_quantidade = int(exist_dest) - int(quantidade)
+                    
+                    if nova_quantidade <= 0:
+                        # Eliminar o lote se ficar zerado
+                        cur.execute("DELETE FROM estoque_dono WHERE id = %s", (lote_dest_id,))
+                    else:
+                        # Reduzir quantidade
+                        cur.execute("""
+                            UPDATE estoque_dono 
+                            SET existencia_atual = %s
+                            WHERE id = %s
+                        """, (nova_quantidade, lote_dest_id))
+                
+                # 3. Eliminar registo de transferência
+                cur.execute("DELETE FROM transferencias WHERE id = %s", (action_id,))
+                
+            elif tipo == "transfer_external":
+                # Transferência externa: devolver palhetas ao lote original
+                cur.execute("""
+                    UPDATE estoque_dono 
+                    SET existencia_atual = existencia_atual + %s
+                    WHERE id = %s
+                """, (quantidade, estoque_id))
+                
+                # Eliminar registo
+                cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (action_id,))
+                
+            elif tipo == "insemination":
+                # Inseminação: devolver palhetas ao proprietário
+                # Buscar dados da inseminação
+                cur.execute("""
+                    SELECT garanhao, dono_id, palhetas_gastas 
+                    FROM inseminacoes 
+                    WHERE id = %s
+                """, (action_id,))
+                
+                insem_data = cur.fetchone()
+                if insem_data:
+                    garanhao, dono_id, palhetas_gastas = insem_data
+                    
+                    # Procurar um lote deste garanhão e proprietário para devolver
+                    cur.execute("""
+                        SELECT id FROM estoque_dono 
+                        WHERE garanhao = %s AND dono_id = %s 
+                        ORDER BY id DESC 
+                        LIMIT 1
+                    """, (garanhao, dono_id))
+                    
+                    lote_existe = cur.fetchone()
+                    if lote_existe:
+                        # Adicionar palhetas ao lote existente
+                        cur.execute("""
+                            UPDATE estoque_dono 
+                            SET existencia_atual = existencia_atual + %s
+                            WHERE id = %s
+                        """, (palhetas_gastas, lote_existe[0]))
+                    # Se não houver lote, as palhetas foram perdidas (não podemos reverter completamente)
+                
+                # Eliminar registo de inseminação
+                cur.execute("DELETE FROM inseminacoes WHERE id = %s", (action_id,))
+            
+            conn.commit()
+            cur.close()
+            
+            # Atualizar status dos proprietários
+            globals()['atualizar_status_proprietarios']()
+            
+            return True
+            
+    except Exception as e:
+        globals()['logger'].error(f"Erro ao reverter ação: {e}")
+        return False
+
+
 def run_dashboard_page(ctx: dict):
     globals().update(ctx)
 
