@@ -649,7 +649,8 @@ def run_transfer_page(ctx):
                 height=80
             )
             
-            if st.button(t("btn.execute_transfer"), type="primary", width="stretch"):
+            btn_text_ext = "🔄 Atualizar Transferência" if edit_mode else t("btn.execute_transfer")
+            if st.button(btn_text_ext, type="primary", width="stretch"):
                 linhas_finais = [v for v in st.session_state["transfer_linhas"].values() if int(v.get("qty", 0)) > 0]
                 if not linhas_finais:
                     st.error(t("error.select_lot_line"))
