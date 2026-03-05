@@ -546,6 +546,7 @@ def run_dashboard_page(ctx: dict):
                             
                             st.markdown("---")
                     
+                    st.markdown("")
                     if st.button("Fechar", use_container_width=True):
                         st.session_state['show_logs_modal'] = False
                         st.rerun()
