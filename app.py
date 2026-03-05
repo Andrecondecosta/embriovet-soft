@@ -1000,14 +1000,146 @@ def registrar_inseminacao(registro):
         return False
 
 
-def registrar_inseminacao_multiplas(registros, data_inseminacao, egua):
-    """Registra múltiplas linhas de inseminação numa transação única"""
+def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None):
+    """Registra múltiplas linhas de inseminação numa transação única ou atualiza uma existente"""
     try:
         if not egua:
             st.error(t("error.mare_required"))
             return False
 
         if not registros:
+            st.error(t("error.select_lot_line"))
+            return False
+
+        total_pal = sum(int(r.get("palhetas", 0)) for r in registros)
+
+        with get_connection() as conn:
+            cur = conn.cursor()
+            
+            if insemination_id:
+                # MODO DE EDIÇÃO
+                # 1. Carregar dados antigos
+                cur.execute("""
+                    SELECT garanhao, dono_id, palhetas_gastas
+                    FROM inseminacoes WHERE id = %s
+                """, (insemination_id,))
+                old_data = cur.fetchone()
+                
+                if old_data:
+                    old_garanhao, old_dono_id, old_palhetas = old_data
+                    
+                    # 2. Devolver palhetas antigas ao stock
+                    cur.execute("""
+                        SELECT id FROM estoque_dono 
+                        WHERE garanhao = %s AND dono_id = %s 
+                        ORDER BY id DESC LIMIT 1
+                    """, (old_garanhao, old_dono_id))
+                    
+                    lote_exists = cur.fetchone()
+                    if lote_exists:
+                        cur.execute("""
+                            UPDATE estoque_dono 
+                            SET existencia_atual = existencia_atual + %s
+                            WHERE id = %s
+                        """, (old_palhetas, lote_exists[0]))
+                
+                # 3. Atualizar inseminação
+                primeiro_registro = registros[0]
+                cur.execute("""
+                    UPDATE inseminacoes
+                    SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
+                        egua = %s, palhetas_gastas = %s
+                    WHERE id = %s
+                """, (
+                    to_py(primeiro_registro.get("garanhao")),
+                    to_py(primeiro_registro.get("dono_id")),
+                    to_py(data_inseminacao),
+                    to_py(egua),
+                    total_pal,
+                    insemination_id
+                ))
+                
+                # 4. Descontar novas palhetas
+                for reg in registros:
+                    stock_id = to_py(reg.get("stock_id"))
+                    palhetas = int(reg.get("palhetas", 0))
+                    
+                    cur.execute(
+                        "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
+                        (stock_id,),
+                    )
+                    result = cur.fetchone()
+                    
+                    if not result:
+                        st.error(f"❌ Lote #{stock_id} não encontrado")
+                        return False
+                    
+                    existencia = int(result[0] or 0)
+                    
+                    if existencia < palhetas:
+                        st.error(f"❌ Estoque insuficiente no lote #{stock_id}! Disponível: {existencia}")
+                        return False
+                    
+                    cur.execute(
+                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
+                        (palhetas, stock_id),
+                    )
+                
+                conn.commit()
+                logger.info(f"Inseminação atualizada: ID {insemination_id}")
+            else:
+                # MODO DE CRIAÇÃO
+                for reg in registros:
+                    stock_id = to_py(reg.get("stock_id"))
+                    palhetas = int(reg.get("palhetas", 0))
+                    
+                    cur.execute(
+                        "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
+                        (stock_id,),
+                    )
+                    result = cur.fetchone()
+                    
+                    if not result:
+                        st.error(f"❌ Lote #{stock_id} não encontrado")
+                        return False
+                    
+                    existencia = int(result[0] or 0)
+                    
+                    if existencia < palhetas:
+                        st.error(f"❌ Estoque insuficiente! Disponível: {existencia} palhetas")
+                        return False
+                    
+                    cur.execute(
+                        """
+                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            to_py(reg.get("garanhao")),
+                            to_py(reg.get("dono_id")),
+                            to_py(data_inseminacao),
+                            to_py(egua),
+                            to_py(reg.get("protocolo")),
+                            palhetas,
+                        ),
+                    )
+                    
+                    cur.execute(
+                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
+                        (palhetas, stock_id),
+                    )
+                
+                conn.commit()
+                logger.info(f"Inseminação registrada: {egua} - {total_pal} palhetas")
+            
+            cur.close()
+            atualizar_status_proprietarios()
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao processar inseminação: {e}")
+        st.error(f"Erro ao processar inseminação: {e}")
+        return False
             st.error(t("error.select_lot"))
             return False
 
