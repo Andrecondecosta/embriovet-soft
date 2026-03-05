@@ -677,5 +677,8 @@ def run_transfer_page(ctx):
                             sucesso = False
                     
                     if sucesso:
+                        # Limpar modo de edição
+                        st.session_state.pop('edit_transfer_id', None)
+                        st.session_state.pop('edit_transfer_type', None)
                         st.session_state["transfer_show_success"] = True
                         st.rerun()
