@@ -1140,10 +1140,19 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
         logger.error(f"Erro ao processar inseminação: {e}")
         st.error(f"Erro ao processar inseminação: {e}")
         return False
-            st.error(t("error.select_lot"))
-            return False
 
-        with get_connection() as conn:
+
+def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas, stock_id):
+    """Registra UMA linha de inseminação"""
+    if not egua:
+        st.error(t("error.mare_required"))
+        return False
+
+    if not stock_id:
+        st.error(t("error.select_lot_line"))
+        return False
+
+    with get_connection() as conn:
             cur = conn.cursor()
 
             # 1) Validar e bloquear stock
