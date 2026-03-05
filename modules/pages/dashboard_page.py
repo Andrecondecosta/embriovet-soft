@@ -317,10 +317,25 @@ def run_dashboard_page(ctx: dict):
     with col_title:
         st.markdown(f"<div class='dash-section-title'>{t('dashboard.activity')}</div>", unsafe_allow_html=True)
     
-    # Botão de gestão para admin
+    # Botão de gestão para admin (sem background)
     if verificar_permissao('Administrador'):
         with col_btn:
-            if st.button("✏️", key="manage_logs_title_btn", help="Gerir logs"):
+            st.markdown("""
+                <style>
+                div[data-testid="column"] button[kind="secondary"] {
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    padding: 4px 8px !important;
+                }
+                div[data-testid="column"] button[kind="secondary"]:hover {
+                    background: rgba(0,0,0,0.05) !important;
+                    border-radius: 4px;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            if st.button("✏️", key="manage_logs_title_btn", help="Gerir logs", type="secondary"):
                 st.session_state['show_logs_modal'] = True
                 st.rerun()
     
