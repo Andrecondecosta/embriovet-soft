@@ -431,16 +431,52 @@ def run_dashboard_page(ctx: dict):
             height=220
         )
         
-        # Se for admin, adicionar botão para abrir modal de gestão
-        if is_admin:
-            if st.button("✏️", key="manage_logs_btn", help="Gerir logs"):
-                st.session_state['show_logs_modal'] = True
-                st.rerun()
-            
-            # Modal com todos os logs
-            if st.session_state.get('show_logs_modal', False):
-                @st.dialog("📋 Gerir Logs de Atividade", width="large")
-                def logs_management_modal():
+        # Se for admin, modal de gestão
+        if is_admin and st.session_state.get('show_logs_modal', False):
+            @st.dialog("📋 Gerir Logs de Atividade", width="large")
+            def logs_management_modal():
+                # Verificar se há pedido de confirmação pendente
+                pending_delete = None
+                for metadata in activity_metadata:
+                    if st.session_state.get(f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}', False):
+                        pending_delete = metadata
+                        break
+                
+                if pending_delete:
+                    # Mostrar confirmação dentro do modal (sem nested dialog)
+                    st.warning("⚠️ **Esta ação é irreversível!**")
+                    st.markdown(f"""
+                    **O que vai acontecer:**
+                    - ❌ Registo de **{pending_delete['acao']}** será eliminado
+                    - ↩️ **{pending_delete['quantidade']} palhetas** serão revertidas ao estado anterior
+                    
+                    Tem a certeza que deseja continuar?
+                    """)
+                    
+                    col_confirm1, col_confirm2, col_confirm3 = st.columns([1, 1, 2])
+                    with col_confirm1:
+                        if st.button("✅ Sim, eliminar", type="primary", use_container_width=True):
+                            sucesso = reverter_acao(
+                                pending_delete['tipo'], 
+                                pending_delete['action_id'], 
+                                pending_delete['estoque_id'],
+                                pending_delete['prop_origem_id'],
+                                pending_delete['prop_destino_id'],
+                                pending_delete['quantidade']
+                            )
+                            if sucesso:
+                                st.session_state[f'confirm_delete_{pending_delete["tipo"]}_{pending_delete["action_id"]}'] = False
+                                st.session_state['show_logs_modal'] = False
+                                st.success("✅ Ação revertida com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao reverter ação")
+                    with col_confirm2:
+                        if st.button("❌ Cancelar", use_container_width=True):
+                            st.session_state[f'confirm_delete_{pending_delete["tipo"]}_{pending_delete["action_id"]}'] = False
+                            st.rerun()
+                else:
+                    # Mostrar lista de logs
                     st.markdown("Clique num registo para editar ou eliminar:")
                     st.markdown("---")
                     
@@ -453,10 +489,26 @@ def run_dashboard_page(ctx: dict):
                                 st.caption(f"{metadata['detalhe']}")
                             
                             with col2:
+                                # CSS para remover background dos botões
+                                st.markdown("""
+                                    <style>
+                                    button[kind="secondary"] {
+                                        background: transparent !important;
+                                        border: none !important;
+                                        box-shadow: none !important;
+                                        padding: 4px 8px !important;
+                                    }
+                                    button[kind="secondary"]:hover {
+                                        background: rgba(0,0,0,0.05) !important;
+                                    }
+                                    </style>
+                                """, unsafe_allow_html=True)
+                                
                                 edit_col, delete_col = st.columns(2)
                                 
                                 with edit_col:
-                                    if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", help="Editar"):
+                                    if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
+                                               help="Editar", type="secondary"):
                                         tipo = metadata['tipo']
                                         action_id = metadata['action_id']
                                         
@@ -472,56 +524,18 @@ def run_dashboard_page(ctx: dict):
                                         st.rerun()
                                 
                                 with delete_col:
-                                    if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", help="Eliminar"):
+                                    if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
+                                               help="Eliminar", type="secondary"):
                                         st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
                                         st.rerun()
                             
                             st.markdown("---")
-                            
-                            # Dialog de confirmação para eliminação
-                            if st.session_state.get(f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}', False):
-                                @st.dialog("⚠️ Confirmar Eliminação")
-                                def confirm_delete_dialog():
-                                    st.warning("**Esta ação é irreversível!**")
-                                    st.markdown(f"""
-                                    **O que vai acontecer:**
-                                    - ❌ Registo de **{metadata['acao']}** será eliminado
-                                    - ↩️ **{metadata['quantidade']} palhetas** serão revertidas ao estado anterior
-                                    
-                                    Tem a certeza que deseja continuar?
-                                    """)
-                                    
-                                    col_confirm1, col_confirm2 = st.columns(2)
-                                    with col_confirm1:
-                                        if st.button("✅ Sim, eliminar", type="primary", use_container_width=True):
-                                            sucesso = reverter_acao(
-                                                metadata['tipo'], 
-                                                metadata['action_id'], 
-                                                metadata['estoque_id'],
-                                                metadata['prop_origem_id'],
-                                                metadata['prop_destino_id'],
-                                                metadata['quantidade']
-                                            )
-                                            if sucesso:
-                                                st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = False
-                                                st.session_state['show_logs_modal'] = False
-                                                st.success("✅ Ação revertida com sucesso!")
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ Erro ao reverter ação")
-                                    with col_confirm2:
-                                        if st.button("Cancelar", use_container_width=True):
-                                            st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = False
-                                            st.rerun()
-                                
-                                confirm_delete_dialog()
                     
-                    st.markdown("---")
                     if st.button("Fechar", use_container_width=True):
                         st.session_state['show_logs_modal'] = False
                         st.rerun()
-                
-                logs_management_modal()
+            
+            logs_management_modal()
     else:
         st.info("Sem atividade recente registada.")
 
