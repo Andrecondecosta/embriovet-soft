@@ -465,7 +465,14 @@ def run_insemination_page(ctx):
                     }
                 )
 
-            ok = registrar_inseminacao_multiplas(registros, data_insem, egua)
+            ok = registrar_inseminacao_multiplas(
+                registros, 
+                data_insem, 
+                egua, 
+                insemination_data['id'] if edit_mode and insemination_data else None
+            )
             if ok:
+                # Limpar modo de edição
+                st.session_state.pop('edit_insemination_id', None)
                 st.session_state["insem_show_success"] = True
                 st.rerun()
