@@ -85,6 +85,48 @@ def run_insemination_page(ctx):
     if "insem_show_success" not in st.session_state:
         st.session_state["insem_show_success"] = False
 
+    # Detectar modo de edição
+    edit_mode = False
+    insemination_data = None
+    if st.session_state.get('edit_insemination_id'):
+        edit_mode = True
+        insemination_id = st.session_state['edit_insemination_id']
+        
+        # Carregar dados da inseminação
+        try:
+            with get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT i.id, i.garanhao, i.egua, i.dono_id, i.palhetas_gastas, 
+                           i.data_inseminacao, i.observacoes, d.nome as proprietario_nome
+                    FROM inseminacoes i
+                    LEFT JOIN dono d ON i.dono_id = d.id
+                    WHERE i.id = %s
+                """, (insemination_id,))
+                row = cur.fetchone()
+                if row:
+                    insemination_data = {
+                        'id': row[0],
+                        'garanhao': row[1],
+                        'egua': row[2],
+                        'dono_id': row[3],
+                        'palhetas_gastas': row[4],
+                        'data_inseminacao': row[5],
+                        'observacoes': row[6],
+                        'proprietario_nome': row[7]
+                    }
+                    
+                    # Pré-preencher estado
+                    if 'insem_egua' not in st.session_state:
+                        st.session_state['insem_egua'] = insemination_data['egua']
+                    st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
+                    st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
+                cur.close()
+        except Exception as e:
+            st.error(f"Erro ao carregar dados da inseminação: {e}")
+            st.session_state.pop('edit_insemination_id', None)
+            edit_mode = False
+
     @st.dialog(t("insemination.success_title"), width="small")
     def show_success_dialog():
         st.markdown(t("insemination.success_msg"))
@@ -404,7 +446,8 @@ def run_insemination_page(ctx):
         unsafe_allow_html=True,
     )
     st.markdown("---")
-    if st.button(t("btn.register_insemination"), type="primary", key="btn_registrar_insem_final", width="stretch"):
+    btn_text = "🔄 Atualizar Inseminação" if edit_mode else t("btn.register_insemination")
+    if st.button(btn_text, type="primary", key="btn_registrar_insem_final", width="stretch"):
         linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
         if not linhas_finais:
             st.error(t("error.select_lot_line"))
@@ -423,7 +466,14 @@ def run_insemination_page(ctx):
                     }
                 )
 
-            ok = registrar_inseminacao_multiplas(registros, data_insem, egua)
+            ok = registrar_inseminacao_multiplas(
+                registros, 
+                data_insem, 
+                egua, 
+                insemination_data['id'] if edit_mode and insemination_data else None
+            )
             if ok:
+                # Limpar modo de edição
+                st.session_state.pop('edit_insemination_id', None)
                 st.session_state["insem_show_success"] = True
                 st.rerun()
