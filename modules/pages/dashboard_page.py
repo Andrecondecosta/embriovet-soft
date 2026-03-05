@@ -450,6 +450,23 @@ def run_dashboard_page(ctx: dict):
         if is_admin and st.session_state.get('show_logs_modal', False):
             @st.dialog("📋 Gerir Logs de Atividade", width="large")
             def logs_management_modal():
+                # CSS global para botões (fora do loop!)
+                st.markdown("""
+                    <style>
+                    button[kind="secondary"] {
+                        background: transparent !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        padding: 2px 6px !important;
+                        min-width: 30px !important;
+                    }
+                    button[kind="secondary"]:hover {
+                        background: rgba(0,0,0,0.05) !important;
+                        border-radius: 4px;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+                
                 # Verificar se há pedido de confirmação pendente
                 pending_delete = None
                 for metadata in activity_metadata:
@@ -496,55 +513,37 @@ def run_dashboard_page(ctx: dict):
                     st.markdown("---")
                     
                     for idx, metadata in enumerate(activity_metadata):
-                        with st.container():
-                            col1, col2 = st.columns([8, 2])
-                            
-                            with col1:
-                                st.markdown(f"**{metadata['acao']}** · {fmt_ts(metadata['ts'])}")
-                                st.caption(f"{metadata['detalhe']}")
-                            
-                            with col2:
-                                # CSS para remover background dos botões
-                                st.markdown("""
-                                    <style>
-                                    button[kind="secondary"] {
-                                        background: transparent !important;
-                                        border: none !important;
-                                        box-shadow: none !important;
-                                        padding: 4px 8px !important;
-                                    }
-                                    button[kind="secondary"]:hover {
-                                        background: rgba(0,0,0,0.05) !important;
-                                    }
-                                    </style>
-                                """, unsafe_allow_html=True)
+                        # Colunas mais compactas: [9, 0.5, 0.5] = menos espaço
+                        col1, col2, col3 = st.columns([9, 0.5, 0.5])
+                        
+                        with col1:
+                            st.markdown(f"**{metadata['acao']}** · {fmt_ts(metadata['ts'])}")
+                            st.caption(f"{metadata['detalhe']}")
+                        
+                        with col2:
+                            if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
+                                       help="Editar", type="secondary"):
+                                tipo = metadata['tipo']
+                                action_id = metadata['action_id']
                                 
-                                edit_col, delete_col = st.columns(2)
+                                if tipo == "insemination":
+                                    st.session_state['edit_insemination_id'] = action_id
+                                    st.session_state['aba_selecionada'] = t("menu.register_insemination")
+                                elif tipo in ["transfer_internal", "transfer_external"]:
+                                    st.session_state['edit_transfer_id'] = action_id
+                                    st.session_state['edit_transfer_type'] = tipo
+                                    st.session_state['aba_selecionada'] = t("menu.transfers")
                                 
-                                with edit_col:
-                                    if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
-                                               help="Editar", type="secondary"):
-                                        tipo = metadata['tipo']
-                                        action_id = metadata['action_id']
-                                        
-                                        if tipo == "insemination":
-                                            st.session_state['edit_insemination_id'] = action_id
-                                            st.session_state['aba_selecionada'] = t("menu.register_insemination")
-                                        elif tipo in ["transfer_internal", "transfer_external"]:
-                                            st.session_state['edit_transfer_id'] = action_id
-                                            st.session_state['edit_transfer_type'] = tipo
-                                            st.session_state['aba_selecionada'] = t("menu.transfers")
-                                        
-                                        st.session_state['show_logs_modal'] = False
-                                        st.rerun()
-                                
-                                with delete_col:
-                                    if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
-                                               help="Eliminar", type="secondary"):
-                                        st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
-                                        st.rerun()
-                            
-                            st.markdown("---")
+                                st.session_state['show_logs_modal'] = False
+                                st.rerun()
+                        
+                        with col3:
+                            if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
+                                       help="Eliminar", type="secondary"):
+                                st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
+                                st.rerun()
+                        
+                        st.markdown("---")
                     
                     st.markdown("")
                     if st.button("Fechar", use_container_width=True):
