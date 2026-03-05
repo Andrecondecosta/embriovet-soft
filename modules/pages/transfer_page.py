@@ -45,7 +45,7 @@ def run_transfer_page(ctx):
                     # Transferência externa
                     cur.execute("""
                         SELECT te.id, te.estoque_id, te.proprietario_origem_id, te.destinatario_externo,
-                               te.quantidade, te.data_transferencia, te.tipo_saida, te.observacoes,
+                               te.quantidade, te.data_transferencia, te.tipo, te.observacoes,
                                d.nome as origem_nome,
                                e.garanhao, e.data_embriovet, e.origem_externa
                         FROM transferencias_externas te
@@ -78,7 +78,7 @@ def run_transfer_page(ctx):
                             'destinatario_externo': row[3],
                             'quantidade': row[4],
                             'data_transferencia': row[5],
-                            'tipo_saida': row[6],
+                            'tipo': row[6],
                             'observacoes': row[7],
                             'origem_nome': row[8],
                             'garanhao': row[9],
