@@ -8,6 +8,100 @@ def run_transfer_page(ctx):
 
     st.header(t("transfer.title"))
 
+    # Detectar modo de edição
+    edit_mode = False
+    transfer_data = None
+    transfer_type = None
+    
+    if st.session_state.get('edit_transfer_id') and st.session_state.get('edit_transfer_type'):
+        edit_mode = True
+        transfer_id = st.session_state['edit_transfer_id']
+        transfer_type = st.session_state['edit_transfer_type']
+        
+        # Carregar dados da transferência
+        try:
+            with get_connection() as conn:
+                cur = conn.cursor()
+                
+                if transfer_type == "transfer_internal":
+                    # Transferência interna
+                    cur.execute("""
+                        SELECT t.id, t.estoque_id, t.proprietario_origem_id, t.proprietario_destino_id,
+                               t.quantidade, t.data_transferencia,
+                               d1.nome as origem_nome, d2.nome as destino_nome,
+                               e.garanhao, e.data_embriovet, e.origem_externa
+                        FROM transferencias t
+                        LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
+                        LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
+                        LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                        WHERE t.id = %s
+                    """, (transfer_id,))
+                    
+                elif transfer_type == "transfer_external":
+                    # Transferência externa
+                    cur.execute("""
+                        SELECT te.id, te.estoque_id, te.proprietario_origem_id, te.destinatario_externo,
+                               te.quantidade, te.data_transferencia, te.tipo_saida, te.observacoes,
+                               d.nome as origem_nome,
+                               e.garanhao, e.data_embriovet, e.origem_externa
+                        FROM transferencias_externas te
+                        LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+                        LEFT JOIN estoque_dono e ON te.estoque_id = e.id
+                        WHERE te.id = %s
+                    """, (transfer_id,))
+                
+                row = cur.fetchone()
+                if row:
+                    if transfer_type == "transfer_internal":
+                        transfer_data = {
+                            'id': row[0],
+                            'estoque_id': row[1],
+                            'proprietario_origem_id': row[2],
+                            'proprietario_destino_id': row[3],
+                            'quantidade': row[4],
+                            'data_transferencia': row[5],
+                            'origem_nome': row[6],
+                            'destino_nome': row[7],
+                            'garanhao': row[8],
+                            'data_embriovet': row[9],
+                            'origem_externa': row[10]
+                        }
+                    else:  # transfer_external
+                        transfer_data = {
+                            'id': row[0],
+                            'estoque_id': row[1],
+                            'proprietario_origem_id': row[2],
+                            'destinatario_externo': row[3],
+                            'quantidade': row[4],
+                            'data_transferencia': row[5],
+                            'tipo_saida': row[6],
+                            'observacoes': row[7],
+                            'origem_nome': row[8],
+                            'garanhao': row[9],
+                            'data_embriovet': row[10],
+                            'origem_externa': row[11]
+                        }
+                    
+                    # Pré-definir tipo de transferência
+                    if 'transfer_tipo' not in st.session_state:
+                        if transfer_type == "transfer_internal":
+                            st.session_state['transfer_tipo'] = t("transfer.internal")
+                        else:
+                            st.session_state['transfer_tipo'] = t("transfer.external")
+                    
+                    # Pré-preencher garanhão e proprietário
+                    if 'transfer_garanhao' not in st.session_state:
+                        st.session_state['transfer_garanhao'] = transfer_data['garanhao']
+                    if 'transfer_proprietario' not in st.session_state and transfer_data.get('origem_nome'):
+                        st.session_state['transfer_proprietario'] = transfer_data['origem_nome']
+                        
+                cur.close()
+        except Exception as e:
+            st.error(f"Erro ao carregar dados da transferência: {e}")
+            st.session_state.pop('edit_transfer_id', None)
+            st.session_state.pop('edit_transfer_type', None)
+            edit_mode = False
+
     st.markdown(
         """
         <style>
