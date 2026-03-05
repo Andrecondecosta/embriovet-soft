@@ -1152,73 +1152,47 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
         st.error(t("error.select_lot_line"))
         return False
 
-    with get_connection() as conn:
+    try:
+        with get_connection() as conn:
             cur = conn.cursor()
 
-            # 1) Validar e bloquear stock
-            validacoes = []
-            for reg in registros:
-                stock_id = to_py(reg.get("stock_id"))
-                palhetas = int(to_py(reg.get("palhetas")) or 0)
+            # Validar stock
+            cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
+            result = cur.fetchone()
 
-                if palhetas <= 0:
-                    cur.close()
-                    st.error(t("error.invalid_qty_line"))
-                    return False
+            if not result:
+                st.error(f"❌ Lote #{stock_id} não encontrado")
+                return False
 
-                cur.execute(
-                    "SELECT existencia_atual FROM estoque_dono WHERE id = %s FOR UPDATE",
-                    (stock_id,),
-                )
-                row = cur.fetchone()
-                if not row:
-                    cur.close()
-                    st.error(t("error.lot_not_found"))
-                    return False
+            existencia = int(result[0] or 0)
 
-                existencia = int(row[0] or 0)
-                if palhetas > existencia:
-                    cur.close()
-                    st.error(f"❌ Stock insuficiente no lote {stock_id}. Disponível: {existencia}")
-                    return False
+            if existencia < palhetas:
+                st.error(f"❌ Estoque insuficiente! Disponível: {existencia} palhetas")
+                return False
 
-                validacoes.append((stock_id, palhetas, reg))
+            # Inserir inseminação
+            cur.execute(
+                """
+                INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas),
+            )
 
-            # 2) Inserir inseminações e atualizar stock
-            for stock_id, palhetas, reg in validacoes:
-                cur.execute(
-                    """
-                    INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        to_py(reg.get("garanhao")),
-                        to_py(reg.get("dono_id")),
-                        to_py(data_inseminacao),
-                        to_py(egua),
-                        to_py(reg.get("protocolo")),
-                        to_py(palhetas),
-                    ),
-                )
-
-                cur.execute(
-                    """
-                    UPDATE estoque_dono
-                    SET existencia_atual = existencia_atual - %s
-                    WHERE id = %s
-                    """,
-                    (to_py(palhetas), stock_id),
-                )
+            # Descontar palhetas
+            cur.execute(
+                "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
+                (palhetas, stock_id),
+            )
 
             conn.commit()
             cur.close()
 
             atualizar_status_proprietarios()
-            logger.info(f"Inseminação múltipla registrada: égua={egua}, linhas={len(registros)}")
             return True
 
     except Exception as e:
-        logger.error(f"Erro ao registrar inseminação múltipla: {e}")
+        logger.error(f"Erro ao registrar inseminação: {e}")
         st.error(f"Erro ao registrar inseminação: {e}")
         return False
 
