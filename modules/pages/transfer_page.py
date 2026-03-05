@@ -7,6 +7,10 @@ def run_transfer_page(ctx):
     globals().update(ctx)
 
     st.header(t("transfer.title"))
+    
+    # Mostrar aviso se estiver em modo de edição
+    if st.session_state.get('edit_transfer_id'):
+        st.info("📝 **Modo de Edição** - Modifique os dados e clique em 'Atualizar Transferência'")
 
     # Detectar modo de edição
     edit_mode = False
