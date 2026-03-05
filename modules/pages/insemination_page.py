@@ -446,7 +446,8 @@ def run_insemination_page(ctx):
         unsafe_allow_html=True,
     )
     st.markdown("---")
-    if st.button(t("btn.register_insemination"), type="primary", key="btn_registrar_insem_final", width="stretch"):
+    btn_text = "🔄 Atualizar Inseminação" if edit_mode else t("btn.register_insemination")
+    if st.button(btn_text, type="primary", key="btn_registrar_insem_final", width="stretch"):
         linhas_finais = [v for v in st.session_state["insem_linhas"].values() if int(v.get("qty", 0)) > 0]
         if not linhas_finais:
             st.error(t("error.select_lot_line"))
