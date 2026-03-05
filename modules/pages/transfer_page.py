@@ -78,7 +78,7 @@ def run_transfer_page(ctx):
                             'destinatario_externo': row[3],
                             'quantidade': row[4],
                             'data_transferencia': row[5],
-                            'tipo_saida': row[6],
+                            'tipo': row[6],
                             'observacoes': row[7],
                             'origem_nome': row[8],
                             'garanhao': row[9],
