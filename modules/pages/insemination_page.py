@@ -120,7 +120,7 @@ def run_insemination_page(ctx):
                         'observacoes': row[7] or '',
                     }
                     
-                    # Pré-preencher estado
+                    # Pré-preencher estado base
                     if 'insem_egua' not in st.session_state:
                         st.session_state['insem_egua'] = insemination_data['egua']
                     if 'insem_data' not in st.session_state:
@@ -129,6 +129,55 @@ def run_insemination_page(ctx):
                         st.session_state['insem_observacoes'] = insemination_data['observacoes']
                     st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
                     st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
+
+                    # Carregar lote utilizado (via estoque_id) para pré-preencher insem_linhas
+                    if 'insem_linhas' not in st.session_state or not st.session_state['insem_linhas']:
+                        cur.execute("""
+                            SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
+                                   ed.data_embriovet, ed.origem_externa, ed.motilidade,
+                                   ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
+                                   ed.contentor_id, ed.canister, ed.andar,
+                                   d.nome as proprietario_nome, c.codigo as contentor_codigo,
+                                   i.palhetas_gastas
+                            FROM inseminacoes i
+                            JOIN estoque_dono ed ON i.estoque_id = ed.id
+                            LEFT JOIN dono d ON ed.dono_id = d.id
+                            LEFT JOIN contentores c ON ed.contentor_id = c.id
+                            WHERE i.id = %s AND i.estoque_id IS NOT NULL
+                        """, (insemination_id,))
+                        lot_row = cur.fetchone()
+                        if lot_row:
+                            (eid, egaranhao, edono_id, eexist, edata_emb, eorig_ext,
+                             emot, edose, ecor, econc, elocal, econt_id, ecan, eandar,
+                             eprop_nome, econt_code, epalhetas) = lot_row
+                            
+                            # Quantidade virtual = atual + usadas (palhetas serão devolvidas no UPDATE)
+                            existencia_virtual = int(eexist or 0) + int(epalhetas or 0)
+                            ref = eorig_ext or (str(edata_emb) if edata_emb else f"Lote #{eid}")
+                            contentor = econt_code or elocal or "SEM-CONTENTOR"
+                            if ecan is not None and eandar is not None:
+                                location = f"{contentor} / C{int(ecan)} / A{int(eandar)}"
+                            else:
+                                location = str(contentor)
+                            
+                            st.session_state['insem_linhas'] = {
+                                str(eid): {
+                                    "stock_id": int(eid),
+                                    "garanhao": egaranhao,
+                                    "dono_id": to_py(edono_id),
+                                    "proprietario_nome": eprop_nome or "—",
+                                    "ref": ref,
+                                    "local": location,
+                                    "motilidade": int(emot or 0),
+                                    "dose": str(edose) if edose else "—",
+                                    "cor": str(ecor) if ecor else "",
+                                    "concentracao": int(econc or 0),
+                                    "protocolo": str(eorig_ext or edata_emb or "N/A"),
+                                    "max_disponivel": existencia_virtual,
+                                    "qty": int(epalhetas or 0),
+                                }
+                            }
+                            st.session_state[f"insem_line_input_{eid}"] = int(epalhetas or 0)
                     
                     # Buscar lotes usados nesta inseminação
                     # Como não temos histórico dos lotes específicos, vamos buscar lotes disponíveis do mesmo garanhão/proprietário
@@ -332,6 +381,17 @@ def run_insemination_page(ctx):
         with b2:
             if st.button(t("btn.close"), key="insem_modal_cancelar", width="stretch"):
                 st.rerun()
+
+    # DEBUG TEMPORÁRIO - remover após diagnóstico
+    if st.session_state.get('edit_insemination_id'):
+        import json
+        debug_info = {
+            'edit_id': st.session_state.get('edit_insemination_id'),
+            'insem_linhas': str(st.session_state.get('insem_linhas', 'NOT SET')),
+            'insem_garanhao_principal': st.session_state.get('insem_garanhao_principal'),
+            'insem_prop_principal': st.session_state.get('insem_prop_principal'),
+        }
+        st.caption(f"🔍 DEBUG: {json.dumps(debug_info, default=str)[:500]}")
 
     # PÁGINA PRINCIPAL - NOVO FLUXO
     render_zone_title(t("insemination.zone_selection"), "insem-zone-title")

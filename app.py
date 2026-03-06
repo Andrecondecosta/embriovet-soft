@@ -1040,11 +1040,11 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             
             if insemination_id:
                 # MODO DE EDIÇÃO - UPDATE
-                # 1. Carregar dados antigos (incluindo egua, data e protocolo para auditoria)
+                # 1. Carregar dados antigos (incluindo egua, data, protocolo e estoque_id para auditoria)
                 cur.execute("""
                     SELECT i.garanhao, i.dono_id, i.palhetas_gastas, i.egua,
                            i.data_inseminacao, i.protocolo,
-                           d.nome AS dono_nome, i.observacoes
+                           d.nome AS dono_nome, i.observacoes, i.estoque_id
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.id = %s
@@ -1052,22 +1052,29 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                 old_data = cur.fetchone()
                 
                 if old_data:
-                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes = old_data
+                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes, old_estoque_id = old_data
                     
-                    # 2. Devolver palhetas antigas ao stock
-                    cur.execute("""
-                        SELECT id, existencia_atual FROM estoque_dono 
-                        WHERE garanhao = %s AND dono_id = %s 
-                        ORDER BY id DESC LIMIT 1
-                    """, (old_garanhao, old_dono_id))
-                    
-                    lote_exists = cur.fetchone()
-                    if lote_exists:
+                    # 2. Devolver palhetas antigas ao stock (usar estoque_id se disponível)
+                    if old_estoque_id:
                         cur.execute("""
                             UPDATE estoque_dono 
-                            SET existencia_atual = %s
+                            SET existencia_atual = existencia_atual + %s
                             WHERE id = %s
-                        """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
+                        """, (int(old_palhetas), old_estoque_id))
+                    else:
+                        # Fallback para registos antigos sem estoque_id
+                        cur.execute("""
+                            SELECT id, existencia_atual FROM estoque_dono 
+                            WHERE garanhao = %s AND dono_id = %s 
+                            ORDER BY id DESC LIMIT 1
+                        """, (old_garanhao, old_dono_id))
+                        lote_exists = cur.fetchone()
+                        if lote_exists:
+                            cur.execute("""
+                                UPDATE estoque_dono 
+                                SET existencia_atual = %s
+                                WHERE id = %s
+                            """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
                 
                 # 3. Atualizar inseminação e marcar como editada
                 primeiro_registro = registros[0]
@@ -1075,7 +1082,8 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     UPDATE inseminacoes
                     SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
                         egua = %s, palhetas_gastas = %s, observacoes = %s,
-                        atualizado = TRUE, utilizador = %s
+                        atualizado = TRUE, utilizador = %s,
+                        estoque_id = %s
                     WHERE id = %s
                 """, (
                     to_py(primeiro_registro.get("garanhao")),
@@ -1085,6 +1093,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     total_pal,
                     to_py(observacoes),
                     st.session_state.get('user', {}).get('username', '—'),
+                    to_py(primeiro_registro.get("stock_id")),
                     insemination_id
                 ))
                 
@@ -1168,8 +1177,8 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     
                     cur.execute(
                         """
-                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas, observacoes, utilizador)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas, observacoes, utilizador, estoque_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             to_py(reg.get("garanhao")),
@@ -1180,6 +1189,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                             palhetas,
                             to_py(observacoes),
                             st.session_state.get('user', {}).get('username', '—'),
+                            to_py(reg.get("stock_id")),
                         ),
                     )
                     
