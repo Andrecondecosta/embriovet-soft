@@ -374,6 +374,28 @@ def carregar_proprietarios(apenas_ativos=False):
         st.error(f"Erro ao carregar proprietarios: {e}")
         return pd.DataFrame()
 
+
+def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
+    """Regista uma edição no histórico de auditoria"""
+    try:
+        utilizador = st.session_state.get('user', {}).get('username', '—')
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO historico_edicoes (tabela_nome, record_id, dados_antigos, dados_novos, utilizador_nome)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                tabela, record_id,
+                json.dumps(dados_antigos, default=str),
+                json.dumps(dados_novos, default=str),
+                utilizador
+            ))
+            conn.commit()
+            cur.close()
+    except Exception as e:
+        logger.error(f"Erro ao registar histórico de edição: {e}")
+
+
 def atualizar_status_proprietarios():
     """
     Desativa automaticamente proprietários quando stock chega a 0.
@@ -1018,15 +1040,15 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             
             if insemination_id:
                 # MODO DE EDIÇÃO - UPDATE
-                # 1. Carregar dados antigos
+                # 1. Carregar dados antigos (incluindo egua e data para auditoria)
                 cur.execute("""
-                    SELECT garanhao, dono_id, palhetas_gastas
+                    SELECT garanhao, dono_id, palhetas_gastas, egua, data_inseminacao
                     FROM inseminacoes WHERE id = %s
                 """, (insemination_id,))
                 old_data = cur.fetchone()
                 
                 if old_data:
-                    old_garanhao, old_dono_id, old_palhetas = old_data
+                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem = old_data
                     
                     # 2. Devolver palhetas antigas ao stock
                     cur.execute("""
@@ -1086,6 +1108,21 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
                 
                 conn.commit()
+
+                # 5. Registar auditoria
+                if old_data:
+                    registar_historico_edicao('inseminacoes', insemination_id, {
+                        'Égua': str(old_egua or '—'),
+                        'Garanhão': str(old_garanhao or '—'),
+                        'Palhetas': int(old_palhetas or 0),
+                        'Data': str(old_data_insem or ''),
+                    }, {
+                        'Égua': str(egua or '—'),
+                        'Garanhão': str(primeiro_registro.get("garanhao", '—')),
+                        'Palhetas': total_pal,
+                        'Data': str(data_inseminacao or ''),
+                    })
+
                 logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
                 
             else:
@@ -2089,6 +2126,26 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
 
             conn.commit()
             cur.close()
+
+            # 9. Registar auditoria (buscar nomes dos proprietários)
+            try:
+                with get_connection() as conn2:
+                    cur2 = conn2.cursor()
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (old_destino_id,))
+                    old_dest_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(novo_dest_id),))
+                    new_dest_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.close()
+                registar_historico_edicao('transferencias', transfer_id, {
+                    'Quantidade': old_quantidade,
+                    'Destino': str(old_dest_nome),
+                }, {
+                    'Quantidade': nova_quantidade_int,
+                    'Destino': str(new_dest_nome),
+                })
+            except Exception as ae:
+                logger.warning(f"Auditoria de transferência interna não registada: {ae}")
+
             atualizar_status_proprietarios()
             logger.info(f"✏️ Transferência interna ATUALIZADA: ID {transfer_id}")
             return True
@@ -2106,9 +2163,9 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
         with get_connection() as conn:
             cur = conn.cursor()
 
-            # 1. Carregar dados antigos
+            # 1. Carregar dados antigos completos
             cur.execute("""
-                SELECT estoque_id, proprietario_origem_id, quantidade
+                SELECT estoque_id, proprietario_origem_id, quantidade, destinatario_externo, tipo
                 FROM transferencias_externas WHERE id = %s
             """, (transfer_id,))
             old = cur.fetchone()
@@ -2116,7 +2173,7 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
                 st.error("Transferência não encontrada")
                 return False
 
-            old_estoque_id, old_origem_id, old_quantidade = old
+            old_estoque_id, old_origem_id, old_quantidade, old_destinatario, old_tipo = old
             old_quantidade = int(old_quantidade)
 
             # 2. Reverter: devolver palhetas ao lote de origem
@@ -2164,6 +2221,18 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
 
             conn.commit()
             cur.close()
+
+            # 6. Registar auditoria
+            registar_historico_edicao('transferencias_externas', transfer_id, {
+                'Quantidade': old_quantidade,
+                'Destinatário': str(old_destinatario or '—'),
+                'Tipo': str(old_tipo or '—'),
+            }, {
+                'Quantidade': nova_quantidade_int,
+                'Destinatário': str(novo_destinatario or '—'),
+                'Tipo': str(novo_tipo or '—'),
+            })
+
             atualizar_status_proprietarios()
             logger.info(f"✏️ Transferência externa ATUALIZADA: ID {transfer_id}")
             return True

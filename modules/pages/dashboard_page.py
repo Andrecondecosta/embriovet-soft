@@ -508,19 +508,93 @@ def run_dashboard_page(ctx: dict):
                             st.session_state[f'confirm_delete_{pending_delete["tipo"]}_{pending_delete["action_id"]}'] = False
                             st.rerun()
                 else:
+                    # Carregar histórico de auditoria em lote para todos os registos
+                    type_to_table = {
+                        'transfer_internal': 'transferencias',
+                        'transfer_external': 'transferencias_externas',
+                        'insemination': 'inseminacoes',
+                    }
+                    historico_map = {}
+                    try:
+                        audit_pairs = [
+                            (type_to_table[m['tipo']], m['action_id'])
+                            for m in activity_metadata
+                            if m['tipo'] in type_to_table and m['action_id']
+                        ]
+                        if audit_pairs:
+                            with get_connection() as conn_audit:
+                                cur_audit = conn_audit.cursor()
+                                cur_audit.execute("""
+                                    SELECT tabela_nome, record_id, dados_antigos, dados_novos,
+                                           utilizador_nome, data_alteracao
+                                    FROM historico_edicoes
+                                    WHERE (tabela_nome, record_id) IN %s
+                                    ORDER BY data_alteracao DESC
+                                """, (tuple(audit_pairs),))
+                                for row_a in cur_audit.fetchall():
+                                    tab, rec_id, ant, nov, user_a, dat_a = row_a
+                                    key_a = (tab, rec_id)
+                                    if key_a not in historico_map:
+                                        historico_map[key_a] = []
+                                    historico_map[key_a].append({
+                                        'dados_antigos': ant or {},
+                                        'dados_novos': nov or {},
+                                        'utilizador': user_a or '—',
+                                        'data': dat_a,
+                                    })
+                                cur_audit.close()
+                    except Exception as ae:
+                        logger.warning(f"Erro ao carregar auditoria no modal: {ae}")
+
                     # Mostrar lista de logs
                     st.markdown("Clique num registo para editar ou eliminar:")
                     st.markdown("---")
                     
                     for idx, metadata in enumerate(activity_metadata):
-                        # Colunas mais compactas: [9, 0.5, 0.5] = menos espaço
-                        col1, col2, col3 = st.columns([9, 0.5, 0.5])
+                        tabela_audit = type_to_table.get(metadata['tipo'])
+                        audit_entries = historico_map.get((tabela_audit, metadata['action_id']), [])
+                        has_audit = len(audit_entries) > 0
+
+                        # Layout: [info | auditoria | ✏️ | 🗑️]
+                        col1, col2, col3, col4 = st.columns([4.5, 5, 0.5, 0.5])
                         
                         with col1:
                             st.markdown(f"**{metadata['acao']}** · {fmt_ts(metadata['ts'])}")
                             st.caption(f"{metadata['detalhe']}")
                         
                         with col2:
+                            if has_audit:
+                                entry = audit_entries[0]  # Edição mais recente
+                                old_vals = entry['dados_antigos']
+                                new_vals = entry['dados_novos']
+                                diffs = []
+                                for campo in old_vals:
+                                    v_old = str(old_vals.get(campo, ''))
+                                    v_new = str(new_vals.get(campo, ''))
+                                    if v_old != v_new:
+                                        diffs.append(
+                                            f"<span style='color:#64748b'><b>{campo}:</b> "
+                                            f"<span style='text-decoration:line-through;color:#ef4444'>{v_old}</span>"
+                                            f" → <span style='color:#16a34a'>{v_new}</span></span>"
+                                        )
+                                diffs_html = "<br>".join(diffs) if diffs else "<span style='color:#64748b'>Sem alterações registadas</span>"
+                                data_edit = fmt_ts(entry['data'])
+                                user_edit = entry['utilizador']
+                                st.markdown(f"""
+                                    <div style="background:#f0fdf4;border-left:3px solid #22c55e;
+                                                border-radius:0 6px 6px 0;padding:7px 10px;font-size:.78rem;
+                                                line-height:1.6;">
+                                        <div style="font-weight:700;color:#15803d;margin-bottom:4px;font-size:.8rem;">
+                                            📋 Histórico de Edição
+                                        </div>
+                                        {diffs_html}
+                                        <div style="color:#94a3b8;margin-top:5px;font-size:.7rem;border-top:1px solid #dcfce7;padding-top:4px;">
+                                            Por <b>{user_edit}</b> · {data_edit}
+                                        </div>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                        
+                        with col3:
                             if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
                                        help="Editar", type="secondary"):
                                 tipo = metadata['tipo']
@@ -543,7 +617,7 @@ def run_dashboard_page(ctx: dict):
                                 st.session_state['show_logs_modal'] = False
                                 st.rerun()
                         
-                        with col3:
+                        with col4:
                             if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
                                        help="Eliminar", type="secondary"):
                                 st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
