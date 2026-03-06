@@ -102,7 +102,7 @@ def run_insemination_page(ctx):
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT i.id, i.garanhao, i.egua, i.dono_id, i.palhetas_gastas, 
-                           i.data_inseminacao, d.nome as proprietario_nome
+                           i.data_inseminacao, d.nome as proprietario_nome, i.observacoes
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.id = %s
@@ -116,8 +116,8 @@ def run_insemination_page(ctx):
                         'dono_id': row[3],
                         'palhetas_gastas': row[4],
                         'data_inseminacao': row[5],
-                        'observacoes': '',
-                        'proprietario_nome': row[6]
+                        'proprietario_nome': row[6],
+                        'observacoes': row[7] or '',
                     }
                     
                     # Pré-preencher estado
@@ -125,6 +125,8 @@ def run_insemination_page(ctx):
                         st.session_state['insem_egua'] = insemination_data['egua']
                     if 'insem_data' not in st.session_state:
                         st.session_state['insem_data'] = insemination_data['data_inseminacao']
+                    if 'insem_observacoes' not in st.session_state:
+                        st.session_state['insem_observacoes'] = insemination_data['observacoes']
                     st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
                     st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
                     
@@ -165,11 +167,13 @@ def run_insemination_page(ctx):
         if st.button(t("btn.ok"), type="primary", width="stretch"):
             # Limpar estado de edição
             st.session_state.pop('edit_insemination_id', None)
-            # Limpar outros estados
+            # Limpar outros estados (incluindo observacoes e data)
             st.session_state["insem_linhas"] = {}
             st.session_state["insem_egua"] = ""
             st.session_state["insem_garanhao_principal"] = None
             st.session_state["insem_prop_principal"] = None
+            st.session_state.pop("insem_observacoes", None)
+            st.session_state.pop("insem_data", None)
             for k in list(st.session_state.keys()):
                 if k.startswith("insem_modal_qtd_") or k.startswith("insem_step_") or k.startswith("insem_line_input_") or k.startswith("insem_modal_sel_"):
                     st.session_state.pop(k, None)
@@ -454,13 +458,20 @@ def run_insemination_page(ctx):
     
     st.markdown("---")
     
-    # 5. ÉGUA E DATA
+    # 5. ÉGUA, DATA E OBSERVAÇÕES
     render_zone_title(t("insemination.zone_details"), "insem-zone-title")
     c1, c2 = st.columns(2)
     with c1:
         egua = st.text_input(t("label.mare"), key="insem_egua")
     with c2:
         data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
+    
+    observacoes = st.text_area(
+        "Observações",
+        key="insem_observacoes",
+        placeholder="Notas adicionais sobre esta inseminação (opcional)...",
+        height=80,
+    )
     
     # RESUMO E BOTÃO FINAL
     total_palhetas = sum(int(v.get("qty", 0)) for v in linhas.values())
@@ -505,7 +516,8 @@ def run_insemination_page(ctx):
                 registros, 
                 data_insem, 
                 egua, 
-                insemination_data['id'] if edit_mode and insemination_data else None
+                insemination_data['id'] if edit_mode and insemination_data else None,
+                observacoes=observacoes or None
             )
             if ok:
                 # Limpar modo de edição

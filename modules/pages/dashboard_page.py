@@ -346,7 +346,7 @@ def run_dashboard_page(ctx: dict):
             cur.execute(
                 """
                 SELECT data_transferencia AS ts,
-                       '—' AS usuario,
+                       COALESCE(t.utilizador, '—') AS usuario,
                        CASE WHEN COALESCE(t.atualizado, FALSE) THEN '✏️ Transferência interna' ELSE 'Transferência interna' END AS acao,
                        'Qtd ' || t.quantidade || ' | ' || 
                        COALESCE(d1.nome, 'Origem ID ' || t.proprietario_origem_id) || ' → ' || 
@@ -362,7 +362,7 @@ def run_dashboard_page(ctx: dict):
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 UNION ALL
                 SELECT data_transferencia AS ts,
-                       '—' AS usuario,
+                       COALESCE(te.utilizador, '—') AS usuario,
                        CASE WHEN COALESCE(te.atualizado, FALSE) THEN '✏️ Transferência externa' ELSE 'Transferência externa' END AS acao,
                        'Qtd ' || te.quantidade || ' | ' || 
                        COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe,
@@ -376,11 +376,12 @@ def run_dashboard_page(ctx: dict):
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 UNION ALL
                 SELECT COALESCE(i.created_at, i.data_inseminacao::timestamp + interval '12 hours') AS ts,
-                       '—' AS usuario,
+                       COALESCE(i.utilizador, '—') AS usuario,
                        CASE WHEN COALESCE(i.atualizado, FALSE) THEN '✏️ Inseminação' ELSE 'Inseminação' END AS acao,
                        'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
                        COALESCE(d.nome, 'Proprietário ID ' || i.dono_id) || ' | ' ||
-                       i.palhetas_gastas || ' palhetas' AS detalhe,
+                       i.palhetas_gastas || ' palhetas' ||
+                       CASE WHEN i.observacoes IS NOT NULL AND i.observacoes != '' THEN ' | ' || i.observacoes ELSE '' END AS detalhe,
                        'insemination' AS tipo,
                        i.id AS action_id,
                        NULL::integer AS estoque_id,
