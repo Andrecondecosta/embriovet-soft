@@ -98,6 +98,42 @@ def run_transfer_page(ctx):
                         st.session_state['transfer_garanhao'] = transfer_data['garanhao']
                     if 'transfer_proprietario' not in st.session_state and transfer_data.get('origem_nome'):
                         st.session_state['transfer_proprietario'] = transfer_data['origem_nome']
+                    
+                    # Buscar informações do lote para pré-preencher
+                    cur.execute("""
+                        SELECT id, existencia_atual, data_embriovet, origem_externa,
+                               contentor_id, canister, andar
+                        FROM estoque_dono
+                        WHERE id = %s
+                    """, (transfer_data['estoque_id'],))
+                    
+                    lote = cur.fetchone()
+                    if lote and 'transfer_linhas' not in st.session_state:
+                        # Pré-preencher lotes selecionados
+                        st.session_state['transfer_linhas'] = {
+                            str(lote[0]): {
+                                'stock_id': lote[0],
+                                'garanhao': transfer_data['garanhao'],
+                                'ref': f"{lote[2] or lote[3]}",
+                                'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
+                                'max_disponivel': int(lote[1]) + transfer_data['quantidade'],  # Somar pois já foi transferido
+                                'qty': transfer_data['quantidade'],
+                                'dono_id': transfer_data['proprietario_origem_id'],
+                                'proprietario_nome': transfer_data['origem_nome']
+                            }
+                        }
+                    
+                    # Pré-preencher campos específicos por tipo
+                    if transfer_type == "transfer_external" and transfer_data:
+                        if 'transfer_destinatario_externo' not in st.session_state:
+                            st.session_state['transfer_destinatario_externo'] = transfer_data.get('destinatario_externo', '')
+                        if 'transfer_motivo' not in st.session_state:
+                            st.session_state['transfer_motivo'] = transfer_data.get('tipo', 'Venda')
+                        if 'transfer_observacoes' not in st.session_state:
+                            st.session_state['transfer_observacoes'] = transfer_data.get('observacoes', '')
+                    elif transfer_type == "transfer_internal" and transfer_data:
+                        if 'transfer_dest_interno' not in st.session_state:
+                            st.session_state['transfer_dest_interno'] = transfer_data.get('destino_nome', '')
                         
                 cur.close()
         except Exception as e:
