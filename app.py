@@ -1017,7 +1017,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             cur = conn.cursor()
             
             if insemination_id:
-                # MODO DE EDIÇÃO
+                # MODO DE EDIÇÃO - UPDATE
                 # 1. Carregar dados antigos
                 cur.execute("""
                     SELECT garanhao, dono_id, palhetas_gastas
@@ -1030,7 +1030,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     
                     # 2. Devolver palhetas antigas ao stock
                     cur.execute("""
-                        SELECT id FROM estoque_dono 
+                        SELECT id, existencia_atual FROM estoque_dono 
                         WHERE garanhao = %s AND dono_id = %s 
                         ORDER BY id DESC LIMIT 1
                     """, (old_garanhao, old_dono_id))
@@ -1039,9 +1039,9 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     if lote_exists:
                         cur.execute("""
                             UPDATE estoque_dono 
-                            SET existencia_atual = existencia_atual + %s
+                            SET existencia_atual = %s
                             WHERE id = %s
-                        """, (old_palhetas, lote_exists[0]))
+                        """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
                 
                 # 3. Atualizar inseminação
                 primeiro_registro = registros[0]
@@ -1086,9 +1086,10 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
                 
                 conn.commit()
-                logger.info(f"Inseminação atualizada: ID {insemination_id}")
+                logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
+                
             else:
-                # MODO DE CRIAÇÃO
+                # MODO DE CRIAÇÃO - INSERT
                 for reg in registros:
                     stock_id = to_py(reg.get("stock_id"))
                     palhetas = int(reg.get("palhetas", 0))
@@ -1130,7 +1131,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
                 
                 conn.commit()
-                logger.info(f"Inseminação registrada: {egua} - {total_pal} palhetas")
+                logger.info(f"✅ Inseminação registrada: {egua} - {total_pal} palhetas")
             
             cur.close()
             atualizar_status_proprietarios()
