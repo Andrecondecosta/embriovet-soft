@@ -347,7 +347,7 @@ def run_dashboard_page(ctx: dict):
                 """
                 SELECT data_transferencia AS ts,
                        '—' AS usuario,
-                       'Transferência interna' AS acao,
+                       CASE WHEN COALESCE(t.atualizado, FALSE) THEN '✏️ Transferência interna' ELSE 'Transferência interna' END AS acao,
                        'Qtd ' || t.quantidade || ' | ' || 
                        COALESCE(d1.nome, 'Origem ID ' || t.proprietario_origem_id) || ' → ' || 
                        COALESCE(d2.nome, 'Dest ID ' || t.proprietario_destino_id) AS detalhe,
@@ -363,7 +363,7 @@ def run_dashboard_page(ctx: dict):
                 UNION ALL
                 SELECT data_transferencia AS ts,
                        '—' AS usuario,
-                       'Transferência externa' AS acao,
+                       CASE WHEN COALESCE(te.atualizado, FALSE) THEN '✏️ Transferência externa' ELSE 'Transferência externa' END AS acao,
                        'Qtd ' || te.quantidade || ' | ' || 
                        COALESCE(d.nome, 'Origem desconhecida') || ' → ' || te.destinatario_externo AS detalhe,
                        'transfer_external' AS tipo,
@@ -377,7 +377,7 @@ def run_dashboard_page(ctx: dict):
                 UNION ALL
                 SELECT i.data_inseminacao AS ts,
                        '—' AS usuario,
-                       'Inseminação' AS acao,
+                       CASE WHEN COALESCE(i.atualizado, FALSE) THEN '✏️ Inseminação' ELSE 'Inseminação' END AS acao,
                        'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
                        COALESCE(d.nome, 'Proprietário ID ' || i.dono_id) || ' | ' ||
                        i.palhetas_gastas || ' palhetas' AS detalhe,

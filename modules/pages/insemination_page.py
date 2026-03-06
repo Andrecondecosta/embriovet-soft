@@ -98,7 +98,7 @@ def run_insemination_page(ctx):
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT i.id, i.garanhao, i.egua, i.dono_id, i.palhetas_gastas, 
-                           i.data_inseminacao, i.observacoes, d.nome as proprietario_nome
+                           i.data_inseminacao, d.nome as proprietario_nome
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.id = %s
@@ -112,8 +112,8 @@ def run_insemination_page(ctx):
                         'dono_id': row[3],
                         'palhetas_gastas': row[4],
                         'data_inseminacao': row[5],
-                        'observacoes': row[6],
-                        'proprietario_nome': row[7]
+                        'observacoes': '',
+                        'proprietario_nome': row[6]
                     }
                     
                     # Pré-preencher estado

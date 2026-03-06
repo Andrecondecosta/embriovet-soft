@@ -263,12 +263,19 @@ def run_transfer_page(ctx):
     def show_success_dialog():
         st.markdown(t("transfer.success_msg"))
         if st.button(t("btn.ok"), type="primary", width="stretch"):
+            # Limpar todo o estado de transferência (incluindo modo de edição)
+            st.session_state.pop('edit_transfer_id', None)
+            st.session_state.pop('edit_transfer_type', None)
             st.session_state["transfer_linhas"] = {}
             st.session_state["transfer_garanhao"] = None
             st.session_state["transfer_proprietario"] = None
             for k in list(st.session_state.keys()):
                 if k.startswith("transfer_step_") or k.startswith("transfer_modal_sel_"):
                     st.session_state.pop(k, None)
+            # Limpar chaves de pré-preenchimento do modo de edição
+            for k in ["transfer_tipo", "transfer_dest_interno", "transfer_dest_externo",
+                      "transfer_destinatario_externo", "transfer_motivo", "transfer_observacoes"]:
+                st.session_state.pop(k, None)
             st.session_state["transfer_show_success"] = False
             st.rerun()
 
@@ -634,25 +641,63 @@ def run_transfer_page(ctx):
                 elif muda_localizacao == t("transfer.new_location") and not contentor_id_destino:
                     st.error(t("transfer.error_no_container"))
                 else:
-                    # Executar transferência interna
-                    if not proprietario_destino:
-                        st.error("Por favor, selecione um proprietário de destino válido.")
-                        sucesso = False
+                    dest_id = int(proprietarios[proprietarios["nome"] == proprietario_destino]["id"].iloc[0])
+                    sucesso = True
+
+                    if edit_mode and transfer_data:
+                        # MODO EDIÇÃO: atualizar a transferência existente com os dados do 1.º lote
+                        linha = linhas_finais[0]
+                        stock_id = linha["stock_id"]
+                        qtd = linha["qty"]
+                        try:
+                            if muda_localizacao == t("transfer.new_location"):
+                                ok = atualizar_transferencia_interna(
+                                    transfer_data['id'], stock_id, dest_id, qtd,
+                                    contentor_id_destino, canister_destino, andar_destino
+                                )
+                            else:
+                                ok = atualizar_transferencia_interna(
+                                    transfer_data['id'], stock_id, dest_id, qtd
+                                )
+                            if not ok:
+                                sucesso = False
+                        except Exception as e:
+                            st.error(f"Erro ao atualizar transferência: {e}")
+                            sucesso = False
+
+                        # Linhas adicionais são tratadas como novas transferências
+                        for linha in linhas_finais[1:]:
+                            origem_id = linha["dono_id"]
+                            if origem_id == dest_id:
+                                st.error(f"⚠️ Não é possível transferir para o mesmo proprietário.")
+                                sucesso = False
+                                continue
+                            try:
+                                if muda_localizacao == t("transfer.new_location"):
+                                    ok = transferir_stock_interno_com_localizacao(
+                                        origem_id, dest_id, linha["stock_id"], linha["qty"],
+                                        contentor_id_destino, canister_destino, andar_destino
+                                    )
+                                else:
+                                    ok = transferir_stock_interno(linha["stock_id"], dest_id, linha["qty"])
+                                if not ok:
+                                    sucesso = False
+                            except Exception as e:
+                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
+                                sucesso = False
                     else:
-                        dest_id = proprietarios[proprietarios["nome"] == proprietario_destino]["id"].iloc[0]
-                        sucesso = True
+                        # MODO CRIAÇÃO: criar novas transferências
                         for linha in linhas_finais:
                             origem_id = linha["dono_id"]
                             stock_id = linha["stock_id"]
                             qtd = linha["qty"]
-                            
+
                             if origem_id == dest_id:
                                 st.error(f"⚠️ Não é possível transferir o lote **{linha['ref']}** para o mesmo proprietário (**{linha['proprietario_nome']}**). Por favor, selecione um proprietário diferente.")
                                 sucesso = False
                                 continue
-                            
+
                             try:
-                                # Se muda localização, passar novos parâmetros
                                 if muda_localizacao == t("transfer.new_location"):
                                     transferir_stock_interno_com_localizacao(
                                         origem_id, dest_id, stock_id, qtd,
@@ -663,7 +708,7 @@ def run_transfer_page(ctx):
                             except Exception as e:
                                 st.error(f"Erro ao transferir {linha['ref']}: {e}")
                                 sucesso = False
-                    
+
                     if sucesso:
                         # Limpar modo de edição
                         st.session_state.pop('edit_transfer_id', None)
@@ -700,18 +745,45 @@ def run_transfer_page(ctx):
                 elif not destinatario_externo:
                     st.error(t("transfer.error_no_recipient"))
                 else:
-                    # Executar transferência externa
                     sucesso = True
-                    for linha in linhas_finais:
-                        stock_id = linha["stock_id"]
-                        qtd = linha["qty"]
-                        
+
+                    if edit_mode and transfer_data:
+                        # MODO EDIÇÃO: atualizar a transferência externa existente
+                        linha = linhas_finais[0]
                         try:
-                            transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
+                            ok = atualizar_transferencia_externa(
+                                transfer_data['id'], linha["stock_id"], destinatario_externo,
+                                linha["qty"], motivo, observacoes
+                            )
+                            if not ok:
+                                sucesso = False
                         except Exception as e:
-                            st.error(f"Erro ao transferir {linha['ref']}: {e}")
+                            st.error(f"Erro ao atualizar transferência: {e}")
                             sucesso = False
-                    
+
+                        # Linhas adicionais são tratadas como novas transferências
+                        for linha in linhas_finais[1:]:
+                            try:
+                                ok = transferir_stock_externo(
+                                    linha["stock_id"], destinatario_externo,
+                                    linha["qty"], motivo, observacoes
+                                )
+                                if not ok:
+                                    sucesso = False
+                            except Exception as e:
+                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
+                                sucesso = False
+                    else:
+                        # MODO CRIAÇÃO: criar novas transferências externas
+                        for linha in linhas_finais:
+                            stock_id = linha["stock_id"]
+                            qtd = linha["qty"]
+                            try:
+                                transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
+                            except Exception as e:
+                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
+                                sucesso = False
+
                     if sucesso:
                         # Limpar modo de edição
                         st.session_state.pop('edit_transfer_id', None)
