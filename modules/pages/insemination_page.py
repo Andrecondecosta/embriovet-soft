@@ -157,6 +157,9 @@ def run_insemination_page(ctx):
     def show_success_dialog():
         st.markdown(t("insemination.success_msg"))
         if st.button(t("btn.ok"), type="primary", width="stretch"):
+            # Limpar estado de edição
+            st.session_state.pop('edit_insemination_id', None)
+            # Limpar outros estados
             st.session_state["insem_linhas"] = {}
             st.session_state["insem_egua"] = ""
             st.session_state["insem_garanhao_principal"] = None
