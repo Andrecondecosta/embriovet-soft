@@ -55,6 +55,11 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
   - Eliminar: confirma e reverte dados (devolve palhetas ao stock)
   - Editar: navega para formulário com dados pré-preenchidos
   - Registos editados exibem prefixo "✏️" na coluna "Ação"
+  - **Painel de Auditoria** — Março 2026:
+    - Layout [4.5 | 5 | 0.5 | 0.5] no modal: col2 mostra histórico de edição
+    - Campos alterados mostrados com valor anterior (riscado vermelho) → novo (verde)
+    - Indica utilizador e data da edição
+    - Baseado na tabela `historico_edicoes` (migration 008)
 
 ### Navegação Sidebar (`ui_kit.py → render_sidebar`)
 - Botões (não radio) para ambos os menus
