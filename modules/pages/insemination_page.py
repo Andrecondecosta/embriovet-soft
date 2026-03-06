@@ -121,6 +121,32 @@ def run_insemination_page(ctx):
                         st.session_state['insem_egua'] = insemination_data['egua']
                     st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
                     st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
+                    
+                    # Buscar lotes usados nesta inseminação
+                    # Como não temos histórico dos lotes específicos, vamos buscar lotes disponíveis do mesmo garanhão/proprietário
+                    cur.execute("""
+                        SELECT id, existencia_atual, data_embriovet, origem_externa, 
+                               contentor_id, canister, andar
+                        FROM estoque_dono
+                        WHERE garanhao = %s AND dono_id = %s AND existencia_atual > 0
+                        ORDER BY id DESC
+                        LIMIT 1
+                    """, (insemination_data['garanhao'], insemination_data['dono_id']))
+                    
+                    lote = cur.fetchone()
+                    if lote and 'insem_linhas' not in st.session_state:
+                        st.session_state['insem_linhas'] = {
+                            str(lote[0]): {
+                                'stock_id': lote[0],
+                                'garanhao': insemination_data['garanhao'],
+                                'ref': f"{lote[2] or lote[3]}",
+                                'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
+                                'max_disponivel': int(lote[1]),
+                                'qty': insemination_data['palhetas_gastas'],
+                                'dono_id': insemination_data['dono_id'],
+                                'proprietario_nome': insemination_data['proprietario_nome']
+                            }
+                        }
                 cur.close()
         except Exception as e:
             st.error(f"Erro ao carregar dados da inseminação: {e}")
