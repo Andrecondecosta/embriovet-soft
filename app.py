@@ -374,6 +374,28 @@ def carregar_proprietarios(apenas_ativos=False):
         st.error(f"Erro ao carregar proprietarios: {e}")
         return pd.DataFrame()
 
+
+def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
+    """Regista uma edição no histórico de auditoria"""
+    try:
+        utilizador = st.session_state.get('user', {}).get('username', '—')
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO historico_edicoes (tabela_nome, record_id, dados_antigos, dados_novos, utilizador_nome)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                tabela, record_id,
+                json.dumps(dados_antigos, default=str),
+                json.dumps(dados_novos, default=str),
+                utilizador
+            ))
+            conn.commit()
+            cur.close()
+    except Exception as e:
+        logger.error(f"Erro ao registar histórico de edição: {e}")
+
+
 def atualizar_status_proprietarios():
     """
     Desativa automaticamente proprietários quando stock chega a 0.
@@ -1017,20 +1039,20 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             cur = conn.cursor()
             
             if insemination_id:
-                # MODO DE EDIÇÃO
-                # 1. Carregar dados antigos
+                # MODO DE EDIÇÃO - UPDATE
+                # 1. Carregar dados antigos (incluindo egua e data para auditoria)
                 cur.execute("""
-                    SELECT garanhao, dono_id, palhetas_gastas
+                    SELECT garanhao, dono_id, palhetas_gastas, egua, data_inseminacao
                     FROM inseminacoes WHERE id = %s
                 """, (insemination_id,))
                 old_data = cur.fetchone()
                 
                 if old_data:
-                    old_garanhao, old_dono_id, old_palhetas = old_data
+                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem = old_data
                     
                     # 2. Devolver palhetas antigas ao stock
                     cur.execute("""
-                        SELECT id FROM estoque_dono 
+                        SELECT id, existencia_atual FROM estoque_dono 
                         WHERE garanhao = %s AND dono_id = %s 
                         ORDER BY id DESC LIMIT 1
                     """, (old_garanhao, old_dono_id))
@@ -1039,16 +1061,16 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     if lote_exists:
                         cur.execute("""
                             UPDATE estoque_dono 
-                            SET existencia_atual = existencia_atual + %s
+                            SET existencia_atual = %s
                             WHERE id = %s
-                        """, (old_palhetas, lote_exists[0]))
+                        """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
                 
-                # 3. Atualizar inseminação
+                # 3. Atualizar inseminação e marcar como editada
                 primeiro_registro = registros[0]
                 cur.execute("""
                     UPDATE inseminacoes
                     SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
-                        egua = %s, palhetas_gastas = %s
+                        egua = %s, palhetas_gastas = %s, atualizado = TRUE
                     WHERE id = %s
                 """, (
                     to_py(primeiro_registro.get("garanhao")),
@@ -1086,9 +1108,25 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
                 
                 conn.commit()
-                logger.info(f"Inseminação atualizada: ID {insemination_id}")
+
+                # 5. Registar auditoria
+                if old_data:
+                    registar_historico_edicao('inseminacoes', insemination_id, {
+                        'Égua': str(old_egua or '—'),
+                        'Garanhão': str(old_garanhao or '—'),
+                        'Palhetas': int(old_palhetas or 0),
+                        'Data': str(old_data_insem or ''),
+                    }, {
+                        'Égua': str(egua or '—'),
+                        'Garanhão': str(primeiro_registro.get("garanhao", '—')),
+                        'Palhetas': total_pal,
+                        'Data': str(data_inseminacao or ''),
+                    })
+
+                logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
+                
             else:
-                # MODO DE CRIAÇÃO
+                # MODO DE CRIAÇÃO - INSERT
                 for reg in registros:
                     stock_id = to_py(reg.get("stock_id"))
                     palhetas = int(reg.get("palhetas", 0))
@@ -1130,7 +1168,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
                 
                 conn.commit()
-                logger.info(f"Inseminação registrada: {egua} - {total_pal} palhetas")
+                logger.info(f"✅ Inseminação registrada: {egua} - {total_pal} palhetas")
             
             cur.close()
             atualizar_status_proprietarios()
@@ -1966,6 +2004,244 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
 
 # Alias para compatibilidade
 transferir_stock_externo = transferir_palhetas_externo
+
+
+def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, nova_quantidade,
+                                     contentor_id_novo=None, canister_novo=None, andar_novo=None):
+    """Atualiza uma transferência interna existente revertendo a antiga e aplicando a nova"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+
+            # 1. Carregar dados antigos da transferência
+            cur.execute("""
+                SELECT estoque_id, proprietario_origem_id, proprietario_destino_id, quantidade
+                FROM transferencias WHERE id = %s
+            """, (transfer_id,))
+            old = cur.fetchone()
+            if not old:
+                st.error("Transferência não encontrada")
+                return False
+
+            old_estoque_id, old_origem_id, old_destino_id, old_quantidade = old
+            old_quantidade = int(old_quantidade)
+
+            # 2. Reverter: devolver palhetas ao lote de origem
+            cur.execute("""
+                UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s
+            """, (old_quantidade, old_estoque_id))
+
+            # 3. Reverter: remover palhetas do destino (procurar lote do destino com mesmo garanhão)
+            cur.execute("""
+                SELECT id, existencia_atual FROM estoque_dono
+                WHERE dono_id = %s AND garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s)
+                ORDER BY id DESC LIMIT 1
+            """, (old_destino_id, old_estoque_id))
+            lote_dest = cur.fetchone()
+            if lote_dest:
+                dest_lote_id, dest_exist = lote_dest
+                nova_exist_dest = int(dest_exist) - old_quantidade
+                if nova_exist_dest <= 0:
+                    cur.execute("DELETE FROM estoque_dono WHERE id = %s", (dest_lote_id,))
+                else:
+                    cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s",
+                                (nova_exist_dest, dest_lote_id))
+
+            # 4. Carregar dados do novo lote de origem
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado,
+                       dose, observacoes, cor, contentor_id, canister, andar
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(novo_estoque_id),))
+            origem = cur.fetchone()
+            if not origem:
+                st.error("Lote de origem não encontrado")
+                return False
+
+            (garanhao, prop_orig_id, exist_atual, data_emb, orig_ext,
+             qual, conc, mot, local, cert, dose, obs, cor, cont_id, can, andar) = origem
+
+            nova_quantidade_int = int(nova_quantidade)
+            exist_atual_int = int(exist_atual or 0)
+
+            if nova_quantidade_int <= 0:
+                st.error(t("error.qty_positive"))
+                return False
+
+            if nova_quantidade_int > exist_atual_int:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual_int}")
+                return False
+
+            # 5. Deduzir do novo lote de origem
+            cur.execute("""
+                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s
+            """, (nova_quantidade_int, to_py(novo_estoque_id)))
+
+            # 6. Determinar localização final
+            final_cont = to_py(contentor_id_novo) if contentor_id_novo else to_py(cont_id)
+            final_can = to_py(canister_novo) if canister_novo else to_py(can)
+            final_andar = to_py(andar_novo) if andar_novo else to_py(andar)
+
+            # 7. Verificar se já existe lote do novo destino
+            cur.execute("""
+                SELECT id FROM estoque_dono
+                WHERE garanhao = %s AND dono_id = %s AND id != %s
+                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
+                AND COALESCE(canister, 0) = COALESCE(%s, 0)
+                AND COALESCE(andar, 0) = COALESCE(%s, 0)
+                LIMIT 1
+            """, (to_py(garanhao), to_py(novo_dest_id), to_py(novo_estoque_id),
+                  final_cont, final_can, final_andar))
+            lote_destino = cur.fetchone()
+
+            if lote_destino:
+                cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s",
+                            (nova_quantidade_int, lote_destino[0]))
+            else:
+                cur.execute("""
+                    INSERT INTO estoque_dono (
+                        garanhao, dono_id, data_embriovet, origem_externa,
+                        palhetas_produzidas, qualidade, concentracao, motilidade,
+                        local_armazenagem, certificado, dose, observacoes,
+                        quantidade_inicial, existencia_atual, cor,
+                        contentor_id, canister, andar
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_py(garanhao), to_py(novo_dest_id), to_py(data_emb), to_py(orig_ext),
+                    nova_quantidade_int, to_py(qual), to_py(conc), to_py(mot),
+                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
+                    nova_quantidade_int, nova_quantidade_int, to_py(cor),
+                    final_cont, final_can, final_andar
+                ))
+
+            # 8. Atualizar registo de transferência e marcar como editado
+            cur.execute("""
+                UPDATE transferencias
+                SET estoque_id = %s, proprietario_origem_id = %s, proprietario_destino_id = %s,
+                    quantidade = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE
+                WHERE id = %s
+            """, (to_py(novo_estoque_id), to_py(prop_orig_id), to_py(novo_dest_id),
+                  nova_quantidade_int, transfer_id))
+
+            conn.commit()
+            cur.close()
+
+            # 9. Registar auditoria (buscar nomes dos proprietários)
+            try:
+                with get_connection() as conn2:
+                    cur2 = conn2.cursor()
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (old_destino_id,))
+                    old_dest_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(novo_dest_id),))
+                    new_dest_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.close()
+                registar_historico_edicao('transferencias', transfer_id, {
+                    'Quantidade': old_quantidade,
+                    'Destino': str(old_dest_nome),
+                }, {
+                    'Quantidade': nova_quantidade_int,
+                    'Destino': str(new_dest_nome),
+                })
+            except Exception as ae:
+                logger.warning(f"Auditoria de transferência interna não registada: {ae}")
+
+            atualizar_status_proprietarios()
+            logger.info(f"✏️ Transferência interna ATUALIZADA: ID {transfer_id}")
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao atualizar transferência interna: {e}")
+        st.error(f"Erro ao atualizar transferência: {e}")
+        return False
+
+
+def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinatario,
+                                     nova_quantidade, novo_tipo, novas_obs):
+    """Atualiza uma transferência externa existente revertendo a antiga e aplicando a nova"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+
+            # 1. Carregar dados antigos completos
+            cur.execute("""
+                SELECT estoque_id, proprietario_origem_id, quantidade, destinatario_externo, tipo
+                FROM transferencias_externas WHERE id = %s
+            """, (transfer_id,))
+            old = cur.fetchone()
+            if not old:
+                st.error("Transferência não encontrada")
+                return False
+
+            old_estoque_id, old_origem_id, old_quantidade, old_destinatario, old_tipo = old
+            old_quantidade = int(old_quantidade)
+
+            # 2. Reverter: devolver palhetas ao lote de origem
+            cur.execute("""
+                UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s
+            """, (old_quantidade, old_estoque_id))
+
+            # 3. Carregar dados do novo lote de origem
+            cur.execute("""
+                SELECT dono_id, existencia_atual, garanhao
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(novo_estoque_id),))
+            origem = cur.fetchone()
+            if not origem:
+                st.error("Lote de origem não encontrado")
+                return False
+
+            prop_orig_id, exist_atual, garanhao = origem
+            nova_quantidade_int = int(nova_quantidade)
+            exist_atual_int = int(exist_atual or 0)
+
+            if nova_quantidade_int <= 0:
+                st.error(t("error.qty_positive"))
+                return False
+
+            if nova_quantidade_int > exist_atual_int:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual_int}")
+                return False
+
+            # 4. Deduzir do novo lote de origem
+            cur.execute("""
+                UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s
+            """, (nova_quantidade_int, to_py(novo_estoque_id)))
+
+            # 5. Atualizar registo e marcar como editado
+            cur.execute("""
+                UPDATE transferencias_externas
+                SET estoque_id = %s, proprietario_origem_id = %s, garanhao = %s,
+                    destinatario_externo = %s, quantidade = %s, tipo = %s,
+                    observacoes = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE
+                WHERE id = %s
+            """, (to_py(novo_estoque_id), to_py(prop_orig_id), to_py(garanhao),
+                  to_py(novo_destinatario), nova_quantidade_int,
+                  to_py(novo_tipo), to_py(novas_obs), transfer_id))
+
+            conn.commit()
+            cur.close()
+
+            # 6. Registar auditoria
+            registar_historico_edicao('transferencias_externas', transfer_id, {
+                'Quantidade': old_quantidade,
+                'Destinatário': str(old_destinatario or '—'),
+                'Tipo': str(old_tipo or '—'),
+            }, {
+                'Quantidade': nova_quantidade_int,
+                'Destinatário': str(novo_destinatario or '—'),
+                'Tipo': str(novo_tipo or '—'),
+            })
+
+            atualizar_status_proprietarios()
+            logger.info(f"✏️ Transferência externa ATUALIZADA: ID {transfer_id}")
+            return True
+
+    except Exception as e:
+        logger.error(f"Erro ao atualizar transferência externa: {e}")
+        st.error(f"Erro ao atualizar transferência: {e}")
+        return False
+
 
 # ------------------------------------------------------------
 # 🖼️ Interface Streamlit

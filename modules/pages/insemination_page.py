@@ -9,6 +9,10 @@ def run_insemination_page(ctx):
     st.header(t("insemination.title"))
     inject_stepper_css()
 
+    # Mostrar aviso se estiver em modo de edição
+    if st.session_state.get('edit_insemination_id'):
+        st.info("📝 **Modo de Edição** - Modifique os dados e clique em 'Atualizar Inseminação'")
+
     st.markdown(
         """
         <style>
@@ -98,7 +102,7 @@ def run_insemination_page(ctx):
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT i.id, i.garanhao, i.egua, i.dono_id, i.palhetas_gastas, 
-                           i.data_inseminacao, i.observacoes, d.nome as proprietario_nome
+                           i.data_inseminacao, d.nome as proprietario_nome
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.id = %s
@@ -112,13 +116,15 @@ def run_insemination_page(ctx):
                         'dono_id': row[3],
                         'palhetas_gastas': row[4],
                         'data_inseminacao': row[5],
-                        'observacoes': row[6],
-                        'proprietario_nome': row[7]
+                        'observacoes': '',
+                        'proprietario_nome': row[6]
                     }
                     
                     # Pré-preencher estado
                     if 'insem_egua' not in st.session_state:
                         st.session_state['insem_egua'] = insemination_data['egua']
+                    if 'insem_data' not in st.session_state:
+                        st.session_state['insem_data'] = insemination_data['data_inseminacao']
                     st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
                     st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
                     
@@ -157,6 +163,9 @@ def run_insemination_page(ctx):
     def show_success_dialog():
         st.markdown(t("insemination.success_msg"))
         if st.button(t("btn.ok"), type="primary", width="stretch"):
+            # Limpar estado de edição
+            st.session_state.pop('edit_insemination_id', None)
+            # Limpar outros estados
             st.session_state["insem_linhas"] = {}
             st.session_state["insem_egua"] = ""
             st.session_state["insem_garanhao_principal"] = None
