@@ -62,9 +62,14 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
     - Transferências: captura Quantidade, Destino / Destinatário, Tipo
     - Indica utilizador e data da edição
     - Baseado na tabela `historico_edicoes` (migration 008)
-  - **Ordenação correcta de inseminações** (migration 009: `created_at TIMESTAMP`)
-    - Inseminações ordenam por timestamp real (não só por data à meia-noite)
-    - Aparecem correctamente intercaladas com as transferências no log
+  - **Campo Observações nas Inseminações** — Março 2026:
+    - Textarea "Observações" adicionada ao formulário de inseminação
+    - Observações aparecem no Detalhe da ATIVIDADE RECENTE e no audit
+    - Pré-preenchidas em modo de edição
+  - **Utilizador nos Logs** — Março 2026:
+    - Colunas `utilizador` adicionadas a `inseminacoes`, `transferencias`, `transferencias_externas` (migration 010)
+    - Novos registos guardam o nome do utilizador autenticado
+    - Bug corrigido: `st.session_state.get('user',{}).get('username')` em 8 locais
 
 ### Navegação Sidebar (`ui_kit.py → render_sidebar`)
 - Botões (não radio) para ambos os menus
