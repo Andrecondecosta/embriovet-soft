@@ -382,17 +382,6 @@ def run_insemination_page(ctx):
             if st.button(t("btn.close"), key="insem_modal_cancelar", width="stretch"):
                 st.rerun()
 
-    # DEBUG TEMPORÁRIO - remover após diagnóstico
-    if st.session_state.get('edit_insemination_id'):
-        import json
-        debug_info = {
-            'edit_id': st.session_state.get('edit_insemination_id'),
-            'insem_linhas': str(st.session_state.get('insem_linhas', 'NOT SET')),
-            'insem_garanhao_principal': st.session_state.get('insem_garanhao_principal'),
-            'insem_prop_principal': st.session_state.get('insem_prop_principal'),
-        }
-        st.caption(f"🔍 DEBUG: {json.dumps(debug_info, default=str)[:500]}")
-
     # PÁGINA PRINCIPAL - NOVO FLUXO
     render_zone_title(t("insemination.zone_selection"), "insem-zone-title")
     

@@ -90,7 +90,8 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 ### Inseminações (`insemination_page.py`)
 - Fluxo sequencial: Cavalo → Proprietário → Lotes → Quantidade
 - Detalhes de lote com cor e concentração
-- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche égua, garanhão, proprietário, data; botão "Atualizar" faz UPDATE no BD
+- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche égua, garanhão, proprietário, data, **lote específico (estoque_id) e nº de palhetas**; botão "Atualizar" faz UPDATE no BD com ajuste correto de stock (devolve antigas, desconta novas)
+- **Testado e verificado** — iteration_26: 16/16 testes passaram (pré-preenchimento do lote, ajuste de stock, auditoria, utiliz.='admin')
 
 ### Migrações DB (`migrations/`)
 - `007_add_atualizado_columns.sql`: Adiciona coluna `atualizado BOOLEAN DEFAULT FALSE` a `inseminacoes`, `transferencias` e `transferencias_externas`
@@ -124,6 +125,9 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - **Gestão de Logs:** Funcional — editar/eliminar transferências e inseminações
 
 ## Backlog / Próximas Tarefas
+
+### P0 — Verificação completa (iteration_26 — 16/16 PASS)
+- [x] Edit Inseminação com Lote de Sémen — pré-preenchimento, ajuste stock, auditoria
 
 ### P1 — Próximas
 - [ ] Completar página "Definições": preview do logo em tempo real + painel i18n
