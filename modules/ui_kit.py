@@ -735,7 +735,7 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
     for item in menu_principal:
         is_active = current_page == item
         btn_style = "primary" if is_active else "secondary"
-        if st.sidebar.button(item, key=f"_nav_pri_{item}", use_container_width=True, type=btn_style):
+        if st.sidebar.button(item, key=f"_nav_pri_{item}", width="stretch", type=btn_style):
             st.session_state["_nav_last_active"] = item
             st.session_state["aba_selecionada"] = item
             st.rerun()
@@ -748,7 +748,7 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
                 is_active = current_page == item
                 label = f"▶ {item}" if is_active else item
                 btn_type = "primary" if is_active else "secondary"
-                if st.button(label, key=f"_nav_sec_{item}", use_container_width=True, type=btn_type):
+                if st.button(label, key=f"_nav_sec_{item}", width="stretch", type=btn_type):
                     st.session_state["_nav_last_active"] = item
                     st.session_state["aba_selecionada"] = item
                     st.rerun()

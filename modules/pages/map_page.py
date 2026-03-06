@@ -228,7 +228,7 @@ def run_map_page(ctx: dict):
                 unsafe_allow_html=True,
             )
             st.markdown("")
-            if st.button("+ Adicionar Primeiro Contentor", type="primary", use_container_width=True):
+            if st.button("+ Adicionar Primeiro Contentor", type="primary", width="stretch"):
                 st.session_state['modal_novo_contentor'] = True
                 st.rerun()
     else:
@@ -432,30 +432,30 @@ def run_map_page(ctx: dict):
                 if is_mobile:
                     btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                     with btn_m1:
-                        criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", use_container_width=True)
+                        criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", width="stretch")
                     with btn_m2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", use_container_width=True)
+                            salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", use_container_width=True)
+                            ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", width="stretch")
                     with btn_m3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", use_container_width=True)
+                            cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", width="stretch")
                 else:
                     bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
                     with bar_btn1:
-                        criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", use_container_width=True)
+                        criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
                     with bar_btn2:
                         if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", use_container_width=True)
+                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", width="stretch")
                         else:
-                            ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", use_container_width=True)
+                            ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", width="stretch")
                     with bar_btn3:
                         if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", use_container_width=True)
+                            cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", width="stretch")
                     with bar_btn4:
                         if not st.session_state["mapa_modo_edicao"]:
-                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", use_container_width=True, help="Distribui todos os contentores em grelha automática")
+                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
 
             if criar_novo:
                 st.session_state['modal_novo_contentor'] = True

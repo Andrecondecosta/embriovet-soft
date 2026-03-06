@@ -375,7 +375,7 @@ def run_dashboard_page(ctx: dict):
                 FROM transferencias_externas te
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 UNION ALL
-                SELECT i.data_inseminacao AS ts,
+                SELECT COALESCE(i.created_at, i.data_inseminacao::timestamp + interval '12 hours') AS ts,
                        '—' AS usuario,
                        CASE WHEN COALESCE(i.atualizado, FALSE) THEN '✏️ Inseminação' ELSE 'Inseminação' END AS acao,
                        'Égua ' || i.egua || ' | ' || i.garanhao || ' | ' || 
@@ -487,7 +487,7 @@ def run_dashboard_page(ctx: dict):
                     
                     col_confirm1, col_confirm2, col_confirm3 = st.columns([1, 1, 2])
                     with col_confirm1:
-                        if st.button("✅ Sim, eliminar", type="primary", use_container_width=True):
+                        if st.button("✅ Sim, eliminar", type="primary", width="stretch"):
                             sucesso = reverter_acao(
                                 pending_delete['tipo'], 
                                 pending_delete['action_id'], 
@@ -504,7 +504,7 @@ def run_dashboard_page(ctx: dict):
                             else:
                                 st.error("❌ Erro ao reverter ação")
                     with col_confirm2:
-                        if st.button("❌ Cancelar", use_container_width=True):
+                        if st.button("❌ Cancelar", width="stretch"):
                             st.session_state[f'confirm_delete_{pending_delete["tipo"]}_{pending_delete["action_id"]}'] = False
                             st.rerun()
                 else:
@@ -626,7 +626,7 @@ def run_dashboard_page(ctx: dict):
                         st.markdown("---")
                     
                     st.markdown("")
-                    if st.button("Fechar", use_container_width=True):
+                    if st.button("Fechar", width="stretch"):
                         st.session_state['show_logs_modal'] = False
                         st.rerun()
             
@@ -638,18 +638,18 @@ def run_dashboard_page(ctx: dict):
     st.markdown(f"<div class='dash-section-title'>{t('dashboard.actions')}</div>", unsafe_allow_html=True)
     a1, a2, a3, a4 = st.columns(4)
     with a1:
-        if st.button(t("dashboard.action.new_insem"), use_container_width=True):
+        if st.button(t("dashboard.action.new_insem"), width="stretch"):
             st.session_state['aba_selecionada'] = t("menu.register_insemination")
             st.rerun()
     with a2:
-        if st.button(t("dashboard.action.new_transfer"), use_container_width=True):
+        if st.button(t("dashboard.action.new_transfer"), width="stretch"):
             st.session_state['aba_selecionada'] = t("menu.transfers")
             st.rerun()
     with a3:
-        if st.button(t("dashboard.action.import"), use_container_width=True):
+        if st.button(t("dashboard.action.import"), width="stretch"):
             st.session_state['aba_selecionada'] = t("menu.import")
             st.rerun()
     with a4:
-        if st.button(t("dashboard.action.map"), use_container_width=True):
+        if st.button(t("dashboard.action.map"), width="stretch"):
             st.session_state['aba_selecionada'] = t("menu.map")
             st.rerun()

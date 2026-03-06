@@ -58,8 +58,13 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
   - **Painel de Auditoria** — Março 2026:
     - Layout [4.5 | 5 | 0.5 | 0.5] no modal: col2 mostra histórico de edição
     - Campos alterados mostrados com valor anterior (riscado vermelho) → novo (verde)
+    - Inseminações: captura Égua, Garanhão, Palhetas, Data, Protocolo, Proprietário
+    - Transferências: captura Quantidade, Destino / Destinatário, Tipo
     - Indica utilizador e data da edição
     - Baseado na tabela `historico_edicoes` (migration 008)
+  - **Ordenação correcta de inseminações** (migration 009: `created_at TIMESTAMP`)
+    - Inseminações ordenam por timestamp real (não só por data à meia-noite)
+    - Aparecem correctamente intercaladas com as transferências no log
 
 ### Navegação Sidebar (`ui_kit.py → render_sidebar`)
 - Botões (não radio) para ambos os menus

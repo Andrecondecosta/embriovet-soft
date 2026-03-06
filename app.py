@@ -1040,15 +1040,19 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             
             if insemination_id:
                 # MODO DE EDIÇÃO - UPDATE
-                # 1. Carregar dados antigos (incluindo egua e data para auditoria)
+                # 1. Carregar dados antigos (incluindo egua, data e protocolo para auditoria)
                 cur.execute("""
-                    SELECT garanhao, dono_id, palhetas_gastas, egua, data_inseminacao
-                    FROM inseminacoes WHERE id = %s
+                    SELECT i.garanhao, i.dono_id, i.palhetas_gastas, i.egua,
+                           i.data_inseminacao, i.protocolo,
+                           d.nome AS dono_nome
+                    FROM inseminacoes i
+                    LEFT JOIN dono d ON i.dono_id = d.id
+                    WHERE i.id = %s
                 """, (insemination_id,))
                 old_data = cur.fetchone()
                 
                 if old_data:
-                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem = old_data
+                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome = old_data
                     
                     # 2. Devolver palhetas antigas ao stock
                     cur.execute("""
@@ -1109,18 +1113,28 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                 
                 conn.commit()
 
-                # 5. Registar auditoria
+                # 5. Registar auditoria com todos os campos relevantes
                 if old_data:
+                    # Obter nome do novo proprietário
+                    cur2 = conn.cursor()
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(primeiro_registro.get("dono_id")),))
+                    new_dono_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.close()
+
                     registar_historico_edicao('inseminacoes', insemination_id, {
                         'Égua': str(old_egua or '—'),
                         'Garanhão': str(old_garanhao or '—'),
                         'Palhetas': int(old_palhetas or 0),
                         'Data': str(old_data_insem or ''),
+                        'Protocolo': str(old_protocolo or '—'),
+                        'Proprietário': str(old_dono_nome or '—'),
                     }, {
                         'Égua': str(egua or '—'),
                         'Garanhão': str(primeiro_registro.get("garanhao", '—')),
                         'Palhetas': total_pal,
                         'Data': str(data_inseminacao or ''),
+                        'Protocolo': str(primeiro_registro.get("protocolo", '—')),
+                        'Proprietário': str(new_dono_nome or '—'),
                     })
 
                 logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
@@ -2481,7 +2495,7 @@ def mostrar_tela_login(app_settings):
             submitted = st.form_submit_button(
                 t("auth.login"),
                 type="primary",
-                use_container_width=True
+                width="stretch"
             )
             
             if submitted:
@@ -2936,7 +2950,7 @@ elif aba == t("menu.add_stock"):
             # Botão + fora do form (Alinhado à direita)
             col_act1, col_act2 = st.columns([6, 2])
             with col_act2:
-                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), use_container_width=True):
+                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), width="stretch"):
                     modal_adicionar_proprietario()
             
             with st.form("novo_stock"):
@@ -3027,7 +3041,7 @@ elif aba == t("menu.add_stock"):
                 observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"), label_visibility="collapsed")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                submitted = st.form_submit_button(t("btn.save"), type="primary", use_container_width=True)
+                submitted = st.form_submit_button(t("btn.save"), type="primary", width="stretch")
 
                 if submitted:
                     palhetas_int = int(to_py(palhetas) or 0)
