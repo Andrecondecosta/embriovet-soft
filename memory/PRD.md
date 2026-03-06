@@ -49,6 +49,12 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - **Gráficos Altair**: Palhetas por Contentor + Palhetas por Proprietário
 - Tabela de actividade recente (transferências + inseminações)
 - Quick Actions (Nova Inseminação, Nova Transferência, Import, Ver Mapa)
+- **Gestão de Logs (Admin)** — Março 2026:
+  - Botão ✏️ junto a "ATIVIDADE RECENTE" abre modal de gestão
+  - Modal lista todos os logs com botões ✏️ (editar) e 🗑️ (eliminar/reverter)
+  - Eliminar: confirma e reverte dados (devolve palhetas ao stock)
+  - Editar: navega para formulário com dados pré-preenchidos
+  - Registos editados exibem prefixo "✏️" na coluna "Ação"
 
 ### Navegação Sidebar (`ui_kit.py → render_sidebar`)
 - Botões (não radio) para ambos os menus
@@ -64,10 +70,15 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 ### Transferências (`transfer_page.py`)
 - Página dedicada: transferências internas e externas
 - Criar novo proprietário durante transferência
+- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche lote, tipo, destino/destinatário; botão "Atualizar" faz UPDATE no BD (não INSERT)
 
 ### Inseminações (`insemination_page.py`)
 - Fluxo sequencial: Cavalo → Proprietário → Lotes → Quantidade
 - Detalhes de lote com cor e concentração
+- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche égua, garanhão, proprietário, data; botão "Atualizar" faz UPDATE no BD
+
+### Migrações DB (`migrations/`)
+- `007_add_atualizado_columns.sql`: Adiciona coluna `atualizado BOOLEAN DEFAULT FALSE` a `inseminacoes`, `transferencias` e `transferencias_externas`
 
 ### Relatórios (`reports_page.py`)
 - Filtros por proprietário, garanhão, datas
@@ -91,10 +102,11 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - Ficheiros SQL em `/app/migrations/`
 
 ## Estado Actual
-- **App:** FUNCIONAL (100% testes passados — iteration_21.json)
+- **App:** FUNCIONAL (testes de edição de logs passados — iteration_23.json)
 - **Navegação:** Totalmente funcional (botões primários + secundários)
 - **Gráficos Dashboard:** Funcionais (Altair v5)
 - **Mapa:** Funcional com header premium
+- **Gestão de Logs:** Funcional — editar/eliminar transferências e inseminações
 
 ## Backlog / Próximas Tarefas
 

@@ -533,6 +533,12 @@ def run_dashboard_page(ctx: dict):
                                     st.session_state['edit_transfer_id'] = action_id
                                     st.session_state['edit_transfer_type'] = tipo
                                     st.session_state['aba_selecionada'] = t("menu.transfers")
+                                    # Limpar estado anterior de transferência para garantir modo de edição limpo
+                                    for k in ['transfer_tipo', 'transfer_linhas', 'transfer_garanhao',
+                                              'transfer_proprietario', 'transfer_dest_interno',
+                                              'transfer_dest_externo', 'transfer_destinatario_externo',
+                                              'transfer_motivo', 'transfer_observacoes']:
+                                        st.session_state.pop(k, None)
                                 
                                 st.session_state['show_logs_modal'] = False
                                 st.rerun()
