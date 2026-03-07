@@ -71,7 +71,10 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
     - Novos registos guardam o nome do utilizador autenticado
     - Bug corrigido: `st.session_state.get('user',{}).get('username')` em 8 locais
 
-### Navegação Sidebar (`ui_kit.py → render_sidebar`)
+## Navegação — Comportamento Mobile (Março 2026)
+- Ao clicar em qualquer item do menu lateral: estado de página limpo (insem_*, edit_*) + scroll ao topo + sidebar fecha em ecrãs < 992px
+- Implementado via `_just_navigated` flag + `st.components.v1.html(height=0)` com JS
+
 - Botões (não radio) para ambos os menus
 - Menu principal: Dashboard, Add Stock, Register Insemination, Int/Ext Transf., View Stock, Reports
 - Menu secundário (expander "Mais opções"): Container Map, Import Semen, Owner Management, User Management, Settings
