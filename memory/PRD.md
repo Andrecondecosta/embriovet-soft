@@ -58,8 +58,18 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
   - **Painel de Auditoria** — Março 2026:
     - Layout [4.5 | 5 | 0.5 | 0.5] no modal: col2 mostra histórico de edição
     - Campos alterados mostrados com valor anterior (riscado vermelho) → novo (verde)
+    - Inseminações: captura Égua, Garanhão, Palhetas, Data, Protocolo, Proprietário
+    - Transferências: captura Quantidade, Destino / Destinatário, Tipo
     - Indica utilizador e data da edição
     - Baseado na tabela `historico_edicoes` (migration 008)
+  - **Campo Observações nas Inseminações** — Março 2026:
+    - Textarea "Observações" adicionada ao formulário de inseminação
+    - Observações aparecem no Detalhe da ATIVIDADE RECENTE e no audit
+    - Pré-preenchidas em modo de edição
+  - **Utilizador nos Logs** — Março 2026:
+    - Colunas `utilizador` adicionadas a `inseminacoes`, `transferencias`, `transferencias_externas` (migration 010)
+    - Novos registos guardam o nome do utilizador autenticado
+    - Bug corrigido: `st.session_state.get('user',{}).get('username')` em 8 locais
 
 ### Navegação Sidebar (`ui_kit.py → render_sidebar`)
 - Botões (não radio) para ambos os menus
@@ -80,7 +90,8 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 ### Inseminações (`insemination_page.py`)
 - Fluxo sequencial: Cavalo → Proprietário → Lotes → Quantidade
 - Detalhes de lote com cor e concentração
-- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche égua, garanhão, proprietário, data; botão "Atualizar" faz UPDATE no BD
+- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche égua, garanhão, proprietário, data, **lote específico (estoque_id) e nº de palhetas**; botão "Atualizar" faz UPDATE no BD com ajuste correto de stock (devolve antigas, desconta novas)
+- **Testado e verificado** — iteration_26: 16/16 testes passaram (pré-preenchimento do lote, ajuste de stock, auditoria, utiliz.='admin')
 
 ### Migrações DB (`migrations/`)
 - `007_add_atualizado_columns.sql`: Adiciona coluna `atualizado BOOLEAN DEFAULT FALSE` a `inseminacoes`, `transferencias` e `transferencias_externas`
@@ -114,6 +125,9 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - **Gestão de Logs:** Funcional — editar/eliminar transferências e inseminações
 
 ## Backlog / Próximas Tarefas
+
+### P0 — Verificação completa (iteration_26 — 16/16 PASS)
+- [x] Edit Inseminação com Lote de Sémen — pré-preenchimento, ajuste stock, auditoria
 
 ### P1 — Próximas
 - [ ] Completar página "Definições": preview do logo em tempo real + painel i18n

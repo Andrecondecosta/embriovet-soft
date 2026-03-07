@@ -1,0 +1,72 @@
+{
+  "summary": "E2E testing of 'Editar Inseminação com Lote de Sémen' feature on Streamlit app at localhost:8501. All critical flows verified and PASSING. Used insem ID=7 (Bela/Chacco blue/estoque_id=25) as test subject. Complete flow: Dashboard → Logs modal → Edit insem ID=7 → verify pre-filled form → change qty 5→4 → Atualizar → verify audit trail and stock adjustment.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "InseminationPage - edit mode",
+        "issue": "DEBUG block visible to users: '🔍 DEBUG: {...}' at line 394 of insemination_page.py (marked 'remover após diagnóstico' in comment). Should be removed before production.",
+        "selector": "st.caption DEBUG line 394",
+        "priority": "LOW"
+      },
+      {
+        "component": "InseminationPage - edit mode for NULL estoque_id",
+        "issue": "When editing insem ID=6 (NULL estoque_id), Proprietário dropdown shows 'Todos' instead of 'Tavares de Almeida'. This is because Tavares de Almeida has 0 active Chacco blue stock, so it's not in the filtered list. Edge case, no crash - acceptable behavior.",
+        "selector": "selectbox#Proprietário",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_results": {
+    "test_1_edit_mode_banner": "PASS - '📝 Modo de Edição' banner visible when editing insem ID=7",
+    "test_2_lot_prefilled": "PASS - Lot 25 (lusopecus/Chacco blue) correctly pre-filled in LINHAS DA INSEMINAÇÃO (qty=5, max_disponivel=6)",
+    "test_3_debug_fields": "PASS - DEBUG shows: edit_id=7, insem_linhas with stock_id=25, qty=5, max_disponivel=6, garanhao_principal=Chacco blue, prop_principal=Joao",
+    "test_4_garanhao_proprietario_preselected": "PASS - Garanhão 'Chacco blue' and Proprietário 'Joao' correctly pre-selected in dropdowns",
+    "test_5_egua_prefilled": "PASS - Égua field pre-filled with 'Bela' (verified via input value)",
+    "test_6_qty_change_5to4": "PASS - Changed qty from 5 to 4, Total updated to '4 palhetas'",
+    "test_7_atualizar_success": "PASS - '🔄 Atualizar Inseminação' button clicked, success dialog '✅ Concluído - A inseminação foi registada com sucesso.' appeared",
+    "test_8_db_insem_updated": "PASS - insem ID=7: palhetas_gastas=4, atualizado=True, utilizador='admin', estoque_id=25 still intact",
+    "test_9_stock_adjusted": "PASS - Lot 25 existencia_atual=2 (correctly: 1 + 5 returned - 4 deducted = 2)",
+    "test_10_historico_edicoes": "PASS - historico_edicoes ID=6 created: Palhetas 5→4, by admin, record_id=7",
+    "test_11_pencil_prefix_in_logs": "PASS - '✏️ Inseminação' prefix shows in logs modal for edited insem ID=7",
+    "test_12_audit_panel_visible": "PASS - Green '📋 Histórico de Edição' panel visible for insem ID=7 in logs modal",
+    "test_13_utilizador_in_logs": "PASS - 'Por admin · 06/03/2026 21:59' shown in audit panel",
+    "test_14_ver_stock_shows_2": "PASS - Ver Stock page shows lot 25 (Chacco blue/Joao) with 2 palhetas",
+    "test_15_regression_null_estoque_id": "PASS - Insem ID=6 (NULL estoque_id) opens edit form without crash. insem_linhas={} (no lot pre-filled, expected). Égua 'Princesa' correctly pre-filled",
+    "test_16_utilizador_not_dash": "PASS - utilizador shows 'admin' in audit panel (not '—')"
+  },
+
+  "test_report_links": ["/app/test_reports/iteration_26.json"],
+
+  "action_items": [
+    "LOW: Remove DEBUG block at insemination_page.py line 394 (marked 'remover após diagnóstico') before production",
+    "LOW: Consider showing proprietário in edit mode even when they have 0 active stock (for NULL estoque_id inseminations) - currently shows 'Todos'"
+  ],
+
+  "critical_code_review_comments": [
+    "DEBUG block at insemination_page.py line 394 is visible to end users - raw JSON data exposed: '🔍 DEBUG: {\"edit_id\": ..., \"insem_linhas\": ...}'"
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "94% (15/16 flows pass, 2 minor UI issues noted)"
+  },
+
+  "seed_data_creation": "Used existing insem ID=7 (Bela/Chacco blue/estoque_id=25). DB state after test: insem ID=7 palhetas=4 (was 5), atualizado=True, lot 25 existencia=2 (was 1).",
+
+  "retest_needed": false,
+
+  "should_main_agent_self_test": true,
+
+  "context_for_next_testing_agent": "Streamlit app at http://localhost:8501. Login: admin/admin123. Edit insemination feature fully working and verified. insem ID=7 (Bela/Chacco blue/estoque_id=25) has palhetas=4, atualizado=True. Lot 25 existencia=2. historico_edicoes has records: ID=5 (no change edit), ID=6 (5→4 palhetas). The full E2E flow (Dashboard→LogsModal→Edit→ChangeQty→Update→VerifyAudit→VerifyStock) is PASSING. Only minor issues: DEBUG block still visible in UI (line 394 insemination_page.py), and proprietário not pre-selected for NULL estoque_id inseminations when proprietário has 0 active stock."
+}

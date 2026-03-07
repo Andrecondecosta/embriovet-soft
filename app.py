@@ -884,7 +884,7 @@ def inserir_stock(dados):
             cur = conn.cursor()
 
             # Obter utilizador atual
-            username = st.session_state.get('username', 'desconhecido')
+            username = st.session_state.get('user', {}).get('username', 'desconhecido')
 
             params = (
                 to_py(dados.get("Garanhão")),
@@ -1022,7 +1022,7 @@ def registrar_inseminacao(registro):
         return False
 
 
-def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None):
+def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None, observacoes=None):
     """Registra múltiplas linhas de inseminação numa transação única ou atualiza uma existente"""
     try:
         if not egua:
@@ -1040,37 +1040,50 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             
             if insemination_id:
                 # MODO DE EDIÇÃO - UPDATE
-                # 1. Carregar dados antigos (incluindo egua e data para auditoria)
+                # 1. Carregar dados antigos (incluindo egua, data, protocolo e estoque_id para auditoria)
                 cur.execute("""
-                    SELECT garanhao, dono_id, palhetas_gastas, egua, data_inseminacao
-                    FROM inseminacoes WHERE id = %s
+                    SELECT i.garanhao, i.dono_id, i.palhetas_gastas, i.egua,
+                           i.data_inseminacao, i.protocolo,
+                           d.nome AS dono_nome, i.observacoes, i.estoque_id
+                    FROM inseminacoes i
+                    LEFT JOIN dono d ON i.dono_id = d.id
+                    WHERE i.id = %s
                 """, (insemination_id,))
                 old_data = cur.fetchone()
                 
                 if old_data:
-                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem = old_data
+                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes, old_estoque_id = old_data
                     
-                    # 2. Devolver palhetas antigas ao stock
-                    cur.execute("""
-                        SELECT id, existencia_atual FROM estoque_dono 
-                        WHERE garanhao = %s AND dono_id = %s 
-                        ORDER BY id DESC LIMIT 1
-                    """, (old_garanhao, old_dono_id))
-                    
-                    lote_exists = cur.fetchone()
-                    if lote_exists:
+                    # 2. Devolver palhetas antigas ao stock (usar estoque_id se disponível)
+                    if old_estoque_id:
                         cur.execute("""
                             UPDATE estoque_dono 
-                            SET existencia_atual = %s
+                            SET existencia_atual = existencia_atual + %s
                             WHERE id = %s
-                        """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
+                        """, (int(old_palhetas), old_estoque_id))
+                    else:
+                        # Fallback para registos antigos sem estoque_id
+                        cur.execute("""
+                            SELECT id, existencia_atual FROM estoque_dono 
+                            WHERE garanhao = %s AND dono_id = %s 
+                            ORDER BY id DESC LIMIT 1
+                        """, (old_garanhao, old_dono_id))
+                        lote_exists = cur.fetchone()
+                        if lote_exists:
+                            cur.execute("""
+                                UPDATE estoque_dono 
+                                SET existencia_atual = %s
+                                WHERE id = %s
+                            """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
                 
                 # 3. Atualizar inseminação e marcar como editada
                 primeiro_registro = registros[0]
                 cur.execute("""
                     UPDATE inseminacoes
                     SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
-                        egua = %s, palhetas_gastas = %s, atualizado = TRUE
+                        egua = %s, palhetas_gastas = %s, observacoes = %s,
+                        atualizado = TRUE, utilizador = %s,
+                        estoque_id = %s
                     WHERE id = %s
                 """, (
                     to_py(primeiro_registro.get("garanhao")),
@@ -1078,6 +1091,9 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     to_py(data_inseminacao),
                     to_py(egua),
                     total_pal,
+                    to_py(observacoes),
+                    st.session_state.get('user', {}).get('username', '—'),
+                    to_py(primeiro_registro.get("stock_id")),
                     insemination_id
                 ))
                 
@@ -1109,18 +1125,30 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                 
                 conn.commit()
 
-                # 5. Registar auditoria
+                # 5. Registar auditoria com todos os campos relevantes
                 if old_data:
+                    # Obter nome do novo proprietário
+                    cur2 = conn.cursor()
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(primeiro_registro.get("dono_id")),))
+                    new_dono_nome = (cur2.fetchone() or ['—'])[0]
+                    cur2.close()
+
                     registar_historico_edicao('inseminacoes', insemination_id, {
                         'Égua': str(old_egua or '—'),
                         'Garanhão': str(old_garanhao or '—'),
                         'Palhetas': int(old_palhetas or 0),
                         'Data': str(old_data_insem or ''),
+                        'Protocolo': str(old_protocolo or '—'),
+                        'Proprietário': str(old_dono_nome or '—'),
+                        'Observações': str(old_observacoes or '—'),
                     }, {
                         'Égua': str(egua or '—'),
                         'Garanhão': str(primeiro_registro.get("garanhao", '—')),
                         'Palhetas': total_pal,
                         'Data': str(data_inseminacao or ''),
+                        'Protocolo': str(primeiro_registro.get("protocolo", '—')),
+                        'Proprietário': str(new_dono_nome or '—'),
+                        'Observações': str(observacoes or '—'),
                     })
 
                 logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
@@ -1149,8 +1177,8 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     
                     cur.execute(
                         """
-                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas, observacoes, utilizador, estoque_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             to_py(reg.get("garanhao")),
@@ -1159,6 +1187,9 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                             to_py(egua),
                             to_py(reg.get("protocolo")),
                             palhetas,
+                            to_py(observacoes),
+                            st.session_state.get('user', {}).get('username', '—'),
+                            to_py(reg.get("stock_id")),
                         ),
                     )
                     
@@ -1813,10 +1844,11 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             cur.execute("""
                 INSERT INTO transferencias (
                     estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int))
-
+                    quantidade, data_transferencia, utilizador
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+            """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int,
+                  st.session_state.get('user', {}).get('username', '—')))
+            
             conn.commit()
             cur.close()
 
@@ -1917,10 +1949,11 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
             cur.execute("""
                 INSERT INTO transferencias (
                     estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int))
-
+                    quantidade, data_transferencia, utilizador
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+            """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int,
+                  st.session_state.get('user', {}).get('username', '—')))
+            
             conn.commit()
             cur.close()
 
@@ -1976,8 +2009,8 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 INSERT INTO transferencias_externas (
                     estoque_id, proprietario_origem_id, garanhao,
                     destinatario_externo, quantidade, tipo, observacoes,
-                    data_transferencia
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    data_transferencia, utilizador
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
             """, (
                 to_py(stock_origem_id),
                 to_py(prop_origem_id),
@@ -1985,7 +2018,8 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 to_py(destinatario_externo),
                 quantidade_int,
                 to_py(tipo),
-                to_py(observacoes)
+                to_py(observacoes),
+                st.session_state.get('user', {}).get('username', '—')
             ))
 
             conn.commit()
@@ -2119,10 +2153,11 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
             cur.execute("""
                 UPDATE transferencias
                 SET estoque_id = %s, proprietario_origem_id = %s, proprietario_destino_id = %s,
-                    quantidade = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE
+                    quantidade = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE,
+                    utilizador = %s
                 WHERE id = %s
             """, (to_py(novo_estoque_id), to_py(prop_orig_id), to_py(novo_dest_id),
-                  nova_quantidade_int, transfer_id))
+                  nova_quantidade_int, st.session_state.get('user', {}).get('username', '—'), transfer_id))
 
             conn.commit()
             cur.close()
@@ -2213,11 +2248,12 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
                 UPDATE transferencias_externas
                 SET estoque_id = %s, proprietario_origem_id = %s, garanhao = %s,
                     destinatario_externo = %s, quantidade = %s, tipo = %s,
-                    observacoes = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE
+                    observacoes = %s, data_transferencia = CURRENT_TIMESTAMP, atualizado = TRUE,
+                    utilizador = %s
                 WHERE id = %s
             """, (to_py(novo_estoque_id), to_py(prop_orig_id), to_py(garanhao),
                   to_py(novo_destinatario), nova_quantidade_int,
-                  to_py(novo_tipo), to_py(novas_obs), transfer_id))
+                  to_py(novo_tipo), to_py(novas_obs), st.session_state.get('user', {}).get('username', '—'), transfer_id))
 
             conn.commit()
             cur.close()
@@ -2481,7 +2517,7 @@ def mostrar_tela_login(app_settings):
             submitted = st.form_submit_button(
                 t("auth.login"),
                 type="primary",
-                use_container_width=True
+                width="stretch"
             )
 
             if submitted:
@@ -2936,7 +2972,7 @@ elif aba == t("menu.add_stock"):
             # Botão + fora do form (Alinhado à direita)
             col_act1, col_act2 = st.columns([6, 2])
             with col_act2:
-                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), use_container_width=True):
+                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), width="stretch"):
                     modal_adicionar_proprietario()
             
             with st.form("novo_stock"):
@@ -3027,7 +3063,7 @@ elif aba == t("menu.add_stock"):
                 observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"), label_visibility="collapsed")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                submitted = st.form_submit_button(t("btn.save"), type="primary", use_container_width=True)
+                submitted = st.form_submit_button(t("btn.save"), type="primary", width="stretch")
 
                 if submitted:
                     palhetas_int = int(to_py(palhetas) or 0)
