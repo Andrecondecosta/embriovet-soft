@@ -2874,6 +2874,41 @@ else:
 
 aba = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 
+# Scroll ao topo + fechar sidebar (mobile) ao navegar
+if st.session_state.pop("_just_navigated", False):
+    import streamlit.components.v1 as _stcomp
+    _stcomp.html(
+        """
+        <script>
+        (function() {
+            // 1. Scroll ao topo da área de conteúdo principal
+            var main = window.parent.document.querySelector('[data-testid="stAppViewContainer"]')
+                    || window.parent.document.querySelector('.main')
+                    || window.parent.document.body;
+            if (main) main.scrollTo({top: 0, behavior: 'instant'});
+
+            // 2. Fechar sidebar em dispositivos móveis/tablets (< 992px)
+            var isMobile = window.parent.innerWidth < 992;
+            if (isMobile) {
+                var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+                var isExpanded = sidebar && sidebar.getAttribute('aria-expanded') === 'true';
+                if (isExpanded) {
+                    // Botão de recolher: ícone "keyboard_double_arrow"
+                    var collapseBtn = window.parent.document.querySelector(
+                        '[data-testid="stBaseButton-headerNoPadding"]'
+                    );
+                    if (collapseBtn) {
+                        setTimeout(function() { collapseBtn.click(); }, 80);
+                    }
+                }
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
+
 # ------------------------------------------------------------
 # 💬 Modal para adicionar proprietário
 # ------------------------------------------------------------

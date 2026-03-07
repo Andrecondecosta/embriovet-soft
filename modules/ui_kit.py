@@ -713,11 +713,19 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         unsafe_allow_html=True,
     )
 
-    # --- Callbacks ---
-    def _on_principal_change():
-        selected = st.session_state.get("menu_principal_radio")
-        if selected:
-            st.session_state["_nav_last_active"] = selected
+    # Prefixos/chaves de estado específicas de página a limpar na navegação
+    _PAGE_STATE_PREFIXES = ("insem_", "transfer_edit_", "stock_filter_")
+    _PAGE_STATE_EXACT = {"edit_insemination_id", "edit_transfer_id", "edit_transfer_type",
+                         "edit_transfer_source_type", "redirecionar_ver_stock"}
+
+    def _clear_page_state():
+        """Remove session state específico de páginas para garantir início limpo."""
+        to_del = [
+            k for k in list(st.session_state.keys())
+            if any(k.startswith(p) for p in _PAGE_STATE_PREFIXES) or k in _PAGE_STATE_EXACT
+        ]
+        for k in to_del:
+            del st.session_state[k]
 
     # Inicializar _nav_last_active ANTES de renderizar widgets
     if not st.session_state.get("_nav_last_active"):
@@ -736,8 +744,10 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
         is_active = current_page == item
         btn_style = "primary" if is_active else "secondary"
         if st.sidebar.button(item, key=f"_nav_pri_{item}", width="stretch", type=btn_style):
+            _clear_page_state()
             st.session_state["_nav_last_active"] = item
             st.session_state["aba_selecionada"] = item
+            st.session_state["_just_navigated"] = True
             st.rerun()
 
     # ---- Menu Secundário: botões dentro do expander ----
@@ -749,8 +759,10 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
                 label = f"▶ {item}" if is_active else item
                 btn_type = "primary" if is_active else "secondary"
                 if st.button(label, key=f"_nav_sec_{item}", width="stretch", type=btn_type):
+                    _clear_page_state()
                     st.session_state["_nav_last_active"] = item
                     st.session_state["aba_selecionada"] = item
+                    st.session_state["_just_navigated"] = True
                     st.rerun()
 
     return st.session_state["_nav_last_active"]
