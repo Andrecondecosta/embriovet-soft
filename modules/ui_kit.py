@@ -20,11 +20,41 @@ def inject_all_css_consolidated():
                 font-size: 14px;
                 color: #0f172a;
             }
-            section.main > div.block-container {
-                padding-top: 0.4rem !important;
+            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
+            [data-testid="stHeader"],
+            [data-testid="stToolbar"],
+            [data-testid="stDeployButton"],
+            [data-testid="stDecoration"],
+            #MainMenu, header { display: none !important; height: 0 !important; }
+            /* Espaçamento normal no topo */
+            [data-testid="stMain"] > .stMainBlockContainer,
+            [data-testid="stMain"] > .block-container,
+            [data-testid="stMainBlockContainer"],
+            .stMainBlockContainer,
+            .block-container {
+                padding-top: 60px !important;
                 padding-bottom: 1.4rem;
             }
-            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            /* SOLUÇÃO DEFINITIVA: remover containers de injeção CSS do flex flow via
+               position:absolute — elementos absolute não criam gap no flexbox.
+               Emotion não conflitua com position (só com display), portanto ganha esta regra.
+               Estrutura real: .stMarkdown > div > [data-testid="stMarkdownContainer"] > style */
+            .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
+            .stMarkdown:has([data-testid="stMarkdownContainer"] > style),
+            /* Também remover iframes de altura 0 (scroll-to-top, JS components) */
+            .stElementContainer:has(iframe[height="0"]) {
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+                visibility: hidden !important;
+            }
+            /* Containers verdadeiramente vazios */
             div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
             .stElementContainer:empty {
@@ -35,13 +65,6 @@ def inject_all_css_consolidated():
                 margin: 0px !important;
                 padding: 0px !important;
                 overflow: hidden !important;
-                line-height: 0 !important;
-                font-size: 0 !important;
-                visibility: hidden !important;
-            }
-            div[data-testid="stElementContainer"]:not(:has(*)) {
-                display: none !important;
-                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
@@ -59,7 +82,7 @@ def inject_all_css_consolidated():
             .stMarkdown {
                 line-height: 1.45;
             }
-            
+
             /* Reports CSS */
             .reports-zone-title {
                 font-size: 0.78rem;
@@ -152,11 +175,35 @@ def inject_design_system():
                 font-size: 14px;
                 color: #0f172a;
             }
-            section.main > div.block-container {
-                padding-top: 0.4rem !important;
+            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
+            [data-testid="stHeader"],
+            [data-testid="stToolbar"],
+            [data-testid="stDeployButton"],
+            [data-testid="stDecoration"],
+            #MainMenu, header { display: none !important; height: 0 !important; }
+            /* Espaçamento normal no topo do conteúdo principal */
+            [data-testid="stMain"] > .stMainBlockContainer,
+            [data-testid="stMain"] > .block-container,
+            [data-testid="stMainBlockContainer"],
+            .stMainBlockContainer,
+            .block-container {
+                padding-top: 60px !important;
                 padding-bottom: 1.4rem;
             }
-            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
+            .stMarkdown:has([data-testid="stMarkdownContainer"] > style),
+            .stElementContainer:has(iframe[height="0"]) {
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+                visibility: hidden !important;
+            }
             div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
             .stElementContainer:empty {
@@ -167,13 +214,6 @@ def inject_design_system():
                 margin: 0px !important;
                 padding: 0px !important;
                 overflow: hidden !important;
-                line-height: 0 !important;
-                font-size: 0 !important;
-                visibility: hidden !important;
-            }
-            div[data-testid="stElementContainer"]:not(:has(*)) {
-                display: none !important;
-                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
@@ -647,37 +687,31 @@ def render_header(app_settings, user_info):
     logo = (app_settings or {}).get("logo_base64")
 
     st.markdown("<div id='topbar-anchor'></div>", unsafe_allow_html=True)
-    col_left, col_right = st.columns([5, 2])
-    with col_left:
-        if logo:
-            st.markdown(
-                f"""
-                <div style='display:flex; align-items:center; gap:10px;'>
-                    <img src='{logo}' style='height:28px;'/>
-                    <div class='app-topbar-title'>{company_name}</div>
+    if logo:
+        st.markdown(
+            f"""
+            <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
+                <img src='{logo}' style='height:28px;'/>
+                <div class='app-topbar-title'>{company_name}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
+        st.markdown(
+            f"""
+            <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
+                <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
+                    {initials}
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
-            st.markdown(
-                f"""
-                <div style='display:flex; align-items:center; gap:10px;'>
-                    <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
-                        {initials}
-                    </div>
-                    <div class='app-topbar-title'>{company_name}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                <div class='app-topbar-title'>{company_name}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    with col_right:
-        settings_clicked = st.button(t("header.settings"), width="content", key="topbar_settings")
-        logout_clicked = st.button(t("header.logout"), width="content", key="topbar_logout")
-
-    return settings_clicked, logout_clicked
+    return False, False
 
 
 def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, active_key):
@@ -765,7 +799,16 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
                     st.session_state["_just_navigated"] = True
                     st.rerun()
 
-    return st.session_state["_nav_last_active"]
+    # ---- Terminar Sessão (fundo da sidebar) ----
+    st.sidebar.markdown("---")
+    logout_clicked = st.sidebar.button(
+        t("header.logout"),
+        key="_sidebar_logout",
+        width="stretch",
+        type="secondary",
+    )
+
+    return st.session_state["_nav_last_active"], logout_clicked
 
 
 def render_zone_title(title: str, cls: str = "reports-zone-title"):
