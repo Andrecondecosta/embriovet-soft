@@ -2382,144 +2382,121 @@ def get_auth_store():
     return {}
 
 def mostrar_tela_login(app_settings):
-    """Exibe tela de login com design premium"""
+    """Exibe tela de login com design limpo e sem artefactos visuais"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
-    logo_base64 = (app_settings or {}).get("logo_base64")
-    cor_primaria = (app_settings or {}).get("primary_color") or "#3b82f6"
-    
-    # CSS Premium para a página de login
+    logo_base64  = (app_settings or {}).get("logo_base64")
+    cor          = (app_settings or {}).get("primary_color") or "#E85D4A"
+
+    # Construir bloco do logo/título (HTML puro — sem widgets Streamlit)
+    if logo_base64:
+        # logo_base64 pode já ter o prefixo data:image/... completo
+        img_src = logo_base64 if logo_base64.startswith("data:") else f"data:image/png;base64,{logo_base64}"
+        logo_html = (
+            f"<img src='{img_src}' "
+            f"style='max-width:72px;height:auto;border-radius:10px;display:block;margin:0 auto 14px;'/>"
+        )
+    else:
+        initials = "".join([p[0].upper() for p in nome_empresa.split()[:2] if p]) or "S"
+        logo_html = (
+            f"<div style='width:52px;height:52px;background:{cor};border-radius:12px;"
+            f"display:flex;align-items:center;justify-content:center;color:#fff;"
+            f"font-weight:700;font-size:1.2rem;margin:0 auto 14px;'>{initials}</div>"
+        )
+
+    # CSS da página de login
     st.markdown(
         f"""
         <style>
-            /* Esconder elementos do Streamlit */
-            #MainMenu, footer, header {{visibility: hidden;}}
-            
-            /* Fundo gradiente premium */
+            #MainMenu, footer, [data-testid="stHeader"],
+            [data-testid="stToolbar"] {{ display: none !important; }}
+
             .stApp {{
-                background: linear-gradient(135deg, {cor_primaria}15 0%, {cor_primaria}05 100%);
+                background: #f1f5f9 !important;
             }}
-            
-            /* Card de login */
-            .login-card {{
-                background: white;
-                border-radius: 16px;
-                padding: 40px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
-                border: 1px solid rgba(0, 0, 0, 0.06);
-                max-width: 440px;
-                margin: 60px auto;
+
+            /* O formulário torna-se o card */
+            [data-testid="stForm"] {{
+                background: #ffffff !important;
+                border-radius: 16px !important;
+                padding: 32px 28px 24px !important;
+                box-shadow: 0 4px 32px rgba(15,23,42,0.10) !important;
+                border: 1px solid #e2e8f0 !important;
+                margin-top: 0 !important;
             }}
-            
-            /* Logo */
-            .login-logo {{
-                text-align: center;
-                margin-bottom: 24px;
-            }}
-            
-            .login-logo img {{
-                max-width: 120px;
-                height: auto;
-                border-radius: 12px;
-            }}
-            
-            /* Título */
-            .login-title {{
-                text-align: center;
-                font-size: 1.75rem;
-                font-weight: 700;
-                color: #0f172a;
-                margin-bottom: 8px;
-            }}
-            
-            .login-subtitle {{
-                text-align: center;
-                font-size: 0.95rem;
-                color: #64748b;
-                margin-bottom: 32px;
-            }}
-            
-            /* Inputs mais bonitos */
-            .stTextInput input {{
-                border-radius: 10px !important;
+
+            /* Inputs */
+            [data-testid="stForm"] input {{
+                border-radius: 9px !important;
                 border: 1.5px solid #e2e8f0 !important;
-                padding: 12px 16px !important;
                 font-size: 0.95rem !important;
-                transition: all 0.2s ease !important;
+                transition: border-color 0.15s, box-shadow 0.15s !important;
             }}
-            
-            .stTextInput input:focus {{
-                border-color: {cor_primaria} !important;
-                box-shadow: 0 0 0 3px {cor_primaria}20 !important;
+            [data-testid="stForm"] input:focus {{
+                border-color: {cor} !important;
+                box-shadow: 0 0 0 3px {cor}22 !important;
             }}
-            
-            /* Botão premium */
-            .stButton > button {{
+
+            /* Botão de submeter — cor da app */
+            button[data-testid="stBaseButton-primaryFormSubmit"] {{
+                background: {cor} !important;
+                border-color: {cor} !important;
+                color: #ffffff !important;
                 border-radius: 10px !important;
-                padding: 12px 24px !important;
-                font-weight: 600 !important;
+                height: 46px !important;
+                font-weight: 700 !important;
                 font-size: 1rem !important;
-                background: linear-gradient(135deg, {cor_primaria} 0%, {cor_primaria}dd 100%) !important;
-                border: none !important;
-                box-shadow: 0 4px 12px {cor_primaria}40 !important;
-                transition: all 0.2s ease !important;
+                letter-spacing: 0.02em;
+                margin-top: 6px;
+                transition: opacity 0.15s, transform 0.12s !important;
             }}
-            
-            .stButton > button:hover {{
-                transform: translateY(-2px) !important;
-                box-shadow: 0 6px 20px {cor_primaria}50 !important;
-            }}
-            
-            /* Footer do card */
-            .login-footer {{
-                text-align: center;
-                margin-top: 24px;
-                padding-top: 24px;
-                border-top: 1px solid #f1f5f9;
-                font-size: 0.85rem;
-                color: #94a3b8;
+            button[data-testid="stBaseButton-primaryFormSubmit"]:hover {{
+                opacity: 0.88 !important;
+                transform: translateY(-1px) !important;
             }}
         </style>
         """,
         unsafe_allow_html=True,
     )
-    
-    # Centralizar o formulário
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<div class='login-card'>", unsafe_allow_html=True)
-        
-        # Logo
-        if logo_base64:
-            st.markdown(
-                f"<div class='login-logo'><img src='data:image/png;base64,{logo_base64}' /></div>",
-                unsafe_allow_html=True
-            )
-        
-        # Título
-        st.markdown(f"<div class='login-title'>{nome_empresa}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='login-subtitle'>{t('login.subtitle')}</div>", unsafe_allow_html=True)
-        
-        # Formulário
+
+    # Usar colunas para centrar o card naturalmente
+    _, col, _ = st.columns([1, 2, 1])
+
+    with col:
+        # Cabeçalho: logo + nome + subtítulo (HTML puro, sem artefactos)
+        st.markdown(
+            f"""
+            <div style="text-align:center; padding: 28px 0 20px 0;">
+                {logo_html}
+                <div style="font-size:1.55rem; font-weight:700; color:#0f172a; line-height:1.2;">
+                    {nome_empresa}
+                </div>
+                <div style="font-size:0.88rem; color:#64748b; margin-top:5px;">
+                    {t('login.subtitle')}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Formulário Streamlit nativo (styled via CSS acima como card)
         with st.form("login_form", clear_on_submit=False):
             username = st.text_input(
                 t("auth.username"),
                 placeholder=t("auth.username_placeholder"),
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
             password = st.text_input(
                 t("auth.password"),
                 type="password",
                 placeholder=t("auth.password_placeholder"),
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
-
             submitted = st.form_submit_button(
                 t("auth.login"),
                 type="primary",
-                width="stretch"
+                width="stretch",
             )
-            
+
             if submitted:
                 if not username or not password:
                     st.error(t("login.missing"))
@@ -2536,14 +2513,13 @@ def mostrar_tela_login(app_settings):
                         st.rerun()
                     else:
                         st.error(t("login.invalid"))
-        
-        # Footer
+
+        # Rodapé de segurança
         st.markdown(
-            f"<div class='login-footer'>🔒 {t('login.secure')}</div>",
-            unsafe_allow_html=True
+            f"<div style='text-align:center;font-size:0.78rem;color:#94a3b8;margin-top:12px;'>"
+            f"🔒 {t('login.secure')}</div>",
+            unsafe_allow_html=True,
         )
-        
-        st.markdown("</div>", unsafe_allow_html=True)
         
 
 def verificar_permissao(nivel_minimo):
