@@ -2727,18 +2727,7 @@ if user.get("must_change_password"):
     render_change_credentials(user, app_settings)
     st.stop()
 
-settings_clicked, logout_clicked = render_header(app_settings, user)
-if logout_clicked:
-    token = st.session_state.pop('auth_token', None)
-    if token:
-        auth_store = get_auth_store()
-        auth_store.pop(token, None)
-    st.query_params.clear()
-    del st.session_state['user']
-    st.rerun()
-if settings_clicked:
-    st.session_state['aba_selecionada'] = t("menu.settings")
-    st.rerun()
+render_header(app_settings, user)
 
 # Menu lateral adaptado às permissões
 # Menu Principal (sempre visível)
@@ -2777,7 +2766,15 @@ if 'aba_selecionada' in st.session_state:
 else:
     active_key = st.session_state.get("_nav_last_active", menu_principal[0])
 
-aba = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
+aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
+if sidebar_logout:
+    token = st.session_state.pop('auth_token', None)
+    if token:
+        auth_store = get_auth_store()
+        auth_store.pop(token, None)
+    st.query_params.clear()
+    del st.session_state['user']
+    st.rerun()
 
 # Scroll ao topo + fechar sidebar (mobile) ao navegar
 if st.session_state.pop("_just_navigated", False):
