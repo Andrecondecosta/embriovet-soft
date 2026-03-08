@@ -32,7 +32,7 @@ def inject_all_css_consolidated():
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
-                padding-top: 2rem !important;
+                padding-top: 60px !important;
                 padding-bottom: 1.4rem;
             }
             /* SOLUÇÃO DEFINITIVA: remover containers de injeção CSS do flex flow via
@@ -187,7 +187,7 @@ def inject_design_system():
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
-                padding-top: 2rem !important;
+                padding-top: 60px !important;
                 padding-bottom: 1.4rem;
             }
             .stElementContainer:has([data-testid="stMarkdownContainer"] > style),

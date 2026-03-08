@@ -2700,6 +2700,26 @@ if "lang" not in st.session_state:
 inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
+# Forçar padding-top via JS (CSS é sobreposto pelo Streamlit interno)
+import streamlit.components.v1 as _css_comp
+_css_comp.html(
+    """
+    <script>
+    (function applyPadding() {
+        var el = window.parent.document.querySelector('[data-testid="stMainBlockContainer"]')
+              || window.parent.document.querySelector('.block-container');
+        if (el) {
+            el.style.setProperty('padding-top', '60px', 'important');
+        } else {
+            setTimeout(applyPadding, 50);
+        }
+    })();
+    </script>
+    """,
+    height=0,
+    scrolling=False,
+)
+
 if not app_settings.get("welcome_completed", False):
     render_welcome_page()
     st.stop()
