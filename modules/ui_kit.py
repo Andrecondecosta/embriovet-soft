@@ -20,9 +20,25 @@ def inject_all_css_consolidated():
                 font-size: 14px;
                 color: #0f172a;
             }
-            section.main > div.block-container {
-                padding-top: 0.4rem !important;
+            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
+            [data-testid="stHeader"],
+            [data-testid="stToolbar"],
+            [data-testid="stDeployButton"],
+            [data-testid="stDecoration"],
+            #MainMenu, header { display: none !important; height: 0 !important; }
+            /* Reduzir padding-top — seletores corretos confirmados via inspeção DOM:
+               o parent é section[data-testid="stMain"], a classe é .stMainBlockContainer */
+            [data-testid="stMain"] > .stMainBlockContainer,
+            [data-testid="stMain"] > .block-container,
+            .stMainBlockContainer,
+            .block-container {
+                padding-top: 8px !important;
                 padding-bottom: 1.4rem;
+            }
+            /* Compensar padding-top excessivo do Emotion CSS via margem negativa no primeiro filho */
+            .stMainBlockContainer > div:first-child,
+            .block-container > div:first-child {
+                margin-top: -76px !important;
             }
             /* Forçar remoção de todos os containers vazios - AGRESSIVO */
             div[data-testid="stElementContainer"]:empty,
@@ -152,9 +168,25 @@ def inject_design_system():
                 font-size: 14px;
                 color: #0f172a;
             }
-            section.main > div.block-container {
-                padding-top: 0.4rem !important;
+            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
+            [data-testid="stHeader"],
+            [data-testid="stToolbar"],
+            [data-testid="stDeployButton"],
+            [data-testid="stDecoration"],
+            #MainMenu, header { display: none !important; height: 0 !important; }
+            /* Reduzir padding-top — seletores corretos confirmados via inspeção DOM:
+               o parent é section[data-testid="stMain"], a classe é .stMainBlockContainer */
+            [data-testid="stMain"] > .stMainBlockContainer,
+            [data-testid="stMain"] > .block-container,
+            .stMainBlockContainer,
+            .block-container {
+                padding-top: 8px !important;
                 padding-bottom: 1.4rem;
+            }
+            /* Compensar padding-top excessivo do Emotion CSS via margem negativa no primeiro filho */
+            .stMainBlockContainer > div:first-child,
+            .block-container > div:first-child {
+                margin-top: -76px !important;
             }
             /* Forçar remoção de todos os containers vazios - AGRESSIVO */
             div[data-testid="stElementContainer"]:empty,
@@ -194,6 +226,29 @@ def inject_design_system():
         </style>
         """,
         unsafe_allow_html=True,
+    )
+
+    # Injetar CSS no <head> via st.components.v1.html — necessita de window.parent
+    import streamlit.components.v1 as _comp
+    _comp.html(
+        """
+        <script>
+        (function() {
+            try {
+                var d = (window.parent !== window) ? window.parent.document : document;
+                if (d.getElementById('eq-pad')) return;
+                var s = d.createElement('style');
+                s.id = 'eq-pad';
+                s.textContent = '.stMainBlockContainer { padding-top: 8px !important; }';
+                d.head.appendChild(s);
+            } catch(e) {
+                document.body.innerText = 'blocked: ' + e.message;
+            }
+        })();
+        </script>
+        """,
+        height=30,
+        scrolling=False,
     )
 
 

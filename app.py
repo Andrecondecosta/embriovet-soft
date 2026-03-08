@@ -2289,84 +2289,13 @@ st.set_page_config(
     page_icon="🐴",
 )
 
-# Consolidar todo o CSS em um único bloco para evitar containers vazios
+# CSS inicial limpo — apenas esconde o menu nativo do Streamlit
 st.markdown(
     """
     <style>
     [data-testid="stMainMenu"] { display:none !important; }
     footer { display:none !important; }
-
-    div[data-testid="stAppViewContainer"] { padding-top: 0rem !important; }
-    section.main > div.block-container { padding-top: .5rem !important; padding-bottom: 1rem !important; }
-    [data-testid="stSidebarContent"] { padding-top: .5rem !important; }
-    .sidebar-shell { padding-top: 8px !important; }
-
-    header[data-testid="stHeader"] { height: 2.6rem !important; }
-    header[data-testid="stHeader"] > div { padding-top: .15rem !important; padding-bottom: .15rem !important; }
-
-    .block-container { margin-top: 0 !important; }
-    
-    /* Forçar altura zero em containers vazios */
-    div[data-testid="stElementContainer"]:empty {
-        display: none !important;
-        height: 0px !important;
-        min-height: 0px !important;
-        max-height: 0px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-        line-height: 0px !important;
-    }
-    
-    /* Remover espaçamento de elementos sem conteúdo texto */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"]:not(:has(*)) {
-        display: none !important;
-    }
-
     </style>
-    <script>
-    (function() {
-        // Remover containers vazios diretamente do DOM
-        const removeEmptyContainers = () => {
-            const containers = document.querySelectorAll('[data-testid="stElementContainer"]');
-            containers.forEach(container => {
-                // Se o container está vazio ou só contém whitespace
-                if (!container.textContent.trim() && !container.querySelector('img, button, input, select, textarea, canvas, svg, iframe')) {
-                    container.style.display = 'none';
-                    container.style.height = '0px';
-                    container.style.margin = '0px';
-                    container.style.padding = '0px';
-                }
-            });
-        };
-        
-        // Ocultar botão Deploy
-        const hideDeploy = () => {
-            const root = window.parent.document;
-            root.querySelectorAll('button, a').forEach(el => {
-                if (el.textContent && el.textContent.trim() === 'Deploy') {
-                    el.style.display = 'none';
-                }
-            });
-        };
-        
-        // Executar imediatamente
-        removeEmptyContainers();
-        hideDeploy();
-        
-        // Observar mudanças e re-executar
-        const obs = new MutationObserver(() => {
-            removeEmptyContainers();
-            hideDeploy();
-        });
-        obs.observe(document.body, { childList: true, subtree: true });
-        
-        // Executar novamente após um delay para garantir
-        setTimeout(() => {
-            removeEmptyContainers();
-            hideDeploy();
-        }, 500);
-    })();
-    </script>
     """,
     unsafe_allow_html=True,
 )
