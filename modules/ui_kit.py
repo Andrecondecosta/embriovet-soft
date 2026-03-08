@@ -20,12 +20,10 @@ def inject_all_css_consolidated():
                 font-size: 14px;
                 color: #0f172a;
             }
-            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
-            [data-testid="stHeader"],
-            [data-testid="stToolbar"],
+            /* Ocultar apenas Deploy e menu — manter botões de controlo da sidebar */
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
-            #MainMenu, header { display: none !important; height: 0 !important; }
+            #MainMenu { display: none !important; }
             /* Espaçamento normal no topo */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
@@ -175,13 +173,15 @@ def inject_design_system():
                 font-size: 14px;
                 color: #0f172a;
             }
-            /* Remover barra do Streamlit (Deploy, menu, status) — liberta espaço no topo */
-            [data-testid="stHeader"],
-            [data-testid="stToolbar"],
+            /* Ocultar apenas Deploy e menu — manter botões de controlo da sidebar */
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
-            #MainMenu, header { display: none !important; height: 0 !important; }
-            /* Espaçamento normal no topo do conteúdo principal */
+            #MainMenu { display: none !important; }
+            /* Header compacto mas visível (contém os botões da sidebar) */
+            [data-testid="stToolbar"] {
+                background: transparent !important;
+                box-shadow: none !important;
+            }
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
             [data-testid="stMainBlockContainer"],
