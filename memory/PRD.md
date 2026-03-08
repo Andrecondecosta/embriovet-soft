@@ -1,5 +1,8 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
+## Última Atualização
+**Mar 2026** — Correção do espaço em branco no topo (P0 resolvido). Ver secção "UI/UX Recente".
+
 ## Problema Original
 Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas, e importação inteligente com criação automática de entidades.
 

@@ -26,21 +26,35 @@ def inject_all_css_consolidated():
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
             #MainMenu, header { display: none !important; height: 0 !important; }
-            /* Reduzir padding-top — seletores corretos confirmados via inspeção DOM:
-               o parent é section[data-testid="stMain"], a classe é .stMainBlockContainer */
+            /* Remover padding-top do Streamlit para o header oculto */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
+            [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
                 padding-top: 8px !important;
                 padding-bottom: 1.4rem;
             }
-            /* Compensar padding-top excessivo do Emotion CSS via margem negativa no primeiro filho */
-            .stMainBlockContainer > div:first-child,
-            .block-container > div:first-child {
-                margin-top: -76px !important;
+            /* SOLUÇÃO DEFINITIVA: remover containers de injeção CSS do flex flow via
+               position:absolute — elementos absolute não criam gap no flexbox.
+               Emotion não conflitua com position (só com display), portanto ganha esta regra.
+               Estrutura real: .stMarkdown > div > [data-testid="stMarkdownContainer"] > style */
+            .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
+            .stMarkdown:has([data-testid="stMarkdownContainer"] > style),
+            /* Também remover iframes de altura 0 (scroll-to-top, JS components) */
+            .stElementContainer:has(iframe[height="0"]) {
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+                visibility: hidden !important;
             }
-            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
+            /* Containers verdadeiramente vazios */
             div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
             .stElementContainer:empty {
@@ -51,13 +65,6 @@ def inject_all_css_consolidated():
                 margin: 0px !important;
                 padding: 0px !important;
                 overflow: hidden !important;
-                line-height: 0 !important;
-                font-size: 0 !important;
-                visibility: hidden !important;
-            }
-            div[data-testid="stElementContainer"]:not(:has(*)) {
-                display: none !important;
-                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
@@ -75,7 +82,7 @@ def inject_all_css_consolidated():
             .stMarkdown {
                 line-height: 1.45;
             }
-            
+
             /* Reports CSS */
             .reports-zone-title {
                 font-size: 0.78rem;
@@ -174,21 +181,32 @@ def inject_design_system():
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
             #MainMenu, header { display: none !important; height: 0 !important; }
-            /* Reduzir padding-top — seletores corretos confirmados via inspeção DOM:
-               o parent é section[data-testid="stMain"], a classe é .stMainBlockContainer */
+            /* Remover padding-top do Streamlit para o header oculto.
+               margin-top apenas aqui (inject_design_system = só quando autenticado)
+               para proteger o layout da página de login. */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
+            [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
                 padding-top: 8px !important;
+                margin-top: -57px !important;
                 padding-bottom: 1.4rem;
             }
-            /* Compensar padding-top excessivo do Emotion CSS via margem negativa no primeiro filho */
-            .stMainBlockContainer > div:first-child,
-            .block-container > div:first-child {
-                margin-top: -76px !important;
+            .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
+            .stMarkdown:has([data-testid="stMarkdownContainer"] > style),
+            .stElementContainer:has(iframe[height="0"]) {
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+                visibility: hidden !important;
             }
-            /* Forçar remoção de todos os containers vazios - AGRESSIVO */
             div[data-testid="stElementContainer"]:empty,
             div[data-testid="stVerticalBlock"]:empty,
             .stElementContainer:empty {
@@ -199,13 +217,6 @@ def inject_design_system():
                 margin: 0px !important;
                 padding: 0px !important;
                 overflow: hidden !important;
-                line-height: 0 !important;
-                font-size: 0 !important;
-                visibility: hidden !important;
-            }
-            div[data-testid="stElementContainer"]:not(:has(*)) {
-                display: none !important;
-                height: 0 !important;
             }
             .stButton > button,
             .stDownloadButton > button,
@@ -226,29 +237,6 @@ def inject_design_system():
         </style>
         """,
         unsafe_allow_html=True,
-    )
-
-    # Injetar CSS no <head> via st.components.v1.html — necessita de window.parent
-    import streamlit.components.v1 as _comp
-    _comp.html(
-        """
-        <script>
-        (function() {
-            try {
-                var d = (window.parent !== window) ? window.parent.document : document;
-                if (d.getElementById('eq-pad')) return;
-                var s = d.createElement('style');
-                s.id = 'eq-pad';
-                s.textContent = '.stMainBlockContainer { padding-top: 8px !important; }';
-                d.head.appendChild(s);
-            } catch(e) {
-                document.body.innerText = 'blocked: ' + e.message;
-            }
-        })();
-        </script>
-        """,
-        height=30,
-        scrolling=False,
     )
 
 
