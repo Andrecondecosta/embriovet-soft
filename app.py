@@ -2306,9 +2306,46 @@ inject_all_css_consolidated()
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
-@st.cache_resource
-def get_auth_store():
-    return {}
+
+def save_session_db(token: str, user: dict):
+    """Guarda a sessão na BD (persiste após restart do servidor)."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_sessions (token, username, user_data, expires_at)
+                    VALUES (%s, %s, %s, NOW() + INTERVAL '30 days')
+                    ON CONFLICT (token) DO UPDATE SET expires_at = NOW() + INTERVAL '30 days'
+                """, (token, user.get("username", ""), json.dumps(user)))
+                conn.commit()
+    except Exception as e:
+        logger.warning(f"save_session_db falhou: {e}")
+
+def load_session_db(token: str) -> dict | None:
+    """Carrega a sessão da BD pelo token."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT user_data FROM user_sessions
+                    WHERE token = %s AND expires_at > NOW()
+                """, (token,))
+                row = cur.fetchone()
+                if row:
+                    return json.loads(row[0])
+    except Exception as e:
+        logger.warning(f"load_session_db falhou: {e}")
+    return None
+
+def delete_session_db(token: str):
+    """Remove a sessão da BD (logout)."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM user_sessions WHERE token = %s", (token,))
+                conn.commit()
+    except Exception as e:
+        logger.warning(f"delete_session_db falhou: {e}")
 
 def mostrar_tela_login(app_settings):
     """Exibe tela de login com design limpo e sem artefactos visuais"""
@@ -2433,8 +2470,7 @@ def mostrar_tela_login(app_settings):
                     user = autenticar_usuario(username, password)
                     if user:
                         token = str(uuid.uuid4())
-                        auth_store = get_auth_store()
-                        auth_store[token] = user
+                        save_session_db(token, user)
                         st.session_state['user'] = user
                         st.session_state['auth_token'] = token
                         st.query_params.session = token
@@ -2728,12 +2764,13 @@ if not app_settings.get("is_initialized"):
     render_onboarding(app_settings)
     st.stop()
 
-# Verificar se está logado (restaurar sessão por query param)
-auth_store = get_auth_store()
+# Verificar se está logado (restaurar sessão por query param → BD)
 token_param = st.query_params.get("session", None)
-if 'user' not in st.session_state and token_param and token_param in auth_store:
-    st.session_state['user'] = auth_store[token_param]
-    st.session_state['auth_token'] = token_param
+if 'user' not in st.session_state and token_param:
+    restored = load_session_db(token_param)
+    if restored:
+        st.session_state['user'] = restored
+        st.session_state['auth_token'] = token_param
 
 if 'user' not in st.session_state:
     mostrar_tela_login(app_settings)
@@ -2790,8 +2827,7 @@ aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_se
 if sidebar_logout:
     token = st.session_state.pop('auth_token', None)
     if token:
-        auth_store = get_auth_store()
-        auth_store.pop(token, None)
+        delete_session_db(token)
     st.query_params.clear()
     del st.session_state['user']
     st.rerun()
