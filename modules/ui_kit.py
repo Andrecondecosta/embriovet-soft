@@ -26,13 +26,13 @@ def inject_all_css_consolidated():
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
             #MainMenu, header { display: none !important; height: 0 !important; }
-            /* Remover padding-top do Streamlit para o header oculto */
+            /* Espaçamento normal no topo */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
-                padding-top: 8px !important;
+                padding-top: 2rem !important;
                 padding-bottom: 1.4rem;
             }
             /* SOLUÇÃO DEFINITIVA: remover containers de injeção CSS do flex flow via
@@ -181,16 +181,13 @@ def inject_design_system():
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
             #MainMenu, header { display: none !important; height: 0 !important; }
-            /* Remover padding-top do Streamlit para o header oculto.
-               margin-top apenas aqui (inject_design_system = só quando autenticado)
-               para proteger o layout da página de login. */
+            /* Espaçamento normal no topo do conteúdo principal */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             .block-container {
-                padding-top: 8px !important;
-                margin-top: -57px !important;
+                padding-top: 2rem !important;
                 padding-bottom: 1.4rem;
             }
             .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
