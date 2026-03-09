@@ -2750,6 +2750,27 @@ _css_comp.html(
             setTimeout(applyPadding, 50);
         }
     })();
+
+    // Restaurar zoom após sair de inputs (fix iOS Safari)
+    (function setupZoomFix() {
+        var doc = window.parent.document;
+        if (doc._equicore_zoom_fix) return;
+        doc._equicore_zoom_fix = true;
+        doc.addEventListener('focusout', function(e) {
+            var tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                // Forçar reset do zoom no viewport
+                var meta = doc.querySelector('meta[name="viewport"]');
+                if (meta) {
+                    var orig = meta.getAttribute('content') || '';
+                    meta.setAttribute('content', orig + ',maximum-scale=1');
+                    setTimeout(function() { meta.setAttribute('content', orig); }, 50);
+                }
+                // Scroll para evitar deslocamento residual
+                setTimeout(function() { window.parent.scrollTo(0, window.parent.scrollY); }, 60);
+            }
+        }, true);
+    })();
     </script>
     """,
     height=0,
@@ -2840,25 +2861,23 @@ if st.session_state.pop("_just_navigated", False):
         <script>
         (function() {
             // 1. Scroll ao topo da área de conteúdo principal
-            var main = window.parent.document.querySelector('[data-testid="stAppViewContainer"]')
+            var main = window.parent.document.querySelector('[data-testid="stMain"]')
                     || window.parent.document.querySelector('.main')
                     || window.parent.document.body;
             if (main) main.scrollTo({top: 0, behavior: 'instant'});
 
             // 2. Fechar sidebar em dispositivos móveis/tablets (< 992px)
-            var isMobile = window.parent.innerWidth < 992;
-            if (isMobile) {
-                var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-                var isExpanded = sidebar && sidebar.getAttribute('aria-expanded') === 'true';
-                if (isExpanded) {
-                    // Botão de recolher: ícone "keyboard_double_arrow"
-                    var collapseBtn = window.parent.document.querySelector(
-                        '[data-testid="stBaseButton-headerNoPadding"]'
-                    );
+            if (window.parent.innerWidth < 992) {
+                setTimeout(function() {
+                    // Tentar vários seletores possíveis do botão de colapso
+                    var collapseBtn =
+                        window.parent.document.querySelector('[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]') ||
+                        window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]') ||
+                        window.parent.document.querySelector('[data-testid="stSidebar"] button');
                     if (collapseBtn) {
-                        setTimeout(function() { collapseBtn.click(); }, 80);
+                        collapseBtn.click();
                     }
-                }
+                }, 150);
             }
         })();
         </script>

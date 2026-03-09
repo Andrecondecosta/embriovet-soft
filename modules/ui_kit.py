@@ -81,6 +81,27 @@ def inject_all_css_consolidated():
                 line-height: 1.45;
             }
 
+            /* Prevenir zoom automático no iOS/Android ao focar inputs (font-size >= 16px) */
+            @media (max-width: 992px) {
+                input[type="text"],
+                input[type="number"],
+                input[type="email"],
+                input[type="password"],
+                input[type="tel"],
+                input[type="search"],
+                input[type="date"],
+                textarea,
+                select,
+                .stTextInput input,
+                .stNumberInput input,
+                .stDateInput input,
+                .stTextArea textarea,
+                .stSelectbox select {
+                    font-size: 16px !important;
+                    touch-action: manipulation;
+                }
+            }
+
             /* Reports CSS */
             .reports-zone-title {
                 font-size: 0.78rem;
