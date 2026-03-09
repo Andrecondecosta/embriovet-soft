@@ -179,31 +179,31 @@ def run_insemination_page(ctx):
                             }
                             st.session_state[f"insem_line_input_{eid}"] = int(epalhetas or 0)
                     
-                    # Buscar lotes usados nesta inseminação
-                    # Como não temos histórico dos lotes específicos, vamos buscar lotes disponíveis do mesmo garanhão/proprietário
-                    cur.execute("""
-                        SELECT id, existencia_atual, data_embriovet, origem_externa, 
-                               contentor_id, canister, andar
-                        FROM estoque_dono
-                        WHERE garanhao = %s AND dono_id = %s AND existencia_atual > 0
-                        ORDER BY id DESC
-                        LIMIT 1
-                    """, (insemination_data['garanhao'], insemination_data['dono_id']))
-                    
-                    lote = cur.fetchone()
-                    if lote and 'insem_linhas' not in st.session_state:
-                        st.session_state['insem_linhas'] = {
-                            str(lote[0]): {
-                                'stock_id': lote[0],
-                                'garanhao': insemination_data['garanhao'],
-                                'ref': f"{lote[2] or lote[3]}",
-                                'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
-                                'max_disponivel': int(lote[1]),
-                                'qty': insemination_data['palhetas_gastas'],
-                                'dono_id': insemination_data['dono_id'],
-                                'proprietario_nome': insemination_data['proprietario_nome']
+                    # Fallback para inseminações sem estoque_id (registos antigos)
+                    if not st.session_state.get('insem_linhas'):
+                        cur.execute("""
+                            SELECT id, existencia_atual, data_embriovet, origem_externa, 
+                                   contentor_id, canister, andar
+                            FROM estoque_dono
+                            WHERE garanhao = %s AND dono_id = %s AND existencia_atual > 0
+                            ORDER BY id DESC
+                            LIMIT 1
+                        """, (insemination_data['garanhao'], insemination_data['dono_id']))
+                        
+                        lote = cur.fetchone()
+                        if lote:
+                            st.session_state['insem_linhas'] = {
+                                str(lote[0]): {
+                                    'stock_id': lote[0],
+                                    'garanhao': insemination_data['garanhao'],
+                                    'ref': f"{lote[2] or lote[3]}",
+                                    'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
+                                    'max_disponivel': int(lote[1]),
+                                    'qty': insemination_data['palhetas_gastas'],
+                                    'dono_id': insemination_data['dono_id'],
+                                    'proprietario_nome': insemination_data['proprietario_nome']
+                                }
                             }
-                        }
                 cur.close()
         except Exception as e:
             st.error(f"Erro ao carregar dados da inseminação: {e}")
@@ -387,9 +387,13 @@ def run_insemination_page(ctx):
     
     # 1. CAVALO
     garanhaos_disponiveis = sorted(stock_disponivel["garanhao"].dropna().unique())
+    # Em modo edição, garantir que o garanhão da inseminação aparece na lista
+    gar_edit = st.session_state.get("insem_garanhao_principal")
+    if edit_mode and gar_edit and gar_edit not in garanhaos_disponiveis:
+        garanhaos_disponiveis = sorted(list(garanhaos_disponiveis) + [gar_edit])
     idx_gar = 0
-    if st.session_state["insem_garanhao_principal"] and st.session_state["insem_garanhao_principal"] in garanhaos_disponiveis:
-        idx_gar = garanhaos_disponiveis.index(st.session_state["insem_garanhao_principal"])
+    if gar_edit and gar_edit in garanhaos_disponiveis:
+        idx_gar = garanhaos_disponiveis.index(gar_edit)
     
     garanhao_selecionado = st.selectbox(
         t("label.garanhao"),
@@ -408,11 +412,15 @@ def run_insemination_page(ctx):
     # 2. PROPRIETÁRIO (filtrado pelo cavalo)
     stock_cavalo = stock_disponivel[stock_disponivel["garanhao"] == garanhao_selecionado]
     proprietarios_com_stock = sorted(stock_cavalo["proprietario_nome"].dropna().unique())
+    # Em modo edição, garantir que o proprietário da inseminação aparece na lista
+    prop_edit = st.session_state.get("insem_prop_principal")
+    if edit_mode and prop_edit and prop_edit not in proprietarios_com_stock:
+        proprietarios_com_stock = sorted(list(proprietarios_com_stock) + [prop_edit])
     prop_opts = [t("common.all")] + proprietarios_com_stock
     
     idx_prop = 0
-    if st.session_state["insem_prop_principal"] and st.session_state["insem_prop_principal"] in proprietarios_com_stock:
-        idx_prop = prop_opts.index(st.session_state["insem_prop_principal"])
+    if prop_edit and prop_edit in proprietarios_com_stock:
+        idx_prop = prop_opts.index(prop_edit)
     
     proprietario_selecionado = st.selectbox(
         t("label.owner"),
