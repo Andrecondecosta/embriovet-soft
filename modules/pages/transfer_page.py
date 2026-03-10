@@ -16,6 +16,7 @@ def run_transfer_page(ctx):
     edit_mode = False
     transfer_data = None
     transfer_type = None
+    edit_op_id = st.session_state.get('edit_transfer_op_id')  # UUID da operação multi-lote
     
     if st.session_state.get('edit_transfer_id') and st.session_state.get('edit_transfer_type'):
         edit_mode = True
@@ -28,26 +29,23 @@ def run_transfer_page(ctx):
                 cur = conn.cursor()
                 
                 if transfer_type == "transfer_internal":
-                    # Transferência interna
                     cur.execute("""
                         SELECT t.id, t.estoque_id, t.proprietario_origem_id, t.proprietario_destino_id,
                                t.quantidade, t.data_transferencia,
                                d1.nome as origem_nome, d2.nome as destino_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa
+                               e.garanhao, e.data_embriovet, e.origem_externa, t.operation_id
                         FROM transferencias t
                         LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                         LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                         LEFT JOIN estoque_dono e ON t.estoque_id = e.id
                         WHERE t.id = %s
                     """, (transfer_id,))
-                    
                 elif transfer_type == "transfer_external":
-                    # Transferência externa
                     cur.execute("""
                         SELECT te.id, te.estoque_id, te.proprietario_origem_id, te.destinatario_externo,
                                te.quantidade, te.data_transferencia, te.tipo, te.observacoes,
                                d.nome as origem_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa
+                               e.garanhao, e.data_embriovet, e.origem_externa, te.operation_id
                         FROM transferencias_externas te
                         LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                         LEFT JOIN estoque_dono e ON te.estoque_id = e.id
@@ -58,33 +56,26 @@ def run_transfer_page(ctx):
                 if row:
                     if transfer_type == "transfer_internal":
                         transfer_data = {
-                            'id': row[0],
-                            'estoque_id': row[1],
-                            'proprietario_origem_id': row[2],
-                            'proprietario_destino_id': row[3],
-                            'quantidade': row[4],
-                            'data_transferencia': row[5],
-                            'origem_nome': row[6],
-                            'destino_nome': row[7],
-                            'garanhao': row[8],
-                            'data_embriovet': row[9],
-                            'origem_externa': row[10]
+                            'id': row[0], 'estoque_id': row[1],
+                            'proprietario_origem_id': row[2], 'proprietario_destino_id': row[3],
+                            'quantidade': row[4], 'data_transferencia': row[5],
+                            'origem_nome': row[6], 'destino_nome': row[7],
+                            'garanhao': row[8], 'data_embriovet': row[9],
+                            'origem_externa': row[10],
                         }
-                    else:  # transfer_external
+                    else:
                         transfer_data = {
-                            'id': row[0],
-                            'estoque_id': row[1],
-                            'proprietario_origem_id': row[2],
-                            'destinatario_externo': row[3],
-                            'quantidade': row[4],
-                            'data_transferencia': row[5],
-                            'tipo': row[6],
-                            'observacoes': row[7],
-                            'origem_nome': row[8],
-                            'garanhao': row[9],
-                            'data_embriovet': row[10],
-                            'origem_externa': row[11]
+                            'id': row[0], 'estoque_id': row[1],
+                            'proprietario_origem_id': row[2], 'destinatario_externo': row[3],
+                            'quantidade': row[4], 'data_transferencia': row[5],
+                            'tipo': row[6], 'observacoes': row[7],
+                            'origem_nome': row[8], 'garanhao': row[9],
+                            'data_embriovet': row[10], 'origem_externa': row[11],
                         }
+                    # Sincronizar operation_id se disponível no registo
+                    if not edit_op_id and row[12]:
+                        edit_op_id = str(row[12])
+                        st.session_state['edit_transfer_op_id'] = edit_op_id
                     
                     # Pré-definir tipo de transferência
                     if 'transfer_tipo' not in st.session_state:
@@ -99,34 +90,74 @@ def run_transfer_page(ctx):
                     if 'transfer_proprietario' not in st.session_state and transfer_data.get('origem_nome'):
                         st.session_state['transfer_proprietario'] = transfer_data['origem_nome']
                     
-                    # Buscar informações do lote para pré-preencher
-                    cur.execute("""
-                        SELECT id, existencia_atual, data_embriovet, origem_externa,
-                               contentor_id, canister, andar
-                        FROM estoque_dono
-                        WHERE id = %s
-                    """, (transfer_data['estoque_id'],))
-                    
-                    lote = cur.fetchone()
-                    if lote and 'transfer_linhas' not in st.session_state:
-                        # Pré-preencher lotes selecionados
-                        st.session_state['transfer_linhas'] = {
-                            str(lote[0]): {
-                                'stock_id': lote[0],
-                                'garanhao': transfer_data['garanhao'],
-                                'ref': f"{lote[2] or lote[3]}",
-                                'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
-                                'max_disponivel': int(lote[1]) + transfer_data['quantidade'],  # Somar pois já foi transferido
-                                'qty': transfer_data['quantidade'],
-                                'dono_id': transfer_data['proprietario_origem_id'],
-                                'proprietario_nome': transfer_data['origem_nome']
-                            }
-                        }
+                    # Carregar TODOS os lotes da operação
+                    if not st.session_state.get('transfer_linhas'):
+                        all_lots = []
+                        if edit_op_id:
+                            # Multi-lote: carregar todos os lotes pelo operation_id
+                            if transfer_type == "transfer_internal":
+                                cur.execute("""
+                                    SELECT t.estoque_id, t.quantidade,
+                                           e.existencia_atual, e.data_embriovet, e.origem_externa,
+                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           t.proprietario_origem_id, d.nome as origem_nome
+                                    FROM transferencias t
+                                    JOIN estoque_dono e ON t.estoque_id = e.id
+                                    LEFT JOIN dono d ON t.proprietario_origem_id = d.id
+                                    WHERE t.operation_id = %s::uuid
+                                    ORDER BY t.id
+                                """, (edit_op_id,))
+                            else:
+                                cur.execute("""
+                                    SELECT te.estoque_id, te.quantidade,
+                                           e.existencia_atual, e.data_embriovet, e.origem_externa,
+                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           te.proprietario_origem_id, d.nome as origem_nome
+                                    FROM transferencias_externas te
+                                    JOIN estoque_dono e ON te.estoque_id = e.id
+                                    LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+                                    WHERE te.operation_id = %s::uuid
+                                    ORDER BY te.id
+                                """, (edit_op_id,))
+                            all_lots = cur.fetchall()
+                        
+                        if not all_lots:
+                            # Single lote (fallback)
+                            cur.execute("""
+                                SELECT id, existencia_atual, data_embriovet, origem_externa,
+                                       contentor_id, canister, andar
+                                FROM estoque_dono WHERE id = %s
+                            """, (transfer_data['estoque_id'],))
+                            lote = cur.fetchone()
+                            if lote:
+                                all_lots = [(
+                                    lote[0], transfer_data['quantidade'],
+                                    lote[1], lote[2], lote[3], lote[4], lote[5], lote[6],
+                                    transfer_data['garanhao'],
+                                    transfer_data['proprietario_origem_id'],
+                                    transfer_data['origem_nome'],
+                                )]
+                        
+                        if all_lots:
+                            new_linhas = {}
+                            for lot in all_lots:
+                                e_id, qty, e_exist, e_data, e_orig, e_cont, e_can, e_and, e_gar, e_dono, e_nome = lot
+                                virtual_exist = int(e_exist or 0) + int(qty or 0)
+                                ref = (e_data.strftime('%Y-%m-%d') if hasattr(e_data, 'strftime') else str(e_data or e_orig or '—'))
+                                local = f"C{e_cont or '?'} Can{e_can or '?'} A{e_and or '?'}"
+                                new_linhas[str(e_id)] = {
+                                    'stock_id': e_id, 'garanhao': e_gar,
+                                    'ref': ref, 'local': local,
+                                    'max_disponivel': virtual_exist, 'qty': int(qty or 0),
+                                    'dono_id': e_dono, 'proprietario_nome': e_nome or '—',
+                                }
+                                st.session_state[f"transfer_step_{e_id}"] = int(qty or 0)
+                            st.session_state['transfer_linhas'] = new_linhas
                     
                     # Pré-preencher campos específicos por tipo
                     if transfer_type == "transfer_external" and transfer_data:
-                        if 'transfer_destinatario_externo' not in st.session_state:
-                            st.session_state['transfer_destinatario_externo'] = transfer_data.get('destinatario_externo', '')
+                        if 'transfer_dest_externo' not in st.session_state:
+                            st.session_state['transfer_dest_externo'] = transfer_data.get('destinatario_externo', '')
                         if 'transfer_motivo' not in st.session_state:
                             st.session_state['transfer_motivo'] = transfer_data.get('tipo', 'Venda')
                         if 'transfer_observacoes' not in st.session_state:
@@ -140,6 +171,7 @@ def run_transfer_page(ctx):
             st.error(f"Erro ao carregar dados da transferência: {e}")
             st.session_state.pop('edit_transfer_id', None)
             st.session_state.pop('edit_transfer_type', None)
+            st.session_state.pop('edit_transfer_op_id', None)
             edit_mode = False
 
     st.markdown(
@@ -645,46 +677,64 @@ def run_transfer_page(ctx):
                     sucesso = True
 
                     if edit_mode and transfer_data:
-                        # MODO EDIÇÃO: atualizar a transferência existente com os dados do 1.º lote
-                        linha = linhas_finais[0]
-                        stock_id = linha["stock_id"]
-                        qtd = linha["qty"]
+                        # MODO EDIÇÃO: reverter operação antiga e re-criar com novos dados
+                        op_id_edit = st.session_state.get('edit_transfer_op_id')
                         try:
-                            if muda_localizacao == t("transfer.new_location"):
-                                ok = atualizar_transferencia_interna(
-                                    transfer_data['id'], stock_id, dest_id, qtd,
-                                    contentor_id_destino, canister_destino, andar_destino
-                                )
-                            else:
-                                ok = atualizar_transferencia_interna(
-                                    transfer_data['id'], stock_id, dest_id, qtd
-                                )
-                            if not ok:
-                                sucesso = False
+                            with get_connection() as conn:
+                                cur = conn.cursor()
+                                # 1. Devolver palhetas de TODOS os lotes antigos ao stock
+                                if op_id_edit:
+                                    cur.execute("SELECT estoque_id, quantidade FROM transferencias WHERE operation_id = %s::uuid", (op_id_edit,))
+                                    old_lots = cur.fetchall()
+                                else:
+                                    old_lots = [(transfer_data['estoque_id'], transfer_data['quantidade'])]
+                                for e_id, qtd_old in old_lots:
+                                    cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd_old, e_id))
+                                    # Retirar do destino
+                                    cur.execute("""
+                                        SELECT ed.id, ed.existencia_atual FROM estoque_dono ed
+                                        WHERE ed.dono_id = %s AND ed.garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s) LIMIT 1
+                                    """, (dest_id, e_id))
+                                    dest_lote = cur.fetchone()
+                                    if dest_lote:
+                                        nova = int(dest_lote[1]) - int(qtd_old)
+                                        if nova <= 0:
+                                            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (dest_lote[0],))
+                                        else:
+                                            cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s", (nova, dest_lote[0]))
+                                # 2. Eliminar registos antigos
+                                if op_id_edit:
+                                    cur.execute("DELETE FROM transferencias WHERE operation_id = %s::uuid", (op_id_edit,))
+                                else:
+                                    cur.execute("DELETE FROM transferencias WHERE id = %s", (transfer_data['id'],))
+                                conn.commit()
+                                cur.close()
                         except Exception as e:
-                            st.error(f"Erro ao atualizar transferência: {e}")
+                            st.error(f"Erro ao reverter transferência: {e}")
                             sucesso = False
 
-                        # Linhas adicionais são tratadas como novas transferências
-                        for linha in linhas_finais[1:]:
-                            origem_id = linha["dono_id"]
-                            if origem_id == dest_id:
-                                st.error(f"⚠️ Não é possível transferir para o mesmo proprietário.")
-                                sucesso = False
-                                continue
-                            try:
-                                if muda_localizacao == t("transfer.new_location"):
-                                    ok = transferir_stock_interno_com_localizacao(
-                                        origem_id, dest_id, linha["stock_id"], linha["qty"],
-                                        contentor_id_destino, canister_destino, andar_destino
-                                    )
-                                else:
-                                    ok = transferir_stock_interno(linha["stock_id"], dest_id, linha["qty"])
-                                if not ok:
+                        # 3. Re-inserir todos os novos lotes
+                        if sucesso:
+                            import uuid as _uuid
+                            op_id = op_id_edit or str(_uuid.uuid4())
+                            for linha in linhas_finais:
+                                origem_id = linha["dono_id"]
+                                if origem_id == dest_id:
+                                    st.error(f"⚠️ Não pode transferir para o mesmo proprietário.")
                                     sucesso = False
-                            except Exception as e:
-                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
-                                sucesso = False
+                                    continue
+                                try:
+                                    if muda_localizacao == t("transfer.new_location"):
+                                        transferir_stock_interno_com_localizacao(
+                                            origem_id, dest_id, linha["stock_id"], linha["qty"],
+                                            contentor_id_destino, canister_destino, andar_destino,
+                                            operation_id=op_id
+                                        )
+                                    else:
+                                        transferir_stock_interno(linha["stock_id"], dest_id, linha["qty"], operation_id=op_id)
+                                except Exception as e:
+                                    st.error(f"Erro ao re-inserir {linha['ref']}: {e}")
+                                    sucesso = False
                     else:
                         # MODO CRIAÇÃO: criar novas transferências internas com operation_id único
                         import uuid as _uuid
@@ -716,6 +766,7 @@ def run_transfer_page(ctx):
                         # Limpar modo de edição
                         st.session_state.pop('edit_transfer_id', None)
                         st.session_state.pop('edit_transfer_type', None)
+                        st.session_state.pop('edit_transfer_op_id', None)
                         st.session_state["transfer_show_success"] = True
                         st.rerun()
         
@@ -751,31 +802,40 @@ def run_transfer_page(ctx):
                     sucesso = True
 
                     if edit_mode and transfer_data:
-                        # MODO EDIÇÃO: atualizar a transferência externa existente
-                        linha = linhas_finais[0]
+                        # MODO EDIÇÃO: reverter operação externa antiga e re-criar com novos dados
+                        op_id_edit = st.session_state.get('edit_transfer_op_id')
                         try:
-                            ok = atualizar_transferencia_externa(
-                                transfer_data['id'], linha["stock_id"], destinatario_externo,
-                                linha["qty"], motivo, observacoes
-                            )
-                            if not ok:
-                                sucesso = False
+                            with get_connection() as conn:
+                                cur = conn.cursor()
+                                # 1. Devolver palhetas de TODOS os lotes antigos ao stock
+                                if op_id_edit:
+                                    cur.execute("SELECT estoque_id, quantidade FROM transferencias_externas WHERE operation_id = %s::uuid", (op_id_edit,))
+                                    old_lots = cur.fetchall()
+                                else:
+                                    old_lots = [(transfer_data['estoque_id'], transfer_data['quantidade'])]
+                                for e_id, qtd_old in old_lots:
+                                    cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd_old, e_id))
+                                # 2. Eliminar registos antigos
+                                if op_id_edit:
+                                    cur.execute("DELETE FROM transferencias_externas WHERE operation_id = %s::uuid", (op_id_edit,))
+                                else:
+                                    cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (transfer_data['id'],))
+                                conn.commit()
+                                cur.close()
                         except Exception as e:
-                            st.error(f"Erro ao atualizar transferência: {e}")
+                            st.error(f"Erro ao reverter transferência externa: {e}")
                             sucesso = False
 
-                        # Linhas adicionais são tratadas como novas transferências
-                        for linha in linhas_finais[1:]:
-                            try:
-                                ok = transferir_stock_externo(
-                                    linha["stock_id"], destinatario_externo,
-                                    linha["qty"], motivo, observacoes
-                                )
-                                if not ok:
+                        # 3. Re-inserir todos os novos lotes
+                        if sucesso:
+                            import uuid as _uuid
+                            op_id = op_id_edit or str(_uuid.uuid4())
+                            for linha in linhas_finais:
+                                try:
+                                    transferir_stock_externo(linha["stock_id"], destinatario_externo, linha["qty"], motivo, observacoes, operation_id=op_id)
+                                except Exception as e:
+                                    st.error(f"Erro ao re-inserir {linha['ref']}: {e}")
                                     sucesso = False
-                            except Exception as e:
-                                st.error(f"Erro ao transferir {linha['ref']}: {e}")
-                                sucesso = False
                     else:
                         # MODO CRIAÇÃO: criar novas transferências externas com operation_id único
                         import uuid as _uuid
@@ -793,5 +853,6 @@ def run_transfer_page(ctx):
                         # Limpar modo de edição
                         st.session_state.pop('edit_transfer_id', None)
                         st.session_state.pop('edit_transfer_type', None)
+                        st.session_state.pop('edit_transfer_op_id', None)
                         st.session_state["transfer_show_success"] = True
                         st.rerun()

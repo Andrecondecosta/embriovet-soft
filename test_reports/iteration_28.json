@@ -1,0 +1,73 @@
+{
+  "summary": "Tested multi-lot operation grouping features on Streamlit app (port 3000). P0 bug fix VERIFIED WORKING: External transfer edit now pre-fills ALL lots by operation_id. Also fixed a secondary bug: External Recipient field not pre-filled in edit mode due to session state key mismatch. Fixed key from 'transfer_destinatario_externo' to 'transfer_dest_externo' in transfer_page.py line 159. Setup fix: Changed Streamlit port from 8501 to 3000 so the preview URL (multi-lot-ops.preview.emergentagent.com) routes correctly via K8s ingress.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "P0_bug_fix_external_transfer_all_lots_loaded": "PASS - All 6 lots pre-filled (values: 8, 30, 36, 34, 43, 7 = Total 158)",
+    "dashboard_grouping": "PASS - Shows 'Qtd 158 (6 lotes)' as 1 row for 6-lot external transfer",
+    "session_persistence_after_refresh": "PASS - User stays logged in after page refresh",
+    "edit_external_transfer_recipient_prefill": "PASS (after fix) - 'tavares almeida' now pre-filled in External Recipient input",
+    "edit_external_transfer_mode_banner": "PASS - Shows 'Modo de Edição' banner correctly",
+    "edit_external_transfer_type_radio": "PASS - External Transfer radio is correctly selected",
+    "edit_external_transfer_reason_prefill": "PASS - 'Export' is pre-filled in the reason selectbox",
+    "edit_internal_transfer_lot_prefill": "PASS - Single lot pre-filled with qty=6, destination='Joao'",
+    "edit_insemination_mode": "PASS - Edit mode opens correctly for insemination",
+    "revert_confirmation_dialog": "PASS - Shows '⚠️ Esta ação é irreversível!' with correct operation details",
+    "gerir_logs_modal_open": "PASS - ✏️ button opens modal with all activity rows"
+  },
+  "bugs_found_and_fixed": [
+    {
+      "file": "/app/modules/pages/transfer_page.py",
+      "line": "159",
+      "issue": "External Recipient not pre-filled in edit mode - session state key mismatch",
+      "root_cause": "Pre-fill code set st.session_state['transfer_destinatario_externo'] but text_input used key='transfer_dest_externo'. Different keys = no pre-fill.",
+      "fix": "Changed line 159 from 'transfer_destinatario_externo' to 'transfer_dest_externo' to match the widget key",
+      "severity": "Medium"
+    }
+  ],
+  "setup_changes": [
+    {
+      "file": "/etc/supervisor/conf.d/streamlit.conf",
+      "change": "Changed Streamlit port from 8501 to 3000 so K8s ingress can route preview URL correctly",
+      "reason": "K8s ingress routes 'multi-lot-ops.preview.emergentagent.com' to port 3000, but Streamlit was running on 8501"
+    },
+    {
+      "file": "/app/.streamlit/config.toml",
+      "change": "Changed port from 8501 to 3000 (consistent with supervisor config)"
+    }
+  ],
+  "not_tested": [
+    "Actual save/submit of edited external transfer (would modify real DB data - deferred for safety)",
+    "Creating new multi-lot external transfer",
+    "Creating new multi-lot internal transfer",
+    "3-lot insemination edit (only 1-lot insemination edit was tested)",
+    "Revert all lots of a grouped operation (only verified confirm dialog, not actual revert)"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_28.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: transfer_page.py line 159 - external recipient session state key mismatch was preventing pre-fill in edit mode",
+    "INFO: cleanup list at line 308-309 includes both 'transfer_dest_externo' AND 'transfer_destinatario_externo' - the second is now dead code but harmless",
+    "INFO: Streamlit needs to run on port 3000 for K8s preview URL routing to work (changed in supervisor config)"
+  ],
+  "updated_files": [
+    "/app/modules/pages/transfer_page.py",
+    "/app/.streamlit/config.toml",
+    "/etc/supervisor/conf.d/streamlit.conf"
+  ],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "100% (all tested features passing)"
+  },
+  "seed_data_used": "6-lot external transfer (op_id starts with 8ddc9755, Total Qtd 158, Tavares de Almeida → tavares almeida), Internal transfer Qtd 6 (single lot to Joao)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "IMPORTANT SETUP: Streamlit now runs on port 3000 (changed from 8501) to be accessible via K8s preview URL. supervisor conf updated. P0 bug (multi-lot edit not loading all lots) is FIXED and VERIFIED. Secondary bug (external recipient not pre-filled) also FIXED in transfer_page.py line 159. All core edit-mode flows work correctly. The app login uses 'admin/admin123' with Enter key. Dashboard ATIVIDADE RECENTE shows grouped ops. Use ✏️ button (title='Gerir logs') to open logs modal, then click ✏️ inside dialog to open edit mode."
+}
