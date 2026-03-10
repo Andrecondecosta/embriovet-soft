@@ -92,35 +92,36 @@ def run_insemination_page(ctx):
     # Detectar modo de edição
     edit_mode = False
     insemination_data = None
+    edit_operation_id = st.session_state.get('edit_insemination_op_id')  # UUID da operação multi-lote
+
     if st.session_state.get('edit_insemination_id'):
         edit_mode = True
         insemination_id = st.session_state['edit_insemination_id']
         
-        # Carregar dados da inseminação
         try:
             with get_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT i.id, i.garanhao, i.egua, i.dono_id, i.palhetas_gastas, 
-                           i.data_inseminacao, d.nome as proprietario_nome, i.observacoes
+                           i.data_inseminacao, d.nome as proprietario_nome, i.observacoes, i.operation_id
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.id = %s
                 """, (insemination_id,))
                 row = cur.fetchone()
                 if row:
+                    # Se operation_id do registo não coincide com o da sessão, sincronizar
+                    if not edit_operation_id and row[8]:
+                        edit_operation_id = str(row[8])
+                        st.session_state['edit_insemination_op_id'] = edit_operation_id
+
                     insemination_data = {
-                        'id': row[0],
-                        'garanhao': row[1],
-                        'egua': row[2],
-                        'dono_id': row[3],
-                        'palhetas_gastas': row[4],
-                        'data_inseminacao': row[5],
-                        'proprietario_nome': row[6],
+                        'id': row[0], 'garanhao': row[1], 'egua': row[2],
+                        'dono_id': row[3], 'palhetas_gastas': row[4],
+                        'data_inseminacao': row[5], 'proprietario_nome': row[6],
                         'observacoes': row[7] or '',
                     }
                     
-                    # Pré-preencher estado base
                     if 'insem_egua' not in st.session_state:
                         st.session_state['insem_egua'] = insemination_data['egua']
                     if 'insem_data' not in st.session_state:
@@ -130,80 +131,82 @@ def run_insemination_page(ctx):
                     st.session_state["insem_garanhao_principal"] = insemination_data['garanhao']
                     st.session_state["insem_prop_principal"] = insemination_data['proprietario_nome']
 
-                    # Carregar lote utilizado (via estoque_id) para pré-preencher insem_linhas
-                    if 'insem_linhas' not in st.session_state or not st.session_state['insem_linhas']:
-                        cur.execute("""
-                            SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
-                                   ed.data_embriovet, ed.origem_externa, ed.motilidade,
-                                   ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
-                                   ed.contentor_id, ed.canister, ed.andar,
-                                   d.nome as proprietario_nome, c.codigo as contentor_codigo,
-                                   i.palhetas_gastas
-                            FROM inseminacoes i
-                            JOIN estoque_dono ed ON i.estoque_id = ed.id
-                            LEFT JOIN dono d ON ed.dono_id = d.id
-                            LEFT JOIN contentores c ON ed.contentor_id = c.id
-                            WHERE i.id = %s AND i.estoque_id IS NOT NULL
-                        """, (insemination_id,))
-                        lot_row = cur.fetchone()
-                        if lot_row:
-                            (eid, egaranhao, edono_id, eexist, edata_emb, eorig_ext,
-                             emot, edose, ecor, econc, elocal, econt_id, ecan, eandar,
-                             eprop_nome, econt_code, epalhetas) = lot_row
-                            
-                            # Quantidade virtual = atual + usadas (palhetas serão devolvidas no UPDATE)
-                            existencia_virtual = int(eexist or 0) + int(epalhetas or 0)
-                            ref = eorig_ext or (str(edata_emb) if edata_emb else f"Lote #{eid}")
-                            contentor = econt_code or elocal or "SEM-CONTENTOR"
-                            if ecan is not None and eandar is not None:
-                                location = f"{contentor} / C{int(ecan)} / A{int(eandar)}"
-                            else:
-                                location = str(contentor)
-                            
-                            st.session_state['insem_linhas'] = {
-                                str(eid): {
-                                    "stock_id": int(eid),
-                                    "garanhao": egaranhao,
-                                    "dono_id": to_py(edono_id),
-                                    "proprietario_nome": eprop_nome or "—",
-                                    "ref": ref,
-                                    "local": location,
-                                    "motilidade": int(emot or 0),
-                                    "dose": str(edose) if edose else "—",
-                                    "cor": str(ecor) if ecor else "",
-                                    "concentracao": int(econc or 0),
-                                    "protocolo": str(eorig_ext or edata_emb or "N/A"),
-                                    "max_disponivel": existencia_virtual,
-                                    "qty": int(epalhetas or 0),
-                                }
-                            }
-                            st.session_state[f"insem_line_input_{eid}"] = int(epalhetas or 0)
-                    
-                    # Fallback para inseminações sem estoque_id (registos antigos)
+                    # Carregar TODOS os lotes da operação
                     if not st.session_state.get('insem_linhas'):
-                        cur.execute("""
-                            SELECT id, existencia_atual, data_embriovet, origem_externa, 
-                                   contentor_id, canister, andar
-                            FROM estoque_dono
-                            WHERE garanhao = %s AND dono_id = %s AND existencia_atual > 0
-                            ORDER BY id DESC
-                            LIMIT 1
-                        """, (insemination_data['garanhao'], insemination_data['dono_id']))
-                        
-                        lote = cur.fetchone()
-                        if lote:
-                            st.session_state['insem_linhas'] = {
-                                str(lote[0]): {
-                                    'stock_id': lote[0],
-                                    'garanhao': insemination_data['garanhao'],
-                                    'ref': f"{lote[2] or lote[3]}",
-                                    'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
-                                    'max_disponivel': int(lote[1]),
-                                    'qty': insemination_data['palhetas_gastas'],
-                                    'dono_id': insemination_data['dono_id'],
-                                    'proprietario_nome': insemination_data['proprietario_nome']
-                                }
+                        if edit_operation_id:
+                            # Multi-lote: carregar todos os lotes pelo operation_id
+                            cur.execute("""
+                                SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
+                                       ed.data_embriovet, ed.origem_externa, ed.motilidade,
+                                       ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
+                                       ed.contentor_id, ed.canister, ed.andar,
+                                       d.nome as proprietario_nome, c.codigo as contentor_codigo,
+                                       i.palhetas_gastas
+                                FROM inseminacoes i
+                                JOIN estoque_dono ed ON i.estoque_id = ed.id
+                                LEFT JOIN dono d ON ed.dono_id = d.id
+                                LEFT JOIN contentores c ON ed.contentor_id = c.id
+                                WHERE i.operation_id = %s::uuid
+                                ORDER BY i.id
+                            """, (edit_operation_id,))
+                            lot_rows = cur.fetchall()
+                        else:
+                            # Single lote (backward compat): carregar por estoque_id
+                            cur.execute("""
+                                SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
+                                       ed.data_embriovet, ed.origem_externa, ed.motilidade,
+                                       ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
+                                       ed.contentor_id, ed.canister, ed.andar,
+                                       d.nome as proprietario_nome, c.codigo as contentor_codigo,
+                                       i.palhetas_gastas
+                                FROM inseminacoes i
+                                JOIN estoque_dono ed ON i.estoque_id = ed.id
+                                LEFT JOIN dono d ON ed.dono_id = d.id
+                                LEFT JOIN contentores c ON ed.contentor_id = c.id
+                                WHERE i.id = %s AND i.estoque_id IS NOT NULL
+                            """, (insemination_id,))
+                            lot_rows = cur.fetchall()
+
+                        new_linhas = {}
+                        for lr in lot_rows:
+                            eid, egar, edono, eexist, edata, eorig, emot, edose, ecor, econc, elocal, econt, ecan, eandar, eprop, econt_cod, epalhetas = lr
+                            existencia_virtual = int(eexist or 0) + int(epalhetas or 0)
+                            sid = str(eid)
+                            local_str = econt_cod or elocal or t("stock.no_location")
+                            ref_str = edata.strftime('%Y-%m-%d') if hasattr(edata, 'strftime') else (eorig or '—')
+                            new_linhas[sid] = {
+                                'stock_id': int(eid), 'garanhao': egar,
+                                'ref': ref_str, 'local': local_str,
+                                'max_disponivel': existencia_virtual,
+                                'qty': int(epalhetas or 0),
+                                'dono_id': edono, 'proprietario_nome': eprop or '—',
                             }
+                            st.session_state[f"insem_step_{sid}"] = int(epalhetas or 0)
+                        if new_linhas:
+                            st.session_state['insem_linhas'] = new_linhas
+
+                        # Fallback para inseminações sem estoque_id (registos antigos)
+                        if not st.session_state.get('insem_linhas'):
+                            cur.execute("""
+                                SELECT id, existencia_atual, data_embriovet, origem_externa,
+                                       contentor_id, canister, andar
+                                FROM estoque_dono
+                                WHERE garanhao = %s AND dono_id = %s AND existencia_atual > 0
+                                ORDER BY id DESC LIMIT 1
+                            """, (insemination_data['garanhao'], insemination_data['dono_id']))
+                            lote = cur.fetchone()
+                            if lote:
+                                st.session_state['insem_linhas'] = {
+                                    str(lote[0]): {
+                                        'stock_id': lote[0], 'garanhao': insemination_data['garanhao'],
+                                        'ref': f"{lote[2] or lote[3]}",
+                                        'local': f"C{lote[4] or '?'} Can{lote[5] or '?'} A{lote[6] or '?'}",
+                                        'max_disponivel': int(lote[1]),
+                                        'qty': insemination_data['palhetas_gastas'],
+                                        'dono_id': insemination_data['dono_id'],
+                                        'proprietario_nome': insemination_data['proprietario_nome'],
+                                    }
+                                }
                 cur.close()
         except Exception as e:
             st.error(f"Erro ao carregar dados da inseminação: {e}")
@@ -573,11 +576,13 @@ def run_insemination_page(ctx):
                 registros, 
                 data_insem, 
                 egua, 
-                insemination_data['id'] if edit_mode and insemination_data else None,
-                observacoes=observacoes or None
+                insemination_data['id'] if edit_mode and insemination_data and not st.session_state.get('edit_insemination_op_id') else None,
+                observacoes=observacoes or None,
+                edit_operation_id=st.session_state.get('edit_insemination_op_id'),
             )
             if ok:
                 # Limpar modo de edição
                 st.session_state.pop('edit_insemination_id', None)
+                st.session_state.pop('edit_insemination_op_id', None)
                 st.session_state["insem_show_success"] = True
                 st.rerun()

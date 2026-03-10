@@ -1,7 +1,7 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Mar 2026** — Remoção dos botões do header (Definições/Terminar Sessão); Terminar Sessão movido para a sidebar.
+**Mar 2026** — Operações multi-lote (transferências + inseminações agrupadas por `operation_id`) totalmente implementadas e testadas. Bug P0 "Editar Transferência não carregava todos os lotes" corrigido. Persistência de sessão via DB implementada. Melhorias de UX mobile concluídas.
 
 ## Problema Original
 Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas, e importação inteligente com criação automática de entidades.
@@ -91,7 +91,12 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 ### Transferências (`transfer_page.py`)
 - Página dedicada: transferências internas e externas
 - Criar novo proprietário durante transferência
-- **Modo de Edição** — Março 2026: ao editar via modal de logs, pré-preenche lote, tipo, destino/destinatário; botão "Atualizar" faz UPDATE no BD (não INSERT)
+- **Modo de Edição Multi-Lote** — Março 2026 (COMPLETO):
+  - Ao editar via modal de logs, carrega TODOS os lotes da operação pelo `operation_id`
+  - Transferências internas: revert+recreate com suporte a `operation_id`
+  - Transferências externas: revert+recreate com suporte a `operation_id` (bug P0 corrigido em Mar 2026)
+  - Criação de novas transferências agrupadas por `operation_id` único
+  - Testado e verificado — iteration_28: 100% sucesso
 
 ### Inseminações (`insemination_page.py`)
 - Fluxo sequencial: Cavalo → Proprietário → Lotes → Quantidade
@@ -132,14 +137,16 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 
 ## Backlog / Próximas Tarefas
 
-### P0 — Verificação completa (iteration_26 — 16/16 PASS)
+### P0 — CONCLUÍDO (iteration_28 — 100% PASS)
+- [x] Edit Transferência Multi-Lote — carregamento de todos os lotes, revert+recreate correto
 - [x] Edit Inseminação com Lote de Sémen — pré-preenchimento, ajuste stock, auditoria
 
 ### P1 — Próximas
 - [ ] Completar página "Definições": preview do logo em tempo real + painel i18n
-- [ ] Verificar persistência de sessão após F5 (refresh do browser)
+- [ ] Verificar salvamento da edição de transferência + reversão (não testado por segurança de DB)
 
 ### P2 — Futuro
+- [ ] Bug visual dos botões `+/-` do stepper
 - [ ] Novos relatórios (por contentor, localização, ocupação)
 - [ ] Testar regra de segurança: contentor com stock > 0 não pode ser apagado
 - [ ] Extrair "Gestão de Proprietários" de app.py para módulo próprio

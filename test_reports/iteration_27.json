@@ -1,0 +1,64 @@
+{
+  "summary": "Frontend testing of multi-lot operation grouping (operation_id) feature. Dashboard correctly shows grouped operations (1 row per operation_id). Login, session persistence, mobile sidebar, and all core pages work. Confirmed critical bug: transfer edit mode does NOT load all lots of a multi-lot operation (transfer_page.py ignores edit_transfer_op_id). Insemination edit mode correctly loads all lots via operation_id.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "TransferPage - Edit Mode",
+        "issue": "When editing a multi-lot transfer from the dashboard logs modal, transfer_page.py completely ignores st.session_state['edit_transfer_op_id']. Only the single clicked row's lot is pre-filled, not all N lots of the grouped operation. The session key edit_transfer_op_id is set by dashboard_page.py but never read in transfer_page.py.",
+        "selector": "transfer_page.py - no reference to edit_transfer_op_id",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Logs modal -> Edit transfer",
+        "issue": "transfer_page.py does not query all lots by operation_id when edit_transfer_op_id is set. Only uses edit_transfer_id (single action row). For a 6-lot grouped transfer, only 1 lot is pre-filled instead of 6.",
+        "affected_selectors": ["transfer_page.py lines 647-687"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Dashboard - Streamlit console",
+        "issues": [
+          "Multiple 'Invalid color passed for widgetBackgroundColor/widgetBorderColor/skeletonBackgroundColor in theme.sidebar' warnings - CSS theme misconfiguration (non-critical, cosmetic)",
+          "Vega-Lite version mismatch warnings v5.20.1 vs v6.3.1 in charts - non-critical",
+          "Vega-Lite 'Infinite extent for Palhetas_start/end' when no data - chart handles gracefully"
+        ]
+      }
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_27.json"],
+  "action_items": [
+    "FIX (HIGH): In transfer_page.py, implement edit_transfer_op_id handling similar to insemination_page.py. When edit_transfer_op_id is set, load ALL transfer rows for that operation_id (from transferencias or transferencias_externas) and pre-fill all lots in st.session_state['transfer_linhas'].",
+    "FIX (LOW): Streamlit sidebar theme color warnings - check .streamlit/config.toml or custom CSS for invalid/empty color values in widgetBackgroundColor, widgetBorderColor, skeletonBackgroundColor"
+  ],
+  "critical_code_review_comments": [
+    "BUG (HIGH): transfer_page.py grep confirms zero references to 'edit_transfer_op_id'. The variable is set by dashboard_page.py (line ~645) but never consumed. The insemination edit correctly uses edit_insemination_op_id to load all lots via JOIN on operation_id - transfer edit needs identical logic.",
+    "The multi-lot insemination (xangai-pedro, op_id=30745450, 3 lots, ids 2/3/4) has estoque_id=None for all rows. The insemination_page.py inner JOIN (line 146) will return 0 rows for this operation. Fallback (line 188) loads a DIFFERENT lot by garanhao+dono_id. Old records won't pre-fill correctly in edit mode.",
+    "registrar_inseminacao_linha() (app.py line 1246) is a legacy function that inserts WITHOUT operation_id - verify it is not called from any active flow, otherwise new records created via this path won't be grouped."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "90% - all major flows work, 1 HIGH bug in transfer multi-lot edit"
+  },
+  "test_credentials": {
+    "username": "admin",
+    "password": "admin123",
+    "note": "Login via keyboard Enter (click is intercepted)"
+  },
+  "seed_data_creation": "No new seed data created. Existing DB has: 6-lot external transfer (op_id=8ddc9755, Qtd 158), 3-lot insemination (op_id=30745450, egua=xangai-pedro), 2-lot external transfer (op_id=72ba7535, Qtd 46)",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "App is Streamlit at port 8501 with PostgreSQL on Render cloud. Login uses Enter key (not button click). Logs modal opens by clicking the ✏️ button at top-right of RECENT ACTIVITY section. To see modal content in Playwright, use main_frame = page.frames[0] (Streamlit runs in the first frame) then click via main_frame. Dashboard correctly groups 10 recent operations by operation_id. The 6-lot external transfer shows as 'Qtd 158 (6 lotes)'. Main bug to retest: transfer edit mode should pre-fill ALL lots when editing a grouped transfer - check if transfer_page.py now reads edit_transfer_op_id.",
+  "rca_of_the_issue": {
+    "bug": "Transfer edit mode doesn't load multi-lot operation",
+    "root_cause": "transfer_page.py only reads 'edit_transfer_id' (single row ID) and 'edit_transfer_type' from session state. It never reads 'edit_transfer_op_id' (UUID of the full operation). When dashboard_page.py sets edit_transfer_op_id and redirects to transfer page, the transfer page ignores it and pre-fills only the 1 row corresponding to action_id.",
+    "reproduction": "1. Login as admin/admin123. 2. Click ✏️ (Gerir logs) on dashboard. 3. Click the edit pencil on 'Transferência externa - Qtd 158 (6 lotes)'. 4. Transfer page opens in edit mode. 5. Only 1 lot pre-filled instead of all 6.",
+    "mitigation": "In transfer_page.py, add a block similar to insemination_page.py lines 135-186: check if edit_transfer_op_id is set in session state, then query all rows from transferencias_externas (or transferencias for internal) WHERE operation_id = edit_transfer_op_id, build transfer_linhas dict from all rows."
+  }
+}
