@@ -5,98 +5,70 @@ import altair as alt
 from modules.i18n import t
 
 
-def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade):
+def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade, operation_id=None):
     """
     Reverte uma ação (transferência ou inseminação) e elimina o registo.
-    Devolve as palhetas ao estado anterior.
+    Se operation_id estiver definido, reverte TODOS os lotes da operação.
     """
     try:
         with globals()['get_connection']() as conn:
             cur = conn.cursor()
             
             if tipo == "transfer_internal":
-                # Transferência interna: devolver palhetas ao proprietário origem
-                # 1. Adicionar palhetas de volta ao lote de origem
-                cur.execute("""
-                    UPDATE estoque_dono 
-                    SET existencia_atual = existencia_atual + %s
-                    WHERE id = %s
-                """, (quantidade, estoque_id))
-                
-                # 2. Buscar e remover palhetas do destino
-                cur.execute("""
-                    SELECT id, existencia_atual, garanhao, data_embriovet, origem_externa
-                    FROM estoque_dono 
-                    WHERE dono_id = %s AND garanhao = (
-                        SELECT garanhao FROM estoque_dono WHERE id = %s
-                    )
-                    ORDER BY id DESC
-                    LIMIT 1
-                """, (prop_destino_id, estoque_id))
-                
-                lote_destino = cur.fetchone()
-                if lote_destino:
-                    lote_dest_id, exist_dest, garanhao, data_emb, origem_ext = lote_destino
-                    nova_quantidade = int(exist_dest) - int(quantidade)
-                    
-                    if nova_quantidade <= 0:
-                        # Eliminar o lote se ficar zerado
-                        cur.execute("DELETE FROM estoque_dono WHERE id = %s", (lote_dest_id,))
-                    else:
-                        # Reduzir quantidade
-                        cur.execute("""
-                            UPDATE estoque_dono 
-                            SET existencia_atual = %s
-                            WHERE id = %s
-                        """, (nova_quantidade, lote_dest_id))
-                
-                # 3. Eliminar registo de transferência
-                cur.execute("DELETE FROM transferencias WHERE id = %s", (action_id,))
+                if operation_id:
+                    # Rever TODOS os lotes da operação
+                    cur.execute("SELECT id, estoque_id, quantidade, proprietario_destino_id FROM transferencias WHERE operation_id = %s", (operation_id,))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute("SELECT id, estoque_id, quantidade, proprietario_destino_id FROM transferencias WHERE id = %s", (action_id,))
+                    rows = cur.fetchall()
+                for row_id, e_id, qtd, dest_id in rows:
+                    cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd, e_id))
+                    cur.execute("""
+                        SELECT id, existencia_atual FROM estoque_dono 
+                        WHERE dono_id = %s AND garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s)
+                        ORDER BY id DESC LIMIT 1
+                    """, (dest_id, e_id))
+                    lote_destino = cur.fetchone()
+                    if lote_destino:
+                        nova = int(lote_destino[1]) - int(qtd)
+                        if nova <= 0:
+                            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (lote_destino[0],))
+                        else:
+                            cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s", (nova, lote_destino[0]))
+                if operation_id:
+                    cur.execute("DELETE FROM transferencias WHERE operation_id = %s", (operation_id,))
+                else:
+                    cur.execute("DELETE FROM transferencias WHERE id = %s", (action_id,))
                 
             elif tipo == "transfer_external":
-                # Transferência externa: devolver palhetas ao lote original
-                cur.execute("""
-                    UPDATE estoque_dono 
-                    SET existencia_atual = existencia_atual + %s
-                    WHERE id = %s
-                """, (quantidade, estoque_id))
-                
-                # Eliminar registo
-                cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (action_id,))
+                if operation_id:
+                    cur.execute("SELECT id, estoque_id, quantidade FROM transferencias_externas WHERE operation_id = %s", (operation_id,))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute("SELECT id, estoque_id, quantidade FROM transferencias_externas WHERE id = %s", (action_id,))
+                    rows = cur.fetchall()
+                for row_id, e_id, qtd in rows:
+                    cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd, e_id))
+                if operation_id:
+                    cur.execute("DELETE FROM transferencias_externas WHERE operation_id = %s", (operation_id,))
+                else:
+                    cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (action_id,))
                 
             elif tipo == "insemination":
-                # Inseminação: devolver palhetas ao proprietário
-                # Buscar dados da inseminação
-                cur.execute("""
-                    SELECT garanhao, dono_id, palhetas_gastas 
-                    FROM inseminacoes 
-                    WHERE id = %s
-                """, (action_id,))
-                
-                insem_data = cur.fetchone()
-                if insem_data:
-                    garanhao, dono_id, palhetas_gastas = insem_data
-                    
-                    # Procurar um lote deste garanhão e proprietário para devolver
-                    cur.execute("""
-                        SELECT id FROM estoque_dono 
-                        WHERE garanhao = %s AND dono_id = %s 
-                        ORDER BY id DESC 
-                        LIMIT 1
-                    """, (garanhao, dono_id))
-                    
-                    lote_existe = cur.fetchone()
-                    if lote_existe:
-                        # Adicionar palhetas ao lote existente
-                        cur.execute("""
-                            UPDATE estoque_dono 
-                            SET existencia_atual = existencia_atual + %s
-                            WHERE id = %s
-                        """, (palhetas_gastas, lote_existe[0]))
-                    # Se não houver lote, as palhetas foram perdidas (não podemos reverter completamente)
-                
-                # Eliminar registo de inseminação
-                cur.execute("DELETE FROM inseminacoes WHERE id = %s", (action_id,))
+                if operation_id:
+                    cur.execute("SELECT id, estoque_id, palhetas_gastas FROM inseminacoes WHERE operation_id = %s", (operation_id,))
+                    rows = cur.fetchall()
+                else:
+                    cur.execute("SELECT id, estoque_id, palhetas_gastas FROM inseminacoes WHERE id = %s", (action_id,))
+                    rows = cur.fetchall()
+                for row_id, e_id, pals in rows:
+                    if e_id:
+                        cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (int(pals or 0), e_id))
+                if operation_id:
+                    cur.execute("DELETE FROM inseminacoes WHERE operation_id = %s", (operation_id,))
+                else:
+                    cur.execute("DELETE FROM inseminacoes WHERE id = %s", (action_id,))
             
             conn.commit()
             cur.close()
@@ -356,7 +328,8 @@ def run_dashboard_page(ctx: dict):
                        t.estoque_id,
                        t.proprietario_origem_id,
                        t.proprietario_destino_id,
-                       t.quantidade
+                       t.quantidade,
+                       t.operation_id::text AS operation_id
                 FROM transferencias t
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
@@ -371,7 +344,8 @@ def run_dashboard_page(ctx: dict):
                        te.estoque_id,
                        te.proprietario_origem_id,
                        NULL::integer AS proprietario_destino_id,
-                       te.quantidade
+                       te.quantidade,
+                       te.operation_id::text AS operation_id
                 FROM transferencias_externas te
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 UNION ALL
@@ -387,11 +361,12 @@ def run_dashboard_page(ctx: dict):
                        NULL::integer AS estoque_id,
                        i.dono_id AS proprietario_origem_id,
                        NULL::integer AS proprietario_destino_id,
-                       i.palhetas_gastas AS quantidade
+                       i.palhetas_gastas AS quantidade,
+                       i.operation_id::text AS operation_id
                 FROM inseminacoes i
                 LEFT JOIN dono d ON i.dono_id = d.id
                 ORDER BY ts DESC
-                LIMIT 10
+                LIMIT 50
                 """
             )
             atividades = cur.fetchall()
@@ -406,35 +381,87 @@ def run_dashboard_page(ctx: dict):
             return val.strftime("%d/%m/%Y %H:%M") if isinstance(val, datetime) else val.strftime("%d/%m/%Y")
         return str(val)
 
+    # ── Agrupar por operation_id (1 linha por operação) ───────────────────
+    def _group_atividades(rows):
+        """Agrupa linhas com o mesmo operation_id numa única linha agregada."""
+        grupos = {}  # key → dict com dados agregados
+        ordem = []   # para manter ordenação por ts
+
+        for row_data in rows:
+            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade, operation_id = row_data
+            quantidade = int(quantidade or 0)
+
+            # Chave: operation_id agrupado por tipo; se NULL, cada linha é sua própria operação
+            if operation_id:
+                key = (tipo, operation_id)
+            else:
+                key = (tipo, f"solo_{action_id}")
+
+            if key not in grupos:
+                grupos[key] = {
+                    "ts": ts, "usuario": usuario, "acao": acao,
+                    "tipo": tipo, "action_id": action_id, "estoque_id": estoque_id,
+                    "prop_origem_id": prop_origem_id, "prop_destino_id": prop_destino_id,
+                    "quantidade": quantidade, "operation_id": operation_id,
+                    "num_lotes": 1, "detalhe_base": detalhe,
+                }
+                ordem.append(key)
+            else:
+                # Somar quantidade ao grupo existente
+                grupos[key]["quantidade"] += quantidade
+                grupos[key]["num_lotes"] += 1
+                # Actualizar detalhe para reflectir total
+                g = grupos[key]
+                if tipo == "insemination":
+                    # Reformatar detalhe com total actualizado
+                    parts = g["detalhe_base"].split(" | ")
+                    if len(parts) >= 4:
+                        parts[3] = f"{g['quantidade']} palhetas ({g['num_lotes']} lotes)"
+                    g["detalhe_base"] = " | ".join(parts)
+                elif tipo in ("transfer_internal", "transfer_external"):
+                    parts = g["detalhe_base"].split(" | ", 1)
+                    g["detalhe_base"] = f"Qtd {g['quantidade']} ({g['num_lotes']} lotes) | " + (parts[1] if len(parts) > 1 else "")
+
+        result = [grupos[k] for k in ordem]
+        # Reformatar detalhe do primeiro lote adicionado (já tem só 1 lote)
+        for g in result:
+            if g["num_lotes"] == 1 and g["tipo"] == "insemination":
+                pass  # detalhe já correcto
+            elif g["num_lotes"] > 1 and g["tipo"] == "insemination":
+                pass  # já reformatado acima
+        return result[:10]  # máximo 10 operações
+
     # Verificar se é administrador
     is_admin = verificar_permissao('Administrador')
     
     if atividades:
+        grouped = _group_atividades(atividades)
+
         # Criar dataframe normal (sem coluna de ações)
         rows_activity = []
         activity_metadata = []
         
-        for row_data in atividades:
-            ts, usuario, acao, detalhe, tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade = row_data
-            
+        for g in grouped:
+            detalhe = g["detalhe_base"]
             rows_activity.append({
-                "Hora": fmt_ts(ts), 
-                "Utilizador": usuario or "—", 
-                "Ação": acao or "—", 
+                "Hora": fmt_ts(g["ts"]), 
+                "Utilizador": g["usuario"] or "—", 
+                "Ação": g["acao"] or "—", 
                 "Detalhe": detalhe or "—"
             })
             
             activity_metadata.append({
-                "ts": ts,
-                "usuario": usuario,
-                "acao": acao,
+                "ts": g["ts"],
+                "usuario": g["usuario"],
+                "acao": g["acao"],
                 "detalhe": detalhe,
-                "tipo": tipo,
-                "action_id": action_id,
-                "estoque_id": estoque_id,
-                "prop_origem_id": prop_origem_id,
-                "prop_destino_id": prop_destino_id,
-                "quantidade": quantidade
+                "tipo": g["tipo"],
+                "action_id": g["action_id"],
+                "estoque_id": g["estoque_id"],
+                "prop_origem_id": g["prop_origem_id"],
+                "prop_destino_id": g["prop_destino_id"],
+                "quantidade": g["quantidade"],
+                "operation_id": g["operation_id"],
             })
         
         df_activity = pd.DataFrame(rows_activity)
@@ -495,7 +522,8 @@ def run_dashboard_page(ctx: dict):
                                 pending_delete['estoque_id'],
                                 pending_delete['prop_origem_id'],
                                 pending_delete['prop_destino_id'],
-                                pending_delete['quantidade']
+                                pending_delete['quantidade'],
+                                operation_id=pending_delete.get('operation_id'),
                             )
                             if sucesso:
                                 st.session_state[f'confirm_delete_{pending_delete["tipo"]}_{pending_delete["action_id"]}'] = False
@@ -600,15 +628,17 @@ def run_dashboard_page(ctx: dict):
                                        help="Editar", type="secondary"):
                                 tipo = metadata['tipo']
                                 action_id = metadata['action_id']
+                                op_id = metadata.get('operation_id')
                                 
                                 if tipo == "insemination":
                                     st.session_state['edit_insemination_id'] = action_id
+                                    st.session_state['edit_insemination_op_id'] = op_id
                                     st.session_state['aba_selecionada'] = t("menu.register_insemination")
                                 elif tipo in ["transfer_internal", "transfer_external"]:
                                     st.session_state['edit_transfer_id'] = action_id
+                                    st.session_state['edit_transfer_op_id'] = op_id
                                     st.session_state['edit_transfer_type'] = tipo
                                     st.session_state['aba_selecionada'] = t("menu.transfers")
-                                    # Limpar estado anterior de transferência para garantir modo de edição limpo
                                     for k in ['transfer_tipo', 'transfer_linhas', 'transfer_garanhao',
                                               'transfer_proprietario', 'transfer_dest_interno',
                                               'transfer_dest_externo', 'transfer_destinatario_externo',

@@ -686,7 +686,9 @@ def run_transfer_page(ctx):
                                 st.error(f"Erro ao transferir {linha['ref']}: {e}")
                                 sucesso = False
                     else:
-                        # MODO CRIAÇÃO: criar novas transferências
+                        # MODO CRIAÇÃO: criar novas transferências internas com operation_id único
+                        import uuid as _uuid
+                        op_id = str(_uuid.uuid4())
                         for linha in linhas_finais:
                             origem_id = linha["dono_id"]
                             stock_id = linha["stock_id"]
@@ -701,10 +703,11 @@ def run_transfer_page(ctx):
                                 if muda_localizacao == t("transfer.new_location"):
                                     transferir_stock_interno_com_localizacao(
                                         origem_id, dest_id, stock_id, qtd,
-                                        contentor_id_destino, canister_destino, andar_destino
+                                        contentor_id_destino, canister_destino, andar_destino,
+                                        operation_id=op_id
                                     )
                                 else:
-                                    transferir_stock_interno(stock_id, dest_id, qtd)
+                                    transferir_stock_interno(stock_id, dest_id, qtd, operation_id=op_id)
                             except Exception as e:
                                 st.error(f"Erro ao transferir {linha['ref']}: {e}")
                                 sucesso = False
@@ -774,12 +777,14 @@ def run_transfer_page(ctx):
                                 st.error(f"Erro ao transferir {linha['ref']}: {e}")
                                 sucesso = False
                     else:
-                        # MODO CRIAÇÃO: criar novas transferências externas
+                        # MODO CRIAÇÃO: criar novas transferências externas com operation_id único
+                        import uuid as _uuid
+                        op_id = str(_uuid.uuid4())
                         for linha in linhas_finais:
                             stock_id = linha["stock_id"]
                             qtd = linha["qty"]
                             try:
-                                transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes)
+                                transferir_stock_externo(stock_id, destinatario_externo, qtd, motivo, observacoes, operation_id=op_id)
                             except Exception as e:
                                 st.error(f"Erro ao transferir {linha['ref']}: {e}")
                                 sucesso = False

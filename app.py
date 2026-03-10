@@ -1022,13 +1022,16 @@ def registrar_inseminacao(registro):
         return False
 
 
-def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None, observacoes=None):
-    """Registra múltiplas linhas de inseminação numa transação única ou atualiza uma existente"""
+def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None, observacoes=None, edit_operation_id=None):
+    """Registra múltiplas linhas de inseminação ou atualiza uma operação existente.
+    
+    - edit_operation_id: UUID da operação a editar (apaga todos os lotes e re-insere)
+    - insemination_id: ID da linha individual a editar (backward compat para operações antigas)
+    """
     try:
         if not egua:
             st.error(t("error.mare_required"))
             return False
-
         if not registros:
             st.error(t("error.select_lot_line"))
             return False
@@ -1037,10 +1040,93 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
 
         with get_connection() as conn:
             cur = conn.cursor()
-            
-            if insemination_id:
-                # MODO DE EDIÇÃO - UPDATE
-                # 1. Carregar dados antigos (incluindo egua, data, protocolo e estoque_id para auditoria)
+
+            # ─── MODO EDIÇÃO COM operation_id ────────────────────────────────────
+            if edit_operation_id:
+                # 1. Carregar dados antigos de TODOS os lotes da operação
+                cur.execute("""
+                    SELECT i.id, i.estoque_id, i.palhetas_gastas,
+                           i.garanhao, i.dono_id, i.egua, i.data_inseminacao,
+                           i.protocolo, i.observacoes, d.nome AS dono_nome
+                    FROM inseminacoes i
+                    LEFT JOIN dono d ON i.dono_id = d.id
+                    WHERE i.operation_id = %s
+                    ORDER BY i.id
+                """, (edit_operation_id,))
+                old_rows = cur.fetchall()
+
+                if not old_rows:
+                    # operation_id não encontrado → fallback para single-row edit
+                    edit_operation_id = None
+                else:
+                    old_for_audit = old_rows[0]  # usar primeiro para auditoria
+
+                    # 2. Devolver palhetas de TODOS os lotes antigos ao stock
+                    for row in old_rows:
+                        if row[1]:  # estoque_id not null
+                            cur.execute(
+                                "UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s",
+                                (int(row[2] or 0), row[1])
+                            )
+
+                    # 3. Eliminar TODOS os registos antigos da operação
+                    cur.execute(
+                        "DELETE FROM inseminacoes WHERE operation_id = %s",
+                        (edit_operation_id,)
+                    )
+
+                    # 4. Re-inserir todos os novos lotes com o mesmo operation_id
+                    for reg in registros:
+                        stock_id = to_py(reg.get("stock_id"))
+                        palhetas = int(reg.get("palhetas", 0))
+                        cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
+                        result = cur.fetchone()
+                        if not result:
+                            st.error(f"❌ Lote #{stock_id} não encontrado")
+                            return False
+                        if int(result[0] or 0) < palhetas:
+                            st.error(f"❌ Estoque insuficiente no lote #{stock_id}! Disponível: {int(result[0] or 0)}")
+                            return False
+                        cur.execute("""
+                            INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
+                                protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE)
+                        """, (
+                            to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
+                            to_py(data_inseminacao), to_py(egua),
+                            to_py(reg.get("protocolo")), palhetas,
+                            to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
+                            stock_id, edit_operation_id,
+                        ))
+                        cur.execute(
+                            "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
+                            (palhetas, stock_id)
+                        )
+
+                    conn.commit()
+
+                    # Auditoria
+                    first = old_for_audit
+                    cur2 = conn.cursor()
+                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(registros[0].get("dono_id")),))
+                    new_dono = (cur2.fetchone() or ['—'])[0]
+                    cur2.close()
+                    registar_historico_edicao('inseminacoes', first[0], {
+                        'Égua': str(first[5] or '—'), 'Garanhão': str(first[3] or '—'),
+                        'Palhetas': int(first[2] or 0), 'Data': str(first[6] or ''),
+                        'Proprietário': str(first[9] or '—'), 'Observações': str(first[8] or '—'),
+                    }, {
+                        'Égua': str(egua or '—'), 'Garanhão': str(registros[0].get("garanhao", '—')),
+                        'Palhetas': total_pal, 'Data': str(data_inseminacao or ''),
+                        'Proprietário': str(new_dono or '—'), 'Observações': str(observacoes or '—'),
+                    })
+                    logger.info(f"✏️ Operação ATUALIZADA (op={edit_operation_id}): égua={egua}, total={total_pal}")
+                    cur.close()
+                    atualizar_status_proprietarios()
+                    return True
+
+            # ─── MODO EDIÇÃO SINGLE ROW (backward compat) ────────────────────────
+            if insemination_id and not edit_operation_id:
                 cur.execute("""
                     SELECT i.garanhao, i.dono_id, i.palhetas_gastas, i.egua,
                            i.data_inseminacao, i.protocolo,
@@ -1050,166 +1136,112 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     WHERE i.id = %s
                 """, (insemination_id,))
                 old_data = cur.fetchone()
-                
+
                 if old_data:
                     old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes, old_estoque_id = old_data
-                    
-                    # 2. Devolver palhetas antigas ao stock (usar estoque_id se disponível)
                     if old_estoque_id:
-                        cur.execute("""
-                            UPDATE estoque_dono 
-                            SET existencia_atual = existencia_atual + %s
-                            WHERE id = %s
-                        """, (int(old_palhetas), old_estoque_id))
-                    else:
-                        # Fallback para registos antigos sem estoque_id
-                        cur.execute("""
-                            SELECT id, existencia_atual FROM estoque_dono 
-                            WHERE garanhao = %s AND dono_id = %s 
-                            ORDER BY id DESC LIMIT 1
-                        """, (old_garanhao, old_dono_id))
-                        lote_exists = cur.fetchone()
-                        if lote_exists:
-                            cur.execute("""
-                                UPDATE estoque_dono 
-                                SET existencia_atual = %s
-                                WHERE id = %s
-                            """, (int(lote_exists[1]) + int(old_palhetas), lote_exists[0]))
-                
-                # 3. Atualizar inseminação e marcar como editada
+                        cur.execute(
+                            "UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s",
+                            (int(old_palhetas), old_estoque_id)
+                        )
+
                 primeiro_registro = registros[0]
                 cur.execute("""
                     UPDATE inseminacoes
                     SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
                         egua = %s, palhetas_gastas = %s, observacoes = %s,
-                        atualizado = TRUE, utilizador = %s,
-                        estoque_id = %s
+                        atualizado = TRUE, utilizador = %s, estoque_id = %s
                     WHERE id = %s
                 """, (
-                    to_py(primeiro_registro.get("garanhao")),
-                    to_py(primeiro_registro.get("dono_id")),
-                    to_py(data_inseminacao),
-                    to_py(egua),
-                    total_pal,
-                    to_py(observacoes),
-                    st.session_state.get('user', {}).get('username', '—'),
-                    to_py(primeiro_registro.get("stock_id")),
-                    insemination_id
+                    to_py(primeiro_registro.get("garanhao")), to_py(primeiro_registro.get("dono_id")),
+                    to_py(data_inseminacao), to_py(egua), total_pal,
+                    to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
+                    to_py(primeiro_registro.get("stock_id")), insemination_id
                 ))
-                
-                # 4. Descontar novas palhetas
+
                 for reg in registros:
                     stock_id = to_py(reg.get("stock_id"))
                     palhetas = int(reg.get("palhetas", 0))
-                    
-                    cur.execute(
-                        "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
-                        (stock_id,),
-                    )
+                    cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
                     result = cur.fetchone()
-                    
                     if not result:
                         st.error(f"❌ Lote #{stock_id} não encontrado")
                         return False
-                    
-                    existencia = int(result[0] or 0)
-                    
-                    if existencia < palhetas:
-                        st.error(f"❌ Estoque insuficiente no lote #{stock_id}! Disponível: {existencia}")
+                    if int(result[0] or 0) < palhetas:
+                        st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
                         return False
-                    
                     cur.execute(
                         "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                        (palhetas, stock_id),
+                        (palhetas, stock_id)
                     )
-                
+
                 conn.commit()
 
-                # 5. Registar auditoria com todos os campos relevantes
                 if old_data:
-                    # Obter nome do novo proprietário
                     cur2 = conn.cursor()
                     cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(primeiro_registro.get("dono_id")),))
                     new_dono_nome = (cur2.fetchone() or ['—'])[0]
                     cur2.close()
-
                     registar_historico_edicao('inseminacoes', insemination_id, {
-                        'Égua': str(old_egua or '—'),
-                        'Garanhão': str(old_garanhao or '—'),
-                        'Palhetas': int(old_palhetas or 0),
-                        'Data': str(old_data_insem or ''),
-                        'Protocolo': str(old_protocolo or '—'),
-                        'Proprietário': str(old_dono_nome or '—'),
+                        'Égua': str(old_egua or '—'), 'Garanhão': str(old_garanhao or '—'),
+                        'Palhetas': int(old_palhetas or 0), 'Data': str(old_data_insem or ''),
+                        'Protocolo': str(old_protocolo or '—'), 'Proprietário': str(old_dono_nome or '—'),
                         'Observações': str(old_observacoes or '—'),
                     }, {
-                        'Égua': str(egua or '—'),
-                        'Garanhão': str(primeiro_registro.get("garanhao", '—')),
-                        'Palhetas': total_pal,
-                        'Data': str(data_inseminacao or ''),
+                        'Égua': str(egua or '—'), 'Garanhão': str(primeiro_registro.get("garanhao", '—')),
+                        'Palhetas': total_pal, 'Data': str(data_inseminacao or ''),
                         'Protocolo': str(primeiro_registro.get("protocolo", '—')),
-                        'Proprietário': str(new_dono_nome or '—'),
-                        'Observações': str(observacoes or '—'),
+                        'Proprietário': str(new_dono_nome or '—'), 'Observações': str(observacoes or '—'),
                     })
 
-                logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}, palhetas={total_pal}")
-                
-            else:
-                # MODO DE CRIAÇÃO - INSERT
-                for reg in registros:
-                    stock_id = to_py(reg.get("stock_id"))
-                    palhetas = int(reg.get("palhetas", 0))
-                    
-                    cur.execute(
-                        "SELECT existencia_atual FROM estoque_dono WHERE id = %s",
-                        (stock_id,),
-                    )
-                    result = cur.fetchone()
-                    
-                    if not result:
-                        st.error(f"❌ Lote #{stock_id} não encontrado")
-                        return False
-                    
-                    existencia = int(result[0] or 0)
-                    
-                    if existencia < palhetas:
-                        st.error(f"❌ Estoque insuficiente! Disponível: {existencia} palhetas")
-                        return False
-                    
-                    cur.execute(
-                        """
-                        INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas_gastas, observacoes, utilizador, estoque_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            to_py(reg.get("garanhao")),
-                            to_py(reg.get("dono_id")),
-                            to_py(data_inseminacao),
-                            to_py(egua),
-                            to_py(reg.get("protocolo")),
-                            palhetas,
-                            to_py(observacoes),
-                            st.session_state.get('user', {}).get('username', '—'),
-                            to_py(reg.get("stock_id")),
-                        ),
-                    )
-                    
-                    cur.execute(
-                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                        (palhetas, stock_id),
-                    )
-                
-                conn.commit()
-                logger.info(f"✅ Inseminação registrada: {egua} - {total_pal} palhetas")
-            
+                logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}")
+                cur.close()
+                atualizar_status_proprietarios()
+                return True
+
+            # ─── MODO CRIAÇÃO ─────────────────────────────────────────────────────
+            import uuid as _uuid
+            new_operation_id = str(_uuid.uuid4())
+
+            for reg in registros:
+                stock_id = to_py(reg.get("stock_id"))
+                palhetas = int(reg.get("palhetas", 0))
+
+                cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
+                result = cur.fetchone()
+                if not result:
+                    st.error(f"❌ Lote #{stock_id} não encontrado")
+                    return False
+                if int(result[0] or 0) < palhetas:
+                    st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
+                    return False
+
+                cur.execute("""
+                    INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
+                        protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid)
+                """, (
+                    to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
+                    to_py(data_inseminacao), to_py(egua),
+                    to_py(reg.get("protocolo")), palhetas,
+                    to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
+                    stock_id, new_operation_id,
+                ))
+                cur.execute(
+                    "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
+                    (palhetas, stock_id)
+                )
+
+            conn.commit()
             cur.close()
             atualizar_status_proprietarios()
+            logger.info(f"✅ Inseminação criada (op={new_operation_id}): {egua} - {total_pal} palhetas")
             return True
 
     except Exception as e:
         logger.error(f"Erro ao processar inseminação: {e}")
         st.error(f"Erro ao processar inseminação: {e}")
         return False
-
 
 def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas, stock_id):
     """Registra UMA linha de inseminação"""
@@ -1761,7 +1793,7 @@ def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
         return df
 
 
-def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade):
+def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade, operation_id=None):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
         with get_connection() as conn:
@@ -1840,14 +1872,14 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                     to_py(contentor_id), to_py(canister), to_py(andar)
                 ))
             
-            # Registrar transferência na tabela de transferências
+            # Registrar transferência
             cur.execute("""
                 INSERT INTO transferencias (
                     estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia, utilizador
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+                    quantidade, data_transferencia, utilizador, operation_id
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
             """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—')))
+                  st.session_state.get('user', {}).get('username', '—'), operation_id))
             
             conn.commit()
             cur.close()
@@ -1867,7 +1899,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
 transferir_stock_interno = transferir_palhetas_parcial
 
 def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, stock_origem_id, quantidade,
-                                              contentor_id_novo, canister_novo, andar_novo):
+                                              contentor_id_novo, canister_novo, andar_novo, operation_id=None):
     """Transfere palhetas para outro proprietário e muda a localização"""
     try:
         with get_connection() as conn:
@@ -1949,10 +1981,10 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
             cur.execute("""
                 INSERT INTO transferencias (
                     estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia, utilizador
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+                    quantidade, data_transferencia, utilizador, operation_id
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
             """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—')))
+                  st.session_state.get('user', {}).get('username', '—'), operation_id))
             
             conn.commit()
             cur.close()
@@ -1968,7 +2000,7 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
         st.error(f"Erro ao transferir palhetas: {e}")
         return False
 
-def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes=""):
+def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes="", operation_id=None):
     """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
     try:
         with get_connection() as conn:
@@ -2009,8 +2041,8 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 INSERT INTO transferencias_externas (
                     estoque_id, proprietario_origem_id, garanhao,
                     destinatario_externo, quantidade, tipo, observacoes,
-                    data_transferencia, utilizador
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
+                    data_transferencia, utilizador, operation_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
             """, (
                 to_py(stock_origem_id), 
                 to_py(prop_origem_id), 
@@ -2019,7 +2051,8 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 quantidade_int,
                 to_py(tipo),
                 to_py(observacoes),
-                st.session_state.get('user', {}).get('username', '—')
+                st.session_state.get('user', {}).get('username', '—'),
+                operation_id
             ))
             
             conn.commit()
