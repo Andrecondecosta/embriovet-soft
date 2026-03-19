@@ -1076,6 +1076,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     )
 
                     # 4. Re-inserir todos os novos lotes com o mesmo operation_id
+                    first_new_id = None
                     for reg in registros:
                         stock_id = to_py(reg.get("stock_id"))
                         palhetas = int(reg.get("palhetas", 0))
@@ -1091,6 +1092,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                             INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
                                 protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE)
+                            RETURNING id
                         """, (
                             to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
                             to_py(data_inseminacao), to_py(egua),
@@ -1098,6 +1100,9 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                             to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
                             stock_id, edit_operation_id,
                         ))
+                        new_row = cur.fetchone()
+                        if first_new_id is None and new_row:
+                            first_new_id = new_row[0]
                         cur.execute(
                             "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
                             (palhetas, stock_id)
@@ -1105,13 +1110,14 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
 
                     conn.commit()
 
-                    # Auditoria
+                    # Auditoria - usar o ID do NOVO registo para que apareça no dashboard
                     first = old_for_audit
+                    audit_record_id = first_new_id or first[0]
                     cur2 = conn.cursor()
                     cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(registros[0].get("dono_id")),))
                     new_dono = (cur2.fetchone() or ['—'])[0]
                     cur2.close()
-                    registar_historico_edicao('inseminacoes', first[0], {
+                    registar_historico_edicao('inseminacoes', audit_record_id, {
                         'Égua': str(first[5] or '—'), 'Garanhão': str(first[3] or '—'),
                         'Palhetas': int(first[2] or 0), 'Data': str(first[6] or ''),
                         'Proprietário': str(first[9] or '—'), 'Observações': str(first[8] or '—'),

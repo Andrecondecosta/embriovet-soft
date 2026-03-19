@@ -143,7 +143,7 @@ def run_transfer_page(ctx):
                             for lot in all_lots:
                                 e_id, qty, e_exist, e_data, e_orig, e_cont, e_can, e_and, e_gar, e_dono, e_nome = lot
                                 virtual_exist = int(e_exist or 0) + int(qty or 0)
-                                ref = (e_data.strftime('%Y-%m-%d') if hasattr(e_data, 'strftime') else str(e_data or e_orig or '—'))
+                                ref = (e_data.strftime('%Y-%m-%d') if hasattr(e_data, 'strftime') else str(e_data or e_orig or f"Lote #{e_id}"))
                                 local = f"C{e_cont or '?'} Can{e_can or '?'} A{e_and or '?'}"
                                 new_linhas[str(e_id)] = {
                                     'stock_id': e_id, 'garanhao': e_gar,

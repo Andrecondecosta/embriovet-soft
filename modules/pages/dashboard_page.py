@@ -584,46 +584,14 @@ def run_dashboard_page(ctx: dict):
                         audit_entries = historico_map.get((tabela_audit, metadata['action_id']), [])
                         has_audit = len(audit_entries) > 0
 
-                        # Layout: [info | auditoria | ✏️ | 🗑️]
-                        col1, col2, col3, col4 = st.columns([4.5, 5, 0.5, 0.5])
+                        # Layout mobile-friendly: [info | botões] + auditoria em linha separada
+                        col1, col_btns = st.columns([9, 1])
                         
                         with col1:
                             st.markdown(f"**{metadata['acao']}** · {fmt_ts(metadata['ts'])}")
                             st.caption(f"{metadata['detalhe']}")
                         
-                        with col2:
-                            if has_audit:
-                                entry = audit_entries[0]  # Edição mais recente
-                                old_vals = entry['dados_antigos']
-                                new_vals = entry['dados_novos']
-                                diffs = []
-                                for campo in old_vals:
-                                    v_old = str(old_vals.get(campo, ''))
-                                    v_new = str(new_vals.get(campo, ''))
-                                    if v_old != v_new:
-                                        diffs.append(
-                                            f"<span style='color:#64748b'><b>{campo}:</b> "
-                                            f"<span style='text-decoration:line-through;color:#ef4444'>{v_old}</span>"
-                                            f" → <span style='color:#16a34a'>{v_new}</span></span>"
-                                        )
-                                diffs_html = "<br>".join(diffs) if diffs else "<span style='color:#64748b'>Sem alterações registadas</span>"
-                                data_edit = fmt_ts(entry['data'])
-                                user_edit = entry['utilizador']
-                                st.markdown(f"""
-                                    <div style="background:#f0fdf4;border-left:3px solid #22c55e;
-                                                border-radius:0 6px 6px 0;padding:7px 10px;font-size:.78rem;
-                                                line-height:1.6;">
-                                        <div style="font-weight:700;color:#15803d;margin-bottom:4px;font-size:.8rem;">
-                                            📋 Histórico de Edição
-                                        </div>
-                                        {diffs_html}
-                                        <div style="color:#94a3b8;margin-top:5px;font-size:.7rem;border-top:1px solid #dcfce7;padding-top:4px;">
-                                            Por <b>{user_edit}</b> · {data_edit}
-                                        </div>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                        
-                        with col3:
+                        with col_btns:
                             if st.button("✏️", key=f"modal_edit_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
                                        help="Editar", type="secondary"):
                                 tipo = metadata['tipo']
@@ -647,12 +615,43 @@ def run_dashboard_page(ctx: dict):
                                 
                                 st.session_state['show_logs_modal'] = False
                                 st.rerun()
-                        
-                        with col4:
+                            
                             if st.button("🗑️", key=f"modal_delete_{metadata['tipo']}_{metadata['action_id']}_{idx}", 
                                        help="Eliminar", type="secondary"):
                                 st.session_state[f'confirm_delete_{metadata["tipo"]}_{metadata["action_id"]}'] = True
                                 st.rerun()
+                        
+                        # Auditoria em linha separada (largura total)
+                        if has_audit:
+                            entry = audit_entries[0]  # Edição mais recente
+                            old_vals = entry['dados_antigos']
+                            new_vals = entry['dados_novos']
+                            diffs = []
+                            for campo in old_vals:
+                                v_old = str(old_vals.get(campo, ''))
+                                v_new = str(new_vals.get(campo, ''))
+                                if v_old != v_new:
+                                    diffs.append(
+                                        f"<span style='color:#64748b'><b>{campo}:</b> "
+                                        f"<span style='text-decoration:line-through;color:#ef4444'>{v_old}</span>"
+                                        f" → <span style='color:#16a34a'>{v_new}</span></span>"
+                                    )
+                            diffs_html = "<br>".join(diffs) if diffs else "<span style='color:#64748b'>Sem alterações registadas</span>"
+                            data_edit = fmt_ts(entry['data'])
+                            user_edit = entry['utilizador']
+                            st.markdown(f"""
+                                <div style="background:#f0fdf4;border-left:3px solid #22c55e;
+                                            border-radius:0 6px 6px 0;padding:7px 10px;font-size:.78rem;
+                                            line-height:1.6;margin-top:4px;">
+                                    <div style="font-weight:700;color:#15803d;margin-bottom:4px;font-size:.8rem;">
+                                        📋 Histórico de Edição
+                                    </div>
+                                    {diffs_html}
+                                    <div style="color:#94a3b8;margin-top:5px;font-size:.7rem;border-top:1px solid #dcfce7;padding-top:4px;">
+                                        Por <b>{user_edit}</b> · {data_edit}
+                                    </div>
+                                </div>
+                            """, unsafe_allow_html=True)
                         
                         st.markdown("---")
                     
