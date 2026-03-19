@@ -173,7 +173,8 @@ def run_insemination_page(ctx):
                             existencia_virtual = int(eexist or 0) + int(epalhetas or 0)
                             sid = str(eid)
                             local_str = econt_cod or elocal or t("stock.no_location")
-                            ref_str = edata.strftime('%Y-%m-%d') if hasattr(edata, 'strftime') else (eorig or '—')
+                            edata_fmt = edata.strftime('%Y-%m-%d') if hasattr(edata, 'strftime') else (str(edata).split(' ')[0].strip() if edata else None)
+                            ref_str = eorig or edata_fmt or f"Lote #{eid}"
                             new_linhas[sid] = {
                                 'stock_id': int(eid), 'garanhao': egar,
                                 'ref': ref_str, 'local': local_str,

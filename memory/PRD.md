@@ -137,9 +137,12 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 
 ## Backlog / Próximas Tarefas
 
-### P0 — CONCLUÍDO (iteration_28 — 100% PASS)
+### P0 — CONCLUÍDO (iteration_29 — 100% PASS)
 - [x] Edit Transferência Multi-Lote — carregamento de todos os lotes, revert+recreate correto
 - [x] Edit Inseminação com Lote de Sémen — pré-preenchimento, ajuste stock, auditoria
+- [x] Nome dos lotes "—" em edição de inseminação → fallback para "Lote #ID"
+- [x] Gerir Logs — botões ✏️/🗑️ em linhas separadas no mobile → layout [9,1] corrigido
+- [x] Gerir Logs — histórico não aparecia após edição multi-lote → auditoria ligada ao ID novo (RETURNING id)
 
 ### P1 — Próximas
 - [ ] Completar página "Definições": preview do logo em tempo real + painel i18n
