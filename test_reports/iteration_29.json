@@ -1,0 +1,64 @@
+{
+  "summary": "Tested BUG FIX: Insemination edit mode lot names now show dates (e.g. '2023-01-27') or origem_externa (e.g. 'lusopecus') instead of '—' or 'Lote #ID'. All three test scenarios VERIFIED PASSING after Streamlit restart. Root cause: Streamlit hot reload does not re-import submodules (Python sys.modules cache). Fix was correct in the source file but required a Streamlit process restart to take effect.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "edit_mode_joana_poeta_plus_lot12": "PASS - Shows '2023-01-27 · 7' (was 'Lote #12 · 7')",
+    "edit_mode_joana_poeta_plus_lot13": "PASS - Shows '2023-01-28 · 4' (was 'Lote #13 · 4')",
+    "edit_mode_joana_poeta_plus_lot14": "PASS - Shows '2023-01-29 · 1' (was 'Lote #14 · 1')",
+    "registration_mode_poeta_plus_dates": "PASS - Select lots modal shows '2023-01-27', '2023-01-29' etc. (no 'Lote #' IDs)",
+    "registration_mode_chacco_blue": "PASS - Select lots modal shows 'lusopecus' for lot 25",
+    "edit_mode_chacco_blue_egua_bela": "PASS - Shows 'lusopecus · 10' (was 'Lote #25 · 10')",
+    "fix_logic_verified_via_code": "PASS - Programmatic test confirms correct output for all 4 lots (12=2023-01-27, 13=2023-01-28, 14=2023-01-29, 25=lusopecus)"
+  },
+  "rca_of_the_issue": {
+    "bug": "Insemination edit mode showed 'Lote #12' etc instead of '2023-01-27'",
+    "root_cause": "data_embriovet column in PostgreSQL stored as TEXT '2023-01-27' (not datetime). Old code used edata.strftime('%Y-%m-%d') which requires a datetime object - strings don't have strftime. Result: hasattr(edata, 'strftime') = False, and old code fell through to f'Lote #{eid}'",
+    "fix_applied": "insemination_page.py line 176: edata_fmt = edata.strftime('%Y-%m-%d') if hasattr(edata, 'strftime') else (str(edata).split(' ')[0].strip() if edata else None). Same fix in transfer_page.py line 146.",
+    "additional_issue": "Streamlit hot reload does NOT re-import submodules (Python sys.modules cache). The fix was in the source file but Streamlit was running old cached module. Required 'sudo supervisorctl restart streamlit' to pick up the changes.",
+    "reproduction_steps": [
+      "1. Login admin/admin123",
+      "2. Dashboard → click ✏️ (Gerir logs) button at top-right of RECENT ACTIVITY",
+      "3. Click ✏️ next to 'Inseminação 10/03/2026 19:54 (Égua Joana)'",
+      "4. Check INSEMINATION LINES section - should show '2023-01-27 · 7', '2023-01-28 · 4', '2023-01-29 · 1'"
+    ],
+    "db_data_verified": {
+      "lot_12": "data_embriovet='2023-01-27' (str), origem_externa=None -> ref='2023-01-27'",
+      "lot_13": "data_embriovet='2023-01-28' (str), origem_externa=None -> ref='2023-01-28'",
+      "lot_14": "data_embriovet='2023-01-29' (str), origem_externa=None -> ref='2023-01-29'",
+      "lot_25": "data_embriovet='' (empty str), origem_externa='lusopecus' -> ref='lusopecus'"
+    }
+  },
+  "setup_changes": [
+    {
+      "action": "sudo supervisorctl restart streamlit",
+      "reason": "Streamlit was using Python sys.modules cached version of insemination_page.py (old code without fix). Restart forces fresh import of all modules including the fixed insemination_page.py"
+    }
+  ],
+  "files_verified": [
+    "/app/modules/pages/insemination_page.py - line 176-177 (fix applied)",
+    "/app/modules/pages/transfer_page.py - line 146 (same fix applied)"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_29.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "INFO: Streamlit submodule hot reload issue - when insemination_page.py or transfer_page.py is modified, Streamlit needs a full restart (not just hot reload) to pick up changes. Consider using importlib.reload() or inline imports to improve hot reload behavior.",
+    "INFO: data_embriovet stored as TEXT in PostgreSQL (not DATE/TIMESTAMP). The fix correctly handles this with str().split(' ')[0].strip() to extract date part."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "100% (all 7 test cases passing)"
+  },
+  "seed_data_creation": "None - used existing DB data (lots 12, 13, 14, 25; insemination op_id=22158148-b571-4912-924a-8a35720fb6e7)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "BUG FIX VERIFIED WORKING. The insemination edit mode now shows correct lot names: dates (2023-01-27 etc) for lots with data_embriovet TEXT, and origem_externa (lusopecus) for lots with origem_externa set. Fix required Streamlit restart to load new module code (Python sys.modules caching). Both insemination_page.py and transfer_page.py have the fix applied. App login: admin/admin123 (Enter key). To access edit mode: Dashboard → ✏️ button at RECENT ACTIVITY → click ✏️ next to insemination entry. Streamlit runs on port 3000."
+}
