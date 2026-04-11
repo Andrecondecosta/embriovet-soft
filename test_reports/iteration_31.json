@@ -1,0 +1,67 @@
+{
+  "summary": "Tested iteration_31 features: batch floor move, responsive map height, Vega-Lite chart fixes, individual lot move. One critical bug fixed (deletar_contentor undefined). Batch move confirmed working via UI. Vega-Lite warnings still present despite fix attempts.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Dashboard Vega-Lite Charts",
+        "issue": "Infinite extent warnings still appearing in browser console: 'WARN Infinite extent for field Palhetas_start/Palhetas_end'. Root cause: Altair generates Vega-Lite v5.20.1 spec but Streamlit renders with Vega-Lite v6.3.1. The fix (filter Palhetas>0, domainMin=0, EncodingSortField) did NOT eliminate warnings. Version mismatch causes internal _start/_end field computation issues.",
+        "selector": "Painel → Palhetas por Contentor and Palhetas por Proprietário charts",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "Map Page Visual Map Height",
+        "issue": "Map iframe renders at 380px (mobile formula) despite 1920px Playwright viewport. The streamlit_js_eval viewport detection may read < 900px (mobile mode) causing formula max(260, min(380, n_cont*60+160))=380 instead of desktop formula max(340, min(520, n_cont*55+200))=520. Responsive height IS implemented and adaptive but seems stuck in mobile mode.",
+        "selector": "Mapa dos Contentores → map iframe",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Individual Lot Move (✏️ Mover button)",
+        "issue": "Standard Playwright .click() does not reliably open the edit form. Form opens only via JavaScript dispatchEvent click. Likely a Streamlit-specific interaction issue in automation - works in real browsers. Form itself (Canister, Andar, Guardar, Cancelar) is correctly implemented.",
+        "affected_selectors": ["button:has-text('✏️ Mover')"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL FIX NEEDED: Vega-Lite 'Infinite extent' warnings for Palhetas_start/Palhetas_end still appear despite filter and domainMin=0 fixes. Root cause is Altair v5 spec vs Vega-Lite v6.3.1 in browser. Need to either: (a) upgrade Altair to v5.5+ which generates v6-compatible specs, (b) use alt.Scale(zero=True) explicitly, or (c) investigate if using mark_bar() with layer instead of stacked encoding avoids the internal _start/_end fields.",
+    "VERIFY: Map height is rendering in mobile mode (380px) despite desktop viewport. Check if streamlit_js_eval is correctly detecting window.innerWidth. Consider adding a fallback/default to desktop mode.",
+    "INFO: deletar_contentor function was missing def statement (fixed in this iteration). Verify container delete functionality works correctly now."
+  ],
+  "critical_code_review_comments": [
+    "FIXED: deletar_contentor function body (lines 1756-1784) was dead code inside mover_lotes_por_andar due to missing 'def deletar_contentor(contentor_id):' line. Fixed by inserting def statement at correct indent level. This would have caused NameError when trying to delete empty containers.",
+    "VEGA-LITE: Using Altair's EncodingSortField in v5 spec mode with Vega-Lite v6 renderer causes Infinite extent warnings for mark_bar internal _start/_end fields - these are not resolved by filtering data or setting domainMin.",
+    "STREAMLIT BUTTON INTERACTION: Streamlit buttons with type='secondary' inside containers may not respond to Playwright's standard click(). JavaScript dispatchEvent required. This is a testing concern, not a production bug."
+  ],
+  "updated_files": ["/app/app.py"],
+  "success_rate": {
+    "backend": "N/A",
+    "frontend": "75%"
+  },
+  "test_credentials": "admin/admin123 (Enter key after password)",
+  "seed_data_creation": "Batch move test changed Container 1 lots in Canister 1 from Andar 1 to Andar 2 (C1/A1 → C1/A2)",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Batch floor move works (expander + form + DB update confirmed). Individual lot move form opens correctly (via JS dispatch). Map height is responsive but shows mobile formula (380px). MOST IMPORTANT: Vega-Lite 'Infinite extent' warnings are STILL present in console logs - fix was insufficient. The specific warnings are for Palhetas_start/Palhetas_end which are internal Vega-Lite fields for bar chart stacking, caused by v5->v6 spec mismatch. Container 1 lots in Canister 1 are now at Andar 2 (not Andar 1) due to batch move testing.",
+  "rca_of_issues": {
+    "vega_lite_warning": {
+      "issue": "Infinite extent for Palhetas_start/Palhetas_end",
+      "root_cause": "Altair library generates Vega-Lite v5.20.1 spec. Streamlit's embedded Vega-Lite is v6.3.1. When v6 processes a v5 mark_bar spec with EncodingSortField, it internally creates _start/_end fields for stacking calculations. The v5->v6 migration changed how these internal fields are computed, causing [Infinity, -Infinity] extent when sorting is applied via EncodingSortField.",
+      "attempted_fix": "filter df[df.Palhetas > 0], scale=alt.Scale(domainMin=0), configure_view(strokeWidth=0)",
+      "fix_result": "Did NOT eliminate warnings - wrong approach for v5/v6 mismatch",
+      "recommended_fix": "Upgrade altair to v5.5+ or use scale=alt.Scale(zero=True) or avoid EncodingSortField in bar charts by using sort parameter differently"
+    },
+    "deletar_contentor_missing": {
+      "issue": "NameError when deleting empty containers",
+      "root_cause": "def deletar_contentor(contentor_id): line was accidentally deleted. Function body (lines 1756-1784 of app.py) was dead code inside mover_lotes_por_andar function.",
+      "fix_applied": "Inserted 'def deletar_contentor(contentor_id):' at line 1758 of app.py",
+      "status": "FIXED"
+    }
+  }
+}

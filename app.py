@@ -1729,6 +1729,33 @@ def atualizar_andar_lote(estoque_id: int, novo_andar: int, novo_canister: int = 
     except Exception as e:
         logger.error(f"Erro ao atualizar posição de lote: {e}")
         return False
+
+
+def mover_lotes_por_andar(contentor_id: int, andar_origem: int, andar_destino: int, canister: int = None) -> int:
+    """Move todos os lotes de um andar para outro dentro do mesmo contentor. Retorna nº de lotes movidos."""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            if canister is not None:
+                cur.execute(
+                    "UPDATE estoque_dono SET andar = %s WHERE contentor_id = %s AND andar = %s AND canister = %s",
+                    (andar_destino, contentor_id, andar_origem, canister)
+                )
+            else:
+                cur.execute(
+                    "UPDATE estoque_dono SET andar = %s WHERE contentor_id = %s AND andar = %s",
+                    (andar_destino, contentor_id, andar_origem)
+                )
+            count = cur.rowcount
+            conn.commit()
+            cur.close()
+        return count
+    except Exception as e:
+        logger.error(f"Erro ao mover lotes por andar: {e}")
+        return 0
+
+
+def deletar_contentor(contentor_id):
     """Deleta um contentor apenas se não tiver stock associado"""
     try:
         with get_connection() as conn:

@@ -1110,12 +1110,14 @@ def run_map_page(ctx: dict):
             )
             mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
 
-            # Renderizar mapa com altura otimizada e responsiva
-            st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
+            # Renderizar mapa com altura responsiva baseada no nº de contentores
+            n_cont = len(contentores_df)
             if is_mobile:
-                components.html(mapa_render, height=340, scrolling=False)
+                map_height = max(260, min(380, n_cont * 60 + 160))
             else:
-                components.html(mapa_render, height=400, scrolling=False)
+                map_height = max(340, min(520, n_cont * 55 + 200))
+            st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
+            components.html(mapa_render, height=map_height, scrolling=False)
             st.markdown("</div>", unsafe_allow_html=True)
 
             # ── Inventário de Contentores ──────────────────────────────────────
@@ -1190,8 +1192,46 @@ def run_map_page(ctx: dict):
                     # Agrupar por canister
                     for canister in sorted(stock_contentor['canister'].dropna().unique()):
                         sc = stock_contentor[stock_contentor['canister'] == canister]
-                        st.markdown(f"<div class='cant-section-title'>Canister {int(canister)}</div>", unsafe_allow_html=True)
+                        can_int = int(canister)
+                        st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
 
+                        # ── Mover todos os lotes deste canister de um andar para outro ──
+                        andares_no_canister = sorted([int(a) for a in sc['andar'].dropna().unique()])
+                        if len(andares_no_canister) > 0:
+                            batch_key = f"batch_{cont_id}_{can_int}"
+                            with st.expander(f"Mover todos os lotes — Canister {can_int}", expanded=False):
+                                with st.form(f"form_batch_{cont_id}_{can_int}"):
+                                    bc1, bc2, bc3 = st.columns([2, 2, 2])
+                                    with bc1:
+                                        andar_origem_opts = andares_no_canister
+                                        origem_sel = st.selectbox(
+                                            "De Andar",
+                                            options=andar_origem_opts,
+                                            format_func=lambda x: f"Andar {x} ({len(sc[sc['andar']==x])} lotes)",
+                                            key=f"orig_{cont_id}_{can_int}"
+                                        )
+                                    with bc2:
+                                        destino_sel = st.number_input(
+                                            "Para Andar", min_value=1, max_value=20,
+                                            value=int(origem_sel) + 1 if int(origem_sel) < 20 else int(origem_sel),
+                                            key=f"dest_{cont_id}_{can_int}"
+                                        )
+                                    with bc3:
+                                        st.markdown("<br>", unsafe_allow_html=True)
+                                        batch_submit = st.form_submit_button("Mover Todos", type="primary", width="stretch")
+
+                                    if batch_submit:
+                                        if int(origem_sel) == int(destino_sel):
+                                            st.warning("Andar de origem igual ao destino.")
+                                        else:
+                                            movidos = mover_lotes_por_andar(cont_id, int(origem_sel), int(destino_sel), canister=can_int)
+                                            if movidos > 0:
+                                                st.toast(f"{movidos} lote(s) movidos do Andar {origem_sel} → Andar {int(destino_sel)}", icon="✅")
+                                                st.rerun()
+                                            else:
+                                                st.warning("Nenhum lote encontrado nesse andar.")
+
+                        # ── Lista individual de lotes ──
                         for _, lote in sc.iterrows():
                             eid = int(lote['id'])
                             andar_atual = int(lote['andar'] or 0)
