@@ -137,12 +137,16 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 
 ## Backlog / Próximas Tarefas
 
-### P0 — CONCLUÍDO (iteration_29 — 100% PASS)
-- [x] Edit Transferência Multi-Lote — carregamento de todos os lotes, revert+recreate correto
+### P0 — CONCLUÍDO (iteration_30 — 90% + fixes aplicadas)
+- [x] Edit Transferência Multi-Lote — carregamento, revert+recreate correto (interno e externo)
 - [x] Edit Inseminação com Lote de Sémen — pré-preenchimento, ajuste stock, auditoria
-- [x] Nome dos lotes "—" em edição de inseminação → fallback para "Lote #ID"
-- [x] Gerir Logs — botões ✏️/🗑️ em linhas separadas no mobile → layout [9,1] corrigido
-- [x] Gerir Logs — histórico não aparecia após edição multi-lote → auditoria ligada ao ID novo (RETURNING id)
+- [x] Nome dos lotes "—" em edição → fallback para data ou "Lote #ID"
+- [x] Gerir Logs — botões mobile layout fixo
+- [x] Histórico de edição ligado ao ID novo (RETURNING id)
+- [x] Revert interno: location-matching JOIN em vez de LIMIT 1 sem ordem
+- [x] atualizado=TRUE marcado após edit de transferências internas e externas
+- [x] Auditoria (historico_edicoes) criada para transferências externas editadas
+- [x] operation_id index corrigido: interno=row[11], externo=row[12]
 
 ### P1 — Próximas
 - [ ] Completar página "Definições": preview do logo em tempo real + painel i18n

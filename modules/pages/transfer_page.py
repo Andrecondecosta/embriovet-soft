@@ -698,11 +698,20 @@ def run_transfer_page(ctx):
                                 for e_id, qtd_old, old_dest_id in old_lots:
                                     # Devolver ao stock de origem
                                     cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd_old, e_id))
-                                    # Retirar do stock de destino (destino ANTIGO)
+                                    # Retirar do stock de destino (destino ANTIGO, usando localização exacta da origem)
                                     if old_dest_id:
                                         cur.execute("""
-                                            SELECT ed.id, ed.existencia_atual FROM estoque_dono ed
-                                            WHERE ed.dono_id = %s AND ed.garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s) LIMIT 1
+                                            SELECT dest.id, dest.existencia_atual
+                                            FROM estoque_dono src
+                                            JOIN estoque_dono dest ON
+                                                dest.garanhao = src.garanhao AND
+                                                dest.dono_id = %s AND
+                                                COALESCE(dest.contentor_id, 0) = COALESCE(src.contentor_id, 0) AND
+                                                COALESCE(dest.canister, 0) = COALESCE(src.canister, 0) AND
+                                                COALESCE(dest.andar, 0) = COALESCE(src.andar, 0)
+                                            WHERE src.id = %s
+                                            ORDER BY dest.existencia_atual DESC
+                                            LIMIT 1
                                         """, (old_dest_id, e_id))
                                         dest_lote = cur.fetchone()
                                         if dest_lote:
@@ -744,6 +753,16 @@ def run_transfer_page(ctx):
                                 except Exception as e:
                                     st.error(f"Erro ao re-inserir {linha['ref']}: {e}")
                                     sucesso = False
+                            # Marcar como editado
+                            if sucesso and op_id:
+                                try:
+                                    with get_connection() as conn_flag:
+                                        cur_flag = conn_flag.cursor()
+                                        cur_flag.execute("UPDATE transferencias SET atualizado = TRUE WHERE operation_id = %s::uuid", (op_id,))
+                                        conn_flag.commit()
+                                        cur_flag.close()
+                                except Exception:
+                                    pass
                     else:
                         # MODO CRIAÇÃO: criar novas transferências internas com operation_id único
                         import uuid as _uuid
@@ -835,16 +854,47 @@ def run_transfer_page(ctx):
                             st.error(f"Erro ao reverter transferência externa: {e}")
                             sucesso = False
 
-                        # 3. Re-inserir todos os novos lotes
+                        # 3. Re-inserir todos os novos lotes + auditoria
                         if sucesso:
                             import uuid as _uuid
                             op_id = op_id_edit or str(_uuid.uuid4())
+                            old_dest = transfer_data.get('destinatario_externo', '—')
+                            old_qty = transfer_data.get('quantidade', 0)
                             for linha in linhas_finais:
                                 try:
                                     transferir_stock_externo(linha["stock_id"], destinatario_externo, linha["qty"], motivo, observacoes, operation_id=op_id)
                                 except Exception as e:
                                     st.error(f"Erro ao re-inserir {linha['ref']}: {e}")
                                     sucesso = False
+                            # Auditoria: ligar ao ID do primeiro novo registo inserido
+                            if sucesso:
+                                try:
+                                    with get_connection() as conn_audit:
+                                        cur_audit = conn_audit.cursor()
+                                        # Marcar como editado
+                                        cur_audit.execute("""
+                                            UPDATE transferencias_externas SET atualizado = TRUE
+                                            WHERE operation_id = %s::uuid
+                                        """, (op_id,))
+                                        cur_audit.execute("""
+                                            SELECT id FROM transferencias_externas
+                                            WHERE operation_id = %s::uuid
+                                            ORDER BY id ASC LIMIT 1
+                                        """, (op_id,))
+                                        new_row = cur_audit.fetchone()
+                                        conn_audit.commit()
+                                        cur_audit.close()
+                                    if new_row:
+                                        total_novo = sum(l["qty"] for l in linhas_finais)
+                                        registar_historico_edicao('transferencias_externas', new_row[0], {
+                                            'Destinatário': str(old_dest), 'Quantidade': int(old_qty),
+                                            'Motivo': transfer_data.get('tipo', '—'),
+                                        }, {
+                                            'Destinatário': str(destinatario_externo), 'Quantidade': total_novo,
+                                            'Motivo': str(motivo),
+                                        })
+                                except Exception:
+                                    pass  # auditoria não crítica
                     else:
                         # MODO CRIAÇÃO: criar novas transferências externas com operation_id único
                         import uuid as _uuid
