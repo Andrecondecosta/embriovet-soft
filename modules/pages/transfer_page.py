@@ -63,6 +63,7 @@ def run_transfer_page(ctx):
                             'garanhao': row[8], 'data_embriovet': row[9],
                             'origem_externa': row[10],
                         }
+                        op_id_from_row = row[11]  # operation_id at index 11 for internal
                     else:
                         transfer_data = {
                             'id': row[0], 'estoque_id': row[1],
@@ -72,9 +73,10 @@ def run_transfer_page(ctx):
                             'origem_nome': row[8], 'garanhao': row[9],
                             'data_embriovet': row[10], 'origem_externa': row[11],
                         }
+                        op_id_from_row = row[12]  # operation_id at index 12 for external
                     # Sincronizar operation_id se disponível no registo
-                    if not edit_op_id and row[12]:
-                        edit_op_id = str(row[12])
+                    if not edit_op_id and op_id_from_row:
+                        edit_op_id = str(op_id_from_row)
                         st.session_state['edit_transfer_op_id'] = edit_op_id
                     
                     # Pré-definir tipo de transferência
@@ -685,24 +687,30 @@ def run_transfer_page(ctx):
                                 cur = conn.cursor()
                                 # 1. Devolver palhetas de TODOS os lotes antigos ao stock
                                 if op_id_edit:
-                                    cur.execute("SELECT estoque_id, quantidade FROM transferencias WHERE operation_id = %s::uuid", (op_id_edit,))
+                                    cur.execute("""
+                                        SELECT t.estoque_id, t.quantidade, t.proprietario_destino_id
+                                        FROM transferencias t
+                                        WHERE t.operation_id = %s::uuid
+                                    """, (op_id_edit,))
                                     old_lots = cur.fetchall()
                                 else:
-                                    old_lots = [(transfer_data['estoque_id'], transfer_data['quantidade'])]
-                                for e_id, qtd_old in old_lots:
+                                    old_lots = [(transfer_data['estoque_id'], transfer_data['quantidade'], transfer_data['proprietario_destino_id'])]
+                                for e_id, qtd_old, old_dest_id in old_lots:
+                                    # Devolver ao stock de origem
                                     cur.execute("UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s", (qtd_old, e_id))
-                                    # Retirar do destino
-                                    cur.execute("""
-                                        SELECT ed.id, ed.existencia_atual FROM estoque_dono ed
-                                        WHERE ed.dono_id = %s AND ed.garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s) LIMIT 1
-                                    """, (dest_id, e_id))
-                                    dest_lote = cur.fetchone()
-                                    if dest_lote:
-                                        nova = int(dest_lote[1]) - int(qtd_old)
-                                        if nova <= 0:
-                                            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (dest_lote[0],))
-                                        else:
-                                            cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s", (nova, dest_lote[0]))
+                                    # Retirar do stock de destino (destino ANTIGO)
+                                    if old_dest_id:
+                                        cur.execute("""
+                                            SELECT ed.id, ed.existencia_atual FROM estoque_dono ed
+                                            WHERE ed.dono_id = %s AND ed.garanhao = (SELECT garanhao FROM estoque_dono WHERE id = %s) LIMIT 1
+                                        """, (old_dest_id, e_id))
+                                        dest_lote = cur.fetchone()
+                                        if dest_lote:
+                                            nova = int(dest_lote[1]) - int(qtd_old)
+                                            if nova <= 0:
+                                                cur.execute("DELETE FROM estoque_dono WHERE id = %s", (dest_lote[0],))
+                                            else:
+                                                cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s", (nova, dest_lote[0]))
                                 # 2. Eliminar registos antigos
                                 if op_id_edit:
                                     cur.execute("DELETE FROM transferencias WHERE operation_id = %s::uuid", (op_id_edit,))
