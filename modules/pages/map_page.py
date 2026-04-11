@@ -1118,90 +1118,176 @@ def run_map_page(ctx: dict):
                 components.html(mapa_render, height=400, scrolling=False)
             st.markdown("</div>", unsafe_allow_html=True)
 
-            # Mostrar lista de contentores abaixo do mapa
-            st.markdown(f"<div class='inv-contentores-head'>{t('map.inventory_title')}</div>", unsafe_allow_html=True)
+            # ── Inventário de Contentores ──────────────────────────────────────
+            primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+            st.markdown(f"""
+            <style>
+                .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
+                .cont-card {{
+                    background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
+                    overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.05);
+                    transition:box-shadow .2s;
+                }}
+                .cont-card-header {{
+                    background:linear-gradient(135deg,{primary}15,{primary}05);
+                    border-bottom:1.5px solid #e2e8f0;
+                    padding:14px 18px; display:flex; align-items:center; justify-content:space-between;
+                }}
+                .cont-card-code {{ font-size:1.1rem; font-weight:800; color:{primary}; letter-spacing:.5px; }}
+                .cont-card-desc {{ font-size:.75rem; color:#64748b; margin-top:2px; }}
+                .cont-card-badge {{
+                    background:{primary}; color:#fff; border-radius:20px;
+                    padding:4px 12px; font-size:.78rem; font-weight:700;
+                }}
+                .cont-card-body {{ padding:14px 18px; }}
+                .cant-section-title {{
+                    font-size:.7rem; font-weight:700; text-transform:uppercase;
+                    letter-spacing:1px; color:#94a3b8; margin:8px 0 6px;
+                }}
+                .lote-row {{
+                    display:flex; align-items:center; justify-content:space-between;
+                    background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+                    padding:8px 12px; margin-bottom:6px; font-size:.82rem;
+                }}
+                .lote-row-left {{ display:flex; flex-direction:column; gap:2px; }}
+                .lote-garanhao {{ font-weight:700; color:#0f172a; }}
+                .lote-meta {{ color:#64748b; font-size:.75rem; }}
+                .lote-pos {{
+                    background:{primary}15; color:{primary}; border-radius:6px;
+                    padding:3px 8px; font-size:.72rem; font-weight:700;
+                    white-space:nowrap;
+                }}
+                @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
+            </style>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"<div class='cant-section-title' style='font-size:.85rem;color:#0f172a;font-weight:700;margin-bottom:8px;'>Inventário por Contentor</div>", unsafe_allow_html=True)
 
             for idx, row in contentores_df.iterrows():
                 stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
                 total_lotes = len(stock_contentor)
+                cod = row['codigo']
+                desc = row['descricao'] or ''
+                cont_id = int(row['id'])
 
-                # Design técnico limpo
-                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
-                    col_det1, col_det2, col_det3 = st.columns([2, 2, 1])
+                # Card header
+                st.markdown(f"""
+                <div class="cont-card">
+                  <div class="cont-card-header">
+                    <div>
+                      <div class="cont-card-code">{cod}</div>
+                      <div class="cont-card-desc">{desc or 'Sem descrição'}</div>
+                    </div>
+                    <div class="cont-card-badge">{total_palhetas} palhetas</div>
+                  </div>
+                  <div class="cont-card-body">
+                """, unsafe_allow_html=True)
 
-                    with col_det1:
-                        st.markdown(f"**Código:** {row['codigo']}")
-                        st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
-                        st.markdown(f"**Posição:** X={row['x']}, Y={row['y']}")
+                if stock_contentor.empty:
+                    st.caption("Nenhum lote neste contentor.")
+                else:
+                    # Agrupar por canister
+                    for canister in sorted(stock_contentor['canister'].dropna().unique()):
+                        sc = stock_contentor[stock_contentor['canister'] == canister]
+                        st.markdown(f"<div class='cant-section-title'>Canister {int(canister)}</div>", unsafe_allow_html=True)
 
-                    with col_det2:
-                        st.markdown(f"**Total Palhetas:** {int(total_palhetas)}")
-                        st.markdown(f"**Total Lotes:** {total_lotes}")
+                        for _, lote in sc.iterrows():
+                            eid = int(lote['id'])
+                            andar_atual = int(lote['andar'] or 0)
+                            can_atual = int(lote['canister'] or 0)
+                            qty = int(lote['existencia_atual'])
+                            gar = lote['garanhao'] or '—'
+                            prop = lote['proprietario_nome'] or '—'
+                            ref = str(lote['origem_externa'] or lote['data_embriovet'] or f"Lote #{eid}").split(' ')[0]
+                            edit_key = f"edit_andar_{cont_id}_{eid}"
+                            is_editing = st.session_state.get(edit_key, False)
 
-                    with col_det3:
-                        if st.button(t("btn.edit"), key=f"edit_{row['id']}", width="stretch"):
-                            st.session_state[f'modal_editar_{row["id"]}'] = True
+                            col_info, col_action = st.columns([3, 2])
+                            with col_info:
+                                st.markdown(f"""
+                                <div class="lote-row">
+                                  <div class="lote-row-left">
+                                    <span class="lote-garanhao">{gar}</span>
+                                    <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
+                                  </div>
+                                  <span class="lote-pos">C{can_atual} / A{andar_atual}</span>
+                                </div>""", unsafe_allow_html=True)
+
+                            with col_action:
+                                if not is_editing:
+                                    if st.button("✏️ Mover", key=f"btn_edit_{cont_id}_{eid}", help="Alterar andar/canister", type="secondary"):
+                                        st.session_state[edit_key] = True
+                                        st.rerun()
+                                else:
+                                    # Formulário inline de edição
+                                    with st.form(f"form_mover_{cont_id}_{eid}"):
+                                        c1, c2 = st.columns(2)
+                                        with c1:
+                                            novo_can = st.number_input("Canister", min_value=1, max_value=20, value=can_atual, key=f"nc_{eid}")
+                                        with c2:
+                                            novo_and = st.number_input("Andar", min_value=1, max_value=20, value=andar_atual, key=f"na_{eid}")
+                                        cs1, cs2 = st.columns(2)
+                                        with cs1:
+                                            salvar_pos = st.form_submit_button("Guardar", type="primary", width="stretch")
+                                        with cs2:
+                                            cancelar_pos = st.form_submit_button("Cancelar", width="stretch")
+
+                                        if cancelar_pos:
+                                            st.session_state[edit_key] = False
+                                            st.rerun()
+                                        if salvar_pos:
+                                            if atualizar_andar_lote(eid, int(novo_and), int(novo_can)):
+                                                st.session_state[edit_key] = False
+                                                st.toast(f"Lote {gar} movido → C{int(novo_can)}/A{int(novo_and)}", icon="✅")
+                                                st.rerun()
+                                            else:
+                                                st.error("Erro ao atualizar posição")
+
+                st.markdown("</div></div>", unsafe_allow_html=True)
+
+                # Acções do contentor (editar código/descrição, apagar)
+                col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
+                with col_e2:
+                    pode_apagar = total_palhetas == 0
+                    if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
+                                 help="Só é possível apagar quando o contentor não tem stock", type="secondary"):
+                        if deletar_contentor(cont_id):
+                            st.success(f"Contentor '{cod}' apagado")
                             st.rerun()
+                    if not pode_apagar:
+                        st.caption(t("map.delete_blocked"))
+                with col_e3:
+                    if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
+                        st.session_state[f'modal_editar_{cont_id}'] = True
+                        st.rerun()
 
-                        pode_apagar = int(total_palhetas) == 0
-                        if st.button(
-                            "Apagar",
-                            key=f"del_{row['id']}",
-                            width="stretch",
-                            disabled=not pode_apagar,
-                            help="Só é possível apagar quando o contentor não tem stock"
-                        ):
-                            if deletar_contentor(row['id']):
-                                st.success(f"Contentor '{row['codigo']}' apagado")
-                                st.rerun()
-                        if not pode_apagar:
-                            st.caption(t("map.delete_blocked"))
+                # Modal edição de código/descrição
+                if st.session_state.get(f'modal_editar_{cont_id}', False):
+                    with st.form(f"form_editar2_{cont_id}"):
+                        st.markdown(f"#### {t('map.edit_container_title')}")
+                        col_edit1, col_edit2 = st.columns(2)
+                        with col_edit1:
+                            novo_codigo = st.text_input(t("label.code"), value=cod)
+                        with col_edit2:
+                            nova_descricao = st.text_input(t("label.description"), value=desc)
+                        cs1, cs2 = st.columns(2)
+                        with cs1:
+                            salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
+                        with cs2:
+                            cancelar_edit2 = st.form_submit_button(t("btn.cancel"), width="stretch")
 
-                    if not stock_contentor.empty:
-                        st.markdown(f"**{t('label.lots')}:**")
-                        for canister in sorted(stock_contentor['canister'].unique()):
-                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
-                            for andar in sorted(stock_canister['andar'].unique()):
-                                stock_andar = stock_canister[stock_canister['andar'] == andar]
-                                for _, lote in stock_andar.iterrows():
-                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
-                                    st.text(f"Can.{canister} / {andar}º | {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])}p | {ref}")
-
-                    # Modal edição
-                    if st.session_state.get(f'modal_editar_{row["id"]}', False):
-                        st.markdown("---")
-                        with st.form(f"form_editar_{row['id']}"):
-                            st.markdown(f"#### {t('map.edit_container_title')}")
-
-                            col_edit1, col_edit2 = st.columns(2)
-                            with col_edit1:
-                                novo_codigo = st.text_input(t("label.code"), value=row['codigo'])
-                            with col_edit2:
-                                nova_descricao = st.text_input(t("label.description"), value=row['descricao'] or '')
-
-                            col_btn_edit1, col_btn_edit2 = st.columns(2)
-                            with col_btn_edit1:
-                                salvar = st.form_submit_button(t("btn.save"), width="stretch")
-                            with col_btn_edit2:
-                                cancelar_edit = st.form_submit_button(t("btn.cancel"), width="stretch")
-
-                            if cancelar_edit:
-                                st.session_state[f'modal_editar_{row["id"]}'] = False
+                        if cancelar_edit2:
+                            st.session_state[f'modal_editar_{cont_id}'] = False
+                            st.rerun()
+                        if salvar_edit:
+                            if editar_contentor(cont_id, {'codigo': novo_codigo, 'descricao': nova_descricao,
+                                                          'x': row['x'], 'y': row['y'], 'w': row['w'], 'h': row['h']}):
+                                st.success(t("map.container_updated"))
+                                st.session_state[f'modal_editar_{cont_id}'] = False
                                 st.rerun()
 
-                            if salvar:
-                                if editar_contentor(row['id'], {
-                                    'codigo': novo_codigo,
-                                    'descricao': nova_descricao,
-                                    'x': row['x'],
-                                    'y': row['y'],
-                                    'w': row['w'],
-                                    'h': row['h']
-                                }):
-                                    st.success(t("map.container_updated"))
-                                    st.session_state[f'modal_editar_{row["id"]}'] = False
-                                    st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
 
         else:
             # MODO LISTA (mantido para compatibilidade)

@@ -1714,7 +1714,21 @@ def atualizar_posicao_contentor(contentor_id, x, y):
         st.error(f"Erro ao guardar posição do contentor: {e}")
         return False
 
-def deletar_contentor(contentor_id):
+def atualizar_andar_lote(estoque_id: int, novo_andar: int, novo_canister: int = None) -> bool:
+    """Atualiza o andar (e opcionalmente o canister) de um lote de sémen"""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            if novo_canister is not None:
+                cur.execute("UPDATE estoque_dono SET andar = %s, canister = %s WHERE id = %s", (novo_andar, novo_canister, estoque_id))
+            else:
+                cur.execute("UPDATE estoque_dono SET andar = %s WHERE id = %s", (novo_andar, estoque_id))
+            conn.commit()
+            cur.close()
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar posição de lote: {e}")
+        return False
     """Deleta um contentor apenas se não tiver stock associado"""
     try:
         with get_connection() as conn:
