@@ -1172,7 +1172,9 @@ def run_map_page(ctx: dict):
                         sty = cell_style(qty)
                         label = str(qty) if qty > 0 else "·"
                         tds += (
-                            f"<td title='C{c} / A{a}: {qty} palhetas' "
+                            f"<td class='hm-cell' "
+                            f"data-cont='{cont_id}' data-c='{c}' data-a='{a}' "
+                            f"title='C{c} / A{a}: {qty} palhetas' "
                             f"style='{sty}text-align:center;border-radius:6px;"
                             f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
                         )
@@ -1193,10 +1195,21 @@ def run_map_page(ctx: dict):
                     )
 
                 return f"""
+                <style>
+                  .hm-cell {{ cursor:pointer; border-radius:6px; transition: transform .15s, box-shadow .15s; position:relative; }}
+                  .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:2; }}
+                  .hm-cell.selected {{ outline:2.5px solid rgb({primary_r},{primary_g},{primary_b});
+                    box-shadow:0 0 0 4px rgba({primary_r},{primary_g},{primary_b},.22);
+                    transform:scale(1.08); z-index:3; }}
+                  .lote-row {{ transition:border .2s, background .2s, box-shadow .2s; }}
+                  .lote-row.hl {{ border:2px solid rgb({primary_r},{primary_g},{primary_b}) !important;
+                    background:rgba({primary_r},{primary_g},{primary_b},.07) !important;
+                    box-shadow:0 2px 8px rgba({primary_r},{primary_g},{primary_b},.15); }}
+                </style>
                 <div style="margin:12px 0 6px;">
                   <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
                                letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
-                    Mapa de Ocupação
+                    Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
                   </div>
                   <div style="overflow-x:auto;">
                     <table style="border-collapse:separate;border-spacing:3px;width:100%;">
@@ -1209,7 +1222,29 @@ def run_map_page(ctx: dict):
                     </table>
                   </div>
                   <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
-                </div>"""
+                </div>
+                <script>
+                (function() {{
+                  function selectCell(el, c, a, contId) {{
+                    // Remover destaques anteriores do mesmo contentor
+                    document.querySelectorAll('.hm-cell.selected').forEach(function(x){{ x.classList.remove('selected'); }});
+                    document.querySelectorAll('.lote-row.hl').forEach(function(x){{ x.classList.remove('hl'); }});
+                    el.classList.add('selected');
+                    // Destacar e rolar para lotes correspondentes
+                    var rows = document.querySelectorAll('.lote-row[data-cont="'+contId+'"][data-c="'+c+'"][data-a="'+a+'"]');
+                    rows.forEach(function(row){{ row.classList.add('hl'); }});
+                    if (rows.length > 0) {{
+                      rows[0].scrollIntoView({{ behavior:'smooth', block:'center' }});
+                    }}
+                  }}
+                  // Ligar eventos de clique a todas as células deste heatmap
+                  document.querySelectorAll('.hm-cell[data-cont="{cont_id}"]').forEach(function(cell) {{
+                    cell.onclick = function() {{
+                      selectCell(cell, cell.dataset.c, cell.dataset.a, cell.dataset.cont);
+                    }};
+                  }});
+                }})();
+                </script>"""
             st.markdown(f"""
             <style>
                 .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
@@ -1340,7 +1375,7 @@ def run_map_page(ctx: dict):
                             col_info, col_action = st.columns([3, 2])
                             with col_info:
                                 st.markdown(f"""
-                                <div class="lote-row">
+                                <div class="lote-row" data-cont="{cont_id}" data-c="{can_atual}" data-a="{andar_atual}">
                                   <div class="lote-row-left">
                                     <span class="lote-garanhao">{gar}</span>
                                     <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
