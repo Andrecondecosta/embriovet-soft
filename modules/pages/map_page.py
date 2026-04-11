@@ -1122,6 +1122,94 @@ def run_map_page(ctx: dict):
 
             # ── Inventário de Contentores ──────────────────────────────────────
             primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+
+            # Converter hex → rgb para usar em rgba()
+            def hex_to_rgb(h):
+                h = h.lstrip('#')
+                if len(h) == 3: h = ''.join(c*2 for c in h)
+                return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+            pr, pg, pb = hex_to_rgb(primary)
+
+            def build_heatmap_html(stock_df, primary_r, primary_g, primary_b):
+                """Gera o HTML de uma grelha Canisters × Andares para o stock de um contentor."""
+                if stock_df.empty:
+                    return ""
+                # Contagem por célula (canister, andar)
+                cell_map = {}
+                for _, r in stock_df.iterrows():
+                    c, a = int(r['canister'] or 0), int(r['andar'] or 0)
+                    if c and a:
+                        cell_map[(c, a)] = cell_map.get((c, a), 0) + int(r['existencia_atual'] or 0)
+
+                if not cell_map:
+                    return ""
+
+                canisters = sorted(set(k[0] for k in cell_map))
+                andares   = sorted(set(k[1] for k in cell_map), reverse=True)  # top → bottom
+                max_pal   = max(cell_map.values()) or 1
+
+                def cell_style(qty):
+                    if qty == 0:
+                        return "background:#f1f5f9;color:#cbd5e1;"
+                    ratio = qty / max_pal
+                    alpha = 0.18 + ratio * 0.78  # 0.18..0.96
+                    bg = f"rgba({primary_r},{primary_g},{primary_b},{alpha:.2f})"
+                    fg = "#fff" if alpha > 0.55 else f"rgb({primary_r},{primary_g},{primary_b})"
+                    return f"background:{bg};color:{fg};font-weight:700;"
+
+                # Header com nomes das colunas (canisters)
+                th_cells = "".join(
+                    f"<th style='text-align:center;font-size:.68rem;font-weight:700;"
+                    f"color:#64748b;padding:4px 2px;white-space:nowrap;'>C{c}</th>"
+                    for c in canisters
+                )
+                rows_html = ""
+                for a in andares:
+                    tds = ""
+                    for c in canisters:
+                        qty = cell_map.get((c, a), 0)
+                        sty = cell_style(qty)
+                        label = str(qty) if qty > 0 else "·"
+                        tds += (
+                            f"<td title='C{c} / A{a}: {qty} palhetas' "
+                            f"style='{sty}text-align:center;border-radius:6px;"
+                            f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
+                        )
+                    rows_html += (
+                        f"<tr><td style='font-size:.65rem;font-weight:700;color:#94a3b8;"
+                        f"padding-right:6px;white-space:nowrap;'>A{a}</td>{tds}</tr>"
+                    )
+
+                legend_items = ""
+                for pct, lbl in [(0, "Vazio"), (0.25, "Baixo"), (0.55, "Médio"), (0.85, "Alto")]:
+                    a = 0.18 + pct * 0.78
+                    bg = f"rgba({primary_r},{primary_g},{primary_b},{a:.2f})" if pct > 0 else "#f1f5f9"
+                    legend_items += (
+                        f"<span style='display:inline-flex;align-items:center;gap:4px;"
+                        f"font-size:.65rem;color:#64748b;margin-right:10px;'>"
+                        f"<span style='display:inline-block;width:12px;height:12px;"
+                        f"border-radius:3px;background:{bg};border:1px solid #e2e8f0;'></span>{lbl}</span>"
+                    )
+
+                return f"""
+                <div style="margin:12px 0 6px;">
+                  <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
+                               letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
+                    Mapa de Ocupação
+                  </div>
+                  <div style="overflow-x:auto;">
+                    <table style="border-collapse:separate;border-spacing:3px;width:100%;">
+                      <thead>
+                        <tr>
+                          <th style="min-width:28px;"></th>{th_cells}
+                        </tr>
+                      </thead>
+                      <tbody>{rows_html}</tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
+                </div>"""
             st.markdown(f"""
             <style>
                 .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
@@ -1189,7 +1277,13 @@ def run_map_page(ctx: dict):
                 if stock_contentor.empty:
                     st.caption("Nenhum lote neste contentor.")
                 else:
-                    # Agrupar por canister
+                    # ── Heatmap Canisters × Andares ──────────────────────────────
+                    heatmap_html = build_heatmap_html(stock_contentor, pr, pg, pb)
+                    if heatmap_html:
+                        st.markdown(heatmap_html, unsafe_allow_html=True)
+                        st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
+
+                    # ── Detalhes por canister ─────────────────────────────────────
                     for canister in sorted(stock_contentor['canister'].dropna().unique()):
                         sc = stock_contentor[stock_contentor['canister'] == canister]
                         can_int = int(canister)

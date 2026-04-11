@@ -148,7 +148,12 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - [x] Auditoria (historico_edicoes) criada para transferências externas editadas
 - [x] operation_id index corrigido: interno=row[11], externo=row[12]
 
-### P1 — CONCLUÍDO (iteration_31/32 — PASS)
+### P1 — CONCLUÍDO (heatmap adicionado)
+- [x] **Heatmap Canisters × Andares** dentro de cada card de contentor
+- [x] Cor proporcional à quantidade (primária com opacidade 18%→96%)
+- [x] Legenda visual (Vazio/Baixo/Médio/Alto)
+- [x] Tooltip com C{n}/A{n}: X palhetas no hover
+- [x] Andares ordenados (mais alto no topo, como contentor físico)
 - [x] Redesign visual dos contentores: cards modernos, badge de palhetas, agrupamento por canister
 - [x] Edição de andar/canister individual: botão ✏️ Mover → form inline
 - [x] **Mover todos os lotes por andar** (batch): expander por canister com De Andar / Para Andar
