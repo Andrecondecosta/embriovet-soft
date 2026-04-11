@@ -148,12 +148,13 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - [x] Auditoria (historico_edicoes) criada para transferências externas editadas
 - [x] operation_id index corrigido: interno=row[11], externo=row[12]
 
-### P1 — CONCLUÍDO (iteration_31 — PASS)
-- [x] Redesign visual dos contentores: cards modernos com código em cor primária, badge de palhetas, agrupamento por canister
-- [x] Edição de andar/canister inline: botão ✏️ Mover → form com inputs Canister/Andar → Guardar/Cancelar
-- [x] DB: `atualizar_andar_lote(estoque_id, novo_andar, novo_canister)` confirmado OK
-- [x] Posição exibida como badge C{n}/A{n} por lote
-- [x] Botões Editar/Apagar do contentor mantidos e funcionais
+### P1 — CONCLUÍDO (iteration_31/32 — PASS)
+- [x] Redesign visual dos contentores: cards modernos, badge de palhetas, agrupamento por canister
+- [x] Edição de andar/canister individual: botão ✏️ Mover → form inline
+- [x] **Mover todos os lotes por andar** (batch): expander por canister com De Andar / Para Andar
+- [x] DB: `mover_lotes_por_andar(contentor_id, andar_origem, andar_destino, canister)` 
+- [x] Altura do mapa responsiva: calculada por nº de contentores + viewport
+- [x] Vega-Lite warnings eliminados: pré-ordenação Python + sort=None + scale(zero=True)
 
 ### P2 — Futuro
 - [ ] Bug visual dos botões `+/-` do stepper

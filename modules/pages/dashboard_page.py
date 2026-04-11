@@ -255,19 +255,21 @@ def run_dashboard_page(ctx: dict):
         with col_g1:
             if not df_por_contentor.empty:
                 _df_c = df_por_contentor[df_por_contentor["Palhetas"] > 0].copy()
+                _df_c = _df_c.sort_values("Palhetas", ascending=False).reset_index(drop=True)
                 if not _df_c.empty:
                     chart_cont = (
                         alt.Chart(_df_c)
                         .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                         .encode(
-                            x=alt.X("Contentor:N", sort=alt.EncodingSortField(field="Palhetas", order="descending"),
+                            x=alt.X("Contentor:N", sort=None,
                                     axis=alt.Axis(labelAngle=-30, title=None)),
-                            y=alt.Y("Palhetas:Q", axis=alt.Axis(title="Palhetas"), scale=alt.Scale(domainMin=0)),
+                            y=alt.Y("Palhetas:Q",
+                                    axis=alt.Axis(title="Palhetas"),
+                                    scale=alt.Scale(zero=True)),
                             color=alt.value(primary_color),
                             tooltip=["Contentor:N", "Palhetas:Q"],
                         )
                         .properties(title="Palhetas por Contentor", height=220)
-                        .configure_view(strokeWidth=0)
                     )
                     st.altair_chart(chart_cont, use_container_width=True)
                 else:
@@ -278,19 +280,21 @@ def run_dashboard_page(ctx: dict):
         with col_g2:
             if not df_por_proprietario.empty:
                 _df_p = df_por_proprietario[df_por_proprietario["Palhetas"] > 0].copy()
+                _df_p = _df_p.sort_values("Palhetas", ascending=False).reset_index(drop=True)
                 if not _df_p.empty:
                     chart_prop = (
                         alt.Chart(_df_p)
                         .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                         .encode(
-                            x=alt.X("Proprietário:N", sort=alt.EncodingSortField(field="Palhetas", order="descending"),
+                            x=alt.X("Proprietário:N", sort=None,
                                     axis=alt.Axis(labelAngle=-30, title=None)),
-                            y=alt.Y("Palhetas:Q", axis=alt.Axis(title="Palhetas"), scale=alt.Scale(domainMin=0)),
+                            y=alt.Y("Palhetas:Q",
+                                    axis=alt.Axis(title="Palhetas"),
+                                    scale=alt.Scale(zero=True)),
                             color=alt.value("#10b981"),
                             tooltip=["Proprietário:N", "Palhetas:Q"],
                         )
                         .properties(title="Palhetas por Proprietário", height=220)
-                        .configure_view(strokeWidth=0)
                     )
                     st.altair_chart(chart_prop, use_container_width=True)
                 else:
