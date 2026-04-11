@@ -148,9 +148,12 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - [x] Auditoria (historico_edicoes) criada para transferências externas editadas
 - [x] operation_id index corrigido: interno=row[11], externo=row[12]
 
-### P1 — Próximas
-- [ ] Completar página "Definições": preview do logo em tempo real + painel i18n
-- [ ] Verificar salvamento da edição de transferência + reversão (não testado por segurança de DB)
+### P1 — CONCLUÍDO (iteration_31 — PASS)
+- [x] Redesign visual dos contentores: cards modernos com código em cor primária, badge de palhetas, agrupamento por canister
+- [x] Edição de andar/canister inline: botão ✏️ Mover → form com inputs Canister/Andar → Guardar/Cancelar
+- [x] DB: `atualizar_andar_lote(estoque_id, novo_andar, novo_canister)` confirmado OK
+- [x] Posição exibida como badge C{n}/A{n} por lote
+- [x] Botões Editar/Apagar do contentor mantidos e funcionais
 
 ### P2 — Futuro
 - [ ] Bug visual dos botões `+/-` do stepper
