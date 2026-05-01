@@ -84,8 +84,8 @@ def run_map_page(ctx: dict):
     if "mapa_salvar_layout_tentativas" not in st.session_state:
         st.session_state["mapa_salvar_layout_tentativas"] = 0
 
-    if "map_bridge_bootstrapped" not in st.session_state:
-        st.session_state["map_bridge_bootstrapped"] = False
+    if "map_bridge_v3_bootstrapped" not in st.session_state:
+        st.session_state["map_bridge_v3_bootstrapped"] = False
 
     try:
         from streamlit_js_eval import streamlit_js_eval
@@ -98,18 +98,20 @@ def run_map_page(ctx: dict):
         st.warning(t("map.missing_dependency"))
     else:
         bridge_boot = None
-        if not st.session_state.get("map_bridge_bootstrapped", False):
+        if not st.session_state.get("map_bridge_v3_bootstrapped", False):
             bridge_boot = streamlit_js_eval(
             js_expressions="""
                 (function(){
                     try {
                         var targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                        var targetDoc = targetWin.document;
+
+                        // Bridge para layout drag-and-drop
                         if (!targetWin.__contentorLayoutBridgeInstalled) {
                             targetWin.__contentorLayoutBridgeInstalled = true;
                             targetWin.addEventListener('message', function(event){
                                 var data = event && event.data ? event.data : null;
                                 if (!data || typeof data !== 'object') return;
-
                                 if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
                                     try {
                                         var atual = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
@@ -120,21 +122,110 @@ def run_map_page(ctx: dict):
                                         targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
                                     } catch (e) {}
                                 }
-
                                 if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
                                     try { targetWin.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
                                 }
                             });
                         }
+
+                        // Handler nomeado para cliques em células do heatmap
+                        function handleHmCellClick(ev) {
+                            ev.stopPropagation();
+                            var cell = ev.currentTarget;
+                            var cId = cell.getAttribute('data-cont');
+                            var c   = cell.getAttribute('data-c');
+                            var a   = cell.getAttribute('data-a');
+                            targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
+                            targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
+                            cell.classList.add('selected');
+                            var rows = targetDoc.querySelectorAll(
+                                '.lote-row[data-cont="'+cId+'"][data-c="'+c+'"][data-a="'+a+'"]'
+                            );
+                            rows.forEach(function(r){ r.classList.add('hl'); });
+                            if (rows.length > 0) {
+                                rows[0].scrollIntoView({behavior:'smooth', block:'center'});
+                            }
+                        }
+
+                        // Garante pointer-events auto em toda a cadeia até .hm-cell
+                        function ensureClickable(cell) {
+                            cell.style.pointerEvents = 'auto';
+                            cell.style.cursor = 'pointer';
+                            cell.style.position = 'relative';
+                            cell.style.zIndex = '5';
+                            var p = cell.parentElement;
+                            var depth = 0;
+                            while (p && depth < 12) {
+                                var cs = targetWin.getComputedStyle(p);
+                                if (cs && cs.pointerEvents === 'none') {
+                                    p.style.pointerEvents = 'auto';
+                                }
+                                if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
+                                    p.style.pointerEvents = 'auto';
+                                }
+                                p = p.parentElement;
+                                depth += 1;
+                            }
+                        }
+
+                        function bindCells(root) {
+                            try {
+                                var cells = (root || targetDoc).querySelectorAll('.hm-cell');
+                                cells.forEach(function(cell){
+                                    if (cell.__hmBound) return;
+                                    cell.__hmBound = true;
+                                    ensureClickable(cell);
+                                    cell.addEventListener('click', handleHmCellClick, false);
+                                    cell.addEventListener('touchend', function(e){
+                                        e.preventDefault();
+                                        handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
+                                    }, {passive: false});
+                                });
+                            } catch (e) {}
+                        }
+
+                        // Vincular já existentes e observar novos
+                        if (!targetDoc.__hmObserver) {
+                            bindCells(targetDoc);
+                            var obs = new targetWin.MutationObserver(function(mutations){
+                                for (var i = 0; i < mutations.length; i++) {
+                                    var m = mutations[i];
+                                    if (m.addedNodes && m.addedNodes.length) {
+                                        for (var j = 0; j < m.addedNodes.length; j++) {
+                                            var node = m.addedNodes[j];
+                                            if (node.nodeType !== 1) continue;
+                                            if (node.classList && node.classList.contains('hm-cell')) {
+                                                bindCells(node.parentElement || targetDoc);
+                                            } else if (node.querySelectorAll) {
+                                                bindCells(node);
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            obs.observe(targetDoc.body, {childList: true, subtree: true});
+                            targetDoc.__hmObserver = obs;
+
+                            // Re-bind periódico de segurança (primeiros 6s após carregar)
+                            var ticks = 0;
+                            var iv = targetWin.setInterval(function(){
+                                bindCells(targetDoc);
+                                ticks += 1;
+                                if (ticks > 12) { targetWin.clearInterval(iv); }
+                            }, 500);
+                        } else {
+                            bindCells(targetDoc);
+                        }
+
                     } catch (e) {}
                     return true;
                 })()
             """,
-            key="map_layout_bridge_bootstrap",
+            key="map_layout_bridge_v3",
             want_output=True,
             )
         if bridge_boot is True:
-            st.session_state["map_bridge_bootstrapped"] = True
+            st.session_state["map_bridge_v3_bootstrapped"] = True
 
     if "map_largura_viewport" not in st.session_state:
         st.session_state["map_largura_viewport"] = None
@@ -398,6 +489,22 @@ def run_map_page(ctx: dict):
                         height: 0 !important;
                         min-height: 0 !important;
                         display: none !important;
+                    }
+
+                    /* Logos e header nativo do Streamlit não devem intercetar cliques
+                       sobre as células do heatmap (overlap posicional). */
+                    [data-testid="stSidebar"] img,
+                    [data-testid="stSidebarContent"] img,
+                    .app-topbar-title,
+                    [data-testid="stMarkdownContainer"] > div > img,
+                    [data-testid="stMarkdown"] img {
+                        pointer-events: none !important;
+                    }
+                    [data-testid="stHeader"] {
+                        pointer-events: none !important;
+                    }
+                    [data-testid="stHeader"] * {
+                        pointer-events: auto;
                     }
                     
                     /* Painel de detalhes elegante */
@@ -1195,18 +1302,7 @@ def run_map_page(ctx: dict):
                     )
 
                 return f"""
-                <style>
-                  .hm-cell {{ cursor:pointer; border-radius:6px; transition: transform .15s, box-shadow .15s; position:relative; }}
-                  .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:2; }}
-                  .hm-cell.selected {{ outline:2.5px solid rgb({primary_r},{primary_g},{primary_b});
-                    box-shadow:0 0 0 4px rgba({primary_r},{primary_g},{primary_b},.22);
-                    transform:scale(1.08); z-index:3; }}
-                  .lote-row {{ transition:border .2s, background .2s, box-shadow .2s; }}
-                  .lote-row.hl {{ border:2px solid rgb({primary_r},{primary_g},{primary_b}) !important;
-                    background:rgba({primary_r},{primary_g},{primary_b},.07) !important;
-                    box-shadow:0 2px 8px rgba({primary_r},{primary_g},{primary_b},.15); }}
-                </style>
-                <div style="margin:12px 0 6px;">
+                <div class="hm-grid-wrap" style="margin:12px 0 6px;">
                   <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
                                letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
                     Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
@@ -1223,28 +1319,7 @@ def run_map_page(ctx: dict):
                   </div>
                   <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
                 </div>
-                <script>
-                (function() {{
-                  function selectCell(el, c, a, contId) {{
-                    // Remover destaques anteriores do mesmo contentor
-                    document.querySelectorAll('.hm-cell.selected').forEach(function(x){{ x.classList.remove('selected'); }});
-                    document.querySelectorAll('.lote-row.hl').forEach(function(x){{ x.classList.remove('hl'); }});
-                    el.classList.add('selected');
-                    // Destacar e rolar para lotes correspondentes
-                    var rows = document.querySelectorAll('.lote-row[data-cont="'+contId+'"][data-c="'+c+'"][data-a="'+a+'"]');
-                    rows.forEach(function(row){{ row.classList.add('hl'); }});
-                    if (rows.length > 0) {{
-                      rows[0].scrollIntoView({{ behavior:'smooth', block:'center' }});
-                    }}
-                  }}
-                  // Ligar eventos de clique a todas as células deste heatmap
-                  document.querySelectorAll('.hm-cell[data-cont="{cont_id}"]').forEach(function(cell) {{
-                    cell.onclick = function() {{
-                      selectCell(cell, cell.dataset.c, cell.dataset.a, cell.dataset.cont);
-                    }};
-                  }});
-                }})();
-                </script>"""
+                """
             st.markdown(f"""
             <style>
                 .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
@@ -1283,6 +1358,33 @@ def run_map_page(ctx: dict):
                     white-space:nowrap;
                 }}
                 @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
+
+                /* Heatmap styles (aplicados globalmente a todos os cards) */
+                .hm-grid-wrap {{
+                    position: relative;
+                    pointer-events: auto !important;
+                    isolation: isolate;
+                    background: #ffffff;
+                }}
+                .hm-grid-wrap table {{ pointer-events:auto !important; }}
+                .hm-cell {{
+                    cursor:pointer !important;
+                    border-radius:6px;
+                    transition: transform .15s, box-shadow .15s;
+                    position: relative;
+                    z-index: 2;
+                    pointer-events:auto !important;
+                    user-select:none;
+                    -webkit-tap-highlight-color: rgba({pr},{pg},{pb},.25);
+                }}
+                .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:3; }}
+                .hm-cell:active {{ transform:scale(0.97); }}
+                .hm-cell.selected {{ outline:2.5px solid rgb({pr},{pg},{pb});
+                    box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.22);
+                    transform:scale(1.08); z-index:4; }}
+                .lote-row.hl {{ border:2px solid rgb({pr},{pg},{pb}) !important;
+                    background:rgba({pr},{pg},{pb},.07) !important;
+                    box-shadow:0 2px 8px rgba({pr},{pg},{pb},.15); }}
             </style>
             """, unsafe_allow_html=True)
 

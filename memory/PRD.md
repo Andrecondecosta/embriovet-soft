@@ -1,7 +1,11 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Mar 2026** — Operações multi-lote (transferências + inseminações agrupadas por `operation_id`) totalmente implementadas e testadas. Bug P0 "Editar Transferência não carregava todos os lotes" corrigido. Persistência de sessão via DB implementada. Melhorias de UX mobile concluídas.
+**Maio 2026** — P0 "Heatmap click bloqueado por DOM overlap" RESOLVIDO. P3 refactoring iniciado: extração de auth e DB para módulos dedicados (`modules/db.py`, `modules/services/auth_service.py`). `app.py` reduzido de 3623 → 3329 linhas (≈ 300 linhas extraídas).
+
+## Changelog Recente (Maio 2026)
+- ✅ **P0: Heatmap click corrigido** — A causa-raiz era uma regra CSS interna do Streamlit (`.stElementContainer:has([data-testid="stMarkdownContainer"] > style) { position: absolute }`) que aplicava `position: absolute` a qualquer markdown que começasse com `<style>`. O heatmap HTML começava com bloco `<style>` o que fazia o container saltar para o topo do DOM, sobrepondo-se a outros elementos. **Solução:** mover o CSS do heatmap para o bloco global de estilos da página (uma só vez) e fazer `build_heatmap_html()` retornar apenas o `<div>` da tabela.
+- ✅ **P3 refactoring inicial:** Criados `/app/modules/db.py` (pool + `get_connection`) e `/app/modules/services/auth_service.py` (auth/sessões/permissões). `app.py` agora importa em vez de definir.
 
 ## Problema Original
 Software modular de gestão veterinária de sémen (congelado/fresco) para equinos. Precisa de: mapa visual de contentores, gestão de stock, transferências, inseminações, relatórios, design premium SaaS, suporte multi-idioma, white-labeling, migrações de base de dados automáticas, e importação inteligente com criação automática de entidades.
@@ -10,6 +14,8 @@ Software modular de gestão veterinária de sémen (congelado/fresco) para equin
 - **Framework:** Streamlit (Python) + PostgreSQL (psycopg2)
 - **Entrada:** `/app/app.py` — Router central, lógica de sessão, menus
 - **Módulos core:**
+  - `modules/db.py` — Pool de conexões PostgreSQL, `get_connection()`, helpers de tipo (NOVO Mai 2026)
+  - `modules/services/auth_service.py` — Autenticação, gestão de utilizadores, sessões persistentes, permissões (NOVO Mai 2026)
   - `modules/ui_kit.py` — Sistema de design, CSS global, sidebar, header
   - `modules/i18n.py` — Sistema de internacionalização (t() function)
   - `modules/migration_runner.py` — Migrações automáticas SQL

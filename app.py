@@ -58,6 +58,22 @@ from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
 from modules.pages.import_page import run_import_page
 from modules.i18n import t, get_i18n_diagnostics
+from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection
+from modules.services.auth_service import (
+    criar_hash_password,
+    ensure_admin_user_exists,
+    verificar_password,
+    autenticar_usuario,
+    carregar_usuarios,
+    adicionar_usuario,
+    alterar_password,
+    desativar_usuario,
+    ativar_usuario,
+    save_session_db,
+    load_session_db,
+    delete_session_db,
+    verificar_permissao,
+)
 
 THEMES = {
     "blue": "#1D4ED8",
@@ -87,99 +103,16 @@ logger = logging.getLogger(__name__)
 load_dotenv("/app/.env", override=True)
 
 # ------------------------------------------------------------
-# Helpers: converter tipos numpy/pandas -> tipos Python (psycopg2 friendly)
+# DB connection pool — definido em modules/db.py.
+# `to_py`, `ensure_sslmode_require`, `build_connection_pool` e `get_connection`
+# são importados no topo deste ficheiro.
 # ------------------------------------------------------------
-def to_py(v):
-    """Converte tipos numpy/pandas para tipos Python que o psycopg2 aceita."""
-    # None fica None
-    if v is None:
-        return None
-
-    # pandas NaN / NaT -> None
-    try:
-        if pd.isna(v):
-            return None
-    except Exception:
-        pass
-
-    # numpy -> python
-    if isinstance(v, (np.integer,)):
-        return int(v)
-    if isinstance(v, (np.floating,)):
-        return float(v)
-    if isinstance(v, (np.bool_,)):
-        return bool(v)
-
-    # pandas Timestamp -> datetime python
-    if isinstance(v, (pd.Timestamp,)):
-        return v.to_pydatetime()
-
-    # datetime/date do python já é ok
-    if isinstance(v, (dt.date, dt.datetime)):
-        return v
-
-    # tudo o resto fica como está (strings, etc.)
-    return v
-
-# ------------------------------------------------------------
-# Pool de conexões
-# ------------------------------------------------------------
-def ensure_sslmode_require(url: str) -> str:
-    if not url:
-        return url
-    parsed = urlparse(url)
-    qs = parse_qs(parsed.query)
-    if "sslmode" not in qs:
-        qs["sslmode"] = ["require"]
-        parsed = parsed._replace(query=urlencode(qs, doseq=True))
-    return urlunparse(parsed)
-
-@st.cache_resource(show_spinner=False)
-def build_connection_pool():
-    database_url = (os.getenv("DATABASE_URL") or "").strip()
-
-    if database_url:
-        database_url = ensure_sslmode_require(database_url)
-        pool_obj = psycopg2.pool.SimpleConnectionPool(
-            1, 10,
-            dsn=database_url
-        )
-        logger.info("✅ Pool criado com DATABASE_URL (sslmode=require)")
-        return pool_obj
-
-    pool_obj = psycopg2.pool.SimpleConnectionPool(
-        1, 10,
-        dbname=os.getenv("DB_NAME", "embriovet"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "123"),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-    )
-    logger.info("✅ Pool criado localmente")
-    return pool_obj
-
 try:
-    connection_pool = build_connection_pool()
+    build_connection_pool()  # garante que o pool é criado no arranque
 except Exception as e:
     logger.error(f"❌ Erro ao criar pool de conexões: {e}")
     st.error(f"Erro de conexão com banco de dados: {e}")
     st.stop()
-
-@contextmanager
-def get_connection():
-    """Context manager para gestão segura de conexões"""
-    conn = None
-    try:
-        conn = connection_pool.getconn()
-        yield conn
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        logger.error(f"Erro na conexão: {e}")
-        raise
-    finally:
-        if conn:
-            connection_pool.putconn(conn)
 
 # ------------------------------------------------------------
 # ✅ Migrations automáticas no arranque
@@ -1304,176 +1237,6 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
         return False
 
 # ------------------------------------------------------------
-# 🔐 Funções de Autenticação e Utilizadores
-# ------------------------------------------------------------
-def criar_hash_password(password):
-    """Cria hash da password usando bcrypt"""
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-
-def ensure_admin_user_exists(username, password):
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM usuarios")
-            total = cur.fetchone()[0] or 0
-            if total > 0:
-                cur.close()
-                return
-
-            password_hash = criar_hash_password(password)
-            cur.execute(
-                """
-                INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)
-                VALUES (%s, %s, %s, %s, TRUE, TRUE)
-                """,
-                (username, "Administrador", password_hash, "Administrador"),
-            )
-            conn.commit()
-            cur.close()
-            logger.info("Utilizador admin inicial criado")
-    except Exception as e:
-        logger.error(f"Erro ao criar admin inicial: {e}")
-
-def verificar_password(password, password_hash):
-    """Verifica se a password corresponde ao hash"""
-    try:
-        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
-    except Exception:
-        return False
-
-def autenticar_usuario(username, password):
-    """Autentica utilizador e retorna seus dados"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, username, nome_completo, password_hash, nivel, ativo, must_change_password
-                FROM usuarios
-                WHERE username = %s AND ativo = TRUE
-            """, (username,))
-            
-            resultado = cur.fetchone()
-            cur.close()
-            
-            if not resultado:
-                return None
-            
-            user_id, username, nome, pwd_hash, nivel, ativo, must_change_password = resultado
-            
-            # Verificar password
-            if verificar_password(password, pwd_hash):
-                # Atualizar last_login
-                cur = conn.cursor()
-                cur.execute("""
-                    UPDATE usuarios SET last_login = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                """, (user_id,))
-                conn.commit()
-                cur.close()
-                
-                return {
-                    'id': user_id,
-                    'username': username,
-                    'nome': nome,
-                    'nivel': nivel,
-                    'must_change_password': must_change_password
-                }
-            
-            return None
-            
-    except Exception as e:
-        logger.error(f"Erro ao autenticar: {e}")
-        return None
-
-def carregar_usuarios():
-    """Carrega lista de utilizadores"""
-    try:
-        with get_connection() as conn:
-            df = pd.read_sql_query("""
-                SELECT id, username, nome_completo, nivel, ativo, 
-                       created_at, last_login
-                FROM usuarios
-                ORDER BY nivel, nome_completo
-            """, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar utilizadores: {e}")
-        return pd.DataFrame()
-
-def adicionar_usuario(username, nome_completo, password, nivel, created_by_id):
-    """Adiciona novo utilizador"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            
-            # Verificar se username já existe
-            cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
-            if cur.fetchone():
-                st.error(t("error.username_exists"))
-                return False
-            
-            password_hash = criar_hash_password(password)
-            
-            cur.execute("""
-                INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, created_by)
-                VALUES (%s, %s, %s, %s, TRUE, %s)
-            """, (username, nome_completo, password_hash, nivel, created_by_id))
-            
-            conn.commit()
-            cur.close()
-            logger.info(f"Utilizador criado: {username} ({nivel})")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Erro ao adicionar utilizador: {e}")
-        st.error(f"Erro ao adicionar utilizador: {e}")
-        return False
-
-def alterar_password(user_id, nova_password):
-    """Altera password do utilizador"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            password_hash = criar_hash_password(nova_password)
-            cur.execute("""
-                UPDATE usuarios SET password_hash = %s
-                WHERE id = %s
-            """, (password_hash, user_id))
-            conn.commit()
-            cur.close()
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao alterar password: {e}")
-        return False
-
-def desativar_usuario(user_id):
-    """Desativa utilizador"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE usuarios SET ativo = FALSE WHERE id = %s", (user_id,))
-            conn.commit()
-            cur.close()
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao desativar utilizador: {e}")
-        return False
-
-def ativar_usuario(user_id):
-    """Ativa utilizador"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE usuarios SET ativo = TRUE WHERE id = %s", (user_id,))
-            conn.commit()
-            cur.close()
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao ativar utilizador: {e}")
-        return False
-
-# ------------------------------------------------------------
 # 👥 Funções de Gestão de Proprietários
 # ------------------------------------------------------------
 def adicionar_proprietario(dados):
@@ -2387,46 +2150,6 @@ inject_all_css_consolidated()
 # 🔐 Sistema de Login
 # ------------------------------------------------------------
 
-def save_session_db(token: str, user: dict):
-    """Guarda a sessão na BD (persiste após restart do servidor)."""
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO user_sessions (token, username, user_data, expires_at)
-                    VALUES (%s, %s, %s, NOW() + INTERVAL '30 days')
-                    ON CONFLICT (token) DO UPDATE SET expires_at = NOW() + INTERVAL '30 days'
-                """, (token, user.get("username", ""), json.dumps(user)))
-                conn.commit()
-    except Exception as e:
-        logger.warning(f"save_session_db falhou: {e}")
-
-def load_session_db(token: str) -> dict | None:
-    """Carrega a sessão da BD pelo token."""
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT user_data FROM user_sessions
-                    WHERE token = %s AND expires_at > NOW()
-                """, (token,))
-                row = cur.fetchone()
-                if row:
-                    return json.loads(row[0])
-    except Exception as e:
-        logger.warning(f"load_session_db falhou: {e}")
-    return None
-
-def delete_session_db(token: str):
-    """Remove a sessão da BD (logout)."""
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM user_sessions WHERE token = %s", (token,))
-                conn.commit()
-    except Exception as e:
-        logger.warning(f"delete_session_db falhou: {e}")
-
 def mostrar_tela_login(app_settings):
     """Exibe tela de login com design limpo e sem artefactos visuais"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
@@ -2566,22 +2289,6 @@ def mostrar_tela_login(app_settings):
             unsafe_allow_html=True,
         )
         
-
-def verificar_permissao(nivel_minimo):
-    """Verifica se o usuário tem permissão mínima necessária"""
-    if 'user' not in st.session_state:
-        return False
-    
-    user_nivel = st.session_state['user']['nivel']
-    
-    niveis = {
-        'Administrador': 3,
-        'Gestor': 2,
-        'Visualizador': 1
-    }
-    
-    return niveis.get(user_nivel, 0) >= niveis.get(nivel_minimo, 0)
-
 
 def render_change_credentials(user, app_settings):
     st.title(t("security.title"))
