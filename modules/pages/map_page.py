@@ -84,8 +84,8 @@ def run_map_page(ctx: dict):
     if "mapa_salvar_layout_tentativas" not in st.session_state:
         st.session_state["mapa_salvar_layout_tentativas"] = 0
 
-    if "map_bridge_bootstrapped" not in st.session_state:
-        st.session_state["map_bridge_bootstrapped"] = False
+    if "map_bridge_v3_bootstrapped" not in st.session_state:
+        st.session_state["map_bridge_v3_bootstrapped"] = False
 
     try:
         from streamlit_js_eval import streamlit_js_eval
@@ -98,18 +98,20 @@ def run_map_page(ctx: dict):
         st.warning(t("map.missing_dependency"))
     else:
         bridge_boot = None
-        if not st.session_state.get("map_bridge_bootstrapped", False):
+        if not st.session_state.get("map_bridge_v3_bootstrapped", False):
             bridge_boot = streamlit_js_eval(
             js_expressions="""
                 (function(){
                     try {
                         var targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                        var targetDoc = targetWin.document;
+
+                        // Bridge para layout drag-and-drop
                         if (!targetWin.__contentorLayoutBridgeInstalled) {
                             targetWin.__contentorLayoutBridgeInstalled = true;
                             targetWin.addEventListener('message', function(event){
                                 var data = event && event.data ? event.data : null;
                                 if (!data || typeof data !== 'object') return;
-
                                 if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
                                     try {
                                         var atual = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
@@ -120,21 +122,110 @@ def run_map_page(ctx: dict):
                                         targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
                                     } catch (e) {}
                                 }
-
                                 if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
                                     try { targetWin.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
                                 }
                             });
                         }
+
+                        // Handler nomeado para cliques em células do heatmap
+                        function handleHmCellClick(ev) {
+                            ev.stopPropagation();
+                            var cell = ev.currentTarget;
+                            var cId = cell.getAttribute('data-cont');
+                            var c   = cell.getAttribute('data-c');
+                            var a   = cell.getAttribute('data-a');
+                            targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
+                            targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
+                            cell.classList.add('selected');
+                            var rows = targetDoc.querySelectorAll(
+                                '.lote-row[data-cont="'+cId+'"][data-c="'+c+'"][data-a="'+a+'"]'
+                            );
+                            rows.forEach(function(r){ r.classList.add('hl'); });
+                            if (rows.length > 0) {
+                                rows[0].scrollIntoView({behavior:'smooth', block:'center'});
+                            }
+                        }
+
+                        // Garante pointer-events auto em toda a cadeia até .hm-cell
+                        function ensureClickable(cell) {
+                            cell.style.pointerEvents = 'auto';
+                            cell.style.cursor = 'pointer';
+                            cell.style.position = 'relative';
+                            cell.style.zIndex = '5';
+                            var p = cell.parentElement;
+                            var depth = 0;
+                            while (p && depth < 12) {
+                                var cs = targetWin.getComputedStyle(p);
+                                if (cs && cs.pointerEvents === 'none') {
+                                    p.style.pointerEvents = 'auto';
+                                }
+                                if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
+                                    p.style.pointerEvents = 'auto';
+                                }
+                                p = p.parentElement;
+                                depth += 1;
+                            }
+                        }
+
+                        function bindCells(root) {
+                            try {
+                                var cells = (root || targetDoc).querySelectorAll('.hm-cell');
+                                cells.forEach(function(cell){
+                                    if (cell.__hmBound) return;
+                                    cell.__hmBound = true;
+                                    ensureClickable(cell);
+                                    cell.addEventListener('click', handleHmCellClick, false);
+                                    cell.addEventListener('touchend', function(e){
+                                        e.preventDefault();
+                                        handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
+                                    }, {passive: false});
+                                });
+                            } catch (e) {}
+                        }
+
+                        // Vincular já existentes e observar novos
+                        if (!targetDoc.__hmObserver) {
+                            bindCells(targetDoc);
+                            var obs = new targetWin.MutationObserver(function(mutations){
+                                for (var i = 0; i < mutations.length; i++) {
+                                    var m = mutations[i];
+                                    if (m.addedNodes && m.addedNodes.length) {
+                                        for (var j = 0; j < m.addedNodes.length; j++) {
+                                            var node = m.addedNodes[j];
+                                            if (node.nodeType !== 1) continue;
+                                            if (node.classList && node.classList.contains('hm-cell')) {
+                                                bindCells(node.parentElement || targetDoc);
+                                            } else if (node.querySelectorAll) {
+                                                bindCells(node);
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            obs.observe(targetDoc.body, {childList: true, subtree: true});
+                            targetDoc.__hmObserver = obs;
+
+                            // Re-bind periódico de segurança (primeiros 6s após carregar)
+                            var ticks = 0;
+                            var iv = targetWin.setInterval(function(){
+                                bindCells(targetDoc);
+                                ticks += 1;
+                                if (ticks > 12) { targetWin.clearInterval(iv); }
+                            }, 500);
+                        } else {
+                            bindCells(targetDoc);
+                        }
+
                     } catch (e) {}
                     return true;
                 })()
             """,
-            key="map_layout_bridge_bootstrap",
+            key="map_layout_bridge_v3",
             want_output=True,
             )
         if bridge_boot is True:
-            st.session_state["map_bridge_bootstrapped"] = True
+            st.session_state["map_bridge_v3_bootstrapped"] = True
 
     if "map_largura_viewport" not in st.session_state:
         st.session_state["map_largura_viewport"] = None
@@ -398,6 +489,22 @@ def run_map_page(ctx: dict):
                         height: 0 !important;
                         min-height: 0 !important;
                         display: none !important;
+                    }
+
+                    /* Logos e header nativo do Streamlit não devem intercetar cliques
+                       sobre as células do heatmap (overlap posicional). */
+                    [data-testid="stSidebar"] img,
+                    [data-testid="stSidebarContent"] img,
+                    .app-topbar-title,
+                    [data-testid="stMarkdownContainer"] > div > img,
+                    [data-testid="stMarkdown"] img {
+                        pointer-events: none !important;
+                    }
+                    [data-testid="stHeader"] {
+                        pointer-events: none !important;
+                    }
+                    [data-testid="stHeader"] * {
+                        pointer-events: auto;
                     }
                     
                     /* Painel de detalhes elegante */
@@ -1122,6 +1229,97 @@ def run_map_page(ctx: dict):
 
             # ── Inventário de Contentores ──────────────────────────────────────
             primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+
+            # Converter hex → rgb para usar em rgba()
+            def hex_to_rgb(h):
+                h = h.lstrip('#')
+                if len(h) == 3: h = ''.join(c*2 for c in h)
+                return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+            pr, pg, pb = hex_to_rgb(primary)
+
+            def build_heatmap_html(stock_df, primary_r, primary_g, primary_b):
+                """Gera o HTML de uma grelha Canisters × Andares para o stock de um contentor."""
+                if stock_df.empty:
+                    return ""
+                # Contagem por célula (canister, andar)
+                cell_map = {}
+                for _, r in stock_df.iterrows():
+                    c, a = int(r['canister'] or 0), int(r['andar'] or 0)
+                    if c and a:
+                        cell_map[(c, a)] = cell_map.get((c, a), 0) + int(r['existencia_atual'] or 0)
+
+                if not cell_map:
+                    return ""
+
+                canisters = sorted(set(k[0] for k in cell_map))
+                andares   = sorted(set(k[1] for k in cell_map), reverse=True)  # top → bottom
+                max_pal   = max(cell_map.values()) or 1
+
+                def cell_style(qty):
+                    if qty == 0:
+                        return "background:#f1f5f9;color:#cbd5e1;"
+                    ratio = qty / max_pal
+                    alpha = 0.18 + ratio * 0.78  # 0.18..0.96
+                    bg = f"rgba({primary_r},{primary_g},{primary_b},{alpha:.2f})"
+                    fg = "#fff" if alpha > 0.55 else f"rgb({primary_r},{primary_g},{primary_b})"
+                    return f"background:{bg};color:{fg};font-weight:700;"
+
+                # Header com nomes das colunas (canisters)
+                th_cells = "".join(
+                    f"<th style='text-align:center;font-size:.68rem;font-weight:700;"
+                    f"color:#64748b;padding:4px 2px;white-space:nowrap;'>C{c}</th>"
+                    for c in canisters
+                )
+                rows_html = ""
+                for a in andares:
+                    tds = ""
+                    for c in canisters:
+                        qty = cell_map.get((c, a), 0)
+                        sty = cell_style(qty)
+                        label = str(qty) if qty > 0 else "·"
+                        tds += (
+                            f"<td class='hm-cell' "
+                            f"data-cont='{cont_id}' data-c='{c}' data-a='{a}' "
+                            f"title='C{c} / A{a}: {qty} palhetas' "
+                            f"style='{sty}text-align:center;border-radius:6px;"
+                            f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
+                        )
+                    rows_html += (
+                        f"<tr><td style='font-size:.65rem;font-weight:700;color:#94a3b8;"
+                        f"padding-right:6px;white-space:nowrap;'>A{a}</td>{tds}</tr>"
+                    )
+
+                legend_items = ""
+                for pct, lbl in [(0, "Vazio"), (0.25, "Baixo"), (0.55, "Médio"), (0.85, "Alto")]:
+                    a = 0.18 + pct * 0.78
+                    bg = f"rgba({primary_r},{primary_g},{primary_b},{a:.2f})" if pct > 0 else "#f1f5f9"
+                    legend_items += (
+                        f"<span style='display:inline-flex;align-items:center;gap:4px;"
+                        f"font-size:.65rem;color:#64748b;margin-right:10px;'>"
+                        f"<span style='display:inline-block;width:12px;height:12px;"
+                        f"border-radius:3px;background:{bg};border:1px solid #e2e8f0;'></span>{lbl}</span>"
+                    )
+
+                return f"""
+                <div class="hm-grid-wrap" style="margin:12px 0 6px;">
+                  <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
+                               letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
+                    Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
+                  </div>
+                  <div style="overflow-x:auto;">
+                    <table style="border-collapse:separate;border-spacing:3px;width:100%;">
+                      <thead>
+                        <tr>
+                          <th style="min-width:28px;"></th>{th_cells}
+                        </tr>
+                      </thead>
+                      <tbody>{rows_html}</tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
+                </div>
+                """
             st.markdown(f"""
             <style>
                 .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
@@ -1160,6 +1358,33 @@ def run_map_page(ctx: dict):
                     white-space:nowrap;
                 }}
                 @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
+
+                /* Heatmap styles (aplicados globalmente a todos os cards) */
+                .hm-grid-wrap {{
+                    position: relative;
+                    pointer-events: auto !important;
+                    isolation: isolate;
+                    background: #ffffff;
+                }}
+                .hm-grid-wrap table {{ pointer-events:auto !important; }}
+                .hm-cell {{
+                    cursor:pointer !important;
+                    border-radius:6px;
+                    transition: transform .15s, box-shadow .15s;
+                    position: relative;
+                    z-index: 2;
+                    pointer-events:auto !important;
+                    user-select:none;
+                    -webkit-tap-highlight-color: rgba({pr},{pg},{pb},.25);
+                }}
+                .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:3; }}
+                .hm-cell:active {{ transform:scale(0.97); }}
+                .hm-cell.selected {{ outline:2.5px solid rgb({pr},{pg},{pb});
+                    box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.22);
+                    transform:scale(1.08); z-index:4; }}
+                .lote-row.hl {{ border:2px solid rgb({pr},{pg},{pb}) !important;
+                    background:rgba({pr},{pg},{pb},.07) !important;
+                    box-shadow:0 2px 8px rgba({pr},{pg},{pb},.15); }}
             </style>
             """, unsafe_allow_html=True)
 
@@ -1189,7 +1414,13 @@ def run_map_page(ctx: dict):
                 if stock_contentor.empty:
                     st.caption("Nenhum lote neste contentor.")
                 else:
-                    # Agrupar por canister
+                    # ── Heatmap Canisters × Andares ──────────────────────────────
+                    heatmap_html = build_heatmap_html(stock_contentor, pr, pg, pb)
+                    if heatmap_html:
+                        st.markdown(heatmap_html, unsafe_allow_html=True)
+                        st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
+
+                    # ── Detalhes por canister ─────────────────────────────────────
                     for canister in sorted(stock_contentor['canister'].dropna().unique()):
                         sc = stock_contentor[stock_contentor['canister'] == canister]
                         can_int = int(canister)
@@ -1246,7 +1477,7 @@ def run_map_page(ctx: dict):
                             col_info, col_action = st.columns([3, 2])
                             with col_info:
                                 st.markdown(f"""
-                                <div class="lote-row">
+                                <div class="lote-row" data-cont="{cont_id}" data-c="{can_atual}" data-a="{andar_atual}">
                                   <div class="lote-row-left">
                                     <span class="lote-garanhao">{gar}</span>
                                     <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
