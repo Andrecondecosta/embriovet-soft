@@ -81,11 +81,28 @@ def _criar_estadia(dados: dict) -> int | None:
         return new_id
 
 
+def _criar_animal(dados: dict) -> int | None:
+    """Insere novo animal e devolve o id criado."""
+    sql = """
+        INSERT INTO animais (nome, tipo, raca, data_nascimento, numero_registo, dono_id)
+        VALUES (%(nome)s, %(tipo)s, %(raca)s, %(data_nascimento)s, %(numero_registo)s, %(dono_id)s)
+        RETURNING id
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, dados)
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        return new_id
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Modal: nova estadia / visita
 # ────────────────────────────────────────────────────────────────────────────
 MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
 TIPOS_REGISTO = ["estadia", "visita"]
+TIPOS_ANIMAL = ["egua", "garanhao", "receptora"]
 
 
 def _render_modal_nova_estadia():
@@ -99,8 +116,13 @@ def _render_modal_nova_estadia():
     )
     animais_df = _pesquisar_animais(termo)
 
-    if termo and animais_df.empty:
-        st.warning("Sem animais activos com esse nome.")
+    # Sinaliza se vamos criar animal novo (termo escrito mas sem matches)
+    criar_novo_animal = bool(termo and termo.strip()) and animais_df.empty
+    if criar_novo_animal:
+        st.info(
+            f"Não existe nenhum animal chamado “{termo.strip()}”. "
+            "Preencha os dados abaixo para o criar automaticamente ao guardar."
+        )
 
     animal_options = (
         {f"{r['nome']} ({r['tipo']})": int(r["id"]) for _, r in animais_df.iterrows()}
@@ -118,6 +140,36 @@ def _render_modal_nova_estadia():
     aloj_df = _carregar_alojamentos_ativos()
 
     with st.form("form_nova_estadia", clear_on_submit=False):
+        # ── Campos extra para criar animal novo (apenas se necessário) ──
+        novo_animal_tipo = None
+        novo_animal_raca = None
+        novo_animal_data_nasc = None
+        novo_animal_num_reg = None
+        if criar_novo_animal:
+            st.markdown("#### Novo animal")
+            cna1, cna2 = st.columns(2)
+            with cna1:
+                novo_animal_tipo = st.selectbox(
+                    "Tipo *",
+                    options=TIPOS_ANIMAL,
+                    key="estadia_novo_animal_tipo",
+                )
+                novo_animal_raca = st.text_input(
+                    "Raça (opcional)",
+                    key="estadia_novo_animal_raca",
+                )
+            with cna2:
+                novo_animal_data_nasc = st.date_input(
+                    "Data de nascimento (opcional)",
+                    value=None,
+                    key="estadia_novo_animal_data_nasc",
+                )
+                novo_animal_num_reg = st.text_input(
+                    "Número de registo (opcional)",
+                    key="estadia_novo_animal_num_reg",
+                )
+            st.markdown("---")
+
         col1, col2 = st.columns(2)
         with col1:
             tipo_registo = st.selectbox(
@@ -176,8 +228,10 @@ def _render_modal_nova_estadia():
 
         if submit:
             erros = []
-            if animal_id is None:
-                erros.append("Selecciona um animal.")
+            if not criar_novo_animal and animal_id is None:
+                erros.append("Selecciona um animal (ou escreva um nome novo para o criar).")
+            if criar_novo_animal and not novo_animal_tipo:
+                erros.append("Indica o tipo do novo animal.")
             if dono_id is None:
                 erros.append("Selecciona um proprietário.")
             if tipo_registo == "estadia" and alojamento_id is None:
@@ -187,6 +241,25 @@ def _render_modal_nova_estadia():
                 for e in erros:
                     st.error(e)
                 return
+
+            # Se for animal novo, cria-o primeiro e usa o id devolvido
+            if criar_novo_animal:
+                try:
+                    animal_id = _criar_animal({
+                        "nome": termo.strip(),
+                        "tipo": novo_animal_tipo,
+                        "raca": (novo_animal_raca or None),
+                        "data_nascimento": novo_animal_data_nasc,
+                        "numero_registo": (novo_animal_num_reg or None),
+                        "dono_id": dono_id,
+                    })
+                except Exception as e:
+                    st.error(f"Erro ao criar animal: {e}")
+                    return
+                if not animal_id:
+                    st.error("Não foi possível criar o animal.")
+                    return
+                st.toast(f"Animal '{termo.strip()}' criado.", icon="✅")
 
             estado_inicial = "internado" if tipo_registo == "estadia" else "visitante"
             criado_por = (st.session_state.get("user") or {}).get("username") or ""
