@@ -58,6 +58,7 @@ from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
 from modules.pages.import_page import run_import_page
 from modules.pages.estadias_page import run_estadias_page
+from modules.pages.trabalho_diario_page import run_trabalho_diario_page
 from modules.i18n import t, get_i18n_diagnostics
 from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection
 from modules.services.auth_service import (
@@ -2600,6 +2601,7 @@ render_header(app_settings, user)
 menu_principal = [
     t("menu.dashboard"),
     "Estadias e Visitas",
+    "Trabalho diário",
 ]
 
 # Menu Secundário (dentro do expander)
@@ -2737,6 +2739,10 @@ if aba == t("menu.dashboard"):
 
 if aba == "Estadias e Visitas":
     run_estadias_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "Trabalho diário":
+    run_trabalho_diario_page({**globals(), **locals()})
     st.stop()
 
 if aba == t("menu.stock"):
