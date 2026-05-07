@@ -57,6 +57,7 @@ from modules.pages.transfer_page import run_transfer_page
 from modules.pages.dashboard_page import run_dashboard_page
 from modules.pages.settings_page import run_settings_page
 from modules.pages.import_page import run_import_page
+from modules.pages.estadias_page import run_estadias_page
 from modules.i18n import t, get_i18n_diagnostics
 from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection
 from modules.services.auth_service import (
@@ -2598,6 +2599,7 @@ render_header(app_settings, user)
 # Menu Principal (sempre visível)
 menu_principal = [
     t("menu.dashboard"),
+    "Estadias e Visitas",
 ]
 
 # Menu Secundário (dentro do expander)
@@ -2731,6 +2733,10 @@ if aba == t("menu.map"):
 
 if aba == t("menu.dashboard"):
     run_dashboard_page({**globals(), **locals()})
+    st.stop()
+
+if aba == "Estadias e Visitas":
+    run_estadias_page({**globals(), **locals()})
     st.stop()
 
 if aba == t("menu.stock"):
