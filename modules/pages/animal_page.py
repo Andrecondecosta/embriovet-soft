@@ -98,14 +98,46 @@ def _obter_estadia_activa(animal_id: int) -> int | None:
 
 def _carregar_diario_clinico(animal_id: int) -> pd.DataFrame:
     sql = """
-        SELECT data_registo, foliculo_mm, edema_grau, fluido_uterino,
-               comportamento, tratamentos, proxima_observacao, observacoes
+        SELECT id, data_registo, foliculo_mm, edema_grau, fluido_uterino,
+               comportamento, temperatura, tratamentos, proxima_observacao,
+               observacoes
         FROM diario_clinico
         WHERE animal_id = %s
         ORDER BY data_registo DESC, id DESC
     """
     with get_connection() as conn:
         return pd.read_sql_query(sql, conn, params=(animal_id,))
+
+
+def _atualizar_diario_clinico(registo_id: int, dados: dict) -> bool:
+    sql = """
+        UPDATE diario_clinico SET
+            data_registo = %(data_registo)s,
+            foliculo_mm = %(foliculo_mm)s,
+            edema_grau = %(edema_grau)s,
+            fluido_uterino = %(fluido_uterino)s,
+            comportamento = %(comportamento)s,
+            temperatura = %(temperatura)s,
+            tratamentos = %(tratamentos)s,
+            proxima_observacao = %(proxima_observacao)s,
+            observacoes = %(observacoes)s
+        WHERE id = %(id)s
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, {**dados, "id": registo_id})
+        conn.commit()
+        cur.close()
+    return True
+
+
+def _apagar_diario_clinico(registo_id: int) -> bool:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM diario_clinico WHERE id = %s", (registo_id,))
+        conn.commit()
+        cur.close()
+    return True
 
 
 def _inserir_diario_clinico(dados: dict) -> int | None:
@@ -250,6 +282,103 @@ def _render_form_novo_registo(animal_id: int) -> None:
                 st.error(f"Erro ao guardar: {e}")
 
 
+def _render_form_editar_diario(registo: dict) -> None:
+    """Form inline para editar um registo do diário clínico."""
+    rid = int(registo["id"])
+    with st.form(f"form_edit_diario_{rid}"):
+        st.markdown("##### Editar registo")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            data_registo = st.date_input(
+                "Data do registo",
+                value=registo.get("data_registo") or date.today(),
+                key=f"ed_data_{rid}",
+            )
+            foliculo_mm = st.number_input(
+                "Folículo (mm)", min_value=0, max_value=99, step=1,
+                value=int(registo.get("foliculo_mm") or 0),
+                key=f"ed_folic_{rid}",
+            )
+        with c2:
+            cur_edema = registo.get("edema_grau")
+            edema_idx = next(
+                (i for i, (v, _) in enumerate(EDEMA_OPTS) if v == (cur_edema if cur_edema is not None else 0)),
+                0,
+            )
+            edema_grau_label = st.selectbox(
+                "Edema",
+                options=[lbl for _, lbl in EDEMA_OPTS],
+                index=edema_idx,
+                key=f"ed_edema_{rid}",
+            )
+            edema_grau = next(v for v, lbl in EDEMA_OPTS if lbl == edema_grau_label)
+            cur_comp = registo.get("comportamento") or COMPORTAMENTOS[0]
+            comp_idx = COMPORTAMENTOS.index(cur_comp) if cur_comp in COMPORTAMENTOS else 0
+            comportamento = st.selectbox(
+                "Comportamento", options=COMPORTAMENTOS, index=comp_idx,
+                key=f"ed_comp_{rid}",
+            )
+        with c3:
+            temperatura = st.number_input(
+                "Temperatura (°C)", min_value=0.0, max_value=45.0, step=0.1,
+                format="%.1f",
+                value=float(registo.get("temperatura") or 0),
+                key=f"ed_temp_{rid}",
+            )
+            fluido_uterino = st.checkbox(
+                "Fluido uterino",
+                value=bool(registo.get("fluido_uterino")),
+                key=f"ed_fluido_{rid}",
+            )
+
+        proxima_observacao = st.date_input(
+            "Próxima observação (opcional)",
+            value=registo.get("proxima_observacao") or None,
+            key=f"ed_prox_{rid}",
+        )
+        tratamentos = st.text_area(
+            "Tratamentos (opcional)",
+            value=registo.get("tratamentos") or "",
+            key=f"ed_trat_{rid}",
+        )
+        observacoes = st.text_area(
+            "Observações (opcional)",
+            value=registo.get("observacoes") or "",
+            key=f"ed_obs_{rid}",
+        )
+
+        b1, b2 = st.columns(2)
+        with b1:
+            guardar = st.form_submit_button(
+                "Guardar alterações", type="primary", width="stretch",
+            )
+        with b2:
+            cancelar = st.form_submit_button("Cancelar", width="stretch")
+
+        if cancelar:
+            st.session_state[f"diario_edit_{rid}"] = False
+            st.rerun()
+
+        if guardar:
+            try:
+                _atualizar_diario_clinico(rid, {
+                    "data_registo": data_registo,
+                    "foliculo_mm": int(foliculo_mm) if foliculo_mm else None,
+                    "edema_grau": int(edema_grau),
+                    "fluido_uterino": bool(fluido_uterino),
+                    "comportamento": comportamento,
+                    "temperatura": float(temperatura) if temperatura else None,
+                    "tratamentos": tratamentos.strip() or None,
+                    "proxima_observacao": proxima_observacao or None,
+                    "observacoes": observacoes.strip() or None,
+                })
+                st.session_state[f"diario_edit_{rid}"] = False
+                st.success("Registo atualizado.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao atualizar: {e}")
+
+
 def _render_tab_diario_clinico(animal_id: int) -> None:
     novo_key = f"diario_novo_{animal_id}"
     aberto = st.session_state.get(novo_key, False)
@@ -269,21 +398,86 @@ def _render_tab_diario_clinico(animal_id: int) -> None:
         st.info("Sem registos clínicos para este animal.")
         return
 
-    view = df.copy()
-    view["fluido_uterino"] = view["fluido_uterino"].map(lambda x: "Sim" if bool(x) else "Não")
-    view["edema_grau"] = view["edema_grau"].map(lambda v: "—" if pd.isna(v) else int(v))
-    view["foliculo_mm"] = view["foliculo_mm"].map(lambda v: "—" if pd.isna(v) else int(v))
-    view = view.rename(columns={
-        "data_registo": "Data",
-        "foliculo_mm": "Folículo",
-        "edema_grau": "Edema",
-        "fluido_uterino": "Fluido",
-        "comportamento": "Comportamento",
-        "tratamentos": "Tratamentos",
-        "proxima_observacao": "Próxima obs.",
-        "observacoes": "Observações",
-    })
-    st.dataframe(view, width="stretch", hide_index=True)
+    # Cabeçalho da lista
+    cols_w = [1.0, 0.8, 0.8, 0.7, 1.2, 1.4, 1.0, 1.4, 0.85, 0.85]
+    headers = [
+        "Data", "Folículo", "Edema", "Fluido", "Comportamento",
+        "Tratamentos", "Próxima obs.", "Observações", "", "",
+    ]
+    head_cols = st.columns(cols_w)
+    for i, h in enumerate(headers):
+        head_cols[i].markdown(
+            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
+            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
+        unsafe_allow_html=True,
+    )
+
+    for _, row in df.iterrows():
+        rid = int(row["id"])
+        edit_key = f"diario_edit_{rid}"
+        del_confirm_key = f"diario_del_confirm_{rid}"
+
+        cols = st.columns(cols_w)
+        cols[0].write(row["data_registo"].strftime("%d/%m/%Y") if pd.notna(row["data_registo"]) else "—")
+        cols[1].write("—" if pd.isna(row["foliculo_mm"]) else int(row["foliculo_mm"]))
+        cols[2].write("—" if pd.isna(row["edema_grau"]) else int(row["edema_grau"]))
+        cols[3].write("Sim" if bool(row["fluido_uterino"]) else "Não")
+        cols[4].write(row["comportamento"] or "—")
+        trat_txt = (row["tratamentos"] or "—")
+        cols[5].write(trat_txt[:40] + ("…" if len(trat_txt) > 40 else ""))
+        prox = row["proxima_observacao"]
+        cols[6].write(prox.strftime("%d/%m/%Y") if pd.notna(prox) else "—")
+        obs_txt = (row["observacoes"] or "—")
+        cols[7].write(obs_txt[:40] + ("…" if len(obs_txt) > 40 else ""))
+
+        with cols[8]:
+            if st.button("Editar", key=f"btn_dc_edit_{rid}", width="stretch"):
+                st.session_state[edit_key] = True
+                # Fecha qualquer confirmação de apagar pendente
+                st.session_state[del_confirm_key] = False
+                st.rerun()
+
+        with cols[9]:
+            if st.button("Apagar", key=f"btn_dc_del_{rid}", width="stretch"):
+                st.session_state[del_confirm_key] = True
+                st.session_state[edit_key] = False
+                st.rerun()
+
+        # Confirmação de apagar (linha-a-linha)
+        if st.session_state.get(del_confirm_key, False):
+            st.warning(
+                f"Tem a certeza que pretende apagar o registo de "
+                f"{row['data_registo'].strftime('%d/%m/%Y') if pd.notna(row['data_registo']) else '?'}? "
+                "Esta operação não pode ser desfeita."
+            )
+            cb1, cb2, _ = st.columns([1, 1, 6])
+            with cb1:
+                if st.button("Confirmar apagar", key=f"btn_dc_confirm_del_{rid}", type="primary", width="stretch"):
+                    try:
+                        _apagar_diario_clinico(rid)
+                        st.session_state[del_confirm_key] = False
+                        st.success("Registo apagado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao apagar: {e}")
+            with cb2:
+                if st.button("Cancelar", key=f"btn_dc_cancel_del_{rid}", width="stretch"):
+                    st.session_state[del_confirm_key] = False
+                    st.rerun()
+
+        # Form de edição inline
+        if st.session_state.get(edit_key, False):
+            with st.container(border=True):
+                _render_form_editar_diario(row.to_dict())
+
+        st.markdown(
+            "<hr style='border:none;border-top:1px dashed #e2e8f0;margin:6px 0 10px;'>",
+            unsafe_allow_html=True,
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────
