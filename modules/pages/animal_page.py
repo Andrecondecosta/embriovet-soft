@@ -80,6 +80,212 @@ def _carregar_estadias_do_animal(animal_id: int) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn, params=(animal_id,))
 
 
+# ── Diário clínico ─────────────────────────────────────────────────────────
+def _obter_estadia_activa(animal_id: int) -> int | None:
+    sql = """
+        SELECT id FROM estadias
+        WHERE animal_id = %s AND data_saida IS NULL
+        ORDER BY data_entrada DESC
+        LIMIT 1
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (animal_id,))
+        row = cur.fetchone()
+        cur.close()
+        return int(row[0]) if row else None
+
+
+def _carregar_diario_clinico(animal_id: int) -> pd.DataFrame:
+    sql = """
+        SELECT data_registo, foliculo_mm, edema_grau, fluido_uterino,
+               comportamento, tratamentos, proxima_observacao, observacoes
+        FROM diario_clinico
+        WHERE animal_id = %s
+        ORDER BY data_registo DESC, id DESC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(animal_id,))
+
+
+def _inserir_diario_clinico(dados: dict) -> int | None:
+    sql = """
+        INSERT INTO diario_clinico (
+            animal_id, estadia_id, data_registo, foliculo_mm, edema_grau,
+            fluido_uterino, comportamento, temperatura, tratamentos,
+            proxima_observacao, observacoes, utilizador
+        ) VALUES (
+            %(animal_id)s, %(estadia_id)s, %(data_registo)s, %(foliculo_mm)s,
+            %(edema_grau)s, %(fluido_uterino)s, %(comportamento)s,
+            %(temperatura)s, %(tratamentos)s, %(proxima_observacao)s,
+            %(observacoes)s, %(utilizador)s
+        ) RETURNING id
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, dados)
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        return new_id
+
+
+def _criar_tarefa_proxima_observacao(
+    animal_id: int, estadia_id: int, data_proxima: date, utilizador: str | None
+) -> None:
+    """Cria automaticamente uma tarefa em trabalho_diario para a próxima
+    observação. Urgência: 'hoje' se for amanhã, 'observacao' se for mais
+    tarde. Se a data for hoje ou no passado, não cria."""
+    hoje = date.today()
+    if data_proxima <= hoje:
+        return
+    urgencia = "hoje" if (data_proxima - hoje).days == 1 else "observacao"
+    sql = """
+        INSERT INTO trabalho_diario (
+            animal_id, estadia_id, data_tarefa, tipo, motivo,
+            urgencia, criado_automaticamente, utilizador
+        ) VALUES (
+            %s, %s, %s, 'observacao_clinica',
+            'Observação clínica agendada', %s, TRUE, %s
+        )
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (animal_id, estadia_id, data_proxima, urgencia, (utilizador or "")[:50]))
+        conn.commit()
+        cur.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Tab Diário clínico
+# ────────────────────────────────────────────────────────────────────────────
+EDEMA_OPTS = [
+    (0, "0 — sem edema"),
+    (1, "1 — ligeiro"),
+    (2, "2 — moderado"),
+    (3, "3 — severo"),
+]
+COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"]
+
+
+def _render_form_novo_registo(animal_id: int) -> None:
+    estadia_id = _obter_estadia_activa(animal_id)
+    if estadia_id is None:
+        st.warning(
+            "Não existe nenhuma estadia activa para este animal. "
+            "Crie uma estadia antes de registar observações clínicas."
+        )
+        return
+
+    with st.form(f"form_diario_{animal_id}", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            data_registo = st.date_input("Data do registo", value=date.today())
+            foliculo_mm = st.number_input(
+                "Folículo (mm)", min_value=0, max_value=99, value=0, step=1,
+            )
+        with c2:
+            edema_grau_label = st.selectbox(
+                "Edema",
+                options=[lbl for _, lbl in EDEMA_OPTS],
+            )
+            edema_grau = next(v for v, lbl in EDEMA_OPTS if lbl == edema_grau_label)
+            comportamento = st.selectbox("Comportamento", options=COMPORTAMENTOS)
+        with c3:
+            temperatura = st.number_input(
+                "Temperatura (°C)", min_value=0.0, max_value=45.0, value=0.0, step=0.1,
+                format="%.1f",
+            )
+            fluido_uterino = st.checkbox("Fluido uterino")
+
+        proxima_observacao = st.date_input(
+            "Próxima observação (opcional)",
+            value=None,
+            help="Se preenchida, cria automaticamente uma tarefa no Trabalho diário.",
+        )
+        tratamentos = st.text_area(
+            "Tratamentos (opcional)",
+            placeholder="Lista livre de tratamentos aplicados…",
+        )
+        observacoes = st.text_area("Observações (opcional)")
+
+        b1, b2 = st.columns(2)
+        with b1:
+            guardar = st.form_submit_button("Guardar", type="primary", width="stretch")
+        with b2:
+            cancelar = st.form_submit_button("Cancelar", width="stretch")
+
+        if cancelar:
+            st.session_state[f"diario_novo_{animal_id}"] = False
+            st.rerun()
+
+        if guardar:
+            utilizador = (st.session_state.get("user") or {}).get("username") or ""
+            try:
+                _inserir_diario_clinico({
+                    "animal_id": animal_id,
+                    "estadia_id": estadia_id,
+                    "data_registo": data_registo,
+                    "foliculo_mm": int(foliculo_mm) if foliculo_mm else None,
+                    "edema_grau": int(edema_grau),
+                    "fluido_uterino": bool(fluido_uterino),
+                    "comportamento": comportamento,
+                    "temperatura": float(temperatura) if temperatura else None,
+                    "tratamentos": tratamentos.strip() or None,
+                    "proxima_observacao": proxima_observacao or None,
+                    "observacoes": observacoes.strip() or None,
+                    "utilizador": utilizador[:50],
+                })
+                if proxima_observacao:
+                    try:
+                        _criar_tarefa_proxima_observacao(
+                            animal_id, estadia_id, proxima_observacao, utilizador,
+                        )
+                    except Exception as e:
+                        st.warning(f"Registo guardado, mas falha ao criar tarefa: {e}")
+                st.success("Registo clínico guardado.")
+                st.session_state[f"diario_novo_{animal_id}"] = False
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao guardar: {e}")
+
+
+def _render_tab_diario_clinico(animal_id: int) -> None:
+    novo_key = f"diario_novo_{animal_id}"
+    aberto = st.session_state.get(novo_key, False)
+
+    label = "Fechar registo" if aberto else "+ Registo de hoje"
+    if st.button(label, key=f"btn_{novo_key}", type="primary"):
+        st.session_state[novo_key] = not aberto
+        st.rerun()
+
+    if aberto:
+        with st.container(border=True):
+            _render_form_novo_registo(animal_id)
+        st.markdown("---")
+
+    df = _carregar_diario_clinico(animal_id)
+    if df.empty:
+        st.info("Sem registos clínicos para este animal.")
+        return
+
+    view = df.copy()
+    view["fluido_uterino"] = view["fluido_uterino"].map(lambda x: "Sim" if bool(x) else "Não")
+    view["edema_grau"] = view["edema_grau"].map(lambda v: "—" if pd.isna(v) else int(v))
+    view["foliculo_mm"] = view["foliculo_mm"].map(lambda v: "—" if pd.isna(v) else int(v))
+    view = view.rename(columns={
+        "data_registo": "Data",
+        "foliculo_mm": "Folículo",
+        "edema_grau": "Edema",
+        "fluido_uterino": "Fluido",
+        "comportamento": "Comportamento",
+        "tratamentos": "Tratamentos",
+        "proxima_observacao": "Próxima obs.",
+        "observacoes": "Observações",
+    })
+    st.dataframe(view, width="stretch", hide_index=True)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers de apresentação
 # ────────────────────────────────────────────────────────────────────────────
@@ -286,7 +492,7 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
         _render_tab_resumo(animal)
 
     with tab_clinico:
-        st.info("Em desenvolvimento — Fase 2")
+        _render_tab_diario_clinico(animal_id)
 
     with tab_repro:
         st.info("Em desenvolvimento — Fase 2")
