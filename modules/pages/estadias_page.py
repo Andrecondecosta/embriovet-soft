@@ -17,6 +17,7 @@ def _carregar_estadias(apenas_activas: bool) -> pd.DataFrame:
     sql = f"""
         SELECT
             e.id,
+            e.animal_id,
             a.nome                                       AS animal,
             e.tipo_registo                               AS tipo,
             d.nome                                       AS proprietario,
@@ -284,8 +285,78 @@ def _render_modal_nova_estadia():
 # ────────────────────────────────────────────────────────────────────────────
 # Página principal
 # ────────────────────────────────────────────────────────────────────────────
+def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: str) -> None:
+    """Renderiza a lista de estadias com botão 'Ver ficha' em cada linha."""
+    if df.empty:
+        st.info(
+            "Sem estadias ou visitas activas." if apenas_activas
+            else "Sem estadias encerradas."
+        )
+        return
+
+    # Cabeçalho da tabela
+    if apenas_activas:
+        col_w = [2, 1, 2, 1.5, 1.4, 1.2, 1.3]
+        headers = ["Animal", "Tipo", "Proprietário", "Motivo", "Estado", "Dias", ""]
+    else:
+        col_w = [1.8, 1, 1.8, 1.4, 1.3, 1, 1.2, 1.2]
+        headers = ["Animal", "Tipo", "Proprietário", "Motivo", "Estado", "Dias", "Data saída", ""]
+
+    head_cols = st.columns(col_w)
+    for i, h in enumerate(headers):
+        head_cols[i].markdown(
+            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
+            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
+        unsafe_allow_html=True,
+    )
+
+    for _, row in df.iterrows():
+        cols = st.columns(col_w)
+        cols[0].write(row["animal"])
+        cols[1].write(row["tipo"])
+        cols[2].write(row["proprietario"])
+        cols[3].write(row["motivo"])
+        cols[4].write(row["estado"])
+        cols[5].write(str(int(row["dias_internado"])) if pd.notna(row["dias_internado"]) else "—")
+
+        if apenas_activas:
+            btn_col = cols[6]
+        else:
+            data_saida = row.get("data_saida")
+            cols[6].write(data_saida.strftime("%d/%m/%Y") if pd.notna(data_saida) else "—")
+            btn_col = cols[7]
+
+        with btn_col:
+            if st.button(
+                "Ver ficha",
+                key=f"{key_prefix}_ver_{int(row['id'])}",
+                width="stretch",
+            ):
+                st.session_state["ver_animal_id"] = int(row["animal_id"])
+                st.session_state["ver_animal_tab"] = 0
+                st.rerun()
+
+
 def run_estadias_page(context: dict):
     """Página de Estadias e Visitas."""
+
+    # ── Drill-down para ficha do animal ─────────────────────────────────────
+    if st.session_state.get("ver_animal_id") is not None:
+        if st.button("← Voltar às estadias", key="btn_voltar_estadias"):
+            st.session_state.pop("ver_animal_id", None)
+            st.session_state.pop("ver_animal_tab", None)
+            st.rerun()
+        from modules.pages.animal_page import run_animal_page
+        run_animal_page(
+            st.session_state["ver_animal_id"],
+            context,
+            st.session_state.get("ver_animal_tab", 0),
+        )
+        return
 
     # Cabeçalho com botão à direita
     col_title, col_btn = st.columns([4, 1])
@@ -310,38 +381,11 @@ def run_estadias_page(context: dict):
 
     with tab_activas:
         df = _carregar_estadias(apenas_activas=True)
-        if df.empty:
-            st.info("Sem estadias ou visitas activas.")
-        else:
-            view = df[[
-                "animal", "tipo", "proprietario", "motivo", "estado", "dias_internado"
-            ]].rename(columns={
-                "animal": "Animal",
-                "tipo": "Tipo",
-                "proprietario": "Proprietário",
-                "motivo": "Motivo",
-                "estado": "Estado",
-                "dias_internado": "Dias internado",
-            })
-            st.dataframe(view, width="stretch", hide_index=True)
+        _render_lista_estadias(df, apenas_activas=True, key_prefix="act")
 
     with tab_encerradas:
         df = _carregar_estadias(apenas_activas=False)
-        if df.empty:
-            st.info("Sem estadias encerradas.")
-        else:
-            view = df[[
-                "animal", "tipo", "proprietario", "motivo", "estado", "dias_internado", "data_saida"
-            ]].rename(columns={
-                "animal": "Animal",
-                "tipo": "Tipo",
-                "proprietario": "Proprietário",
-                "motivo": "Motivo",
-                "estado": "Estado",
-                "dias_internado": "Dias internado",
-                "data_saida": "Data saída",
-            })
-            st.dataframe(view, width="stretch", hide_index=True)
+        _render_lista_estadias(df, apenas_activas=False, key_prefix="enc")
 
     with tab_calendario:
         st.info("Em desenvolvimento")
