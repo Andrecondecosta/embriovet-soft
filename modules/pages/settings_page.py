@@ -1,12 +1,218 @@
 import base64
+import pandas as pd
 import streamlit as st
+
+from modules.db import get_connection
 from modules.i18n import t
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Alojamentos — helpers DB
+# ────────────────────────────────────────────────────────────────────────────
+TIPOS_ALOJAMENTO = ["box", "paddock", "outro"]
+
+
+def _carregar_alojamentos_admin() -> pd.DataFrame:
+    sql = """
+        SELECT id, tipo, nome, capacidade, ativo, observacoes
+        FROM alojamentos
+        ORDER BY ativo DESC, tipo, nome
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn)
+
+
+def _inserir_alojamento(dados: dict) -> int | None:
+    sql = """
+        INSERT INTO alojamentos (tipo, nome, capacidade, observacoes, ativo)
+        VALUES (%(tipo)s, %(nome)s, %(capacidade)s, %(observacoes)s, TRUE)
+        RETURNING id
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, dados)
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        return new_id
+
+
+def _atualizar_alojamento(aloj_id: int, dados: dict) -> bool:
+    sql = """
+        UPDATE alojamentos SET
+            tipo = %(tipo)s,
+            nome = %(nome)s,
+            capacidade = %(capacidade)s,
+            observacoes = %(observacoes)s
+        WHERE id = %(id)s
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, {**dados, "id": aloj_id})
+        conn.commit()
+        cur.close()
+    return True
+
+
+def _toggle_ativo_alojamento(aloj_id: int) -> None:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE alojamentos SET ativo = NOT ativo WHERE id = %s",
+            (aloj_id,),
+        )
+        conn.commit()
+        cur.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Alojamentos — formulário "novo" + edição inline + lista
+# ────────────────────────────────────────────────────────────────────────────
+def _render_form_novo_alojamento() -> None:
+    with st.expander("+ Novo alojamento", expanded=False):
+        with st.form("form_novo_alojamento", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                nome = st.text_input("Nome *", key="nv_aloj_nome")
+                tipo = st.selectbox("Tipo", options=TIPOS_ALOJAMENTO, key="nv_aloj_tipo")
+            with c2:
+                capacidade = st.number_input(
+                    "Capacidade", min_value=1, max_value=999, value=1, step=1,
+                    key="nv_aloj_capacidade",
+                )
+                observacoes = st.text_input(
+                    "Observações (opcional)", key="nv_aloj_obs",
+                )
+            submit = st.form_submit_button("Guardar", type="primary", width="stretch")
+            if submit:
+                if not nome.strip():
+                    st.error("O nome é obrigatório.")
+                else:
+                    try:
+                        new_id = _inserir_alojamento({
+                            "tipo": tipo,
+                            "nome": nome.strip(),
+                            "capacidade": int(capacidade),
+                            "observacoes": observacoes.strip() or None,
+                        })
+                        st.success(f"Alojamento criado (#{new_id}).")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+
+
+def _render_form_editar_alojamento(row: dict) -> None:
+    aid = int(row["id"])
+    with st.form(f"form_edit_aloj_{aid}"):
+        c1, c2 = st.columns(2)
+        with c1:
+            nome = st.text_input("Nome *", value=row.get("nome") or "")
+            tipo_idx = TIPOS_ALOJAMENTO.index(row["tipo"]) if row.get("tipo") in TIPOS_ALOJAMENTO else 0
+            tipo = st.selectbox("Tipo", options=TIPOS_ALOJAMENTO, index=tipo_idx)
+        with c2:
+            capacidade = st.number_input(
+                "Capacidade", min_value=1, max_value=999,
+                value=int(row.get("capacidade") or 1), step=1,
+            )
+            observacoes = st.text_input(
+                "Observações (opcional)", value=row.get("observacoes") or "",
+            )
+        b1, b2 = st.columns(2)
+        with b1:
+            guardar = st.form_submit_button("Guardar", type="primary", width="stretch")
+        with b2:
+            cancelar = st.form_submit_button("Cancelar", width="stretch")
+        if cancelar:
+            st.session_state[f"aloj_edit_{aid}"] = False
+            st.rerun()
+        if guardar:
+            if not nome.strip():
+                st.error("O nome é obrigatório.")
+                return
+            try:
+                _atualizar_alojamento(aid, {
+                    "tipo": tipo,
+                    "nome": nome.strip(),
+                    "capacidade": int(capacidade),
+                    "observacoes": observacoes.strip() or None,
+                })
+                st.session_state[f"aloj_edit_{aid}"] = False
+                st.success("Atualizado.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro: {e}")
+
+
+def _render_tab_alojamentos() -> None:
+    st.markdown("### Alojamentos")
+    st.caption("Gerir boxes, paddocks e outros locais.")
+
+    _render_form_novo_alojamento()
+    st.markdown("---")
+
+    df = _carregar_alojamentos_admin()
+    if df.empty:
+        st.info("Sem alojamentos registados.")
+        return
+
+    # Cabeçalho
+    head = st.columns([2.2, 1.2, 1.2, 1.4, 1.2, 1.2])
+    for i, h in enumerate(["Nome", "Tipo", "Capacidade", "Estado", "", ""]):
+        head[i].markdown(
+            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
+            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
+        unsafe_allow_html=True,
+    )
+
+    for _, row in df.iterrows():
+        aid = int(row["id"])
+        editing = st.session_state.get(f"aloj_edit_{aid}", False)
+
+        cols = st.columns([2.2, 1.2, 1.2, 1.4, 1.2, 1.2])
+        cols[0].write(row["nome"])
+        cols[1].write(row["tipo"])
+        cols[2].write(int(row["capacidade"] or 0))
+        estado_txt = "Activo" if row["ativo"] else "Inactivo"
+        estado_cor = "#16a34a" if row["ativo"] else "#94a3b8"
+        cols[3].markdown(
+            f"<span style='color:{estado_cor};font-weight:600;'>{estado_txt}</span>",
+            unsafe_allow_html=True,
+        )
+
+        with cols[4]:
+            label_toggle = "Inactivo" if row["ativo"] else "Activo"
+            if st.button(label_toggle, key=f"toggle_aloj_{aid}", width="stretch"):
+                _toggle_ativo_alojamento(aid)
+                st.rerun()
+
+        with cols[5]:
+            if st.button("Editar", key=f"edit_aloj_{aid}", width="stretch"):
+                st.session_state[f"aloj_edit_{aid}"] = True
+                st.rerun()
+
+        if editing:
+            _render_form_editar_alojamento(row.to_dict())
 
 
 def run_settings_page(ctx: dict):
     globals().update(ctx)
 
     st.header(t("settings.title"))
+
+    tab_geral, tab_alojamentos = st.tabs(["Geral", "Alojamentos"])
+
+    with tab_geral:
+        _run_settings_geral()
+
+    with tab_alojamentos:
+        _render_tab_alojamentos()
+
+
+def _run_settings_geral():
     inject_stock_css()
     inject_reports_css()
 
