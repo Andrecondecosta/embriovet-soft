@@ -649,17 +649,209 @@ def _render_tab_estadias(animal_id: int) -> None:
     df = _carregar_estadias_do_animal(animal_id)
     if df.empty:
         st.info("Sem estadias registadas para este animal.")
-        return
+    else:
+        view = df.rename(columns={
+            "tipo_registo": "Tipo registo",
+            "motivo": "Motivo",
+            "estado": "Estado",
+            "data_entrada": "Data entrada",
+            "data_saida": "Data saída",
+            "dias": "Dias",
+        })
+        st.dataframe(view, width="stretch", hide_index=True)
 
-    view = df.rename(columns={
-        "tipo_registo": "Tipo registo",
-        "motivo": "Motivo",
-        "estado": "Estado",
-        "data_entrada": "Data entrada",
-        "data_saida": "Data saída",
-        "dias": "Dias",
-    })
-    st.dataframe(view, width="stretch", hide_index=True)
+    # Secção de acompanhamento pós-inseminação (apenas se houver estadia
+    # activa com motivo='inseminacao')
+    estadia = _obter_estadia_activa_inseminacao(animal_id)
+    if estadia is not None:
+        st.markdown("---")
+        _render_seccao_acompanhamento(animal_id, estadia)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Acompanhamento pós-inseminação
+# ────────────────────────────────────────────────────────────────────────────
+def _obter_estadia_activa_inseminacao(animal_id: int) -> dict | None:
+    sql = """
+        SELECT id, garanhao, data_entrada
+        FROM estadias
+        WHERE animal_id = %s
+          AND data_saida IS NULL
+          AND motivo = 'inseminacao'
+        ORDER BY data_entrada DESC
+        LIMIT 1
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (animal_id,))
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            return None
+        return {"id": int(row[0]), "garanhao": row[1], "data_entrada": row[2]}
+
+
+def _obter_acompanhamento(estadia_id: int) -> dict | None:
+    sql = """
+        SELECT id, data_inseminacao, data_1o_diagnostico, data_confirmacao,
+               data_2a_confirmacao, data_parto_previsto, resultado
+        FROM acompanhamento_inseminacao
+        WHERE estadia_id = %s
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (estadia_id,))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            return None
+        cols = [d[0] for d in cur.description]
+        cur.close()
+        return dict(zip(cols, row))
+
+
+def _upsert_acompanhamento(animal_id: int, estadia_id: int, dados: dict) -> None:
+    sql = """
+        INSERT INTO acompanhamento_inseminacao (
+            estadia_id, animal_id, data_inseminacao, data_1o_diagnostico,
+            data_confirmacao, data_2a_confirmacao, data_parto_previsto
+        ) VALUES (
+            %(estadia_id)s, %(animal_id)s, %(data_inseminacao)s,
+            %(data_1o_diagnostico)s, %(data_confirmacao)s,
+            %(data_2a_confirmacao)s, %(data_parto_previsto)s
+        )
+        ON CONFLICT (estadia_id) DO UPDATE SET
+            data_inseminacao    = EXCLUDED.data_inseminacao,
+            data_1o_diagnostico = EXCLUDED.data_1o_diagnostico,
+            data_confirmacao    = EXCLUDED.data_confirmacao,
+            data_2a_confirmacao = EXCLUDED.data_2a_confirmacao,
+            data_parto_previsto = EXCLUDED.data_parto_previsto
+    """
+    payload = {
+        "estadia_id": estadia_id,
+        "animal_id": animal_id,
+        **dados,
+    }
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, payload)
+        conn.commit()
+        cur.close()
+
+
+def _atualizar_garanhao_estadia(estadia_id: int, garanhao: str | None) -> None:
+    sql = "UPDATE estadias SET garanhao = %s, updated_at = NOW() WHERE id = %s"
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (garanhao, estadia_id))
+        conn.commit()
+        cur.close()
+
+
+def _render_timeline_acompanhamento(acomp: dict) -> None:
+    """Renderiza as datas guardadas como timeline visual."""
+    etapas = [
+        ("Inseminação",         acomp.get("data_inseminacao"),    "#2563eb"),
+        ("1º diagnóstico",      acomp.get("data_1o_diagnostico"), "#7c3aed"),
+        ("Confirmação",         acomp.get("data_confirmacao"),    "#16a34a"),
+        ("2ª confirmação",      acomp.get("data_2a_confirmacao"), "#0891b2"),
+        ("Parto previsto",      acomp.get("data_parto_previsto"), "#dc2626"),
+    ]
+
+    html_items = []
+    for label, dt, cor in etapas:
+        ativo = dt is not None
+        bg = cor if ativo else "#e2e8f0"
+        text_color = "#ffffff" if ativo else "#94a3b8"
+        dt_txt = dt.strftime("%d/%m/%Y") if dt else "—"
+        html_items.append(
+            f"<div style='flex:1;text-align:center;'>"
+            f"<div style='width:32px;height:32px;border-radius:50%;background:{bg};"
+            f"color:{text_color};display:inline-flex;align-items:center;"
+            f"justify-content:center;font-size:.85rem;font-weight:700;"
+            f"margin-bottom:6px;'>{'✓' if ativo else '·'}</div>"
+            f"<div style='font-size:.7rem;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:.4px;font-weight:600;'>{label}</div>"
+            f"<div style='font-size:.85rem;color:#0f172a;font-weight:600;margin-top:2px;'>"
+            f"{dt_txt}</div>"
+            f"</div>"
+        )
+    linha = (
+        "<div style='display:flex;align-items:flex-start;gap:8px;"
+        "padding:12px 4px;'>"
+        + "".join(html_items)
+        + "</div>"
+    )
+    st.markdown(linha, unsafe_allow_html=True)
+
+
+def _render_seccao_acompanhamento(animal_id: int, estadia: dict) -> None:
+    estadia_id = estadia["id"]
+    acomp = _obter_acompanhamento(estadia_id) or {}
+
+    st.subheader("Acompanhamento pós-inseminação")
+    st.caption(f"Estadia activa de inseminação · entrada {estadia['data_entrada'].strftime('%d/%m/%Y') if estadia.get('data_entrada') else '—'}")
+
+    with st.form(f"form_acomp_{estadia_id}"):
+        garanhao = st.text_input(
+            "Garanhão",
+            value=estadia.get("garanhao") or "",
+            key=f"acomp_garanhao_{estadia_id}",
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            data_inseminacao = st.date_input(
+                "Quando foi inseminada",
+                value=acomp.get("data_inseminacao") or None,
+                key=f"acomp_data_insem_{estadia_id}",
+            )
+            data_1o_diagnostico = st.date_input(
+                "1º diagnóstico gestação",
+                value=acomp.get("data_1o_diagnostico") or None,
+                key=f"acomp_1o_{estadia_id}",
+            )
+            data_confirmacao = st.date_input(
+                "Confirmação gestação",
+                value=acomp.get("data_confirmacao") or None,
+                key=f"acomp_conf_{estadia_id}",
+            )
+        with c2:
+            data_2a_confirmacao = st.date_input(
+                "2ª confirmação",
+                value=acomp.get("data_2a_confirmacao") or None,
+                key=f"acomp_2a_{estadia_id}",
+            )
+            data_parto_previsto = st.date_input(
+                "Parto previsto",
+                value=acomp.get("data_parto_previsto") or None,
+                key=f"acomp_parto_{estadia_id}",
+            )
+
+        guardar = st.form_submit_button(
+            "Guardar acompanhamento", type="primary", width="stretch",
+        )
+
+        if guardar:
+            try:
+                _atualizar_garanhao_estadia(estadia_id, (garanhao or "").strip() or None)
+                _upsert_acompanhamento(animal_id, estadia_id, {
+                    "data_inseminacao":    data_inseminacao or None,
+                    "data_1o_diagnostico": data_1o_diagnostico or None,
+                    "data_confirmacao":    data_confirmacao or None,
+                    "data_2a_confirmacao": data_2a_confirmacao or None,
+                    "data_parto_previsto": data_parto_previsto or None,
+                })
+                st.success("Acompanhamento guardado.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao guardar: {e}")
+
+    # Timeline com os valores guardados (após reload)
+    acomp_atual = _obter_acompanhamento(estadia_id)
+    if acomp_atual:
+        st.markdown("##### Timeline")
+        _render_timeline_acompanhamento(acomp_atual)
 
 
 # ────────────────────────────────────────────────────────────────────────────
