@@ -1,7 +1,7 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Maio 2026** — P0 "Heatmap click bloqueado por DOM overlap" RESOLVIDO. P3 refactoring iniciado: extração de auth e DB para módulos dedicados (`modules/db.py`, `modules/services/auth_service.py`). `app.py` reduzido de 3623 → 3329 linhas (≈ 300 linhas extraídas).
+**Maio 2026** — Perfil de Garanhão validado (4 abas: Resumo, Produção de sémen, Fertilidade, Alertas). Bug corrigido: `TypeError: unsupported operand type(s) for -: 'datetime.date' and 'str'` na aba Alertas — `data_embriovet` é VARCHAR no schema legado, agora convertido para DATE via SQL `NULLIF(...)::date` em `_ultima_producao_garanhao()` com fallback Python. P0 "Heatmap click bloqueado por DOM overlap" RESOLVIDO. P3 refactoring iniciado: extração de auth e DB para módulos dedicados (`modules/db.py`, `modules/services/auth_service.py`). `app.py` reduzido de 3623 → 3329 linhas (≈ 300 linhas extraídas).
 
 ## Changelog Recente (Maio 2026)
 - ✅ **P0: Heatmap click corrigido** — A causa-raiz era uma regra CSS interna do Streamlit (`.stElementContainer:has([data-testid="stMarkdownContainer"] > style) { position: absolute }`) que aplicava `position: absolute` a qualquer markdown que começasse com `<style>`. O heatmap HTML começava com bloco `<style>` o que fazia o container saltar para o topo do DOM, sobrepondo-se a outros elementos. **Solução:** mover o CSS do heatmap para o bloco global de estilos da página (uma só vez) e fazer `build_heatmap_html()` retornar apenas o `<div>` da tabela.

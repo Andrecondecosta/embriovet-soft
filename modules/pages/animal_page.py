@@ -1110,14 +1110,35 @@ def _kpis_fertilidade_garanhao(df: pd.DataFrame) -> tuple[int, int, str, float |
 
 
 def _ultima_producao_garanhao(garanhao_nome: str):
+    # data_embriovet é VARCHAR no schema legado — convertemos para DATE com
+    # NULLIF para tolerar valores vazios/strings inválidas.
     sql = """
-        SELECT MAX(data_embriovet) FROM estoque_dono
+        SELECT MAX(NULLIF(data_embriovet, '')::date) FROM estoque_dono
         WHERE LOWER(garanhao) = LOWER(%s)
     """
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute(sql, (garanhao_nome,))
-        row = cur.fetchone()
+        try:
+            cur.execute(sql, (garanhao_nome,))
+            row = cur.fetchone()
+        except Exception:
+            # Fallback: faz o parsing em Python se houver formatos inválidos
+            conn.rollback()
+            cur.execute(
+                "SELECT data_embriovet FROM estoque_dono "
+                "WHERE LOWER(garanhao) = LOWER(%s)",
+                (garanhao_nome,),
+            )
+            datas: list[date] = []
+            for (val,) in cur.fetchall():
+                if not val:
+                    continue
+                try:
+                    datas.append(datetime.strptime(str(val)[:10], "%Y-%m-%d").date())
+                except Exception:
+                    continue
+            cur.close()
+            return max(datas) if datas else None
         cur.close()
         return row[0] if row else None
 
@@ -1229,6 +1250,12 @@ def _render_tab_alertas_garanhao(animal: dict) -> None:
     if ultima:
         if isinstance(ultima, datetime):
             ultima = ultima.date()
+        elif isinstance(ultima, str):
+            try:
+                ultima = datetime.strptime(ultima[:10], "%Y-%m-%d").date()
+            except Exception:
+                ultima = None
+    if ultima:
         dias = (date.today() - ultima).days
         if dias > 30:
             st.info(
