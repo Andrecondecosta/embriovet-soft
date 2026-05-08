@@ -188,6 +188,54 @@ def _criar_tarefa_proxima_observacao(
         cur.close()
 
 
+def _concluir_tarefas_animal_hoje(animal_id: int) -> int:
+    """Marca como concluídas todas as tarefas pendentes do animal para hoje.
+    Devolve o número de tarefas concluídas."""
+    sql = """
+        UPDATE trabalho_diario
+        SET concluida = TRUE,
+            data_conclusao = CURRENT_DATE,
+            observacoes_conclusao = 'Concluído via registo clínico'
+        WHERE animal_id = %s
+          AND data_tarefa = CURRENT_DATE
+          AND concluida = FALSE
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (animal_id,))
+        n = cur.rowcount
+        conn.commit()
+        cur.close()
+        return n or 0
+
+
+def _inserir_tarefa_acompanhamento(
+    animal_id: int, estadia_id: int, data_proxima: date, utilizador: str | None
+) -> None:
+    """Insere uma tarefa de acompanhamento clínico em trabalho_diario para
+    a data indicada, com `criado_automaticamente=FALSE` (decisão manual do
+    veterinário). Urgência: 'hoje' se for amanhã, 'observacao' se for mais
+    tarde. Se a data for hoje ou no passado, não cria."""
+    hoje = date.today()
+    if not data_proxima or data_proxima <= hoje:
+        return
+    urgencia = "hoje" if (data_proxima - hoje).days == 1 else "observacao"
+    sql = """
+        INSERT INTO trabalho_diario (
+            animal_id, estadia_id, data_tarefa, tipo, motivo,
+            urgencia, criado_automaticamente, utilizador
+        ) VALUES (
+            %s, %s, %s, 'observacao_clinica',
+            'Acompanhamento clínico agendado', %s, FALSE, %s
+        )
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (animal_id, estadia_id, data_proxima, urgencia, (utilizador or "")[:50]))
+        conn.commit()
+        cur.close()
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Tab Diário clínico
 # ────────────────────────────────────────────────────────────────────────────
@@ -268,14 +316,32 @@ def _render_form_novo_registo(animal_id: int) -> None:
                     "observacoes": observacoes.strip() or None,
                     "utilizador": utilizador[:50],
                 })
+
+                # 1) Concluir tarefas pendentes do animal para hoje
+                tarefas_concluidas = 0
+                try:
+                    tarefas_concluidas = _concluir_tarefas_animal_hoje(animal_id)
+                except Exception as e:
+                    st.warning(f"Registo guardado, mas falha ao concluir tarefas: {e}")
+
+                # 2) Criar tarefa de acompanhamento se foi indicada próxima observação
                 if proxima_observacao:
                     try:
-                        _criar_tarefa_proxima_observacao(
+                        _inserir_tarefa_acompanhamento(
                             animal_id, estadia_id, proxima_observacao, utilizador,
                         )
                     except Exception as e:
                         st.warning(f"Registo guardado, mas falha ao criar tarefa: {e}")
-                st.success("Registo clínico guardado.")
+
+                # 3) Toast de confirmação
+                if tarefas_concluidas > 0:
+                    st.toast(
+                        "✓ Registo guardado — tarefa concluída na agenda",
+                        icon="✅",
+                    )
+                else:
+                    st.toast("✓ Registo guardado", icon="✅")
+
                 st.session_state[f"diario_novo_{animal_id}"] = False
                 st.rerun()
             except Exception as e:
