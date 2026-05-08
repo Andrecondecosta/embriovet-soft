@@ -6,7 +6,7 @@ Ao arrancar a página garante a existência de tarefas automáticas
 'primeira_observacao' para animais em estadias activas sem registo clínico.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -66,7 +66,8 @@ def _gerar_tarefas_primeira_observacao() -> int:
         return n or 0
 
 
-def _carregar_tarefas(urgencia: str) -> pd.DataFrame:
+def _carregar_tarefas_periodo() -> pd.DataFrame:
+    """Tarefas pendentes desde hoje até 7 dias à frente."""
     sql = """
         SELECT
             td.id,
@@ -80,19 +81,19 @@ def _carregar_tarefas(urgencia: str) -> pd.DataFrame:
         FROM trabalho_diario td
         JOIN animais  a ON a.id = td.animal_id
         JOIN estadias e ON e.id = td.estadia_id
-        WHERE td.data_tarefa = CURRENT_DATE
+        WHERE td.data_tarefa BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
           AND td.concluida = FALSE
-          AND td.urgencia = %s
-        ORDER BY td.created_at DESC
+        ORDER BY td.data_tarefa ASC, td.created_at DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(urgencia,))
+        return pd.read_sql_query(sql, conn)
 
 
-def _contar_total_tarefas_hoje() -> int:
+def _contar_total_proximos_7_dias() -> int:
     sql = """
         SELECT COUNT(*) FROM trabalho_diario
-        WHERE data_tarefa = CURRENT_DATE AND concluida = FALSE
+        WHERE data_tarefa BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+          AND concluida = FALSE
     """
     with get_connection() as conn:
         cur = conn.cursor()
@@ -144,29 +145,62 @@ def _render_tarefa(row: dict, key_prefix: str) -> None:
             st.rerun()
 
 
-def _render_seccao(titulo: str, urgencia: str, key_prefix: str) -> None:
-    st.subheader(titulo)
-    df = _carregar_tarefas(urgencia)
-    if df.empty:
-        st.markdown(
-            "<div style='color:#94a3b8;font-style:italic;padding:6px 0 14px;'>"
-            "Sem tarefas nesta categoria.</div>",
-            unsafe_allow_html=True,
-        )
+def _render_dia(dia: date, df_dia: pd.DataFrame, key_prefix: str) -> None:
+    """Renderiza um expander para um dia específico, com tarefas agrupadas
+    por urgência (urgente → hoje → observacao)."""
+    if df_dia.empty:
         return
-    for _, row in df.iterrows():
-        _render_tarefa(row.to_dict(), key_prefix)
-        st.markdown(
-            "<hr style='border:none;border-top:1px dashed #e2e8f0;margin:8px 0;'>",
-            unsafe_allow_html=True,
-        )
+
+    is_today = dia == date.today()
+    nome_dia = "Hoje" if is_today else (
+        "Amanhã" if dia == date.today() + timedelta(days=1) else dia.strftime("%A")
+    )
+    titulo = f"📅 {dia.strftime('%d/%m/%Y')} ({nome_dia}) — {len(df_dia)} tarefa{'s' if len(df_dia) != 1 else ''}"
+
+    with st.expander(titulo, expanded=is_today):
+        secoes = [
+            ("🔴 Urgente",    "urgente"),
+            ("🟡 Hoje",       "hoje"),
+            ("⚪ Observação", "observacao"),
+        ]
+        # Acrescentar 'amanha' se existir alguma com essa urgência
+        if (df_dia["urgencia"] == "amanha").any():
+            secoes.append(("🟢 Amanhã", "amanha"))
+
+        renderizou_alguma = False
+        for label, urg in secoes:
+            sub = df_dia[df_dia["urgencia"] == urg]
+            if sub.empty:
+                continue
+            renderizou_alguma = True
+            st.markdown(
+                f"<div style='font-size:.78rem;font-weight:700;color:#475569;"
+                f"text-transform:uppercase;letter-spacing:.5px;margin:6px 0 4px;'>"
+                f"{label}</div>",
+                unsafe_allow_html=True,
+            )
+            for _, row in sub.iterrows():
+                _render_tarefa(row.to_dict(), key_prefix)
+                st.markdown(
+                    "<hr style='border:none;border-top:1px dashed #e2e8f0;margin:6px 0;'>",
+                    unsafe_allow_html=True,
+                )
+
+        # Cobre urgências fora das categorias acima (defesa)
+        outras = df_dia[~df_dia["urgencia"].isin([u for _, u in secoes] + ["amanha"])]
+        if not outras.empty:
+            for _, row in outras.iterrows():
+                _render_tarefa(row.to_dict(), key_prefix)
+
+        if not renderizou_alguma and outras.empty:
+            st.caption("(sem tarefas para mostrar)")
 
 
 # ────────────────────────────────────────────────────────────────────────────
 # Página principal
 # ────────────────────────────────────────────────────────────────────────────
 def run_trabalho_diario_page(context: dict):
-    """Trabalho diário — tarefas do dia agrupadas por urgência."""
+    """Trabalho diário — tarefas dos próximos 7 dias agrupadas por dia."""
 
     # Drill-down para ficha do animal (mesma lógica do estadias_page)
     if st.session_state.get("ver_animal_id") is not None:
@@ -199,13 +233,25 @@ def run_trabalho_diario_page(context: dict):
         unsafe_allow_html=True,
     )
 
-    # KPI total de tarefas para hoje
-    total = _contar_total_tarefas_hoje()
-    st.metric(label="Tarefas pendentes hoje", value=total)
+    # KPI dos próximos 7 dias
+    total = _contar_total_proximos_7_dias()
+    st.metric(label="Tarefas nos próximos 7 dias", value=total)
 
     st.markdown("---")
 
-    # Secções
-    _render_seccao("🔴 Urgente",     "urgente",    key_prefix="td_urg")
-    _render_seccao("🟡 Hoje",        "hoje",       key_prefix="td_hoje")
-    _render_seccao("⚪ Observação",  "observacao", key_prefix="td_obs")
+    # Carregar todas as tarefas do período e agrupar por dia
+    df = _carregar_tarefas_periodo()
+
+    if df.empty:
+        st.info("Sem tarefas pendentes nos próximos 7 dias.")
+        return
+
+    # Garantir tipo de data nativo Python (evita issues com pd.Timestamp)
+    df["dia"] = pd.to_datetime(df["data_tarefa"]).dt.date
+
+    for offset in range(8):  # 0..7 inclusive
+        dia = hoje + timedelta(days=offset)
+        df_dia = df[df["dia"] == dia]
+        if df_dia.empty:
+            continue
+        _render_dia(dia, df_dia, key_prefix=f"td_d{offset}")
