@@ -105,6 +105,34 @@ def _contar_total_proximos_7_dias() -> int:
         return int(n or 0)
 
 
+def _contar_concluidas_hoje() -> int:
+    sql = """
+        SELECT COUNT(*) FROM trabalho_diario
+        WHERE concluida = TRUE AND data_conclusao = CURRENT_DATE
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql)
+        n = cur.fetchone()[0]
+        cur.close()
+        return int(n or 0)
+
+
+def _concluir_tarefa(tarefa_id: int, observacoes: str | None) -> None:
+    sql = """
+        UPDATE trabalho_diario
+        SET concluida = TRUE,
+            data_conclusao = CURRENT_DATE,
+            observacoes_conclusao = %s
+        WHERE id = %s
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (observacoes, tarefa_id))
+        conn.commit()
+        cur.close()
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers de período
 # ────────────────────────────────────────────────────────────────────────────
@@ -169,6 +197,8 @@ def _render_cabecalho_dia(dia: date) -> None:
 def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
     cfg = URGENCIAS.get(row["urgencia"], URGENCIAS["observacao"])
     motivo = _resumir(row.get("motivo"), 30)
+    tid = int(row["id"])
+    concluir_key = f"concluir_{tid}"
 
     with st.container():
         st.markdown(
@@ -183,14 +213,56 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
             f"</div>",
             unsafe_allow_html=True,
         )
-        if st.button(
-            "Ver",
-            key=f"{key_prefix}_ver_{int(row['id'])}",
-            width="stretch",
-        ):
-            st.session_state["ver_animal_id"] = int(row["animal_id"])
-            st.session_state["ver_animal_tab"] = 0
-            st.rerun()
+
+        # Botões: Ver | ✓ Concluir
+        bcol1, bcol2 = st.columns(2)
+        with bcol1:
+            if st.button(
+                "Ver",
+                key=f"{key_prefix}_ver_{tid}",
+                width="stretch",
+            ):
+                st.session_state["ver_animal_id"] = int(row["animal_id"])
+                st.session_state["ver_animal_tab"] = 0
+                st.rerun()
+        with bcol2:
+            if st.button(
+                "✓ Concluir",
+                key=f"{key_prefix}_concluir_btn_{tid}",
+                width="stretch",
+            ):
+                st.session_state[concluir_key] = not st.session_state.get(concluir_key, False)
+                st.rerun()
+
+        # Form inline de conclusão (só renderiza quando aberto)
+        if st.session_state.get(concluir_key, False):
+            with st.form(f"{key_prefix}_form_concluir_{tid}", clear_on_submit=False):
+                obs = st.text_area(
+                    "Notas",
+                    key=f"{key_prefix}_obs_{tid}",
+                    placeholder="Notas sobre a conclusão...",
+                    label_visibility="collapsed",
+                    height=68,
+                )
+                fcol1, fcol2 = st.columns(2)
+                with fcol1:
+                    confirmar = st.form_submit_button(
+                        "Confirmar", type="primary", width="stretch",
+                    )
+                with fcol2:
+                    cancelar = st.form_submit_button("Cancelar", width="stretch")
+
+                if cancelar:
+                    st.session_state[concluir_key] = False
+                    st.rerun()
+                if confirmar:
+                    try:
+                        _concluir_tarefa(tid, (obs or "").strip() or None)
+                        st.session_state[concluir_key] = False
+                        st.toast(f"Tarefa concluída: {row['animal']}", icon="✅")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
 
 
 def _render_coluna_dia(dia: date, df_dia: pd.DataFrame, idx: int) -> None:
@@ -243,9 +315,14 @@ def run_trabalho_diario_page(context: dict):
         unsafe_allow_html=True,
     )
 
-    # KPI dos próximos 7 dias
+    # KPIs: próximos 7 dias + concluídas hoje
     total = _contar_total_proximos_7_dias()
-    st.metric(label="Tarefas nos próximos 7 dias", value=total)
+    concluidas = _contar_concluidas_hoje()
+    kpi1, kpi2 = st.columns(2)
+    with kpi1:
+        st.metric(label="Tarefas nos próximos 7 dias", value=total)
+    with kpi2:
+        st.metric(label="Concluídas hoje", value=concluidas)
 
     st.markdown("---")
 
