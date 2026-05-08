@@ -1,9 +1,9 @@
-"""Página de Trabalho diário — listagem de tarefas pendentes do dia.
+"""Página de Trabalho diário — agenda semanal de tarefas pendentes.
 
-Mostra três secções (Urgente · Hoje · Observação) com tarefas da tabela
-`trabalho_diario` WHERE concluida = FALSE AND data_tarefa = CURRENT_DATE.
-Ao arrancar a página garante a existência de tarefas automáticas
-'primeira_observacao' para animais em estadias activas sem registo clínico.
+Mostra uma vista de 7 colunas (segunda → domingo) com cartões coloridos
+por urgência. Permite navegar entre semanas e abrir a ficha do animal.
+A query carrega tarefas da semana seleccionada com `data_tarefa BETWEEN
+segunda_feira AND domingo AND concluida = FALSE`.
 """
 
 from datetime import date, timedelta
@@ -18,11 +18,17 @@ from modules.db import get_connection
 # Constantes
 # ────────────────────────────────────────────────────────────────────────────
 URGENCIAS = {
-    "urgente":     {"label": "Urgente",     "icon": "🔴", "color": "#dc2626"},
-    "hoje":        {"label": "Hoje",        "icon": "🟡", "color": "#ca8a04"},
-    "amanha":      {"label": "Amanhã",      "icon": "🟢", "color": "#16a34a"},
-    "observacao":  {"label": "Observação",  "icon": "⚪", "color": "#64748b"},
+    "urgente":    {"label": "Urgente",    "icon": "🔴", "color": "#dc2626", "bg": "#fee2e2", "border": "#fca5a5"},
+    "hoje":       {"label": "Hoje",       "icon": "🟡", "color": "#ca8a04", "bg": "#fef3c7", "border": "#fde68a"},
+    "amanha":     {"label": "Amanhã",     "icon": "🟢", "color": "#16a34a", "bg": "#dcfce7", "border": "#bbf7d0"},
+    "observacao": {"label": "Observação", "icon": "⚪", "color": "#475569", "bg": "#f1f5f9", "border": "#e2e8f0"},
 }
+
+DIAS_ABREV = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+MESES_ABREV = [
+    "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+    "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+]
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -32,7 +38,6 @@ def _gerar_tarefas_primeira_observacao() -> int:
     """Cria automaticamente tarefas 'primeira_observacao' para animais em
     estadias activas que ainda não têm registo no diário clínico —
     apenas se ainda não existir uma tarefa do mesmo tipo para hoje.
-    Devolve quantas tarefas foram criadas.
     """
     sql = """
         INSERT INTO trabalho_diario (
@@ -66,27 +71,24 @@ def _gerar_tarefas_primeira_observacao() -> int:
         return n or 0
 
 
-def _carregar_tarefas_periodo() -> pd.DataFrame:
-    """Tarefas pendentes desde hoje até 7 dias à frente."""
+def _carregar_tarefas_semana(seg: date, dom: date) -> pd.DataFrame:
     sql = """
         SELECT
             td.id,
             td.animal_id,
-            a.nome      AS animal,
+            a.nome    AS animal,
             td.tipo,
             td.motivo,
             td.urgencia,
-            e.motivo    AS motivo_estadia,
             td.data_tarefa
         FROM trabalho_diario td
-        JOIN animais  a ON a.id = td.animal_id
-        JOIN estadias e ON e.id = td.estadia_id
-        WHERE td.data_tarefa BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+        JOIN animais a ON a.id = td.animal_id
+        WHERE td.data_tarefa BETWEEN %s AND %s
           AND td.concluida = FALSE
         ORDER BY td.data_tarefa ASC, td.created_at DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn)
+        return pd.read_sql_query(sql, conn, params=(seg, dom))
 
 
 def _contar_total_proximos_7_dias() -> int:
@@ -104,39 +106,85 @@ def _contar_total_proximos_7_dias() -> int:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Helpers de período
+# ────────────────────────────────────────────────────────────────────────────
+def _segunda_da_semana(referencia: date) -> date:
+    """Devolve a segunda-feira da semana a que `referencia` pertence."""
+    return referencia - timedelta(days=referencia.weekday())
+
+
+def _formatar_intervalo(seg: date, dom: date) -> str:
+    if seg.month == dom.month and seg.year == dom.year:
+        return f"{seg.day} — {dom.day} {MESES_ABREV[dom.month - 1]} {dom.year}"
+    if seg.year == dom.year:
+        return (
+            f"{seg.day} {MESES_ABREV[seg.month - 1]} — "
+            f"{dom.day} {MESES_ABREV[dom.month - 1]} {dom.year}"
+        )
+    return (
+        f"{seg.day} {MESES_ABREV[seg.month - 1]} {seg.year} — "
+        f"{dom.day} {MESES_ABREV[dom.month - 1]} {dom.year}"
+    )
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # UI helpers
 # ────────────────────────────────────────────────────────────────────────────
-def _badge_urgencia(urgencia: str) -> str:
+def _badge_pequeno(urgencia: str) -> str:
     cfg = URGENCIAS.get(urgencia, {"label": urgencia, "icon": "•", "color": "#94a3b8"})
     return (
-        f"<span style='display:inline-block;padding:2px 10px;border-radius:999px;"
-        f"background:{cfg['color']}1A;color:{cfg['color']};font-size:.7rem;"
-        f"font-weight:700;text-transform:uppercase;letter-spacing:.5px;'>"
+        f"<span style='display:inline-block;padding:1px 7px;border-radius:999px;"
+        f"background:{cfg['color']}26;color:{cfg['color']};font-size:.62rem;"
+        f"font-weight:700;text-transform:uppercase;letter-spacing:.4px;'>"
         f"{cfg['icon']} {cfg['label']}</span>"
     )
 
 
-def _render_tarefa(row: dict, key_prefix: str) -> None:
-    cols = st.columns([3.5, 4, 2, 1.5, 1.3])
+def _resumir(texto: str | None, max_chars: int = 30) -> str:
+    if not texto:
+        return "—"
+    texto = texto.strip()
+    if len(texto) <= max_chars:
+        return texto
+    return texto[: max_chars - 1] + "…"
 
-    cols[0].markdown(
-        f"<div style='font-weight:600;color:#0f172a;'>{row['animal']}</div>"
-        f"<div style='font-size:.75rem;color:#94a3b8;'>{row['tipo']}</div>",
-        unsafe_allow_html=True,
-    )
-    cols[1].markdown(
-        f"<div style='color:#334155;font-size:.9rem;'>{row['motivo']}</div>",
-        unsafe_allow_html=True,
-    )
-    cols[2].markdown(
-        f"<div style='font-size:.78rem;color:#64748b;'>Estadia: <b>{row['motivo_estadia']}</b></div>",
-        unsafe_allow_html=True,
-    )
-    cols[3].markdown(_badge_urgencia(row["urgencia"]), unsafe_allow_html=True)
 
-    with cols[4]:
+def _render_cabecalho_dia(dia: date) -> None:
+    is_today = dia == date.today()
+    bg = "#fef3c7" if is_today else "#f8fafc"
+    border = "#fde68a" if is_today else "#e2e8f0"
+    nome = DIAS_ABREV[dia.weekday()]
+    st.markdown(
+        f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+        f"padding:8px 6px;text-align:center;margin-bottom:8px;'>"
+        f"<div style='font-size:.7rem;color:#64748b;font-weight:700;text-transform:uppercase;"
+        f"letter-spacing:.6px;'>{nome}</div>"
+        f"<div style='font-size:1.05rem;font-weight:700;color:#0f172a;'>"
+        f"{dia.day}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
+    cfg = URGENCIAS.get(row["urgencia"], URGENCIAS["observacao"])
+    motivo = _resumir(row.get("motivo"), 30)
+
+    with st.container():
+        st.markdown(
+            f"<div style='background:{cfg['bg']};border:1px solid {cfg['border']};"
+            f"border-left:3px solid {cfg['color']};border-radius:6px;"
+            f"padding:8px 10px;margin-bottom:6px;'>"
+            f"<div style='font-weight:700;color:#0f172a;font-size:.85rem;"
+            f"line-height:1.2;margin-bottom:3px;'>{row['animal']}</div>"
+            f"<div style='font-size:.72rem;color:#475569;line-height:1.25;"
+            f"margin-bottom:6px;'>{motivo}</div>"
+            f"<div style='margin-bottom:4px;'>{_badge_pequeno(row['urgencia'])}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
         if st.button(
-            "Ver animal",
+            "Ver",
             key=f"{key_prefix}_ver_{int(row['id'])}",
             width="stretch",
         ):
@@ -145,64 +193,26 @@ def _render_tarefa(row: dict, key_prefix: str) -> None:
             st.rerun()
 
 
-def _render_dia(dia: date, df_dia: pd.DataFrame, key_prefix: str) -> None:
-    """Renderiza um expander para um dia específico, com tarefas agrupadas
-    por urgência (urgente → hoje → observacao)."""
+def _render_coluna_dia(dia: date, df_dia: pd.DataFrame, idx: int) -> None:
+    _render_cabecalho_dia(dia)
     if df_dia.empty:
+        st.markdown(
+            "<div style='color:#94a3b8;font-style:italic;font-size:.72rem;"
+            "text-align:center;padding:8px 0;'>— sem tarefas —</div>",
+            unsafe_allow_html=True,
+        )
         return
-
-    is_today = dia == date.today()
-    nome_dia = "Hoje" if is_today else (
-        "Amanhã" if dia == date.today() + timedelta(days=1) else dia.strftime("%A")
-    )
-    titulo = f"📅 {dia.strftime('%d/%m/%Y')} ({nome_dia}) — {len(df_dia)} tarefa{'s' if len(df_dia) != 1 else ''}"
-
-    with st.expander(titulo, expanded=is_today):
-        secoes = [
-            ("🔴 Urgente",    "urgente"),
-            ("🟡 Hoje",       "hoje"),
-            ("⚪ Observação", "observacao"),
-        ]
-        # Acrescentar 'amanha' se existir alguma com essa urgência
-        if (df_dia["urgencia"] == "amanha").any():
-            secoes.append(("🟢 Amanhã", "amanha"))
-
-        renderizou_alguma = False
-        for label, urg in secoes:
-            sub = df_dia[df_dia["urgencia"] == urg]
-            if sub.empty:
-                continue
-            renderizou_alguma = True
-            st.markdown(
-                f"<div style='font-size:.78rem;font-weight:700;color:#475569;"
-                f"text-transform:uppercase;letter-spacing:.5px;margin:6px 0 4px;'>"
-                f"{label}</div>",
-                unsafe_allow_html=True,
-            )
-            for _, row in sub.iterrows():
-                _render_tarefa(row.to_dict(), key_prefix)
-                st.markdown(
-                    "<hr style='border:none;border-top:1px dashed #e2e8f0;margin:6px 0;'>",
-                    unsafe_allow_html=True,
-                )
-
-        # Cobre urgências fora das categorias acima (defesa)
-        outras = df_dia[~df_dia["urgencia"].isin([u for _, u in secoes] + ["amanha"])]
-        if not outras.empty:
-            for _, row in outras.iterrows():
-                _render_tarefa(row.to_dict(), key_prefix)
-
-        if not renderizou_alguma and outras.empty:
-            st.caption("(sem tarefas para mostrar)")
+    for _, row in df_dia.iterrows():
+        _render_cartao_tarefa(row.to_dict(), key_prefix=f"sem_d{idx}")
 
 
 # ────────────────────────────────────────────────────────────────────────────
 # Página principal
 # ────────────────────────────────────────────────────────────────────────────
 def run_trabalho_diario_page(context: dict):
-    """Trabalho diário — tarefas dos próximos 7 dias agrupadas por dia."""
+    """Trabalho diário — agenda semanal."""
 
-    # Drill-down para ficha do animal (mesma lógica do estadias_page)
+    # Drill-down para ficha do animal
     if st.session_state.get("ver_animal_id") is not None:
         if st.button("← Voltar ao trabalho diário", key="btn_voltar_trab_diario"):
             st.session_state.pop("ver_animal_id", None)
@@ -224,7 +234,7 @@ def run_trabalho_diario_page(context: dict):
     except Exception as e:
         st.warning(f"Não foi possível gerar tarefas automáticas: {e}")
 
-    # Cabeçalho
+    # Cabeçalho com data
     hoje = date.today()
     st.markdown(
         f"## Trabalho diário "
@@ -239,19 +249,62 @@ def run_trabalho_diario_page(context: dict):
 
     st.markdown("---")
 
-    # Carregar todas as tarefas do período e agrupar por dia
-    df = _carregar_tarefas_periodo()
+    # Inicializar offset de semana
+    if "semana_offset" not in st.session_state:
+        st.session_state["semana_offset"] = 0
 
-    if df.empty:
-        st.info("Sem tarefas pendentes nos próximos 7 dias.")
-        return
+    # Calcular semana visível
+    seg_hoje = _segunda_da_semana(hoje)
+    seg = seg_hoje + timedelta(weeks=int(st.session_state["semana_offset"]))
+    dom = seg + timedelta(days=6)
 
-    # Garantir tipo de data nativo Python (evita issues com pd.Timestamp)
-    df["dia"] = pd.to_datetime(df["data_tarefa"]).dt.date
+    # Navegação de semana
+    col_prev, col_title, col_next = st.columns([1, 3, 1])
+    with col_prev:
+        if st.button("◀ Semana anterior", key="btn_sem_ant", width="stretch"):
+            st.session_state["semana_offset"] -= 1
+            st.rerun()
+    with col_title:
+        sufixo = ""
+        if st.session_state["semana_offset"] == 0:
+            sufixo = " · Esta semana"
+        elif st.session_state["semana_offset"] == 1:
+            sufixo = " · Próxima semana"
+        elif st.session_state["semana_offset"] == -1:
+            sufixo = " · Semana anterior"
+        st.markdown(
+            f"<div style='text-align:center;padding:6px 0;'>"
+            f"<div style='font-size:1.05rem;font-weight:700;color:#0f172a;'>"
+            f"{_formatar_intervalo(seg, dom)}</div>"
+            f"<div style='font-size:.75rem;color:#94a3b8;'>{sufixo}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col_next:
+        if st.button("Semana seguinte ▶", key="btn_sem_seg", width="stretch"):
+            st.session_state["semana_offset"] += 1
+            st.rerun()
 
-    for offset in range(8):  # 0..7 inclusive
-        dia = hoje + timedelta(days=offset)
-        df_dia = df[df["dia"] == dia]
-        if df_dia.empty:
-            continue
-        _render_dia(dia, df_dia, key_prefix=f"td_d{offset}")
+    # Botão extra: voltar a hoje
+    if st.session_state["semana_offset"] != 0:
+        if st.button("⌂ Voltar a esta semana", key="btn_sem_hoje"):
+            st.session_state["semana_offset"] = 0
+            st.rerun()
+
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:6px 0 12px;'>",
+        unsafe_allow_html=True,
+    )
+
+    # Carregar tarefas da semana
+    df = _carregar_tarefas_semana(seg, dom)
+    if not df.empty:
+        df["dia"] = pd.to_datetime(df["data_tarefa"]).dt.date
+
+    # 7 colunas — uma por dia
+    cols = st.columns(7, gap="small")
+    for i in range(7):
+        dia = seg + timedelta(days=i)
+        df_dia = df[df["dia"] == dia] if not df.empty else df
+        with cols[i]:
+            _render_coluna_dia(dia, df_dia, idx=i)
