@@ -248,6 +248,123 @@ EDEMA_OPTS = [
 COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"]
 
 
+# ── Historial reprodutivo ──────────────────────────────────────────────────
+def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFrame:
+    """Histórico completo de inseminações da égua, com proprietário e resultado
+    (do acompanhamento da estadia que abrange a data, se existir)."""
+    sql = """
+        SELECT
+            i.data_inseminacao,
+            i.garanhao,
+            d.nome           AS proprietario,
+            i.palhetas_gastas,
+            COALESCE(ai.resultado, 'pendente') AS resultado,
+            i.observacoes
+        FROM inseminacoes i
+        LEFT JOIN dono d ON d.id = i.dono_id
+        LEFT JOIN estadias e
+               ON e.animal_id = %s
+              AND e.motivo = 'inseminacao'
+              AND i.data_inseminacao BETWEEN e.data_entrada
+                                         AND COALESCE(e.data_saida, CURRENT_DATE)
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        WHERE LOWER(i.egua) = LOWER(%s)
+        ORDER BY i.data_inseminacao DESC, i.id DESC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(animal_id, animal_nome))
+
+
+def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
+    total = len(df)
+    if total == 0:
+        return 0, 0, "—"
+    gestacoes = int((df["resultado"] == "gestacao_confirmada").sum())
+    taxa = (gestacoes / total) * 100
+    return total, gestacoes, f"{taxa:.0f} %"
+
+
+RESULTADO_BADGE = {
+    "pendente":             ("Pendente",    "#475569", "#e2e8f0"),
+    "gestacao_confirmada":  ("Gestação ✓",  "#15803d", "#dcfce7"),
+    "falhou":               ("Falhou",      "#b91c1c", "#fee2e2"),
+}
+
+
+def _badge_resultado(resultado: str) -> str:
+    label, fg, bg = RESULTADO_BADGE.get(
+        resultado, (str(resultado or "—"), "#475569", "#e2e8f0"),
+    )
+    return (
+        f"<span style='display:inline-block;padding:2px 9px;border-radius:999px;"
+        f"background:{bg};color:{fg};font-size:.7rem;font-weight:700;"
+        f"text-transform:uppercase;letter-spacing:.4px;'>{label}</span>"
+    )
+
+
+def _render_tab_historial_reprodutivo(animal: dict) -> None:
+    df_ins = _carregar_inseminacoes_animal(animal["id"], animal.get("nome") or "")
+
+    total, gestacoes, taxa = _kpis_inseminacoes(df_ins)
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        st.metric("Total inseminações", total)
+    with k2:
+        st.metric("Gestações confirmadas", gestacoes)
+    with k3:
+        st.metric("Taxa de sucesso", taxa)
+
+    st.markdown("---")
+
+    if df_ins.empty:
+        st.info("Sem inseminações registadas para este animal.")
+    else:
+        # Cabeçalho da tabela
+        cols_w = [1.0, 1.4, 1.6, 0.8, 1.2, 2.0]
+        headers = ["Data", "Garanhão", "Proprietário", "Palhetas",
+                   "Resultado", "Observações"]
+        head_cols = st.columns(cols_w)
+        for i, h in enumerate(headers):
+            head_cols[i].markdown(
+                f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
+                f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
+            unsafe_allow_html=True,
+        )
+
+        for _, row in df_ins.iterrows():
+            cols = st.columns(cols_w)
+            dt = row["data_inseminacao"]
+            cols[0].write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "—")
+            cols[1].write(row["garanhao"] or "—")
+            cols[2].write(row["proprietario"] or "—")
+            cols[3].write(int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else "—")
+            cols[4].markdown(_badge_resultado(row["resultado"]), unsafe_allow_html=True)
+            obs = row["observacoes"] or "—"
+            obs_short = obs if len(obs) <= 60 else obs[:59] + "…"
+            cols[5].write(obs_short)
+
+    # ── Estadias anteriores ────────────────────────────────────────────────
+    st.markdown("##### Estadias anteriores")
+    df_est = _carregar_estadias_do_animal(animal["id"])
+    if df_est.empty:
+        st.info("Sem estadias registadas.")
+        return
+
+    view = df_est.rename(columns={
+        "tipo_registo": "Tipo registo",
+        "motivo": "Motivo",
+        "estado": "Estado",
+        "data_entrada": "Data entrada",
+        "data_saida": "Data saída",
+        "dias": "Dias estadia",
+    })
+    st.dataframe(view, width="stretch", hide_index=True)
+
+
 def _render_form_novo_registo(animal_id: int) -> None:
     estadia_id = _obter_estadia_activa(animal_id)
     if estadia_id is None:
@@ -947,7 +1064,7 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
         _render_tab_diario_clinico(animal_id)
 
     with tab_repro:
-        st.info("Em desenvolvimento — Fase 2")
+        _render_tab_historial_reprodutivo(animal)
 
     with tab_estadias:
         _render_tab_estadias(animal_id)
