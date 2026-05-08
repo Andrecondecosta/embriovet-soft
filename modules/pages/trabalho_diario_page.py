@@ -80,12 +80,14 @@ def _carregar_tarefas_semana(seg: date, dom: date) -> pd.DataFrame:
             td.tipo,
             td.motivo,
             td.urgencia,
-            td.data_tarefa
+            td.data_tarefa,
+            td.concluida,
+            td.data_conclusao,
+            td.observacoes_conclusao
         FROM trabalho_diario td
         JOIN animais a ON a.id = td.animal_id
         WHERE td.data_tarefa BETWEEN %s AND %s
-          AND td.concluida = FALSE
-        ORDER BY td.data_tarefa ASC, td.created_at DESC
+        ORDER BY td.data_tarefa ASC, td.concluida ASC, td.created_at DESC
     """
     with get_connection() as conn:
         return pd.read_sql_query(sql, conn, params=(seg, dom))
@@ -195,9 +197,43 @@ def _render_cabecalho_dia(dia: date) -> None:
 
 
 def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
-    cfg = URGENCIAS.get(row["urgencia"], URGENCIAS["observacao"])
     motivo = _resumir(row.get("motivo"), 30)
     tid = int(row["id"])
+
+    # ── Tarefa concluída ───────────────────────────────────────────────
+    if bool(row.get("concluida")):
+        obs_concl = (row.get("observacoes_conclusao") or "").strip()
+        obs_html = (
+            f"<div style='font-size:.68rem;color:#94a3b8;font-style:italic;"
+            f"line-height:1.25;margin-top:2px;'>{obs_concl}</div>"
+            if obs_concl else ""
+        )
+        dt_concl = row.get("data_conclusao")
+        dt_concl_txt = dt_concl.strftime("%d/%m") if dt_concl else ""
+        st.markdown(
+            f"<div style='background:#f1f5f9;border:1px solid #e2e8f0;"
+            f"border-left:3px solid #cbd5e1;border-radius:6px;"
+            f"padding:8px 10px;margin-bottom:6px;opacity:.95;'>"
+            f"<div style='font-weight:700;color:#64748b;font-size:.85rem;"
+            f"line-height:1.2;margin-bottom:3px;text-decoration:line-through;'>"
+            f"{row['animal']}</div>"
+            f"<div style='font-size:.72rem;color:#94a3b8;line-height:1.25;"
+            f"margin-bottom:6px;'>{motivo}</div>"
+            f"{obs_html}"
+            f"<div style='margin:6px 0 4px;'>"
+            f"<span style='display:inline-block;padding:1px 8px;border-radius:999px;"
+            f"background:#dcfce7;color:#15803d;font-size:.62rem;font-weight:700;"
+            f"text-transform:uppercase;letter-spacing:.4px;'>✓ Feito</span>"
+            f"</div>"
+            f"<div style='font-size:.66rem;color:#94a3b8;margin-top:4px;'>"
+            f"Concluído em {dt_concl_txt}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    # ── Tarefa pendente (mantém aspecto actual) ────────────────────────
+    cfg = URGENCIAS.get(row["urgencia"], URGENCIAS["observacao"])
     concluir_key = f"concluir_{tid}"
 
     with st.container():
