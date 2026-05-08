@@ -1040,8 +1040,224 @@ def _render_seccao_acompanhamento(animal_id: int, estadia: dict) -> None:
 # ────────────────────────────────────────────────────────────────────────────
 # Página principal
 # ────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Tabs específicas para tipo='garanhao'
+# ────────────────────────────────────────────────────────────────────────────
+def _carregar_stock_garanhao(garanhao_nome: str) -> pd.DataFrame:
+    sql = """
+        SELECT
+            ed.data_embriovet         AS data_producao,
+            d.nome                    AS proprietario,
+            ed.palhetas_produzidas    AS palhetas_iniciais,
+            ed.existencia_atual       AS palhetas_restantes,
+            ed.motilidade,
+            ed.concentracao,
+            ed.qualidade,
+            c.codigo                  AS contentor,
+            ed.canister,
+            ed.andar
+        FROM estoque_dono ed
+        LEFT JOIN dono d        ON d.id = ed.dono_id
+        LEFT JOIN contentores c ON c.id = ed.contentor_id
+        WHERE LOWER(ed.garanhao) = LOWER(%s)
+        ORDER BY ed.data_embriovet DESC, ed.id DESC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(garanhao_nome,))
+
+
+def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str]:
+    if df.empty:
+        return 0, 0, "—"
+    total_palh = int(df["palhetas_restantes"].fillna(0).sum())
+    lotes_act = int((df["palhetas_restantes"].fillna(0) > 0).sum())
+    motil_validas = df.loc[df["palhetas_restantes"].fillna(0) > 0, "motilidade"].dropna()
+    motil_avg = f"{motil_validas.mean():.0f} %" if len(motil_validas) else "—"
+    return total_palh, lotes_act, motil_avg
+
+
+def _carregar_inseminacoes_garanhao(garanhao_nome: str) -> pd.DataFrame:
+    sql = """
+        SELECT
+            i.data_inseminacao,
+            i.egua,
+            d.nome           AS proprietario,
+            i.palhetas_gastas,
+            COALESCE(ai.resultado, 'pendente') AS resultado
+        FROM inseminacoes i
+        LEFT JOIN dono d ON d.id = i.dono_id
+        LEFT JOIN animais a ON LOWER(a.nome) = LOWER(i.egua)
+        LEFT JOIN estadias e
+               ON e.animal_id = a.id
+              AND e.motivo = 'inseminacao'
+              AND i.data_inseminacao BETWEEN e.data_entrada
+                                         AND COALESCE(e.data_saida, CURRENT_DATE)
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        WHERE LOWER(i.garanhao) = LOWER(%s)
+        ORDER BY i.data_inseminacao DESC, i.id DESC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(garanhao_nome,))
+
+
+def _kpis_fertilidade_garanhao(df: pd.DataFrame) -> tuple[int, int, str, float | None]:
+    total = len(df)
+    if total == 0:
+        return 0, 0, "—", None
+    ges = int((df["resultado"] == "gestacao_confirmada").sum())
+    taxa = (ges / total) * 100
+    return total, ges, f"{taxa:.0f} %", taxa
+
+
+def _ultima_producao_garanhao(garanhao_nome: str):
+    sql = """
+        SELECT MAX(data_embriovet) FROM estoque_dono
+        WHERE LOWER(garanhao) = LOWER(%s)
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (garanhao_nome,))
+        row = cur.fetchone()
+        cur.close()
+        return row[0] if row else None
+
+
+def _render_tab_producao_semen(animal: dict) -> None:
+    nome = animal.get("nome") or ""
+    df = _carregar_stock_garanhao(nome)
+    total_palh, lotes_act, motil_avg = _kpis_stock_garanhao(df)
+
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        st.metric("Total palhetas em stock", total_palh)
+    with k2:
+        st.metric("Total lotes activos", lotes_act)
+    with k3:
+        st.metric("Motilidade média", motil_avg)
+
+    st.markdown("---")
+
+    if df.empty:
+        st.info("Sem lotes registados para este garanhão.")
+        return
+
+    view = df.copy()
+    view["data_producao"] = pd.to_datetime(view["data_producao"]).dt.strftime("%d/%m/%Y")
+    view = view.rename(columns={
+        "data_producao": "Data produção",
+        "proprietario": "Proprietário",
+        "palhetas_iniciais": "Palhetas iniciais",
+        "palhetas_restantes": "Palhetas restantes",
+        "motilidade": "Motilidade (%)",
+        "concentracao": "Concentração",
+        "qualidade": "Qualidade",
+        "contentor": "Contentor",
+        "canister": "Canister",
+        "andar": "Andar",
+    })
+    st.dataframe(view, width="stretch", hide_index=True)
+
+
+def _render_tab_fertilidade_garanhao(animal: dict) -> None:
+    nome = animal.get("nome") or ""
+    df = _carregar_inseminacoes_garanhao(nome)
+    total, ges, taxa_txt, _ = _kpis_fertilidade_garanhao(df)
+
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        st.metric("Total inseminações realizadas", total)
+    with k2:
+        st.metric("Gestações confirmadas", ges)
+    with k3:
+        st.metric("Taxa de fertilidade", taxa_txt)
+
+    st.markdown("---")
+
+    if df.empty:
+        st.info("Sem inseminações registadas para este garanhão.")
+        return
+
+    cols_w = [1.0, 1.6, 1.6, 0.9, 1.4]
+    headers = ["Data", "Égua", "Proprietário", "Palhetas", "Resultado"]
+    head_cols = st.columns(cols_w)
+    for i, h in enumerate(headers):
+        head_cols[i].markdown(
+            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
+            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
+        unsafe_allow_html=True,
+    )
+    for _, row in df.iterrows():
+        cols = st.columns(cols_w)
+        dt = row["data_inseminacao"]
+        cols[0].write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "—")
+        cols[1].write(row["egua"] or "—")
+        cols[2].write(row["proprietario"] or "—")
+        cols[3].write(int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else "—")
+        cols[4].markdown(_badge_resultado(row["resultado"]), unsafe_allow_html=True)
+
+
+def _render_tab_alertas_garanhao(animal: dict) -> None:
+    nome = animal.get("nome") or ""
+    df_stock = _carregar_stock_garanhao(nome)
+    df_ins = _carregar_inseminacoes_garanhao(nome)
+    total_palh, _, _ = _kpis_stock_garanhao(df_stock)
+    _, _, _, taxa_pct = _kpis_fertilidade_garanhao(df_ins)
+    ultima = _ultima_producao_garanhao(nome)
+
+    alertas_emitidos = 0
+
+    # 🔴 Stock crítico
+    if total_palh < 10:
+        st.error(
+            f"🔴 **Stock crítico** — apenas **{total_palh} palhetas** em stock "
+            f"({nome}). Considere repor.",
+        )
+        alertas_emitidos += 1
+    # 🟡 Stock baixo (não duplica se já foi crítico)
+    elif total_palh < 25:
+        st.warning(
+            f"🟡 **Stock baixo** — apenas **{total_palh} palhetas** em stock "
+            f"({nome}). Vigie a evolução.",
+        )
+        alertas_emitidos += 1
+
+    # ⚪ Última produção há mais de 30 dias
+    if ultima:
+        if isinstance(ultima, datetime):
+            ultima = ultima.date()
+        dias = (date.today() - ultima).days
+        if dias > 30:
+            st.info(
+                f"⚪ **Sem produção recente** — última produção em "
+                f"**{ultima.strftime('%d/%m/%Y')}** ({dias} dias).",
+            )
+            alertas_emitidos += 1
+    else:
+        st.info(f"⚪ **Sem produção registada** para {nome}.")
+        alertas_emitidos += 1
+
+    # 🟢 Taxa de fertilidade > 70%
+    if taxa_pct is not None and taxa_pct > 70:
+        st.success(
+            f"🟢 **Excelente fertilidade** — taxa de **{taxa_pct:.0f} %** "
+            f"({nome}).",
+        )
+        alertas_emitidos += 1
+
+    if alertas_emitidos == 0:
+        st.markdown(
+            "<div style='color:#94a3b8;font-style:italic;padding:12px 0;'>"
+            "Sem alertas activos para este garanhão.</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
-    """Página de detalhe de um animal com 4 tabs."""
+    """Página de detalhe de um animal com 4 tabs (variam consoante o tipo)."""
 
     animal = _carregar_animal(animal_id)
     if not animal:
@@ -1049,12 +1265,25 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
         return
 
     st.markdown(f"## {animal.get('nome') or 'Animal sem nome'}")
-
-    nomes_tabs = ["Resumo", "Diário clínico", "Historial reprodutivo", "Estadias"]
-    # Honrar tab inicial: o Streamlit não permite seleccionar tab por código,
-    # mas guardamos a preferência em session_state para uso futuro.
     st.session_state[f"animal_{animal_id}_tab_inicial"] = tab_inicial
 
+    if (animal.get("tipo") or "").lower() == "garanhao":
+        # ── Layout específico para garanhão ─────────────────────────────────
+        nomes_tabs = ["Resumo", "Produção de sémen", "Fertilidade", "Alertas"]
+        tab_resumo, tab_producao, tab_fert, tab_alertas = st.tabs(nomes_tabs)
+
+        with tab_resumo:
+            _render_tab_resumo(animal)
+        with tab_producao:
+            _render_tab_producao_semen(animal)
+        with tab_fert:
+            _render_tab_fertilidade_garanhao(animal)
+        with tab_alertas:
+            _render_tab_alertas_garanhao(animal)
+        return
+
+    # ── Layout padrão para égua/receptora (mantido) ─────────────────────────
+    nomes_tabs = ["Resumo", "Diário clínico", "Historial reprodutivo", "Estadias"]
     tab_resumo, tab_clinico, tab_repro, tab_estadias = st.tabs(nomes_tabs)
 
     with tab_resumo:
