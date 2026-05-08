@@ -777,7 +777,7 @@ def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
                 ):
                     st.session_state["ver_animal_id"] = a["id"]
                     st.session_state["aba_selecionada"] = "Estadias e Visitas"
-                    st.session_state["pesquisa_global"] = ""
+                    st.session_state["pesquisa_global_limpar"] = True
                     st.rerun()
 
         # Proprietários
@@ -796,7 +796,7 @@ def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
                 ):
                     st.session_state["ver_proprietario_id"] = d["id"]
                     st.session_state["aba_selecionada"] = "Proprietários"
-                    st.session_state["pesquisa_global"] = ""
+                    st.session_state["pesquisa_global_limpar"] = True
                     st.rerun()
 
         # Garanhões no stock
@@ -814,7 +814,7 @@ def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
                     width="stretch",
                 ):
                     st.session_state["aba_selecionada"] = "Stock de sémen"
-                    st.session_state["pesquisa_global"] = ""
+                    st.session_state["pesquisa_global_limpar"] = True
                     st.rerun()
 
 
@@ -853,6 +853,12 @@ def render_header(app_settings, user_info):
             )
 
     with col_search:
+        # Limpar o campo (vindo de um click anterior) ANTES de instanciar o widget,
+        # caso contrário o Streamlit lança StreamlitAPIException.
+        if st.session_state.get("pesquisa_global_limpar"):
+            del st.session_state["pesquisa_global_limpar"]
+            st.session_state["pesquisa_global"] = ""
+
         st.text_input(
             "Pesquisa global",
             key="pesquisa_global",
