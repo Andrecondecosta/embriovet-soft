@@ -703,34 +703,177 @@ def inject_shell_css(primary_color: str | None):
     )
 
 
+def _pesquisa_global(termo: str) -> dict:
+    """Executa as 3 queries de pesquisa global e devolve {animais, donos, garanhoes}."""
+    from modules.db import get_connection
+    if not termo or len(termo.strip()) < 3:
+        return {"animais": [], "donos": [], "garanhoes": []}
+    like = f"%{termo.strip()}%"
+    out = {"animais": [], "donos": [], "garanhoes": []}
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, nome, tipo FROM animais "
+                "WHERE ativo = TRUE AND LOWER(nome) LIKE LOWER(%s) "
+                "ORDER BY nome LIMIT 5",
+                (like,),
+            )
+            out["animais"] = [{"id": int(r[0]), "nome": r[1], "tipo": r[2]} for r in cur.fetchall()]
+
+            cur.execute(
+                "SELECT id, nome FROM dono "
+                "WHERE LOWER(nome) LIKE LOWER(%s) OR nif LIKE %s "
+                "ORDER BY nome LIMIT 5",
+                (like, like),
+            )
+            out["donos"] = [{"id": int(r[0]), "nome": r[1]} for r in cur.fetchall()]
+
+            cur.execute(
+                "SELECT DISTINCT garanhao FROM estoque_dono "
+                "WHERE LOWER(garanhao) LIKE LOWER(%s) AND existencia_atual > 0 "
+                "ORDER BY garanhao LIMIT 5",
+                (like,),
+            )
+            out["garanhoes"] = [r[0] for r in cur.fetchall() if r[0]]
+            cur.close()
+    except Exception:
+        pass
+    return out
+
+
+def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
+    """Renderiza os resultados da pesquisa agrupados por categoria."""
+    total = (
+        len(resultados["animais"]) +
+        len(resultados["donos"]) +
+        len(resultados["garanhoes"])
+    )
+
+    if total == 0:
+        st.markdown(
+            f"<div style='padding:8px 12px;color:#94a3b8;font-style:italic;"
+            f"font-size:.82rem;border:1px solid var(--border);border-radius:6px;"
+            f"background:#fafafa;margin-bottom:8px;'>"
+            f"Sem resultados para “{termo}”</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    with st.container(border=True):
+        # Animais
+        if resultados["animais"]:
+            st.markdown(
+                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
+                "text-transform:uppercase;letter-spacing:.5px;margin:2px 0 4px;'>"
+                "🐎 Animais</div>",
+                unsafe_allow_html=True,
+            )
+            for a in resultados["animais"]:
+                if st.button(
+                    f"{a['nome']}  ·  {a['tipo']}",
+                    key=f"pg_animal_{a['id']}",
+                    width="stretch",
+                ):
+                    st.session_state["ver_animal_id"] = a["id"]
+                    st.session_state["aba_selecionada"] = "Estadias e Visitas"
+                    st.session_state["pesquisa_global"] = ""
+                    st.rerun()
+
+        # Proprietários
+        if resultados["donos"]:
+            st.markdown(
+                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
+                "text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;'>"
+                "👥 Proprietários</div>",
+                unsafe_allow_html=True,
+            )
+            for d in resultados["donos"]:
+                if st.button(
+                    d["nome"],
+                    key=f"pg_dono_{d['id']}",
+                    width="stretch",
+                ):
+                    st.session_state["ver_proprietario_id"] = d["id"]
+                    st.session_state["aba_selecionada"] = "Proprietários"
+                    st.session_state["pesquisa_global"] = ""
+                    st.rerun()
+
+        # Garanhões no stock
+        if resultados["garanhoes"]:
+            st.markdown(
+                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
+                "text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;'>"
+                "🐴 Garanhões no stock</div>",
+                unsafe_allow_html=True,
+            )
+            for g in resultados["garanhoes"]:
+                if st.button(
+                    g,
+                    key=f"pg_gar_{g}",
+                    width="stretch",
+                ):
+                    st.session_state["aba_selecionada"] = "Stock de sémen"
+                    st.session_state["pesquisa_global"] = ""
+                    st.rerun()
+
+
 def render_header(app_settings, user_info):
     company_name = (app_settings or {}).get("company_name") or "Sistema"
     logo = (app_settings or {}).get("logo_base64")
 
     st.markdown("<div id='topbar-anchor'></div>", unsafe_allow_html=True)
-    if logo:
-        st.markdown(
-            f"""
-            <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
-                <img src='{logo}' style='height:28px;'/>
-                <div class='app-topbar-title'>{company_name}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
-        st.markdown(
-            f"""
-            <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
-                <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
-                    {initials}
+
+    # Layout: marca à esquerda, barra de pesquisa no centro, utilizador à direita
+    col_brand, col_search, col_user = st.columns([3, 4, 2])
+
+    with col_brand:
+        if logo:
+            st.markdown(
+                f"""
+                <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
+                    <img src='{logo}' style='height:28px;'/>
+                    <div class='app-topbar-title'>{company_name}</div>
                 </div>
-                <div class='app-topbar-title'>{company_name}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
+            st.markdown(
+                f"""
+                <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
+                    <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
+                        {initials}
+                    </div>
+                    <div class='app-topbar-title'>{company_name}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    with col_search:
+        st.text_input(
+            "Pesquisa global",
+            key="pesquisa_global",
+            placeholder="🔍 Pesquisar animal, proprietário...",
+            label_visibility="collapsed",
         )
+
+    with col_user:
+        nome = (user_info or {}).get("nome") or ""
+        if nome:
+            st.markdown(
+                f"<div style='text-align:right;padding:8px 4px;font-size:.82rem;"
+                f"color:#475569;'>{nome}</div>",
+                unsafe_allow_html=True,
+            )
+
+    # Resultados da pesquisa (apenas se >= 3 caracteres)
+    termo = st.session_state.get("pesquisa_global", "") or ""
+    if len(termo.strip()) >= 3:
+        resultados = _pesquisa_global(termo)
+        _render_resultados_pesquisa(termo, resultados)
 
     return False, False
 

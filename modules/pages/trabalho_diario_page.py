@@ -179,28 +179,97 @@ def _resumir(texto: str | None, max_chars: int = 30) -> str:
     return texto[: max_chars - 1] + "…"
 
 
-def _render_cabecalho_dia(dia: date) -> None:
-    is_today = dia == date.today()
-    bg = "#fef3c7" if is_today else "#f8fafc"
-    border = "#fde68a" if is_today else "#e2e8f0"
-    nome = DIAS_ABREV[dia.weekday()]
-    st.markdown(
-        f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
-        f"padding:8px 6px;text-align:center;margin-bottom:8px;'>"
-        f"<div style='font-size:.7rem;color:#64748b;font-weight:700;text-transform:uppercase;"
-        f"letter-spacing:.6px;'>{nome}</div>"
-        f"<div style='font-size:1.05rem;font-weight:700;color:#0f172a;'>"
-        f"{dia.day}</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+def _injetar_css_cartoes() -> None:
+    """Injecta o CSS que estiliza os botões-cartão conforme a urgência.
+
+    Cada cartão pendente é criado com `st.button(key=...)` cuja key
+    inclui a urgência. O Streamlit atribui a classe `st-key-<key>`
+    ao `stElementContainer` desse botão; o CSS abaixo usa um selector
+    de wildcard sobre essa classe.
+    """
+    css = """
+    <style>
+    /* Estado base — todos os cartões clicáveis ocupam altura suficiente
+       para mostrar nome + motivo + badge alinhados à esquerda. */
+    div[class*="st-key-tdcard-"] button,
+    div[class*="st-key-tdcard-"] button[kind="secondary"] {
+        text-align: left !important;
+        white-space: normal !important;
+        padding: 10px 12px !important;
+        min-height: 92px !important;
+        height: auto !important;
+        border-radius: 6px !important;
+        border-style: solid !important;
+        border-width: 1px !important;
+        border-left-width: 3px !important;
+        font-weight: 400 !important;
+        line-height: 1.25 !important;
+    }
+    div[class*="st-key-tdcard-"] button p,
+    div[class*="st-key-tdcard-"] button div {
+        text-align: left !important;
+        margin: 0 !important;
+    }
+
+    /* URGENTE — vermelho claro */
+    div.st-key-tdcard-urgente button,
+    div[class*="st-key-tdcard-urgente-"] button {
+        background: #fee2e2 !important;
+        border-color: #fca5a5 !important;
+        border-left-color: #dc2626 !important;
+        color: #0f172a !important;
+    }
+    div.st-key-tdcard-urgente button:hover,
+    div[class*="st-key-tdcard-urgente-"] button:hover {
+        background: #fecaca !important;
+        border-color: #f87171 !important;
+    }
+
+    /* HOJE — amarelo claro */
+    div[class*="st-key-tdcard-hoje-"] button {
+        background: #fef3c7 !important;
+        border-color: #fde68a !important;
+        border-left-color: #ca8a04 !important;
+        color: #0f172a !important;
+    }
+    div[class*="st-key-tdcard-hoje-"] button:hover {
+        background: #fde68a !important;
+        border-color: #facc15 !important;
+    }
+
+    /* AMANHÃ — verde claro */
+    div[class*="st-key-tdcard-amanha-"] button {
+        background: #dcfce7 !important;
+        border-color: #bbf7d0 !important;
+        border-left-color: #16a34a !important;
+        color: #0f172a !important;
+    }
+    div[class*="st-key-tdcard-amanha-"] button:hover {
+        background: #bbf7d0 !important;
+        border-color: #86efac !important;
+    }
+
+    /* OBSERVAÇÃO — cinza claro */
+    div[class*="st-key-tdcard-observacao-"] button {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+        border-left-color: #475569 !important;
+        color: #0f172a !important;
+    }
+    div[class*="st-key-tdcard-observacao-"] button:hover {
+        background: #e2e8f0 !important;
+        border-color: #cbd5e1 !important;
+    }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
 
 
 def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
     motivo = _resumir(row.get("motivo"), 30)
     tid = int(row["id"])
 
-    # ── Tarefa concluída ───────────────────────────────────────────────
+    # ── Tarefa concluída — apenas visual, não clicável ─────────────────
     if bool(row.get("concluida")):
         obs_concl = (row.get("observacoes_conclusao") or "").strip()
         obs_html = (
@@ -232,73 +301,43 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
         )
         return
 
-    # ── Tarefa pendente (mantém aspecto actual) ────────────────────────
+    # ── Tarefa pendente — cartão inteiro clicável (st.button) ──────────
     cfg = URGENCIAS.get(row["urgencia"], URGENCIAS["observacao"])
-    concluir_key = f"concluir_{tid}"
 
-    with st.container():
-        st.markdown(
-            f"<div style='background:{cfg['bg']};border:1px solid {cfg['border']};"
-            f"border-left:3px solid {cfg['color']};border-radius:6px;"
-            f"padding:8px 10px;margin-bottom:6px;'>"
-            f"<div style='font-weight:700;color:#0f172a;font-size:.85rem;"
-            f"line-height:1.2;margin-bottom:3px;'>{row['animal']}</div>"
-            f"<div style='font-size:.72rem;color:#475569;line-height:1.25;"
-            f"margin-bottom:6px;'>{motivo}</div>"
-            f"<div style='margin-bottom:4px;'>{_badge_pequeno(row['urgencia'])}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    # Label markdown rico (negrito + duas linhas + emoji da urgência).
+    # A key inclui a urgência para o CSS conseguir estilizar via `st-key-`.
+    label = (
+        f"**{row['animal']}**\n\n"
+        f"{motivo}\n\n"
+        f"{cfg['icon']} {cfg['label'].upper()}"
+    )
 
-        # Botões: Ver | ✓ Concluir
-        bcol1, bcol2 = st.columns(2)
-        with bcol1:
-            if st.button(
-                "Ver",
-                key=f"{key_prefix}_ver_{tid}",
-                width="stretch",
-            ):
-                st.session_state["ver_animal_id"] = int(row["animal_id"])
-                st.session_state["ver_animal_tab"] = 0
-                st.rerun()
-        with bcol2:
-            if st.button(
-                "✓ Concluir",
-                key=f"{key_prefix}_concluir_btn_{tid}",
-                width="stretch",
-            ):
-                st.session_state[concluir_key] = not st.session_state.get(concluir_key, False)
-                st.rerun()
+    if st.button(
+        label,
+        key=f"tdcard-{row['urgencia']}-{key_prefix}-{tid}",
+        width="stretch",
+    ):
+        st.session_state["ver_animal_id"] = int(row["animal_id"])
+        st.session_state["ver_animal_tab"] = 0
+        st.rerun()
 
-        # Form inline de conclusão (só renderiza quando aberto)
-        if st.session_state.get(concluir_key, False):
-            with st.form(f"{key_prefix}_form_concluir_{tid}", clear_on_submit=False):
-                obs = st.text_area(
-                    "Notas",
-                    key=f"{key_prefix}_obs_{tid}",
-                    placeholder="Notas sobre a conclusão...",
-                    label_visibility="collapsed",
-                    height=68,
-                )
-                fcol1, fcol2 = st.columns(2)
-                with fcol1:
-                    confirmar = st.form_submit_button(
-                        "Confirmar", type="primary", width="stretch",
-                    )
-                with fcol2:
-                    cancelar = st.form_submit_button("Cancelar", width="stretch")
 
-                if cancelar:
-                    st.session_state[concluir_key] = False
-                    st.rerun()
-                if confirmar:
-                    try:
-                        _concluir_tarefa(tid, (obs or "").strip() or None)
-                        st.session_state[concluir_key] = False
-                        st.toast(f"Tarefa concluída: {row['animal']}", icon="✅")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
+def _render_cabecalho_dia(dia: date) -> None:
+    is_today = dia == date.today()
+    bg = "#fef3c7" if is_today else "#f8fafc"
+    border = "#fde68a" if is_today else "#e2e8f0"
+    nome = DIAS_ABREV[dia.weekday()]
+    st.markdown(
+        f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+        f"padding:8px 6px;text-align:center;margin-bottom:8px;'>"
+        f"<div style='font-size:.7rem;color:#64748b;font-weight:700;text-transform:uppercase;"
+        f"letter-spacing:.6px;'>{nome}</div>"
+        f"<div style='font-size:1.05rem;font-weight:700;color:#0f172a;'>"
+        f"{dia.day}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
 
 
 def _render_coluna_dia(dia: date, df_dia: pd.DataFrame, idx: int) -> None:
@@ -413,6 +452,9 @@ def run_trabalho_diario_page(context: dict):
     df = _carregar_tarefas_semana(seg, dom)
     if not df.empty:
         df["dia"] = pd.to_datetime(df["data_tarefa"]).dt.date
+
+    # Estilos dos cartões clicáveis (cores por urgência)
+    _injetar_css_cartoes()
 
     # 7 colunas — uma por dia
     cols = st.columns(7, gap="small")
