@@ -1055,7 +1055,8 @@ def _carregar_stock_garanhao(garanhao_nome: str) -> pd.DataFrame:
             ed.qualidade,
             c.codigo                  AS contentor,
             ed.canister,
-            ed.andar
+            ed.andar,
+            ed.origem_externa
         FROM estoque_dono ed
         LEFT JOIN dono d        ON d.id = ed.dono_id
         LEFT JOIN contentores c ON c.id = ed.contentor_id
@@ -1066,14 +1067,19 @@ def _carregar_stock_garanhao(garanhao_nome: str) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn, params=(garanhao_nome,))
 
 
-def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str]:
+def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
     if df.empty:
-        return 0, 0, "—"
-    total_palh = int(df["palhetas_restantes"].fillna(0).sum())
-    lotes_act = int((df["palhetas_restantes"].fillna(0) > 0).sum())
-    motil_validas = df.loc[df["palhetas_restantes"].fillna(0) > 0, "motilidade"].dropna()
+        return 0, 0, "—", 0, 0
+    palh = df["palhetas_restantes"].fillna(0)
+    total_palh = int(palh.sum())
+    lotes_act = int((palh > 0).sum())
+    motil_validas = df.loc[palh > 0, "motilidade"].dropna()
     motil_avg = f"{motil_validas.mean():.0f} %" if len(motil_validas) else "—"
-    return total_palh, lotes_act, motil_avg
+    origem = df.get("origem_externa", pd.Series([None] * len(df))).fillna("").astype(str).str.strip()
+    mask_externo = origem != ""
+    palh_internas = int(palh.where(~mask_externo, 0).sum())
+    palh_externas = int(palh.where(mask_externo, 0).sum())
+    return total_palh, lotes_act, motil_avg, palh_internas, palh_externas
 
 
 def _carregar_inseminacoes_garanhao(garanhao_nome: str) -> pd.DataFrame:
@@ -1146,15 +1152,19 @@ def _ultima_producao_garanhao(garanhao_nome: str):
 def _render_tab_producao_semen(animal: dict) -> None:
     nome = animal.get("nome") or ""
     df = _carregar_stock_garanhao(nome)
-    total_palh, lotes_act, motil_avg = _kpis_stock_garanhao(df)
+    total_palh, lotes_act, motil_avg, palh_internas, palh_externas = _kpis_stock_garanhao(df)
 
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         st.metric("Total palhetas em stock", total_palh)
     with k2:
         st.metric("Total lotes activos", lotes_act)
     with k3:
         st.metric("Motilidade média", motil_avg)
+    with k4:
+        st.metric("Palhetas produzidas aqui", palh_internas)
+    with k5:
+        st.metric("Palhetas recebidas de fora", palh_externas)
 
     st.markdown("---")
 
@@ -1164,6 +1174,12 @@ def _render_tab_producao_semen(animal: dict) -> None:
 
     view = df.copy()
     view["data_producao"] = pd.to_datetime(view["data_producao"]).dt.strftime("%d/%m/%Y")
+    origem_col = view.get("origem_externa", pd.Series([None] * len(view))).fillna("").astype(str).str.strip()
+    view["Origem"] = origem_col.apply(
+        lambda v: "🏠 Colheita interna" if not v else f"🌍 Externo — {v}"
+    )
+    if "origem_externa" in view.columns:
+        view = view.drop(columns=["origem_externa"])
     view = view.rename(columns={
         "data_producao": "Data produção",
         "proprietario": "Proprietário",
@@ -1176,6 +1192,13 @@ def _render_tab_producao_semen(animal: dict) -> None:
         "canister": "Canister",
         "andar": "Andar",
     })
+    # Coloca "Origem" logo após a "Data produção" para leitura natural
+    cols = list(view.columns)
+    if "Origem" in cols and "Data produção" in cols:
+        cols.remove("Origem")
+        idx = cols.index("Data produção") + 1
+        cols.insert(idx, "Origem")
+        view = view[cols]
     st.dataframe(view, width="stretch", hide_index=True)
 
 
@@ -1225,7 +1248,7 @@ def _render_tab_alertas_garanhao(animal: dict) -> None:
     nome = animal.get("nome") or ""
     df_stock = _carregar_stock_garanhao(nome)
     df_ins = _carregar_inseminacoes_garanhao(nome)
-    total_palh, _, _ = _kpis_stock_garanhao(df_stock)
+    total_palh, _, _, _, _ = _kpis_stock_garanhao(df_stock)
     _, _, _, taxa_pct = _kpis_fertilidade_garanhao(df_ins)
     ultima = _ultima_producao_garanhao(nome)
 
