@@ -17,6 +17,7 @@ from typing import Callable, Optional
 import pandas as pd
 import streamlit as st
 
+from modules.components.modal_proprietario import render_modal_proprietario
 from modules.db import get_connection
 
 
@@ -56,41 +57,6 @@ def _existe_animal_com_nome(nome: str) -> bool:
         existe = cur.fetchone() is not None
         cur.close()
         return existe
-
-
-def _existe_dono_com_nome(nome: str) -> bool:
-    sql = "SELECT 1 FROM dono WHERE LOWER(nome) = LOWER(%s) LIMIT 1"
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, (nome,))
-        existe = cur.fetchone() is not None
-        cur.close()
-        return existe
-
-
-def _inserir_dono_inline(payload: dict) -> int:
-    sql = """
-        INSERT INTO dono (
-            nome, nif, email, telemovel, cidade, ativo
-        ) VALUES (%s, %s, %s, %s, %s, TRUE)
-        RETURNING id
-    """
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            sql,
-            (
-                payload["nome"],
-                payload.get("nif") or None,
-                payload.get("email") or None,
-                payload.get("telemovel") or None,
-                payload.get("cidade") or None,
-            ),
-        )
-        new_id = int(cur.fetchone()[0])
-        conn.commit()
-        cur.close()
-        return new_id
 
 
 def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
@@ -191,10 +157,8 @@ def render_modal_animal(
     if tipo_default not in TIPOS_ANIMAL:
         tipo_default = "egua"
 
-    show_dono_form_key = f"{key}_show_new_dono"
     dono_version_key = f"{key}_dono_version"
-    if show_dono_form_key not in st.session_state:
-        st.session_state[show_dono_form_key] = False
+    applied_prop_key = f"{key}_applied_novo_prop"
     if dono_version_key not in st.session_state:
         st.session_state[dono_version_key] = 0
 
@@ -248,6 +212,18 @@ def render_modal_animal(
 
         # ── Proprietário ────────────────────────────────────────────────
         _section_title("Proprietário")
+
+        # Se foi acabado de criar um proprietário no modal centralizado,
+        # forçamos o re-mount do selectbox (bumpando a versão) para que
+        # o novo dono fique seleccionado por defeito.
+        novo_prop_id = st.session_state.get("novo_prop_id")
+        if (
+            novo_prop_id is not None
+            and st.session_state.get(applied_prop_key) != novo_prop_id
+        ):
+            st.session_state[dono_version_key] += 1
+            st.session_state[applied_prop_key] = novo_prop_id
+
         if donos_df.empty:
             st.info(
                 "Ainda não existem proprietários activos. Crie um abaixo "
@@ -256,6 +232,9 @@ def render_modal_animal(
             dono_id: Optional[int] = None
         else:
             opcoes = [None] + donos_df["id"].tolist()
+            default_idx = 0
+            if novo_prop_id is not None and novo_prop_id in opcoes:
+                default_idx = opcoes.index(novo_prop_id)
 
             def _fmt_dono(did: Optional[int]) -> str:
                 if did is None:
@@ -266,6 +245,7 @@ def render_modal_animal(
             dono_id = st.selectbox(
                 "Proprietário *",
                 opcoes,
+                index=default_idx,
                 format_func=_fmt_dono,
                 key=f"{key}_an_dono_{st.session_state[dono_version_key]}",
             )
@@ -274,44 +254,19 @@ def render_modal_animal(
         with col_btn:
             if st.button(
                 "+ Novo proprietário",
-                key=f"{key}_btn_toggle_new_dono",
+                key=f"{key}_btn_novo_dono",
                 width="stretch",
             ):
-                st.session_state[show_dono_form_key] = (
-                    not st.session_state[show_dono_form_key]
+                render_modal_proprietario(
+                    key="modal_prop_dentro_animal",
+                    on_success=lambda dono_id, dono_nome: (
+                        st.session_state.update({
+                            "novo_prop_id": dono_id,
+                            "novo_prop_nome": dono_nome,
+                        }),
+                        st.rerun(),
+                    ),
                 )
-                st.rerun()
-
-        novo_dono_payload: Optional[dict] = None
-        if st.session_state[show_dono_form_key]:
-            with st.container(border=True):
-                st.markdown(
-                    "<div style='font-size:.78rem;color:#0f172a;font-weight:600;"
-                    "margin-bottom:6px;'>Novo proprietário</div>",
-                    unsafe_allow_html=True,
-                )
-                d1, d2 = st.columns(2)
-                with d1:
-                    nd_nome = st.text_input(
-                        "Nome *", key=f"{key}_nd_nome",
-                        placeholder="Obrigatório",
-                    )
-                    nd_nif = st.text_input("NIF", key=f"{key}_nd_nif")
-                    nd_email = st.text_input("Email", key=f"{key}_nd_email")
-                with d2:
-                    nd_tel = st.text_input(
-                        "Telemóvel", key=f"{key}_nd_tel",
-                    )
-                    nd_cidade = st.text_input(
-                        "Cidade", key=f"{key}_nd_cidade",
-                    )
-                novo_dono_payload = {
-                    "nome": (nd_nome or "").strip(),
-                    "nif": (nd_nif or "").strip(),
-                    "email": (nd_email or "").strip(),
-                    "telemovel": (nd_tel or "").strip(),
-                    "cidade": (nd_cidade or "").strip(),
-                }
 
         # ── Pedigree ────────────────────────────────────────────────────
         _section_title("Pedigree")
@@ -423,7 +378,8 @@ def render_modal_animal(
             )
 
         if cancelar:
-            st.session_state[show_dono_form_key] = False
+            st.session_state.pop("novo_prop_id", None)
+            st.session_state.pop("novo_prop_nome", None)
             st.rerun()
 
         if not guardar:
@@ -440,24 +396,6 @@ def render_modal_animal(
                 "Escolha outro nome.",
             )
             return
-
-        # Resolver dono_id (criar inline se necessário)
-        if (
-            st.session_state[show_dono_form_key]
-            and novo_dono_payload is not None
-            and novo_dono_payload["nome"]
-        ):
-            if _existe_dono_com_nome(novo_dono_payload["nome"]):
-                st.error(
-                    f"Já existe um proprietário com o nome "
-                    f"'{novo_dono_payload['nome']}'.",
-                )
-                return
-            try:
-                dono_id = _inserir_dono_inline(novo_dono_payload)
-            except Exception as exc:
-                st.error(f"Erro ao criar proprietário: {exc}")
-                return
 
         if not dono_id:
             st.error("Selecione um proprietário ou crie um novo.")
@@ -512,7 +450,9 @@ def render_modal_animal(
                 st.warning(f"Animal criado, mas callback falhou: {exc}")
 
         # Reset estado interno do modal
-        st.session_state[show_dono_form_key] = False
+        st.session_state.pop("novo_prop_id", None)
+        st.session_state.pop("novo_prop_nome", None)
+        st.session_state.pop(applied_prop_key, None)
         st.session_state[dono_version_key] += 1
         st.success(
             f"Animal '{nome_clean}' criado e estadia/visita registada.",
