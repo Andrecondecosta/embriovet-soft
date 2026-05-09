@@ -714,12 +714,22 @@ def _pesquisa_global(termo: str) -> dict:
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT id, nome, tipo FROM animais "
-                "WHERE ativo = TRUE AND LOWER(nome) LIKE LOWER(%s) "
-                "ORDER BY nome LIMIT 5",
+                "SELECT a.id, a.nome, a.tipo, d.nome AS proprietario "
+                "FROM animais a "
+                "LEFT JOIN dono d ON a.dono_id = d.id "
+                "WHERE a.ativo = TRUE AND LOWER(a.nome) LIKE LOWER(%s) "
+                "ORDER BY LOWER(a.nome) LIMIT 5",
                 (like,),
             )
-            out["animais"] = [{"id": int(r[0]), "nome": r[1], "tipo": r[2]} for r in cur.fetchall()]
+            out["animais"] = [
+                {
+                    "id": int(r[0]),
+                    "nome": r[1],
+                    "tipo": r[2],
+                    "proprietario": r[3],
+                }
+                for r in cur.fetchall()
+            ]
 
             cur.execute(
                 "SELECT id, nome FROM dono "
@@ -770,8 +780,9 @@ def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
                 unsafe_allow_html=True,
             )
             for a in resultados["animais"]:
+                prop = a.get("proprietario") or "—"
                 if st.button(
-                    f"{a['nome']}  ·  {a['tipo']}",
+                    f"{a['nome']} ({prop})",
                     key=f"pg_animal_{a['id']}",
                     width="stretch",
                 ):
