@@ -44,16 +44,6 @@ def _carregar_alojamentos() -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 
-def _carregar_garanhoes() -> pd.DataFrame:
-    sql = (
-        "SELECT id, nome FROM animais "
-        "WHERE tipo = 'garanhao' AND COALESCE(ativo, TRUE) = TRUE "
-        "ORDER BY LOWER(nome)"
-    )
-    with get_connection() as conn:
-        return pd.read_sql_query(sql, conn)
-
-
 # ────────────────────────────────────────────────────────────────────────────
 # Validações & inserts
 # ────────────────────────────────────────────────────────────────────────────
@@ -104,10 +94,7 @@ def _inserir_dono_inline(payload: dict) -> int:
 
 
 def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
-    """Cria animal + estadia (e acompanhamento_inseminacao se aplicável).
-
-    Devolve `(animal_id, estadia_id)`. Tudo numa única transacção.
-    """
+    """Cria animal + estadia. Devolve `(animal_id, estadia_id)` numa transacção."""
     sql_animal = """
         INSERT INTO animais (
             nome, tipo, raca, pelagem, data_nascimento, numero_registo, chip,
@@ -122,16 +109,11 @@ def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
     sql_estadia = """
         INSERT INTO estadias (
             tipo_registo, animal_id, alojamento_id, dono_id,
-            data_entrada, data_saida, motivo, estado, garanhao,
+            data_entrada, data_saida, motivo, estado,
             observacoes_entrada
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id
-    """
-    sql_acomp = """
-        INSERT INTO acompanhamento_inseminacao (
-            estadia_id, animal_id, data_inseminacao
-        ) VALUES (%s, %s, %s)
     """
 
     with get_connection() as conn:
@@ -160,17 +142,10 @@ def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
                     estadia.get("alojamento_id"), estadia["dono_id"],
                     estadia["data_entrada"], estadia.get("data_saida"),
                     estadia["motivo"], estadia["estado"],
-                    estadia.get("garanhao"),
                     estadia.get("observacoes_entrada"),
                 ),
             )
             estadia_id = int(cur.fetchone()[0])
-
-            if estadia["motivo"] == "inseminacao":
-                cur.execute(
-                    sql_acomp,
-                    (estadia_id, animal_id, estadia["data_entrada"]),
-                )
 
             conn.commit()
             return animal_id, estadia_id
@@ -228,7 +203,6 @@ def render_modal_animal(
         # Catálogos (recarregam consoante as versões em session_state)
         donos_df = _carregar_donos()
         alojamentos_df = _carregar_alojamentos()
-        garanhoes_df = _carregar_garanhoes()
 
         # ── Identificação ────────────────────────────────────────────────
         _section_title("Identificação")
@@ -417,31 +391,6 @@ def render_modal_animal(
                 key=f"{key}_es_aloj",
             )
 
-        garanhao_nome: Optional[str] = None
-        if motivo == "inseminacao":
-            if garanhoes_df.empty:
-                st.warning(
-                    "Não existem garanhões activos para selecionar. "
-                    "Crie primeiro um animal do tipo 'garanhão'.",
-                )
-            else:
-                def _fmt_gar(gid: Optional[int]) -> str:
-                    if gid is None:
-                        return "— Selecionar garanhão —"
-                    row = garanhoes_df.loc[garanhoes_df["id"] == gid]
-                    return str(row.iloc[0]["nome"]) if not row.empty else f"#{gid}"
-
-                garanhao_id = st.selectbox(
-                    "Garanhão para inseminação *",
-                    [None] + garanhoes_df["id"].tolist(),
-                    format_func=_fmt_gar,
-                    key=f"{key}_es_garanhao",
-                )
-                if garanhao_id is not None:
-                    row = garanhoes_df.loc[garanhoes_df["id"] == garanhao_id]
-                    if not row.empty:
-                        garanhao_nome = str(row.iloc[0]["nome"])
-
         # ── Observações + receptora ─────────────────────────────────────
         _section_title("Observações")
         observacoes = st.text_area(
@@ -518,10 +467,6 @@ def render_modal_animal(
             st.error("O alojamento é obrigatório quando o tipo é 'estadia'.")
             return
 
-        if motivo == "inseminacao" and not garanhao_nome:
-            st.error("Indique o garanhão para a inseminação.")
-            return
-
         # ── INSERTs ─────────────────────────────────────────────────────
         animal_payload = {
             "nome": nome_clean,
@@ -549,7 +494,6 @@ def render_modal_animal(
             "data_saida": data_saida or None,
             "motivo": motivo,
             "estado": "internado" if tipo_registo == "estadia" else "visitante",
-            "garanhao": garanhao_nome,
             "observacoes_entrada": (observacoes or "").strip() or None,
         }
 
