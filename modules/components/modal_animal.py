@@ -25,8 +25,45 @@ from modules.db import get_connection
 # ────────────────────────────────────────────────────────────────────────────
 
 TIPOS_ANIMAL = ["egua", "garanhao", "receptora"]
-TIPOS_REGISTO = ["estadia", "visita"]
+TIPOS_REGISTO = ["estadia", "visita", "externo"]
 MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
+
+
+def _ensure_externo_constraints() -> None:
+    """Garante que as CHECK constraints de `estadias` aceitam 'externo'.
+
+    O spec menciona explicitamente o `estado`, mas a coluna `tipo_registo`
+    também tem uma CHECK constraint que bloquearia o INSERT, pelo que ambas
+    são actualizadas. Idempotente — pode ser chamada múltiplas vezes.
+    """
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_estado_check"
+            )
+            cur.execute("""
+                ALTER TABLE estadias
+                ADD CONSTRAINT estadias_estado_check
+                CHECK (estado IN (
+                    'internado', 'visitante', 'gestante',
+                    'alta', 'sem_resultado', 'externo'
+                ))
+            """)
+            cur.execute(
+                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_tipo_registo_check"
+            )
+            cur.execute("""
+                ALTER TABLE estadias
+                ADD CONSTRAINT estadias_tipo_registo_check
+                CHECK (tipo_registo IN ('estadia', 'visita', 'externo'))
+            """)
+            conn.commit()
+            cur.close()
+    except Exception:
+        # Falha silenciosa para não bloquear a UI; será tentada novamente
+        # no próximo INSERT.
+        pass
 
 
 def _carregar_donos() -> pd.DataFrame:
@@ -363,10 +400,19 @@ def render_modal_animal(
                 "Tipo de registo",
                 TIPOS_REGISTO,
                 key=f"{key}_es_tipo_reg",
-                format_func=lambda x: x.capitalize(),
+                format_func=lambda x: {
+                    "estadia": "Estadia — fica internada no centro",
+                    "visita": "Visita — vem no dia e vai embora",
+                    "externo": "Externo — não vem ao centro / sémen enviado",
+                }.get(x, x.capitalize()),
+            )
+            motivo_label = (
+                "Motivo (opcional)"
+                if tipo_registo == "externo"
+                else "Motivo"
             )
             motivo = st.selectbox(
-                "Motivo",
+                motivo_label,
                 MOTIVOS,
                 key=f"{key}_es_motivo",
                 format_func=lambda x: {
@@ -378,44 +424,55 @@ def render_modal_animal(
                 }.get(x, x.capitalize()),
             )
         with e2:
+            dt_label = (
+                "Data do serviço / envio"
+                if tipo_registo == "externo"
+                else "Data de entrada"
+            )
             data_entrada = st.date_input(
-                "Data de entrada",
+                dt_label,
                 key=f"{key}_es_dt_ent",
                 format="DD/MM/YYYY",
             )
-            data_saida = st.date_input(
-                "Data prevista de saída",
-                key=f"{key}_es_dt_saida",
-                format="DD/MM/YYYY",
-            )
+            if tipo_registo != "externo":
+                data_saida = st.date_input(
+                    "Data prevista de saída",
+                    key=f"{key}_es_dt_saida",
+                    format="DD/MM/YYYY",
+                )
+            else:
+                # Limpa qualquer valor anterior — não aplicável a 'externo'
+                data_saida = None
+                st.session_state[f"{key}_es_dt_saida"] = None
 
         alojamento_id: Optional[int] = None
-        if alojamentos_df.empty:
-            if tipo_registo == "estadia":
-                st.warning(
-                    "Não existem alojamentos activos. Crie um em "
-                    "Definições → Alojamentos antes de registar uma estadia.",
-                )
-        else:
-            def _fmt_aloj(aid: Optional[int]) -> str:
-                if aid is None:
-                    return "— Selecionar alojamento —"
-                row = alojamentos_df.loc[alojamentos_df["id"] == aid]
-                if row.empty:
-                    return f"#{aid}"
-                r = row.iloc[0]
-                return f"{r['nome']} ({r['tipo']})"
+        if tipo_registo != "externo":
+            if alojamentos_df.empty:
+                if tipo_registo == "estadia":
+                    st.warning(
+                        "Não existem alojamentos activos. Crie um em "
+                        "Definições → Alojamentos antes de registar uma estadia.",
+                    )
+            else:
+                def _fmt_aloj(aid: Optional[int]) -> str:
+                    if aid is None:
+                        return "— Selecionar alojamento —"
+                    row = alojamentos_df.loc[alojamentos_df["id"] == aid]
+                    if row.empty:
+                        return f"#{aid}"
+                    r = row.iloc[0]
+                    return f"{r['nome']} ({r['tipo']})"
 
-            alojamento_id = st.selectbox(
-                (
-                    "Alojamento *"
-                    if tipo_registo == "estadia"
-                    else "Alojamento (opcional)"
-                ),
-                [None] + alojamentos_df["id"].tolist(),
-                format_func=_fmt_aloj,
-                key=f"{key}_es_aloj",
-            )
+                alojamento_id = st.selectbox(
+                    (
+                        "Alojamento *"
+                        if tipo_registo == "estadia"
+                        else "Alojamento (opcional)"
+                    ),
+                    [None] + alojamentos_df["id"].tolist(),
+                    format_func=_fmt_aloj,
+                    key=f"{key}_es_aloj",
+                )
 
         # ── Observações + receptora ─────────────────────────────────────
         _section_title("Observações")
@@ -479,6 +536,10 @@ def render_modal_animal(
             st.error("O alojamento é obrigatório quando o tipo é 'estadia'.")
             return
 
+        # Garante que as CHECK constraints aceitam 'externo' antes do INSERT.
+        if tipo_registo == "externo":
+            _ensure_externo_constraints()
+
         # ── INSERTs ─────────────────────────────────────────────────────
         animal_payload = {
             "nome": nome_clean,
@@ -498,6 +559,12 @@ def render_modal_animal(
             "observacoes": (observacoes or "").strip() or None,
             "is_receptora": is_receptora,
         }
+        if tipo_registo == "externo":
+            estado_inicial = "externo"
+        elif tipo_registo == "estadia":
+            estado_inicial = "internado"
+        else:
+            estado_inicial = "visitante"
         estadia_payload = {
             "tipo_registo": tipo_registo,
             "alojamento_id": alojamento_id,
@@ -505,7 +572,7 @@ def render_modal_animal(
             "data_entrada": data_entrada,
             "data_saida": data_saida or None,
             "motivo": motivo,
-            "estado": "internado" if tipo_registo == "estadia" else "visitante",
+            "estado": estado_inicial,
             "observacoes_entrada": (observacoes or "").strip() or None,
         }
 
