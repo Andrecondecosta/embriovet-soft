@@ -85,11 +85,32 @@ def _carregar_alojamentos() -> pd.DataFrame:
 # Validações & inserts
 # ────────────────────────────────────────────────────────────────────────────
 
-def _existe_animal_com_nome(nome: str) -> bool:
-    sql = "SELECT 1 FROM animais WHERE LOWER(nome) = LOWER(%s) LIMIT 1"
+def _existe_animal_com_nome_e_dono(nome: str, dono_id: int) -> bool:
+    """True se já existir um animal com o mesmo nome E o mesmo proprietário."""
+    sql = (
+        "SELECT 1 FROM animais "
+        "WHERE LOWER(nome) = LOWER(%s) AND dono_id = %s LIMIT 1"
+    )
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute(sql, (nome,))
+        cur.execute(sql, (nome, int(dono_id)))
+        existe = cur.fetchone() is not None
+        cur.close()
+        return existe
+
+
+def _existe_animal_com_nome_outro_dono(nome: str, dono_id: int) -> bool:
+    """True se já existir um animal com o mesmo nome de OUTRO proprietário.
+
+    Usado para mostrar um aviso informativo (não bloqueia a criação).
+    """
+    sql = (
+        "SELECT 1 FROM animais "
+        "WHERE LOWER(nome) = LOWER(%s) AND dono_id IS DISTINCT FROM %s LIMIT 1"
+    )
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (nome, int(dono_id) if dono_id is not None else None))
         existe = cur.fetchone() is not None
         cur.close()
         return existe
@@ -489,6 +510,18 @@ def render_modal_animal(
 
         st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
+        # Aviso informativo (não bloqueia) — nome já em uso por outro proprietário
+        nome_preview = (nome or "").strip()
+        if (
+            nome_preview
+            and dono_id
+            and _existe_animal_com_nome_outro_dono(nome_preview, int(dono_id))
+        ):
+            st.warning(
+                "Já existe um animal com este nome de outro proprietário — "
+                "confirme que é um animal diferente.",
+            )
+
         # ── Botões ──────────────────────────────────────────────────────
         b1, b2 = st.columns(2)
         with b1:
@@ -521,15 +554,19 @@ def render_modal_animal(
         if not nome_clean:
             st.error("O nome do animal é obrigatório.")
             return
-        if _existe_animal_com_nome(nome_clean):
-            st.error(
-                f"Já existe um animal com o nome '{nome_clean}'. "
-                "Escolha outro nome.",
-            )
-            return
 
         if not dono_id:
             st.error("Selecione um proprietário ou crie um novo.")
+            return
+
+        # Bloquear apenas se já existir animal com o MESMO nome E o MESMO
+        # proprietário (mesmo nome com outro proprietário é permitido — só
+        # mostra aviso informativo acima).
+        if _existe_animal_com_nome_e_dono(nome_clean, int(dono_id)):
+            st.error(
+                f"Já existe um animal com o nome '{nome_clean}' deste "
+                "proprietário. Escolha outro nome.",
+            )
             return
 
         if tipo_registo == "estadia" and not alojamento_id:
