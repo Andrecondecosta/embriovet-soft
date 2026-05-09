@@ -257,28 +257,21 @@ def render_search_animal(
         st.caption(f"Sem resultados para “{termo_clean}”.")
         return _animal_seleccionado(key)
 
-    # Auto-selecção quando há um único resultado
-    if len(df) == 1:
-        row = df.iloc[0]
-        sel = {
-            "id": int(row["id"]),
-            "nome": str(row["nome"]),
-            "proprietario": (
-                str(row["proprietario"]) if pd.notna(row["proprietario"]) else None
-            ),
-        }
-        st.session_state[f"{key}_selected"] = sel
-        st.success(f"Selecionado automaticamente: **{_fmt_animal_option(row)}**")
-        if on_select is not None and st.session_state.get(f"{key}_last_auto") != sel["id"]:
-            st.session_state[f"{key}_last_auto"] = sel["id"]
-            try:
-                on_select(sel["id"], sel["nome"], sel["proprietario"])
-            except Exception as exc:  # pragma: no cover
-                st.warning(f"Selecção feita, mas callback falhou: {exc}")
-        return sel
-
-    # Selectbox com múltiplos resultados — formato "Nome (Proprietário)"
+    # Selectbox com os resultados — sempre visível, mesmo com 1 resultado.
+    # Formato "Nome (Proprietário)" desambigua animais com nome igual.
     opcoes = [None] + df["id"].tolist()
+
+    # Default: se já existe selecção válida (ex.: animal recém-criado via "+"),
+    # pré-selecciona-a no dropdown; caso contrário fica no placeholder.
+    sel_atual = st.session_state.get(f"{key}_selected") or {}
+    sel_id = sel_atual.get("id")
+    select_key = f"{key}_select"
+    if (
+        sel_id is not None
+        and sel_id in opcoes
+        and select_key not in st.session_state
+    ):
+        st.session_state[select_key] = sel_id
 
     def _fmt(idx: Optional[int]) -> str:
         if idx is None:
@@ -292,7 +285,7 @@ def render_search_animal(
         "Resultados",
         opcoes,
         format_func=_fmt,
-        key=f"{key}_select",
+        key=select_key,
     )
 
     if selected_id is not None:

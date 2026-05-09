@@ -85,7 +85,10 @@ def _carregar_alojamentos() -> pd.DataFrame:
 
 
 def _has_animais_resultados(termo: str) -> bool:
-    """Devolve True se houver pelo menos um animal cujo nome contém `termo`."""
+    """Devolve True se houver pelo menos um animal cujo nome contém `termo`.
+
+    Mantido como utilitário interno; pode ser usado por validações futuras.
+    """
     sql = (
         "SELECT 1 FROM animais "
         "WHERE ativo = TRUE AND LOWER(nome) LIKE LOWER(%s) LIMIT 1"
@@ -241,23 +244,16 @@ def _render_modal_nova_estadia() -> None:
                 label="Animal *",
             )
 
-        termo = (st.session_state.get("estadia_animal_search_termo") or "").strip()
         with col_plus:
             st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            mostrar_plus = (
-                animal is None
-                and len(termo) >= 2
-                and not _has_animais_resultados(termo)
-            )
-            if mostrar_plus:
-                if st.button(
-                    "➕ Criar",
-                    key="ne_btn_criar_animal",
-                    help="Criar novo animal com este nome",
-                    width="stretch",
-                ):
-                    st.session_state["abrir_modal_animal_para_estadia"] = True
-                    st.rerun()
+            if st.button(
+                "➕ Criar",
+                key="ne_btn_criar_animal",
+                help="Criar novo animal",
+                width="stretch",
+            ):
+                st.session_state["abrir_modal_animal_para_estadia"] = True
+                st.rerun()
 
         if not animal:
             st.caption("Pesquise um animal pelo nome ou crie um novo.")
