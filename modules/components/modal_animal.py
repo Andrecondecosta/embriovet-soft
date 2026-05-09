@@ -17,7 +17,6 @@ from typing import Callable, Optional
 import pandas as pd
 import streamlit as st
 
-from modules.components.modal_proprietario import render_modal_proprietario
 from modules.db import get_connection
 
 
@@ -159,14 +158,60 @@ def render_modal_animal(
 
     dono_version_key = f"{key}_dono_version"
     applied_prop_key = f"{key}_applied_novo_prop"
+    draft_applied_flag = f"{key}_draft_applied"
     if dono_version_key not in st.session_state:
         st.session_state[dono_version_key] = 0
+
+    # ── Restauro do draft (vindo do fluxo "+ Novo proprietário") ────────────
+    # Aplicamos UMA VEZ por reabertura — Streamlit exige que o set seja
+    # feito ANTES dos widgets serem instanciados.
+    draft = st.session_state.get("modal_animal_draft")
+    if draft and not st.session_state.get(draft_applied_flag):
+        st.session_state[f"{key}_an_nome"] = draft.get("nome", "")
+        if draft.get("tipo") in TIPOS_ANIMAL:
+            st.session_state[f"{key}_an_tipo"] = draft["tipo"]
+        st.session_state[f"{key}_an_raca"] = draft.get("raca", "")
+        st.session_state[f"{key}_an_pelagem"] = draft.get("pelagem", "")
+        st.session_state[f"{key}_an_dt_nasc"] = draft.get("data_nascimento")
+        st.session_state[f"{key}_an_reg"] = draft.get("numero_registo", "")
+        st.session_state[f"{key}_an_chip"] = draft.get("chip", "")
+        st.session_state[f"{key}_an_altura"] = float(draft.get("altura") or 0.0)
+        st.session_state[f"{key}_an_peso"] = float(draft.get("peso") or 0.0)
+        st.session_state[f"{key}_an_pai"] = draft.get("pai", "")
+        st.session_state[f"{key}_an_mae"] = draft.get("mae", "")
+        st.session_state[f"{key}_an_avo_p"] = draft.get("avo_paterno", "")
+        st.session_state[f"{key}_an_avo_m"] = draft.get("avo_materno", "")
+        if draft.get("tipo_registo") in TIPOS_REGISTO:
+            st.session_state[f"{key}_es_tipo_reg"] = draft["tipo_registo"]
+        if draft.get("motivo") in MOTIVOS:
+            st.session_state[f"{key}_es_motivo"] = draft["motivo"]
+        if draft.get("data_entrada"):
+            st.session_state[f"{key}_es_dt_ent"] = draft["data_entrada"]
+        st.session_state[f"{key}_es_dt_saida"] = draft.get("data_saida")
+        if draft.get("alojamento_id") is not None:
+            st.session_state[f"{key}_es_aloj"] = draft["alojamento_id"]
+        st.session_state[f"{key}_an_obs"] = draft.get("observacoes", "")
+        st.session_state[f"{key}_an_is_receptora"] = bool(draft.get("is_receptora"))
+        st.session_state[draft_applied_flag] = True
 
     @st.dialog("Novo animal", width="large")
     def _modal() -> None:
         # Catálogos (recarregam consoante as versões em session_state)
         donos_df = _carregar_donos()
         alojamentos_df = _carregar_alojamentos()
+
+        # Inicializa session_state para widgets sem `value=` para evitar
+        # avisos do Streamlit ("created with a default value but also had
+        # its value set via the Session State API").
+        for k_init, v_default in (
+            (f"{key}_an_dt_nasc", None),
+            (f"{key}_an_altura", 0.0),
+            (f"{key}_an_peso", 0.0),
+            (f"{key}_es_dt_ent", date.today()),
+            (f"{key}_es_dt_saida", None),
+        ):
+            if k_init not in st.session_state:
+                st.session_state[k_init] = v_default
 
         # ── Identificação ────────────────────────────────────────────────
         _section_title("Identificação")
@@ -192,7 +237,6 @@ def render_modal_animal(
             pelagem = st.text_input("Pelagem / cor", key=f"{key}_an_pelagem")
             data_nascimento = st.date_input(
                 "Data de nascimento",
-                value=None,
                 key=f"{key}_an_dt_nasc",
                 format="DD/MM/YYYY",
             )
@@ -203,11 +247,11 @@ def render_modal_animal(
             chip = st.text_input("Chip electrónico", key=f"{key}_an_chip")
             altura = st.number_input(
                 "Altura (cm)", min_value=0.0, max_value=300.0,
-                value=0.0, step=1.0, key=f"{key}_an_altura",
+                step=1.0, key=f"{key}_an_altura",
             )
             peso = st.number_input(
                 "Peso (kg)", min_value=0.0, max_value=2000.0,
-                value=0.0, step=1.0, key=f"{key}_an_peso",
+                step=1.0, key=f"{key}_an_peso",
             )
 
         # ── Proprietário ────────────────────────────────────────────────
@@ -257,16 +301,45 @@ def render_modal_animal(
                 key=f"{key}_btn_novo_dono",
                 width="stretch",
             ):
-                render_modal_proprietario(
-                    key="modal_prop_dentro_animal",
-                    on_success=lambda dono_id, dono_nome: (
-                        st.session_state.update({
-                            "novo_prop_id": dono_id,
-                            "novo_prop_nome": dono_nome,
-                        }),
-                        st.rerun(),
+                # Workaround: Streamlit não permite diálogos aninhados.
+                # Guardamos um snapshot do formulário em session_state e
+                # delegamos a abertura do modal de proprietário ao orquestrador
+                # da página (que corre em cada rerun).
+                st.session_state["modal_animal_draft"] = {
+                    "nome": st.session_state.get(f"{key}_an_nome", ""),
+                    "tipo": st.session_state.get(f"{key}_an_tipo", tipo_default),
+                    "raca": st.session_state.get(f"{key}_an_raca", ""),
+                    "pelagem": st.session_state.get(f"{key}_an_pelagem", ""),
+                    "data_nascimento": st.session_state.get(f"{key}_an_dt_nasc"),
+                    "numero_registo": st.session_state.get(f"{key}_an_reg", ""),
+                    "chip": st.session_state.get(f"{key}_an_chip", ""),
+                    "altura": st.session_state.get(f"{key}_an_altura", 0.0),
+                    "peso": st.session_state.get(f"{key}_an_peso", 0.0),
+                    "pai": st.session_state.get(f"{key}_an_pai", ""),
+                    "mae": st.session_state.get(f"{key}_an_mae", ""),
+                    "avo_paterno": st.session_state.get(f"{key}_an_avo_p", ""),
+                    "avo_materno": st.session_state.get(f"{key}_an_avo_m", ""),
+                    "tipo_registo": st.session_state.get(
+                        f"{key}_es_tipo_reg", "estadia",
                     ),
-                )
+                    "motivo": st.session_state.get(
+                        f"{key}_es_motivo", "inseminacao",
+                    ),
+                    "data_entrada": st.session_state.get(
+                        f"{key}_es_dt_ent", date.today(),
+                    ),
+                    "data_saida": st.session_state.get(f"{key}_es_dt_saida"),
+                    "alojamento_id": st.session_state.get(f"{key}_es_aloj"),
+                    "observacoes": st.session_state.get(f"{key}_an_obs", ""),
+                    "is_receptora": bool(
+                        st.session_state.get(f"{key}_an_is_receptora", False),
+                    ),
+                }
+                st.session_state["abrir_modal_prop_standalone"] = True
+                # Limpar a flag de "draft já aplicado" para que, ao reabrir,
+                # os campos sejam realmente repopulados.
+                st.session_state.pop(draft_applied_flag, None)
+                st.rerun()
 
         # ── Pedigree ────────────────────────────────────────────────────
         _section_title("Pedigree")
@@ -307,13 +380,11 @@ def render_modal_animal(
         with e2:
             data_entrada = st.date_input(
                 "Data de entrada",
-                value=date.today(),
                 key=f"{key}_es_dt_ent",
                 format="DD/MM/YYYY",
             )
             data_saida = st.date_input(
                 "Data prevista de saída",
-                value=None,
                 key=f"{key}_es_dt_saida",
                 format="DD/MM/YYYY",
             )
@@ -380,6 +451,9 @@ def render_modal_animal(
         if cancelar:
             st.session_state.pop("novo_prop_id", None)
             st.session_state.pop("novo_prop_nome", None)
+            st.session_state.pop("modal_animal_draft", None)
+            st.session_state.pop("reabrir_modal_animal", None)
+            st.session_state.pop(draft_applied_flag, None)
             st.rerun()
 
         if not guardar:
@@ -453,6 +527,9 @@ def render_modal_animal(
         st.session_state.pop("novo_prop_id", None)
         st.session_state.pop("novo_prop_nome", None)
         st.session_state.pop(applied_prop_key, None)
+        st.session_state.pop("modal_animal_draft", None)
+        st.session_state.pop("reabrir_modal_animal", None)
+        st.session_state.pop(draft_applied_flag, None)
         st.session_state[dono_version_key] += 1
         st.success(
             f"Animal '{nome_clean}' criado e estadia/visita registada.",

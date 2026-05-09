@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from modules.components.modal_animal import render_modal_animal
+from modules.components.modal_proprietario import render_modal_proprietario
 from modules.db import get_connection
 
 
@@ -96,6 +97,38 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
 
 def run_estadias_page(context: dict):
     """Página de Estadias e Visitas."""
+
+    # ── Orquestração do "wizard" de criação de animal + proprietário ────────
+    # (Workaround para a limitação do Streamlit: não permite diálogos
+    # aninhados — usamos session_state como fila para abrir/reabrir os
+    # modais em reruns sucessivos.)
+    if st.session_state.get("abrir_modal_prop_standalone"):
+        del st.session_state["abrir_modal_prop_standalone"]
+        render_modal_proprietario(
+            key="modal_prop_standalone",
+            on_success=lambda dono_id, dono_nome: (
+                st.session_state.update({
+                    "novo_prop_id": dono_id,
+                    "novo_prop_nome": dono_nome,
+                    "reabrir_modal_animal": True,
+                }),
+                st.rerun(),
+            ),
+        )
+
+    if st.session_state.get("reabrir_modal_animal"):
+        del st.session_state["reabrir_modal_animal"]
+        render_modal_animal(
+            key="modal_nova_estadia",
+            tipo_default="egua",
+            on_success=lambda animal_id, animal_nome, estadia_id: (
+                st.session_state.update({
+                    "ultima_estadia_criada": estadia_id,
+                    "ultimo_animal_criado": animal_id,
+                }),
+                st.rerun(),
+            ),
+        )
 
     # ── Drill-down para ficha do animal ─────────────────────────────────────
     if st.session_state.get("ver_animal_id") is not None:
