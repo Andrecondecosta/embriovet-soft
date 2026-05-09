@@ -1,0 +1,578 @@
+"""Modal de criação rápida de um animal + estadia/visita associada.
+
+Uso típico:
+    if st.button("+ Novo animal"):
+        render_modal_animal(
+            "modal_animal_egua",
+            tipo_default="egua",
+            on_success=lambda aid, nome, eid: st.session_state.update(...),
+        )
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Callable, Optional
+
+import pandas as pd
+import streamlit as st
+
+from modules.db import get_connection
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Catálogos
+# ────────────────────────────────────────────────────────────────────────────
+
+TIPOS_ANIMAL = ["egua", "garanhao", "receptora"]
+TIPOS_REGISTO = ["estadia", "visita"]
+MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
+
+
+def _carregar_donos() -> pd.DataFrame:
+    sql = "SELECT id, nome FROM dono WHERE ativo = TRUE ORDER BY LOWER(nome)"
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn)
+
+
+def _carregar_alojamentos() -> pd.DataFrame:
+    sql = (
+        "SELECT id, nome, tipo, capacidade FROM alojamentos "
+        "WHERE ativo = TRUE ORDER BY tipo, LOWER(nome)"
+    )
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn)
+
+
+def _carregar_garanhoes() -> pd.DataFrame:
+    sql = (
+        "SELECT id, nome FROM animais "
+        "WHERE tipo = 'garanhao' AND COALESCE(ativo, TRUE) = TRUE "
+        "ORDER BY LOWER(nome)"
+    )
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Validações & inserts
+# ────────────────────────────────────────────────────────────────────────────
+
+def _existe_animal_com_nome(nome: str) -> bool:
+    sql = "SELECT 1 FROM animais WHERE LOWER(nome) = LOWER(%s) LIMIT 1"
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (nome,))
+        existe = cur.fetchone() is not None
+        cur.close()
+        return existe
+
+
+def _existe_dono_com_nome(nome: str) -> bool:
+    sql = "SELECT 1 FROM dono WHERE LOWER(nome) = LOWER(%s) LIMIT 1"
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (nome,))
+        existe = cur.fetchone() is not None
+        cur.close()
+        return existe
+
+
+def _inserir_dono_inline(payload: dict) -> int:
+    sql = """
+        INSERT INTO dono (
+            nome, nif, email, telemovel, cidade, ativo
+        ) VALUES (%s, %s, %s, %s, %s, TRUE)
+        RETURNING id
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            sql,
+            (
+                payload["nome"],
+                payload.get("nif") or None,
+                payload.get("email") or None,
+                payload.get("telemovel") or None,
+                payload.get("cidade") or None,
+            ),
+        )
+        new_id = int(cur.fetchone()[0])
+        conn.commit()
+        cur.close()
+        return new_id
+
+
+def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
+    """Cria animal + estadia (e acompanhamento_inseminacao se aplicável).
+
+    Devolve `(animal_id, estadia_id)`. Tudo numa única transacção.
+    """
+    sql_animal = """
+        INSERT INTO animais (
+            nome, tipo, raca, pelagem, data_nascimento, numero_registo, chip,
+            altura, peso, dono_id, pai, mae, avo_paterno, avo_materno,
+            observacoes, is_receptora, ativo
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, TRUE
+        ) RETURNING id
+    """
+    sql_estadia = """
+        INSERT INTO estadias (
+            tipo_registo, animal_id, alojamento_id, dono_id,
+            data_entrada, data_saida, motivo, estado, garanhao,
+            observacoes_entrada
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        ) RETURNING id
+    """
+    sql_acomp = """
+        INSERT INTO acompanhamento_inseminacao (
+            estadia_id, animal_id, data_inseminacao
+        ) VALUES (%s, %s, %s)
+    """
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                sql_animal,
+                (
+                    animal["nome"], animal["tipo"], animal.get("raca"),
+                    animal.get("pelagem"), animal.get("data_nascimento"),
+                    animal.get("numero_registo"), animal.get("chip"),
+                    animal.get("altura"), animal.get("peso"),
+                    animal.get("dono_id"),
+                    animal.get("pai"), animal.get("mae"),
+                    animal.get("avo_paterno"), animal.get("avo_materno"),
+                    animal.get("observacoes"),
+                    bool(animal.get("is_receptora", False)),
+                ),
+            )
+            animal_id = int(cur.fetchone()[0])
+
+            cur.execute(
+                sql_estadia,
+                (
+                    estadia["tipo_registo"], animal_id,
+                    estadia.get("alojamento_id"), estadia["dono_id"],
+                    estadia["data_entrada"], estadia.get("data_saida"),
+                    estadia["motivo"], estadia["estado"],
+                    estadia.get("garanhao"),
+                    estadia.get("observacoes_entrada"),
+                ),
+            )
+            estadia_id = int(cur.fetchone()[0])
+
+            if estadia["motivo"] == "inseminacao":
+                cur.execute(
+                    sql_acomp,
+                    (estadia_id, animal_id, estadia["data_entrada"]),
+                )
+
+            conn.commit()
+            return animal_id, estadia_id
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# UI
+# ────────────────────────────────────────────────────────────────────────────
+
+def _section_title(label: str) -> None:
+    st.markdown(
+        f"<div style='font-size:.78rem;color:#64748b;text-transform:uppercase;"
+        f"letter-spacing:.6px;font-weight:700;margin:14px 0 6px;'>{label}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_modal_animal(
+    key: str,
+    tipo_default: str = "egua",
+    on_success: Optional[Callable[[int, str, int], None]] = None,
+) -> None:
+    """Abre um modal completo para criar um animal + estadia/visita.
+
+    Parâmetros
+    ----------
+    key : str
+        Prefixo único para os widgets (necessário se usares mais que um
+        modal na mesma página).
+    tipo_default : str
+        Valor pré-seleccionado em "tipo" (egua/garanhao/receptora).
+    on_success : Optional[Callable[[int, str, int], None]]
+        Callback `(animal_id, animal_nome, estadia_id)` invocado após
+        criação bem-sucedida.
+    """
+
+    if tipo_default not in TIPOS_ANIMAL:
+        tipo_default = "egua"
+
+    show_dono_form_key = f"{key}_show_new_dono"
+    dono_version_key = f"{key}_dono_version"
+    if show_dono_form_key not in st.session_state:
+        st.session_state[show_dono_form_key] = False
+    if dono_version_key not in st.session_state:
+        st.session_state[dono_version_key] = 0
+
+    @st.dialog("Novo animal", width="large")
+    def _modal() -> None:
+        # Catálogos (recarregam consoante as versões em session_state)
+        donos_df = _carregar_donos()
+        alojamentos_df = _carregar_alojamentos()
+        garanhoes_df = _carregar_garanhoes()
+
+        # ── Identificação ────────────────────────────────────────────────
+        _section_title("Identificação")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            nome = st.text_input(
+                "Nome *", key=f"{key}_an_nome",
+                placeholder="Ex.: Tornado",
+            )
+            tipo = st.selectbox(
+                "Tipo",
+                TIPOS_ANIMAL,
+                index=TIPOS_ANIMAL.index(tipo_default),
+                key=f"{key}_an_tipo",
+                format_func=lambda x: {
+                    "egua": "Égua",
+                    "garanhao": "Garanhão",
+                    "receptora": "Receptora",
+                }.get(x, x),
+            )
+            raca = st.text_input("Raça", key=f"{key}_an_raca")
+        with c2:
+            pelagem = st.text_input("Pelagem / cor", key=f"{key}_an_pelagem")
+            data_nascimento = st.date_input(
+                "Data de nascimento",
+                value=None,
+                key=f"{key}_an_dt_nasc",
+                format="DD/MM/YYYY",
+            )
+            numero_registo = st.text_input(
+                "Nº de registo / passaporte", key=f"{key}_an_reg",
+            )
+        with c3:
+            chip = st.text_input("Chip electrónico", key=f"{key}_an_chip")
+            altura = st.number_input(
+                "Altura (cm)", min_value=0.0, max_value=300.0,
+                value=0.0, step=1.0, key=f"{key}_an_altura",
+            )
+            peso = st.number_input(
+                "Peso (kg)", min_value=0.0, max_value=2000.0,
+                value=0.0, step=1.0, key=f"{key}_an_peso",
+            )
+
+        # ── Proprietário ────────────────────────────────────────────────
+        _section_title("Proprietário")
+        if donos_df.empty:
+            st.info(
+                "Ainda não existem proprietários activos. Crie um abaixo "
+                "para continuar.",
+            )
+            dono_id: Optional[int] = None
+        else:
+            opcoes = [None] + donos_df["id"].tolist()
+
+            def _fmt_dono(did: Optional[int]) -> str:
+                if did is None:
+                    return "— Selecionar proprietário —"
+                row = donos_df.loc[donos_df["id"] == did]
+                return str(row.iloc[0]["nome"]) if not row.empty else f"#{did}"
+
+            dono_id = st.selectbox(
+                "Proprietário *",
+                opcoes,
+                format_func=_fmt_dono,
+                key=f"{key}_an_dono_{st.session_state[dono_version_key]}",
+            )
+
+        col_btn, _ = st.columns([1, 2])
+        with col_btn:
+            if st.button(
+                "+ Novo proprietário",
+                key=f"{key}_btn_toggle_new_dono",
+                width="stretch",
+            ):
+                st.session_state[show_dono_form_key] = (
+                    not st.session_state[show_dono_form_key]
+                )
+                st.rerun()
+
+        novo_dono_payload: Optional[dict] = None
+        if st.session_state[show_dono_form_key]:
+            with st.container(border=True):
+                st.markdown(
+                    "<div style='font-size:.78rem;color:#0f172a;font-weight:600;"
+                    "margin-bottom:6px;'>Novo proprietário</div>",
+                    unsafe_allow_html=True,
+                )
+                d1, d2 = st.columns(2)
+                with d1:
+                    nd_nome = st.text_input(
+                        "Nome *", key=f"{key}_nd_nome",
+                        placeholder="Obrigatório",
+                    )
+                    nd_nif = st.text_input("NIF", key=f"{key}_nd_nif")
+                    nd_email = st.text_input("Email", key=f"{key}_nd_email")
+                with d2:
+                    nd_tel = st.text_input(
+                        "Telemóvel", key=f"{key}_nd_tel",
+                    )
+                    nd_cidade = st.text_input(
+                        "Cidade", key=f"{key}_nd_cidade",
+                    )
+                novo_dono_payload = {
+                    "nome": (nd_nome or "").strip(),
+                    "nif": (nd_nif or "").strip(),
+                    "email": (nd_email or "").strip(),
+                    "telemovel": (nd_tel or "").strip(),
+                    "cidade": (nd_cidade or "").strip(),
+                }
+
+        # ── Pedigree ────────────────────────────────────────────────────
+        _section_title("Pedigree")
+        p1, p2 = st.columns(2)
+        with p1:
+            pai = st.text_input("Pai", key=f"{key}_an_pai")
+            avo_paterno = st.text_input(
+                "Avô paterno", key=f"{key}_an_avo_p",
+            )
+        with p2:
+            mae = st.text_input("Mãe", key=f"{key}_an_mae")
+            avo_materno = st.text_input(
+                "Avô materno", key=f"{key}_an_avo_m",
+            )
+
+        # ── Estadia / Visita ────────────────────────────────────────────
+        _section_title("Estadia / Visita")
+        e1, e2 = st.columns(2)
+        with e1:
+            tipo_registo = st.selectbox(
+                "Tipo de registo",
+                TIPOS_REGISTO,
+                key=f"{key}_es_tipo_reg",
+                format_func=lambda x: x.capitalize(),
+            )
+            motivo = st.selectbox(
+                "Motivo",
+                MOTIVOS,
+                key=f"{key}_es_motivo",
+                format_func=lambda x: {
+                    "inseminacao": "Inseminação",
+                    "colheita": "Colheita",
+                    "diagnostico": "Diagnóstico",
+                    "tratamento": "Tratamento",
+                    "embriao": "Embrião",
+                }.get(x, x.capitalize()),
+            )
+        with e2:
+            data_entrada = st.date_input(
+                "Data de entrada",
+                value=date.today(),
+                key=f"{key}_es_dt_ent",
+                format="DD/MM/YYYY",
+            )
+            data_saida = st.date_input(
+                "Data prevista de saída",
+                value=None,
+                key=f"{key}_es_dt_saida",
+                format="DD/MM/YYYY",
+            )
+
+        alojamento_id: Optional[int] = None
+        if alojamentos_df.empty:
+            if tipo_registo == "estadia":
+                st.warning(
+                    "Não existem alojamentos activos. Crie um em "
+                    "Definições → Alojamentos antes de registar uma estadia.",
+                )
+        else:
+            def _fmt_aloj(aid: Optional[int]) -> str:
+                if aid is None:
+                    return "— Selecionar alojamento —"
+                row = alojamentos_df.loc[alojamentos_df["id"] == aid]
+                if row.empty:
+                    return f"#{aid}"
+                r = row.iloc[0]
+                return f"{r['nome']} ({r['tipo']})"
+
+            alojamento_id = st.selectbox(
+                (
+                    "Alojamento *"
+                    if tipo_registo == "estadia"
+                    else "Alojamento (opcional)"
+                ),
+                [None] + alojamentos_df["id"].tolist(),
+                format_func=_fmt_aloj,
+                key=f"{key}_es_aloj",
+            )
+
+        garanhao_nome: Optional[str] = None
+        if motivo == "inseminacao":
+            if garanhoes_df.empty:
+                st.warning(
+                    "Não existem garanhões activos para selecionar. "
+                    "Crie primeiro um animal do tipo 'garanhão'.",
+                )
+            else:
+                def _fmt_gar(gid: Optional[int]) -> str:
+                    if gid is None:
+                        return "— Selecionar garanhão —"
+                    row = garanhoes_df.loc[garanhoes_df["id"] == gid]
+                    return str(row.iloc[0]["nome"]) if not row.empty else f"#{gid}"
+
+                garanhao_id = st.selectbox(
+                    "Garanhão para inseminação *",
+                    [None] + garanhoes_df["id"].tolist(),
+                    format_func=_fmt_gar,
+                    key=f"{key}_es_garanhao",
+                )
+                if garanhao_id is not None:
+                    row = garanhoes_df.loc[garanhoes_df["id"] == garanhao_id]
+                    if not row.empty:
+                        garanhao_nome = str(row.iloc[0]["nome"])
+
+        # ── Observações + receptora ─────────────────────────────────────
+        _section_title("Observações")
+        observacoes = st.text_area(
+            "Observações", key=f"{key}_an_obs", height=80,
+        )
+
+        is_receptora = False
+        if tipo == "egua":
+            is_receptora = st.checkbox(
+                "É receptora",
+                key=f"{key}_an_is_receptora",
+            )
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+        # ── Botões ──────────────────────────────────────────────────────
+        b1, b2 = st.columns(2)
+        with b1:
+            cancelar = st.button(
+                "Cancelar",
+                key=f"{key}_btn_cancelar",
+                width="stretch",
+            )
+        with b2:
+            guardar = st.button(
+                "Guardar animal",
+                type="primary",
+                key=f"{key}_btn_guardar",
+                width="stretch",
+            )
+
+        if cancelar:
+            st.session_state[show_dono_form_key] = False
+            st.rerun()
+
+        if not guardar:
+            return
+
+        # ── Validações ──────────────────────────────────────────────────
+        nome_clean = (nome or "").strip()
+        if not nome_clean:
+            st.error("O nome do animal é obrigatório.")
+            return
+        if _existe_animal_com_nome(nome_clean):
+            st.error(
+                f"Já existe um animal com o nome '{nome_clean}'. "
+                "Escolha outro nome.",
+            )
+            return
+
+        # Resolver dono_id (criar inline se necessário)
+        if (
+            st.session_state[show_dono_form_key]
+            and novo_dono_payload is not None
+            and novo_dono_payload["nome"]
+        ):
+            if _existe_dono_com_nome(novo_dono_payload["nome"]):
+                st.error(
+                    f"Já existe um proprietário com o nome "
+                    f"'{novo_dono_payload['nome']}'.",
+                )
+                return
+            try:
+                dono_id = _inserir_dono_inline(novo_dono_payload)
+            except Exception as exc:
+                st.error(f"Erro ao criar proprietário: {exc}")
+                return
+
+        if not dono_id:
+            st.error("Selecione um proprietário ou crie um novo.")
+            return
+
+        if tipo_registo == "estadia" and not alojamento_id:
+            st.error("O alojamento é obrigatório quando o tipo é 'estadia'.")
+            return
+
+        if motivo == "inseminacao" and not garanhao_nome:
+            st.error("Indique o garanhão para a inseminação.")
+            return
+
+        # ── INSERTs ─────────────────────────────────────────────────────
+        animal_payload = {
+            "nome": nome_clean,
+            "tipo": tipo,
+            "raca": (raca or "").strip() or None,
+            "pelagem": (pelagem or "").strip() or None,
+            "data_nascimento": data_nascimento or None,
+            "numero_registo": (numero_registo or "").strip() or None,
+            "chip": (chip or "").strip() or None,
+            "altura": altura if altura and altura > 0 else None,
+            "peso": peso if peso and peso > 0 else None,
+            "dono_id": dono_id,
+            "pai": (pai or "").strip() or None,
+            "mae": (mae or "").strip() or None,
+            "avo_paterno": (avo_paterno or "").strip() or None,
+            "avo_materno": (avo_materno or "").strip() or None,
+            "observacoes": (observacoes or "").strip() or None,
+            "is_receptora": is_receptora,
+        }
+        estadia_payload = {
+            "tipo_registo": tipo_registo,
+            "alojamento_id": alojamento_id,
+            "dono_id": dono_id,
+            "data_entrada": data_entrada,
+            "data_saida": data_saida or None,
+            "motivo": motivo,
+            "estado": "internado" if tipo_registo == "estadia" else "visitante",
+            "garanhao": garanhao_nome,
+            "observacoes_entrada": (observacoes or "").strip() or None,
+        }
+
+        try:
+            animal_id, estadia_id = _criar_animal_e_estadia(
+                animal_payload, estadia_payload,
+            )
+        except Exception as exc:
+            st.error(f"Erro ao guardar: {exc}")
+            return
+
+        if on_success is not None:
+            try:
+                on_success(animal_id, nome_clean, estadia_id)
+            except Exception as exc:  # pragma: no cover
+                st.warning(f"Animal criado, mas callback falhou: {exc}")
+
+        # Reset estado interno do modal
+        st.session_state[show_dono_form_key] = False
+        st.session_state[dono_version_key] += 1
+        st.success(
+            f"Animal '{nome_clean}' criado e estadia/visita registada.",
+        )
+        st.rerun()
+
+    _modal()
