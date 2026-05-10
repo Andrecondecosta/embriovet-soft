@@ -1,5 +1,6 @@
 """Página de Estadias e Visitas — gestão de internamentos e visitas dos animais."""
 
+import calendar as _calendar
 from datetime import date
 
 import pandas as pd
@@ -16,6 +17,18 @@ from modules.db import get_connection
 # ────────────────────────────────────────────────────────────────────────────
 TIPOS_REGISTO = ["estadia", "visita", "externo"]
 MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
+
+CORES_MOTIVO = {
+    "inseminacao": "#9FE1CB",
+    "colheita":    "#FAC775",
+    "diagnostico": "#F4C0D1",
+    "tratamento":  "#B5D4F4",
+    "embriao":     "#DDD6FE",
+}
+MESES_PT = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -440,6 +453,243 @@ def _render_modal_nova_estadia() -> None:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Calendário visual de ocupação mensal
+# ────────────────────────────────────────────────────────────────────────────
+def _target_year_month(offset: int) -> tuple[int, int]:
+    today = date.today()
+    y, m = today.year, today.month + offset
+    while m <= 0:
+        m += 12
+        y -= 1
+    while m > 12:
+        m -= 12
+        y += 1
+    return y, m
+
+
+def _carregar_estadias_mes(primeiro: date, ultimo: date) -> pd.DataFrame:
+    sql = """
+        SELECT
+            e.id, e.animal_id, e.alojamento_id,
+            a.nome AS animal_nome,
+            d.nome AS proprietario_nome,
+            e.data_entrada, e.data_saida, e.motivo, e.tipo_registo
+        FROM estadias e
+        JOIN animais   a  ON a.id  = e.animal_id
+        JOIN dono      d  ON d.id  = e.dono_id
+        JOIN alojamentos al ON al.id = e.alojamento_id
+        WHERE e.tipo_registo = 'estadia'
+          AND e.alojamento_id IS NOT NULL
+          AND e.data_entrada <= %s
+          AND (e.data_saida IS NULL OR e.data_saida >= %s)
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(ultimo, primeiro))
+
+
+def _contar_ocupados_em(d: date) -> int:
+    sql = """
+        SELECT COUNT(DISTINCT alojamento_id)
+        FROM estadias
+        WHERE tipo_registo = 'estadia'
+          AND alojamento_id IS NOT NULL
+          AND data_entrada <= %s
+          AND (data_saida IS NULL OR data_saida >= %s)
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (d, d))
+        n = int(cur.fetchone()[0] or 0)
+        cur.close()
+        return n
+
+
+def _render_tab_calendario() -> None:
+    """Calendário visual mensal — linhas = alojamentos, colunas = dias."""
+    # ── Drill-down via query-param (clique nos blocos) ───────────────────
+    try:
+        qp = st.query_params
+        if "ver_animal_cal" in qp:
+            raw = qp.get("ver_animal_cal")
+            try:
+                aid = int(raw if isinstance(raw, str) else raw[0])
+                st.session_state["ver_animal_id"] = aid
+                st.session_state["ver_animal_tab"] = 0
+            except (TypeError, ValueError):
+                pass
+            del qp["ver_animal_cal"]
+            st.rerun()
+    except Exception:
+        pass
+
+    if "calendario_offset" not in st.session_state:
+        st.session_state["calendario_offset"] = 0
+
+    offset = int(st.session_state["calendario_offset"])
+    target_y, target_m = _target_year_month(offset)
+    primeiro = date(target_y, target_m, 1)
+    _, last_d = _calendar.monthrange(target_y, target_m)
+    ultimo = date(target_y, target_m, last_d)
+    today = date.today()
+
+    # ── Navegação ────────────────────────────────────────────────────────
+    c_prev, c_title, c_next = st.columns([1, 2, 1])
+    with c_prev:
+        if st.button("◀ Mês anterior", key="cal_btn_prev", width="stretch"):
+            st.session_state["calendario_offset"] = offset - 1
+            st.rerun()
+    with c_title:
+        st.markdown(
+            f"<h3 style='text-align:center;margin:6px 0;color:#0f172a;"
+            f"font-weight:700;'>{MESES_PT[target_m - 1]} {target_y}</h3>",
+            unsafe_allow_html=True,
+        )
+    with c_next:
+        if st.button("Mês seguinte ▶", key="cal_btn_next", width="stretch"):
+            st.session_state["calendario_offset"] = offset + 1
+            st.rerun()
+
+    # ── Carregar dados ───────────────────────────────────────────────────
+    alojamentos = _carregar_alojamentos()
+    if alojamentos.empty:
+        st.info("Sem alojamentos activos. Crie um em Definições → Alojamentos.")
+        return
+
+    df_est = _carregar_estadias_mes(primeiro, ultimo)
+
+    # ── Pré-computar ocupação (aloj_id, dia) → estadia ───────────────────
+    # Construímos PRIMEIRO o mapa de ocupação para que a taxa de ocupação
+    # seja calculada com pares únicos (aloj_id, dia) — evita ultrapassar
+    # 100% se houver sobreposição de estadias no mesmo alojamento.
+    occ: dict[tuple[int, int], dict] = {}
+    aloj_ids_validos = {int(a) for a in alojamentos["id"].tolist()}
+    for _, r in df_est.iterrows():
+        aloj_id = int(r["alojamento_id"])
+        if aloj_id not in aloj_ids_validos:
+            continue
+        de_d = pd.to_datetime(r["data_entrada"]).date()
+        ds = (
+            pd.to_datetime(r["data_saida"]).date()
+            if pd.notna(r["data_saida"]) else ultimo
+        )
+        for d_num in range(1, last_d + 1):
+            cur_day = date(target_y, target_m, d_num)
+            if de_d <= cur_day <= ds:
+                # Mantém a estadia mais recente para esse par (aloj_id, dia)
+                # — em caso de sobreposição, prevalece a última do iter
+                occ[(aloj_id, d_num)] = {
+                    "animal_id": int(r["animal_id"]),
+                    "animal_nome": r["animal_nome"] or "",
+                    "proprietario": r["proprietario_nome"] or "",
+                    "motivo": r["motivo"] or "",
+                }
+
+    # ── KPIs ─────────────────────────────────────────────────────────────
+    total_aloj = len(alojamentos)
+    ocupados_hoje = _contar_ocupados_em(today)
+    livres_hoje = max(total_aloj - ocupados_hoje, 0)
+
+    total_dias_aloj = total_aloj * last_d
+    dias_ocupados = len(occ)  # pares únicos (aloj_id, dia)
+    taxa = (dias_ocupados / total_dias_aloj * 100) if total_dias_aloj > 0 else 0.0
+    taxa = min(taxa, 100.0)  # safety: nunca passa de 100%
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Total alojamentos", total_aloj)
+    k2.metric("Ocupados hoje", ocupados_hoje)
+    k3.metric("Livres hoje", livres_hoje)
+    k4.metric("Taxa de ocupação (mês)", f"{taxa:.0f}%")
+
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:8px 0 12px;'>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Construir HTML da grelha ─────────────────────────────────────────
+    header_cells = []
+    for d_num in range(1, last_d + 1):
+        is_today = (target_y, target_m, d_num) == (today.year, today.month, today.day)
+        bg = "#DBEAFE" if is_today else "#F8FAFC"
+        color = "#1E40AF" if is_today else "#64748B"
+        header_cells.append(
+            f"<th style='padding:4px 6px;font-size:10px;text-align:center;"
+            f"background:{bg};color:{color};border:1px solid #E2E8F0;"
+            f"font-weight:700;min-width:30px;'>{d_num}</th>"
+        )
+
+    rows_html = []
+    for _, aloj in alojamentos.iterrows():
+        aloj_id = int(aloj["id"])
+        aloj_label = f"{aloj['nome']}"
+        cells = []
+        for d_num in range(1, last_d + 1):
+            entry = occ.get((aloj_id, d_num))
+            if entry:
+                cor = CORES_MOTIVO.get(entry["motivo"], "#E2E8F0")
+                nome_trunc = entry["animal_nome"][:8] if entry["animal_nome"] else ""
+                title = (
+                    f"{entry['animal_nome']} ({entry['proprietario']})"
+                    f" — {entry['motivo']}"
+                ).replace('"', "'")
+                cells.append(
+                    f"<td style='padding:0;border:1px solid #E2E8F0;'>"
+                    f"<a href='?ver_animal_cal={entry['animal_id']}' "
+                    f"target='_self' "
+                    f"style='display:block;background:{cor};padding:6px 4px;"
+                    f"font-size:10px;color:#1E293B;text-decoration:none;"
+                    f"text-align:center;font-weight:600;white-space:nowrap;"
+                    f"overflow:hidden;text-overflow:ellipsis;cursor:pointer;' "
+                    f"title=\"{title}\">{nome_trunc}</a></td>"
+                )
+            else:
+                cells.append(
+                    "<td style='background:white;border:1px solid #E2E8F0;"
+                    "padding:6px 4px;min-width:30px;'>&nbsp;</td>"
+                )
+        rows_html.append(
+            f"<tr><th style='text-align:left;padding:4px 10px;"
+            f"border:1px solid #E2E8F0;background:#F8FAFC;font-size:11px;"
+            f"font-weight:600;color:#1E293B;white-space:nowrap;"
+            f"position:sticky;left:0;z-index:1;'>{aloj_label}</th>"
+            f"{''.join(cells)}</tr>"
+        )
+
+    grid_html = f"""
+    <div style='overflow-x:auto;border:1px solid #E2E8F0;border-radius:6px;
+                background:white;'>
+      <table style='border-collapse:collapse;font-family:inherit;width:100%;'>
+        <thead>
+          <tr>
+            <th style='text-align:left;padding:6px 10px;background:#F8FAFC;
+                       border:1px solid #E2E8F0;font-size:10px;color:#64748B;
+                       font-weight:700;text-transform:uppercase;
+                       letter-spacing:.5px;position:sticky;left:0;z-index:2;'>
+              Alojamento
+            </th>
+            {''.join(header_cells)}
+          </tr>
+        </thead>
+        <tbody>{''.join(rows_html)}</tbody>
+      </table>
+    </div>
+    """
+    st.markdown(grid_html, unsafe_allow_html=True)
+
+    # ── Legenda ──────────────────────────────────────────────────────────
+    legenda_items = " · ".join(
+        f"<span style='display:inline-block;width:11px;height:11px;"
+        f"background:{cor};border:1px solid #E2E8F0;border-radius:2px;"
+        f"vertical-align:middle;margin-right:5px;'></span>{m.capitalize()}"
+        for m, cor in CORES_MOTIVO.items()
+    )
+    st.markdown(
+        f"<div style='margin-top:12px;font-size:11px;color:#64748B;'>"
+        f"<b style='color:#1E293B;'>Legenda:</b> {legenda_items}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # Lista de estadias
 # ────────────────────────────────────────────────────────────────────────────
 def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: str) -> None:
@@ -590,4 +840,4 @@ def run_estadias_page(context: dict):
         _render_lista_estadias(df, apenas_activas=False, key_prefix="enc")
 
     with tab_calendario:
-        st.info("Em desenvolvimento")
+        _render_tab_calendario()
