@@ -30,6 +30,60 @@ MESES_PT = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
+# Estados finais permitidos ao registar a saída de uma estadia.
+ESTADOS_SAIDA = ["gestante", "alta", "sem_resultado", "transferido"]
+
+
+def _ensure_saida_constraints() -> None:
+    """Garante que `estadias.estado` aceita os estados de saída (incl. 'transferido').
+
+    Idempotente. Mantemos os estados existentes (`internado`, `visitante`,
+    `gestante`, `alta`, `sem_resultado`, `externo`) e acrescentamos
+    `transferido`.
+    """
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_estado_check"
+            )
+            cur.execute("""
+                ALTER TABLE estadias
+                ADD CONSTRAINT estadias_estado_check
+                CHECK (estado IN (
+                    'internado', 'visitante', 'gestante',
+                    'alta', 'sem_resultado', 'externo', 'transferido'
+                ))
+            """)
+            cur.execute("""
+                ALTER TABLE estadias
+                ADD COLUMN IF NOT EXISTS observacoes_saida TEXT
+            """)
+            conn.commit()
+            cur.close()
+    except Exception:
+        pass
+
+
+def _registar_saida_estadia(
+    estadia_id: int, data_saida, estado_final: str, observacoes: str | None,
+) -> None:
+    sql = """
+        UPDATE estadias
+           SET data_saida = %s,
+               estado = %s,
+               observacoes_saida = %s
+         WHERE id = %s
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            sql,
+            (data_saida, estado_final, (observacoes or None), int(estadia_id)),
+        )
+        conn.commit()
+        cur.close()
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers de acesso à BD
@@ -702,8 +756,11 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
         return
 
     if apenas_activas:
-        col_w = [2, 1, 2, 1.5, 1.4, 1.2, 1.3]
-        headers = ["Animal", "Tipo", "Proprietário", "Motivo", "Estado", "Dias", ""]
+        col_w = [1.8, 0.9, 1.7, 1.3, 1.2, 0.9, 1.2, 1.4]
+        headers = [
+            "Animal", "Tipo", "Proprietário", "Motivo", "Estado",
+            "Dias", "", "",
+        ]
     else:
         col_w = [1.8, 1, 1.8, 1.4, 1.3, 1, 1.2, 1.2]
         headers = [
@@ -734,24 +791,120 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
             str(int(row["dias_internado"])) if pd.notna(row["dias_internado"]) else "—"
         )
 
+        estadia_id = int(row["id"])
         if apenas_activas:
-            btn_col = cols[6]
+            with cols[6]:
+                if st.button(
+                    "Ver ficha",
+                    key=f"{key_prefix}_ver_{estadia_id}",
+                    width="stretch",
+                ):
+                    st.session_state["ver_animal_id"] = int(row["animal_id"])
+                    st.session_state["ver_animal_tab"] = 0
+                    st.rerun()
+            with cols[7]:
+                if st.button(
+                    "Registar saída",
+                    key=f"{key_prefix}_saida_{estadia_id}",
+                    type="primary",
+                    width="stretch",
+                ):
+                    st.session_state["abrir_modal_saida_id"] = estadia_id
+                    st.session_state["abrir_modal_saida_animal"] = row["animal"]
+                    st.rerun()
         else:
             data_saida = row.get("data_saida")
             cols[6].write(
                 data_saida.strftime("%d/%m/%Y") if pd.notna(data_saida) else "—"
             )
-            btn_col = cols[7]
+            with cols[7]:
+                if st.button(
+                    "Ver ficha",
+                    key=f"{key_prefix}_ver_{estadia_id}",
+                    width="stretch",
+                ):
+                    st.session_state["ver_animal_id"] = int(row["animal_id"])
+                    st.session_state["ver_animal_tab"] = 0
+                    st.rerun()
 
-        with btn_col:
-            if st.button(
-                "Ver ficha",
-                key=f"{key_prefix}_ver_{int(row['id'])}",
-                width="stretch",
-            ):
-                st.session_state["ver_animal_id"] = int(row["animal_id"])
-                st.session_state["ver_animal_tab"] = 0
-                st.rerun()
+
+# ────────────────────────────────────────────────────────────────────────────
+# Diálogo "Registar saída"
+# ────────────────────────────────────────────────────────────────────────────
+def _render_modal_saida(estadia_id: int, animal_label: str | None) -> None:
+    @st.dialog("Registar saída")
+    def _modal() -> None:
+        st.markdown(
+            f"<div style='color:#475569;font-size:.85rem;margin-bottom:8px;'>"
+            f"Encerra a estadia activa de "
+            f"<b>{animal_label or '—'}</b> (ID #{estadia_id}).</div>",
+            unsafe_allow_html=True,
+        )
+
+        if "ms_data_saida" not in st.session_state:
+            st.session_state["ms_data_saida"] = date.today()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            data_saida = st.date_input(
+                "Data de saída",
+                key="ms_data_saida",
+                format="DD/MM/YYYY",
+            )
+        with c2:
+            estado_final = st.selectbox(
+                "Estado final",
+                ESTADOS_SAIDA,
+                key="ms_estado",
+                format_func=lambda x: {
+                    "gestante": "Gestante",
+                    "alta": "Alta",
+                    "sem_resultado": "Sem resultado",
+                    "transferido": "Transferido",
+                }.get(x, x.capitalize()),
+            )
+
+        observacoes = st.text_area(
+            "Observações de saída", key="ms_obs", height=80,
+        )
+
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+        b1, b2 = st.columns(2)
+        with b1:
+            cancelar = st.button(
+                "Cancelar", key="ms_btn_cancel", width="stretch",
+            )
+        with b2:
+            guardar = st.button(
+                "Guardar saída", type="primary",
+                key="ms_btn_save", width="stretch",
+            )
+
+        if cancelar:
+            for k in ("ms_data_saida", "ms_estado", "ms_obs"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+        if not guardar:
+            return
+
+        _ensure_saida_constraints()
+        try:
+            _registar_saida_estadia(
+                estadia_id, data_saida, estado_final,
+                (observacoes or "").strip(),
+            )
+        except Exception as exc:
+            st.error(f"Erro ao registar saída: {exc}")
+            return
+
+        for k in ("ms_data_saida", "ms_estado", "ms_obs"):
+            st.session_state.pop(k, None)
+        st.success("Saída registada com sucesso.")
+        st.rerun()
+
+    _modal()
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -799,6 +952,11 @@ def run_estadias_page(context: dict):
         st.session_state.pop("reabrir_modal_nova_estadia", None)
         _render_modal_nova_estadia()
 
+    if st.session_state.get("abrir_modal_saida_id"):
+        eid = int(st.session_state.pop("abrir_modal_saida_id"))
+        animal_label = st.session_state.pop("abrir_modal_saida_animal", None)
+        _render_modal_saida(eid, animal_label)
+
     # ── Drill-down para ficha do animal ─────────────────────────────────────
     if st.session_state.get("ver_animal_id") is not None:
         if st.button("← Voltar às estadias", key="btn_voltar_estadias"):
@@ -826,10 +984,13 @@ def run_estadias_page(context: dict):
             st.session_state["abrir_modal_nova_estadia"] = True
             st.rerun()
 
-    # Tabs
-    tab_activas, tab_encerradas, tab_calendario = st.tabs(
-        ["Activas", "Encerradas", "Calendário"]
+    # Tabs (ordem pedida: Calendário → Activas → Encerradas)
+    tab_calendario, tab_activas, tab_encerradas = st.tabs(
+        ["Calendário", "Activas", "Encerradas"]
     )
+
+    with tab_calendario:
+        _render_tab_calendario()
 
     with tab_activas:
         df = _carregar_estadias(apenas_activas=True)
@@ -838,6 +999,3 @@ def run_estadias_page(context: dict):
     with tab_encerradas:
         df = _carregar_estadias(apenas_activas=False)
         _render_lista_estadias(df, apenas_activas=False, key_prefix="enc")
-
-    with tab_calendario:
-        _render_tab_calendario()
