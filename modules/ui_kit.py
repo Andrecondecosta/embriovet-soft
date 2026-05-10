@@ -704,11 +704,16 @@ def inject_shell_css(primary_color: str | None):
 
 
 def _pesquisa_global(termo: str) -> dict:
-    """Executa as 3 queries de pesquisa global e devolve {animais, donos, garanhoes}."""
+    """Executa as 3 queries de pesquisa global e devolve {animais, donos, garanhoes}.
+
+    Limites: 3 animais + 3 proprietários + 2 garanhões (máx 8 resultados).
+    Ordenação: nome exacto primeiro, depois parciais por ordem alfabética.
+    """
     from modules.db import get_connection
     if not termo or len(termo.strip()) < 3:
         return {"animais": [], "donos": [], "garanhoes": []}
-    like = f"%{termo.strip()}%"
+    termo_clean = termo.strip()
+    like = f"%{termo_clean}%"
     out = {"animais": [], "donos": [], "garanhoes": []}
     try:
         with get_connection() as conn:
@@ -718,8 +723,9 @@ def _pesquisa_global(termo: str) -> dict:
                 "FROM animais a "
                 "LEFT JOIN dono d ON a.dono_id = d.id "
                 "WHERE a.ativo = TRUE AND LOWER(a.nome) LIKE LOWER(%s) "
-                "ORDER BY LOWER(a.nome) LIMIT 5",
-                (like,),
+                "ORDER BY (LOWER(a.nome) = LOWER(%s)) DESC, LOWER(a.nome) "
+                "LIMIT 3",
+                (like, termo_clean),
             )
             out["animais"] = [
                 {
@@ -734,99 +740,171 @@ def _pesquisa_global(termo: str) -> dict:
             cur.execute(
                 "SELECT id, nome FROM dono "
                 "WHERE LOWER(nome) LIKE LOWER(%s) OR nif LIKE %s "
-                "ORDER BY nome LIMIT 5",
-                (like, like),
+                "ORDER BY (LOWER(nome) = LOWER(%s)) DESC, LOWER(nome) "
+                "LIMIT 3",
+                (like, like, termo_clean),
             )
             out["donos"] = [{"id": int(r[0]), "nome": r[1]} for r in cur.fetchall()]
 
             cur.execute(
-                "SELECT DISTINCT garanhao FROM estoque_dono "
+                "SELECT garanhao, SUM(existencia_atual)::int AS palhetas "
+                "FROM estoque_dono "
                 "WHERE LOWER(garanhao) LIKE LOWER(%s) AND existencia_atual > 0 "
-                "ORDER BY garanhao LIMIT 5",
-                (like,),
+                "GROUP BY garanhao "
+                "ORDER BY (LOWER(garanhao) = LOWER(%s)) DESC, garanhao "
+                "LIMIT 2",
+                (like, termo_clean),
             )
-            out["garanhoes"] = [r[0] for r in cur.fetchall() if r[0]]
+            out["garanhoes"] = [
+                {"nome": r[0], "palhetas": int(r[1])}
+                for r in cur.fetchall()
+                if r[0]
+            ]
             cur.close()
     except Exception:
         pass
     return out
 
 
-def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
-    """Renderiza os resultados da pesquisa agrupados por categoria."""
-    total = (
-        len(resultados["animais"]) +
-        len(resultados["donos"]) +
-        len(resultados["garanhoes"])
+def _inject_pesquisa_dropdown_css() -> None:
+    """Injecta o CSS do dropdown da pesquisa global.
+
+    O Streamlit re-renderiza o DOM em cada rerun, pelo que injectamos o CSS
+    sempre que esta função é chamada (não há benefício em fazer cache).
+    """
+    st.markdown(
+        """
+        <style>
+        /* Container do dropdown — flutua absolutamente abaixo da barra de
+           pesquisa, sem alterar o fluxo do resto da página. */
+        [data-testid="stVerticalBlock"]:has(
+            > [data-testid="stElementContainer"]:first-child .pg-dropdown-anchor
+        ) {
+            background: #F8F9FA !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 0 0 6px 6px !important;
+            padding: 4px 0 !important;
+            max-height: 220px !important;
+            overflow-y: auto !important;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07) !important;
+            margin-top: -8px !important;
+            margin-bottom: 12px !important;
+        }
+        /* Botões dentro do dropdown */
+        [data-testid="stVerticalBlock"]:has(
+            > [data-testid="stElementContainer"]:first-child .pg-dropdown-anchor
+        ) [data-testid="stButton"] > button {
+            background: transparent !important;
+            border: none !important;
+            text-align: left !important;
+            padding: 6px 12px !important;
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+            height: auto !important;
+            min-height: 0 !important;
+            justify-content: flex-start !important;
+            color: #1e293b !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            font-weight: 400 !important;
+            width: 100% !important;
+        }
+        [data-testid="stVerticalBlock"]:has(
+            > [data-testid="stElementContainer"]:first-child .pg-dropdown-anchor
+        ) [data-testid="stButton"] > button:hover {
+            background: #E9ECEF !important;
+            color: #0f172a !important;
+        }
+        [data-testid="stVerticalBlock"]:has(
+            > [data-testid="stElementContainer"]:first-child .pg-dropdown-anchor
+        ) > [data-testid="stElementContainer"] {
+            margin-bottom: 0 !important;
+            margin-top: 0 !important;
+        }
+        .pg-no-results {
+            padding: 8px 12px;
+            color: #94a3b8;
+            font-style: italic;
+            font-size: 11px;
+        }
+        .pg-dropdown-anchor {
+            display: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
-    if total == 0:
+
+def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
+    """Renderiza os resultados num dropdown discreto colado à barra de pesquisa."""
+    _inject_pesquisa_dropdown_css()
+
+    total = (
+        len(resultados["animais"])
+        + len(resultados["donos"])
+        + len(resultados["garanhoes"])
+    )
+
+    with st.container():
+        # Anchor invisível usado pelo CSS `:has()` para identificar o
+        # container do dropdown e estilizar o seu conteúdo.
         st.markdown(
-            f"<div style='padding:8px 12px;color:#94a3b8;font-style:italic;"
-            f"font-size:.82rem;border:1px solid var(--border);border-radius:6px;"
-            f"background:#fafafa;margin-bottom:8px;'>"
-            f"Sem resultados para “{termo}”</div>",
+            "<div class='pg-dropdown-anchor'></div>",
             unsafe_allow_html=True,
         )
-        return
 
-    with st.container(border=True):
-        # Animais
-        if resultados["animais"]:
+        if total == 0:
             st.markdown(
-                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
-                "text-transform:uppercase;letter-spacing:.5px;margin:2px 0 4px;'>"
-                "🐎 Animais</div>",
+                f"<div class='pg-no-results'>Sem resultados para “{termo}”</div>",
                 unsafe_allow_html=True,
             )
-            for a in resultados["animais"]:
-                prop = a.get("proprietario") or "—"
-                if st.button(
-                    f"{a['nome']} ({prop})",
-                    key=f"pg_animal_{a['id']}",
-                    width="stretch",
-                ):
-                    st.session_state["ver_animal_id"] = a["id"]
-                    st.session_state["aba_selecionada"] = "Estadias e Visitas"
-                    st.session_state["pesquisa_global_limpar"] = True
-                    st.rerun()
+            return
+
+        emoji_animal = {
+            "garanhao": "🐴",
+            "egua": "🐎",
+            "receptora": "🤰",
+        }
+
+        # Animais
+        for a in resultados["animais"]:
+            prop = a.get("proprietario") or "—"
+            emoji = emoji_animal.get(a.get("tipo"), "🐎")
+            if st.button(
+                f"{emoji}  {a['nome']} ({prop})",
+                key=f"pg_animal_{a['id']}",
+                width="stretch",
+            ):
+                st.session_state["ver_animal_id"] = a["id"]
+                st.session_state["aba_selecionada"] = "Estadias e Visitas"
+                st.session_state["pesquisa_global_limpar"] = True
+                st.rerun()
 
         # Proprietários
-        if resultados["donos"]:
-            st.markdown(
-                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
-                "text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;'>"
-                "👥 Proprietários</div>",
-                unsafe_allow_html=True,
-            )
-            for d in resultados["donos"]:
-                if st.button(
-                    d["nome"],
-                    key=f"pg_dono_{d['id']}",
-                    width="stretch",
-                ):
-                    st.session_state["ver_proprietario_id"] = d["id"]
-                    st.session_state["aba_selecionada"] = "Proprietários"
-                    st.session_state["pesquisa_global_limpar"] = True
-                    st.rerun()
+        for d in resultados["donos"]:
+            if st.button(
+                f"👥  {d['nome']}",
+                key=f"pg_dono_{d['id']}",
+                width="stretch",
+            ):
+                st.session_state["ver_proprietario_id"] = d["id"]
+                st.session_state["aba_selecionada"] = "Proprietários"
+                st.session_state["pesquisa_global_limpar"] = True
+                st.rerun()
 
-        # Garanhões no stock
-        if resultados["garanhoes"]:
-            st.markdown(
-                "<div style='font-size:.7rem;font-weight:700;color:#94a3b8;"
-                "text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;'>"
-                "🐴 Garanhões no stock</div>",
-                unsafe_allow_html=True,
-            )
-            for g in resultados["garanhoes"]:
-                if st.button(
-                    g,
-                    key=f"pg_gar_{g}",
-                    width="stretch",
-                ):
-                    st.session_state["aba_selecionada"] = "Stock de sémen"
-                    st.session_state["pesquisa_global_limpar"] = True
-                    st.rerun()
+        # Garanhões com stock
+        for g in resultados["garanhoes"]:
+            label = f"🐴  {g['nome']} — {g['palhetas']} palhetas"
+            if st.button(
+                label,
+                key=f"pg_gar_{g['nome']}",
+                width="stretch",
+            ):
+                st.session_state["aba_selecionada"] = "Stock de sémen"
+                st.session_state["pesquisa_global_garanhao"] = g["nome"]
+                st.session_state["pesquisa_global_limpar"] = True
+                st.rerun()
 
 
 def render_header(app_settings, user_info):
