@@ -264,7 +264,6 @@ def _limpar_estado_modal_nova_estadia() -> None:
         "ne_dt_ent",
         "ne_aloj",
         "ne_aloj_v",
-        "ne_dt_saida",
         "ne_obs",
         "animal_criado_para_estadia",
     ):
@@ -333,8 +332,6 @@ def _render_modal_nova_estadia() -> None:
         # Inicializar defaults dos widgets antes de renderizar (evita avisos)
         if "ne_dt_ent" not in st.session_state:
             st.session_state["ne_dt_ent"] = date.today()
-        if "ne_dt_saida" not in st.session_state:
-            st.session_state["ne_dt_saida"] = None
 
         c1, c2 = st.columns(2)
         with c1:
@@ -431,14 +428,9 @@ def _render_modal_nova_estadia() -> None:
                     key="ne_aloj",
                 )
 
-        # Data prevista de saída — não aparece para externo
+        # Data de saída é registada mais tarde via "Registar saída" — não
+        # pertence ao formulário de criação.
         data_saida = None
-        if tipo_registo != "externo":
-            data_saida = st.date_input(
-                "Data prevista de saída",
-                key="ne_dt_saida",
-                format="DD/MM/YYYY",
-            )
 
         observacoes = st.text_area(
             "Observações", key="ne_obs", height=80,
@@ -612,9 +604,10 @@ def _render_tab_calendario() -> None:
     df_est = _carregar_estadias_mes(primeiro, ultimo)
 
     # ── Pré-computar ocupação (aloj_id, dia) → estadia ───────────────────
-    # Construímos PRIMEIRO o mapa de ocupação para que a taxa de ocupação
-    # seja calculada com pares únicos (aloj_id, dia) — evita ultrapassar
-    # 100% se houver sobreposição de estadias no mesmo alojamento.
+    # Regras de pintura:
+    #   • dia_inicio = data_entrada
+    #   • dia_fim = MIN(data_saida se existe, hoje)
+    #   • Dias futuros ficam SEMPRE brancos — nunca pintar além de hoje.
     occ: dict[tuple[int, int], dict] = {}
     aloj_ids_validos = {int(a) for a in alojamentos["id"].tolist()}
     for _, r in df_est.iterrows():
@@ -622,15 +615,14 @@ def _render_tab_calendario() -> None:
         if aloj_id not in aloj_ids_validos:
             continue
         de_d = pd.to_datetime(r["data_entrada"]).date()
-        ds = (
-            pd.to_datetime(r["data_saida"]).date()
-            if pd.notna(r["data_saida"]) else ultimo
-        )
+        if pd.notna(r["data_saida"]):
+            ds = min(pd.to_datetime(r["data_saida"]).date(), today)
+        else:
+            ds = today  # estadia em curso — só pinta até hoje (inclusive)
         for d_num in range(1, last_d + 1):
             cur_day = date(target_y, target_m, d_num)
             if de_d <= cur_day <= ds:
                 # Mantém a estadia mais recente para esse par (aloj_id, dia)
-                # — em caso de sobreposição, prevalece a última do iter
                 occ[(aloj_id, d_num)] = {
                     "animal_id": int(r["animal_id"]),
                     "animal_nome": r["animal_nome"] or "",
@@ -834,10 +826,12 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
 def _render_modal_saida(estadia_id: int, animal_label: str | None) -> None:
     @st.dialog("Registar saída")
     def _modal() -> None:
+        nome_display = (animal_label or "—").strip()
+        if nome_display and nome_display != "—":
+            nome_display = nome_display[0].upper() + nome_display[1:]
         st.markdown(
             f"<div style='color:#475569;font-size:.85rem;margin-bottom:8px;'>"
-            f"Encerra a estadia activa de "
-            f"<b>{animal_label or '—'}</b> (ID #{estadia_id}).</div>",
+            f"Encerrar estadia de <b>{nome_display}</b></div>",
             unsafe_allow_html=True,
         )
 
