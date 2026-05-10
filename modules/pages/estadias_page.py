@@ -859,13 +859,20 @@ def _render_modal_saida(estadia_id: int, animal_label: str | None) -> None:
                 format_func=lambda x: {
                     "gestante": "Gestante",
                     "alta": "Alta",
-                    "sem_resultado": "Sem resultado",
+                    "sem_resultado": "Outro",
                     "transferido": "Transferido",
                 }.get(x, x.capitalize()),
             )
 
         observacoes = st.text_area(
-            "Observações de saída", key="ms_obs", height=80,
+            "Observações de saída"
+            + (" *" if estado_final == "sem_resultado" else ""),
+            key="ms_obs",
+            height=80,
+            help=(
+                "Obrigatório quando o estado final é 'Outro'."
+                if estado_final == "sem_resultado" else None
+            ),
         )
 
         st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -887,6 +894,15 @@ def _render_modal_saida(estadia_id: int, animal_label: str | None) -> None:
             st.rerun()
 
         if not guardar:
+            return
+
+        # Quando o estado final é 'Outro' (sem_resultado), as observações
+        # passam a ser obrigatórias.
+        if (
+            estado_final == "sem_resultado"
+            and not (observacoes or "").strip()
+        ):
+            st.warning("Por favor descreva o motivo nas observações")
             return
 
         _ensure_saida_constraints()
