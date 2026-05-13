@@ -1,0 +1,10 @@
+ALTER TABLE inseminacoes ADD COLUMN IF NOT EXISTS animal_id_egua INTEGER REFERENCES animais(id);
+ALTER TABLE inseminacoes ADD COLUMN IF NOT EXISTS animal_id_garanhao INTEGER REFERENCES animais(id);
+ALTER TABLE inseminacoes ADD COLUMN IF NOT EXISTS estadia_id INTEGER REFERENCES estadias(id);
+ALTER TABLE inseminacoes ADD COLUMN IF NOT EXISTS resultado VARCHAR(30) DEFAULT 'pendente' CHECK (resultado IN ('pendente','gestacao_confirmada','falhou'));
+ALTER TABLE inseminacoes ADD COLUMN IF NOT EXISTS data_resultado DATE;
+CREATE INDEX IF NOT EXISTS idx_inseminacoes_egua ON inseminacoes(animal_id_egua);
+CREATE INDEX IF NOT EXISTS idx_inseminacoes_garanhao ON inseminacoes(animal_id_garanhao);
+CREATE INDEX IF NOT EXISTS idx_inseminacoes_estadia ON inseminacoes(estadia_id);
+UPDATE inseminacoes i SET animal_id_egua = a.id FROM animais a WHERE LOWER(i.egua) = LOWER(a.nome) AND a.tipo = 'egua' AND i.animal_id_egua IS NULL;
+UPDATE inseminacoes i SET animal_id_garanhao = a.id FROM animais a WHERE LOWER(i.garanhao) = LOWER(a.nome) AND a.tipo = 'garanhao' AND i.animal_id_garanhao IS NULL;
