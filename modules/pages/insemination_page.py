@@ -572,11 +572,27 @@ def run_insemination_page(ctx):
     with c2:
         data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
     
+    # ── Observações destacadas + follow-up D+1 (verificar ovulação) ──
+    st.markdown(
+        "<div style='margin-top:.6rem;font-weight:700;font-size:.95rem;"
+        "color:#0f172a;'>🗒 Observações da inseminação</div>",
+        unsafe_allow_html=True,
+    )
     observacoes = st.text_area(
         "Observações",
         key="insem_observacoes",
-        placeholder="Notas adicionais sobre esta inseminação (opcional)...",
-        height=80,
+        placeholder="O que aconteceu? Reflexo, edema uterino, hora exacta, "
+                    "reacção da égua, protocolo hormonal usado, etc.",
+        height=110,
+        label_visibility="collapsed",
+    )
+    criar_d1 = st.checkbox(
+        "🩺 Criar tarefa para D+1 (verificar ovulação no dia seguinte)",
+        value=True,
+        key="insem_criar_d1",
+        help="Cria uma tarefa no Trabalho Diário do dia seguinte para o "
+             "veterinário confirmar se a égua ovulou. A tarefa D+14 "
+             "(1º diagnóstico de gestação) é criada sempre.",
     )
     
     # RESUMO E BOTÃO FINAL
@@ -663,6 +679,7 @@ def run_insemination_page(ctx):
                         utilizador=st.session_state.get(
                             "user", {}
                         ).get("username", "—"),
+                        criar_tarefa_d1=bool(criar_d1),
                     )
                     try:
                         atualizar_status_proprietarios()
