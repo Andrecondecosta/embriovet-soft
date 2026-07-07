@@ -840,6 +840,10 @@ def _executar_importacao(linhas):
                     data_criacao = datetime.date.today()
                     date_note = ""
 
+                # Resolve animal_id do garanhão (cria em `animais` se necessário)
+                from modules.repositories.animal_repo import get_or_create_garanhao
+                animal_id = get_or_create_garanhao(linha.get("garanhao"))
+
                 cur.execute(
                     """
                     INSERT INTO estoque_dono (
@@ -848,10 +852,10 @@ def _executar_importacao(linhas):
                         certificado, dose, observacoes,
                         quantidade_inicial, existencia_atual,
                         contentor_id, canister, andar, cor,
-                        criado_por, data_criacao
+                        criado_por, data_criacao, animal_id
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                     RETURNING id
                     """,
@@ -875,6 +879,7 @@ def _executar_importacao(linhas):
                         to_py(linha.get("cor")),
                         to_py(criado_por),
                         to_py(data_criacao),
+                        animal_id,
                     ),
                 )
                 stock_id = cur.fetchone()[0]

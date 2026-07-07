@@ -821,6 +821,10 @@ def inserir_stock(dados):
             # Obter utilizador atual
             username = st.session_state.get('user', {}).get('username', 'desconhecido')
 
+            # Resolver animal_id do garanhão (cria em `animais` se necessário)
+            from modules.repositories.animal_repo import get_or_create_garanhao
+            animal_id = get_or_create_garanhao(dados.get("Garanhão"))
+
             params = (
                 to_py(dados.get("Garanhão")),
                 to_py(dados.get("Proprietário")),
@@ -839,7 +843,8 @@ def inserir_stock(dados):
                 to_py(dados.get("Canister")),
                 to_py(dados.get("Andar")),
                 to_py(dados.get("Cor")),
-                username
+                username,
+                animal_id,
             )
 
             cur.execute(
@@ -850,8 +855,8 @@ def inserir_stock(dados):
                     certificado, dose, observacoes,
                     quantidade_inicial, existencia_atual,
                     contentor_id, canister, andar, cor,
-                    criado_por, data_criacao
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    criado_por, data_criacao, animal_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
                 RETURNING id, garanhao
                 """,
                 params,
@@ -1615,7 +1620,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
-                       contentor_id, canister, andar
+                       contentor_id, canister, andar, animal_id
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
             
@@ -1625,7 +1630,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 return False
             
             (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs, cor, contentor_id, canister, andar) = origem
+             qual, conc, mot, local, cert, dose, obs, cor, contentor_id, canister, andar, animal_id) = origem
             
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
@@ -1674,14 +1679,15 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
                         quantidade_inicial, existencia_atual, cor,
-                        contentor_id, canister, andar
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        contentor_id, canister, andar, animal_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
                     quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
                     quantidade_int, quantidade_int, to_py(cor),
-                    to_py(contentor_id), to_py(canister), to_py(andar)
+                    to_py(contentor_id), to_py(canister), to_py(andar),
+                    to_py(animal_id)
                 ))
             
             # Registrar transferência
@@ -1720,7 +1726,8 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
             # Buscar dados do lote origem
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
+                       animal_id
                 FROM estoque_dono WHERE id = %s
             """, (to_py(stock_origem_id),))
             
@@ -1730,7 +1737,7 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                 return False
             
             (garanhao, prop_origem_db, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs, cor) = origem
+             qual, conc, mot, local, cert, dose, obs, cor, animal_id) = origem
             
             exist_atual = int(to_py(exist_atual) or 0)
             quantidade_int = int(to_py(quantidade) or 0)
@@ -1779,14 +1786,15 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
                         quantidade_inicial, existencia_atual, cor,
-                        contentor_id, canister, andar
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        contentor_id, canister, andar, animal_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(prop_destino_id), to_py(data_emb), to_py(origem_ext),
                     quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
                     quantidade_int, quantidade_int, to_py(cor),
-                    to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)
+                    to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo),
+                    to_py(animal_id)
                 ))
             
             # Registrar transferência na tabela de transferências
@@ -1930,7 +1938,7 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
             cur.execute("""
                 SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
                        qualidade, concentracao, motilidade, local_armazenagem, certificado,
-                       dose, observacoes, cor, contentor_id, canister, andar
+                       dose, observacoes, cor, contentor_id, canister, andar, animal_id
                 FROM estoque_dono WHERE id = %s
             """, (to_py(novo_estoque_id),))
             origem = cur.fetchone()
@@ -1939,7 +1947,7 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
                 return False
 
             (garanhao, prop_orig_id, exist_atual, data_emb, orig_ext,
-             qual, conc, mot, local, cert, dose, obs, cor, cont_id, can, andar) = origem
+             qual, conc, mot, local, cert, dose, obs, cor, cont_id, can, andar, animal_id) = origem
 
             nova_quantidade_int = int(nova_quantidade)
             exist_atual_int = int(exist_atual or 0)
@@ -1984,14 +1992,14 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
                         palhetas_produzidas, qualidade, concentracao, motilidade,
                         local_armazenagem, certificado, dose, observacoes,
                         quantidade_inicial, existencia_atual, cor,
-                        contentor_id, canister, andar
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        contentor_id, canister, andar, animal_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     to_py(garanhao), to_py(novo_dest_id), to_py(data_emb), to_py(orig_ext),
                     nova_quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                     to_py(local), to_py(cert), to_py(dose), to_py(obs),
                     nova_quantidade_int, nova_quantidade_int, to_py(cor),
-                    final_cont, final_can, final_andar
+                    final_cont, final_can, final_andar, to_py(animal_id)
                 ))
 
             # 8. Atualizar registo de transferência e marcar como editado
@@ -2780,34 +2788,61 @@ elif aba == t("menu.add_stock"):
         if contentores_df.empty:
             st.warning(t("add_stock.no_containers"))
         else:
+            # Carregar garanhões (para selectbox de identificação)
+            with get_connection() as _cx:
+                garanhoes_df = pd.read_sql_query(
+                    "SELECT id, nome FROM animais "
+                    "WHERE tipo = 'garanhao' AND ativo = TRUE "
+                    "ORDER BY LOWER(nome)",
+                    _cx,
+                )
+            # Sentinela para "criar novo garanhão"
+            _SENTINELA_NOVO = "➕ Criar novo garanhão"
+            opcoes_garanhao = garanhoes_df["nome"].tolist() + [_SENTINELA_NOVO]
+
             # Botão + fora do form (Alinhado à direita)
             col_act1, col_act2 = st.columns([6, 2])
             with col_act2:
                 if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), width="stretch"):
                     modal_adicionar_proprietario()
+
+            # ── Identificação do Garanhão (FORA do form para permitir
+            # renderização condicional do input "criar novo") ────────────
+            st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
+            col_id1, col_id2 = st.columns(2)
+            with col_id1:
+                garanhao_escolhido = st.selectbox(
+                    t("label.garanhao_required"),
+                    options=opcoes_garanhao,
+                    help=t("add_stock.required_name"),
+                    key="add_stock_garanhao_select",
+                )
+                if garanhao_escolhido == _SENTINELA_NOVO:
+                    garanhao_novo_nome = st.text_input(
+                        t("label.garanhao_required") + " (novo)",
+                        key="add_stock_garanhao_novo",
+                        placeholder="Nome do novo garanhão",
+                    )
+                    garanhao = (garanhao_novo_nome or "").strip()
+                else:
+                    garanhao = garanhao_escolhido
+            with col_id2:
+                # Verificar se há proprietário recém-adicionado
+                if 'novo_proprietario_id' in st.session_state:
+                    try:
+                        idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
+                    except ValueError:
+                        idx_default = 0
+                else:
+                    idx_default = 0
+                proprietario_nome = st.selectbox(
+                    t("add_stock.owner_semen"), proprietarios["nome"],
+                    index=idx_default, key="add_stock_prop_select",
+                )
+                dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
+            st.markdown('</div>', unsafe_allow_html=True)
             
             with st.form("novo_stock"):
-                # SEÇÃO 1: IDENTIDADE
-                st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
-                col_id1, col_id2 = st.columns(2)
-                
-                with col_id1:
-                    garanhao = st.text_input(t("label.garanhao_required"), help=t("add_stock.required_name"))
-                
-                with col_id2:
-                    # Verificar se há proprietário recém-adicionado
-                    if 'novo_proprietario_id' in st.session_state:
-                        try:
-                            idx_default = list(proprietarios["id"]).index(st.session_state['novo_proprietario_id'])
-                        except ValueError:
-                            idx_default = 0
-                    else:
-                        idx_default = 0
-                    
-                    proprietario_nome = st.selectbox(t("add_stock.owner_semen"), proprietarios["nome"], index=idx_default)
-                    dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-                st.markdown('</div>', unsafe_allow_html=True)
-
                 # SEÇÃO 2: DADOS TÉCNICOS
                 st.markdown('<div class="form-card"><div class="form-section-header">🔬 Dados Técnicos</div>', unsafe_allow_html=True)
                 col_tec1, col_tec2, col_tec3, col_tec4 = st.columns(4)
