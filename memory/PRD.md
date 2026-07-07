@@ -1,9 +1,28 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Maio 2026** — Perfil de Garanhão validado (4 abas: Resumo, Produção de sémen, Fertilidade, Alertas). Bug corrigido: `TypeError: unsupported operand type(s) for -: 'datetime.date' and 'str'` na aba Alertas — `data_embriovet` é VARCHAR no schema legado, agora convertido para DATE via SQL `NULLIF(...)::date` em `_ultima_producao_garanhao()` com fallback Python. P0 "Heatmap click bloqueado por DOM overlap" RESOLVIDO. P3 refactoring iniciado: extração de auth e DB para módulos dedicados (`modules/db.py`, `modules/services/auth_service.py`). `app.py` reduzido de 3623 → 3329 linhas (≈ 300 linhas extraídas).
+**Fev 2026** — Pedido 2 concluído: ficha do garanhão agora liga por FK (`estoque_dono.animal_id`, `inseminacoes.animal_id_garanhao/egua`) em vez de `LOWER(garanhao)`, e criado `UNIQUE INDEX animais_nome_tipo_uniq ON animais (LOWER(TRIM(nome)), tipo)` via migration 025 (com dedupe de duplicados legados). Também concluído o Pedido 2c (botão "➕ Novo Proprietário" removido do "Adicionar Stock", criação via `modal_animal → modal_proprietario` funciona sem F5). Suite de testes `/app/tests/test_modal_animal.py` cobre agora 5 cenários (todos passam contra o Postgres do Render).
 
-## Changelog Recente (Maio 2026)
+## Changelog Recente (Fev 2026)
+- ✅ **Migration 025 — dedupe + índice único anti-duplicados**:
+  - Fusão de duplicados por `(LOWER(TRIM(nome)), tipo)` — mantém o `id` mais antigo, reaponta TODAS as FKs (`estoque_dono.animal_id`, `inseminacoes.animal_id_egua/garanhao`, `estadias.animal_id/animal_doador_id`, `diario_clinico.animal_id`, `trabalho_diario.animal_id`, `acompanhamento_inseminacao.animal_id`) e apaga os `id` mais recentes.
+  - Cria `UNIQUE INDEX animais_nome_tipo_uniq ON animais (LOWER(TRIM(nome)), tipo)` sobre todos os registos (não apenas `ativo=TRUE`).
+  - No Render havia 1 duplicado ("paris" égua ids [2,5]) — fundido; nada mais restante.
+- ✅ **Ficha do garanhão passa a usar FK** em `/app/modules/pages/animal_page.py`:
+  - `_carregar_stock_garanhao(animal_id)` → `WHERE ed.animal_id = %s` (era `LOWER(ed.garanhao)`)
+  - `_carregar_inseminacoes_garanhao(animal_id)` → `WHERE i.animal_id_garanhao = %s` + JOIN à estadia por `e.animal_id = i.animal_id_egua`
+  - `_ultima_producao_garanhao(animal_id)` → `WHERE animal_id = %s`
+  - Callers (`_render_tab_producao_semen/fertilidade/alertas`) passam agora `int(animal.get("id"))`.
+- ✅ **Botão "➕ Novo Proprietário" removido do form "Adicionar Stock"** — proprietário criado via modal_animal fica disponível no selectbox "Proprietário do sémen" após `st.rerun()` (usa `novo_proprietario_id` como bridge, e `proprietarios` é recarregado no topo do script).
+- ✅ **Testes `/app/tests/test_modal_animal.py`** (5 testes, todos passam):
+  - `test_criar_garanhao_gera_fk_correcto_em_estadias` — cria animal + estadia via `_criar_animal_e_estadia`, valida `animais.tipo='garanhao'`, `estadias.animal_id == animal_id`, e JOIN `animais ↔ estadias`.
+  - `test_fk_estadias_animal_id_impede_orfao` — confirma que a FK `estadias_animal_id_fkey` rejeita `animal_id` inexistente.
+  - `test_indice_unico_impede_duplicados_nome_tipo` — insert de duplicados (case/espaços diferentes) bloqueado por `UniqueViolation`.
+  - `test_indice_unico_permite_mesmo_nome_tipos_diferentes` — mesmo nome com tipos diferentes (égua vs garanhão) continua permitido.
+  - `test_carregar_stock_garanhao_usa_fk_animal_id` — confirma que a query filtra por `animal_id` (não por nome), incluindo o caso em que dois animais partilham nome mas com tipos/FKs distintos.
+- Infra: `/app/tests/conftest.py` (carrega `.env` + adiciona `/app` ao `sys.path`).
+
+## Changelog Anterior (Maio 2026)
 - ✅ **P0: Heatmap click corrigido** — A causa-raiz era uma regra CSS interna do Streamlit (`.stElementContainer:has([data-testid="stMarkdownContainer"] > style) { position: absolute }`) que aplicava `position: absolute` a qualquer markdown que começasse com `<style>`. O heatmap HTML começava com bloco `<style>` o que fazia o container saltar para o topo do DOM, sobrepondo-se a outros elementos. **Solução:** mover o CSS do heatmap para o bloco global de estilos da página (uma só vez) e fazer `build_heatmap_html()` retornar apenas o `<div>` da tabela.
 - ✅ **P3 refactoring inicial:** Criados `/app/modules/db.py` (pool + `get_connection`) e `/app/modules/services/auth_service.py` (auth/sessões/permissões). `app.py` agora importa em vez de definir.
 

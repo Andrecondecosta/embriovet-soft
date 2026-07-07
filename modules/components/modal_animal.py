@@ -196,6 +196,7 @@ def render_modal_animal(
     key: str,
     tipo_default: str = "egua",
     on_success: Optional[Callable[[int, str, int], None]] = None,
+    tipo_locked: bool = False,
 ) -> None:
     """Abre um modal completo para criar um animal + estadia/visita.
 
@@ -209,6 +210,10 @@ def render_modal_animal(
     on_success : Optional[Callable[[int, str, int], None]]
         Callback `(animal_id, animal_nome, estadia_id)` invocado após
         criação bem-sucedida.
+    tipo_locked : bool
+        Se True, o campo "Tipo" fica fixo em `tipo_default` (não é mostrado)
+        e o campo "É receptora" também fica escondido — o modal fica
+        focado num único tipo de animal.
     """
 
     if tipo_default not in TIPOS_ANIMAL:
@@ -279,17 +284,21 @@ def render_modal_animal(
                 "Nome *", key=f"{key}_an_nome",
                 placeholder="Ex.: Tornado",
             )
-            tipo = st.selectbox(
-                "Tipo",
-                TIPOS_ANIMAL,
-                index=TIPOS_ANIMAL.index(tipo_default),
-                key=f"{key}_an_tipo",
-                format_func=lambda x: {
-                    "egua": "Égua",
-                    "garanhao": "Garanhão",
-                    "receptora": "Receptora",
-                }.get(x, x),
-            )
+            if tipo_locked:
+                # Tipo fixo — não mostra o selectbox
+                tipo = tipo_default
+            else:
+                tipo = st.selectbox(
+                    "Tipo",
+                    TIPOS_ANIMAL,
+                    index=TIPOS_ANIMAL.index(tipo_default),
+                    key=f"{key}_an_tipo",
+                    format_func=lambda x: {
+                        "egua": "Égua",
+                        "garanhao": "Garanhão",
+                        "receptora": "Receptora",
+                    }.get(x, x),
+                )
             raca = st.text_input("Raça", key=f"{key}_an_raca")
         with c2:
             pelagem = st.text_input("Pelagem / cor", key=f"{key}_an_pelagem")
@@ -502,7 +511,7 @@ def render_modal_animal(
         )
 
         is_receptora = False
-        if tipo == "egua":
+        if tipo == "egua" and not tipo_locked:
             is_receptora = st.checkbox(
                 "É receptora",
                 key=f"{key}_an_is_receptora",
