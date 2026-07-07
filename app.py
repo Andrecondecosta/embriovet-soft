@@ -2796,9 +2796,23 @@ elif aba == t("menu.add_stock"):
                     "ORDER BY LOWER(nome)",
                     _cx,
                 )
-            # Sentinela para "criar novo garanhão"
-            _SENTINELA_NOVO = "➕ Criar novo garanhão"
-            opcoes_garanhao = garanhoes_df["nome"].tolist() + [_SENTINELA_NOVO]
+
+            # ── Orquestração do modal "Novo garanhão" ────────────────────
+            # Usa o mesmo padrão do proprietário: session_state flag → rerun
+            # → renderiza o modal_animal (que não pode ser aninhado noutro).
+            if st.session_state.get("abrir_modal_novo_garanhao"):
+                del st.session_state["abrir_modal_novo_garanhao"]
+                from modules.components.modal_animal import render_modal_animal
+                def _on_garanhao_criado(animal_id, animal_nome, estadia_id):
+                    st.session_state["novo_animal_id"] = int(animal_id)
+                    st.session_state["novo_animal_nome"] = animal_nome
+                    st.rerun()
+                render_modal_animal(
+                    key="modal_novo_garanhao_stock",
+                    tipo_default="garanhao",
+                    tipo_locked=True,
+                    on_success=_on_garanhao_criado,
+                )
 
             # Botão + fora do form (Alinhado à direita)
             col_act1, col_act2 = st.columns([6, 2])
@@ -2807,25 +2821,50 @@ elif aba == t("menu.add_stock"):
                     modal_adicionar_proprietario()
 
             # ── Identificação do Garanhão (FORA do form para permitir
-            # renderização condicional do input "criar novo") ────────────
+            # pré-selecção de garanhão recém-criado via session_state) ────
             st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
-            col_id1, col_id2 = st.columns(2)
+            col_id1, col_id_btn, col_id2 = st.columns([3, 1, 3])
             with col_id1:
-                garanhao_escolhido = st.selectbox(
-                    t("label.garanhao_required"),
-                    options=opcoes_garanhao,
-                    help=t("add_stock.required_name"),
-                    key="add_stock_garanhao_select",
-                )
-                if garanhao_escolhido == _SENTINELA_NOVO:
-                    garanhao_novo_nome = st.text_input(
-                        t("label.garanhao_required") + " (novo)",
-                        key="add_stock_garanhao_novo",
-                        placeholder="Nome do novo garanhão",
-                    )
-                    garanhao = (garanhao_novo_nome or "").strip()
+                # Selectbox por id (permite pré-seleccionar via novo_animal_id)
+                garanhao_ids = garanhoes_df["id"].tolist()
+                # Se acabámos de criar um garanhão, força a pré-selecção
+                novo_id = st.session_state.get("novo_animal_id")
+                default_idx = 0
+                if novo_id is not None and int(novo_id) in garanhao_ids:
+                    default_idx = garanhao_ids.index(int(novo_id))
+
+                def _fmt_garanhao(gid):
+                    r = garanhoes_df.loc[garanhoes_df["id"] == gid]
+                    return str(r.iloc[0]["nome"]) if not r.empty else f"#{gid}"
+
+                if not garanhao_ids:
+                    st.info("Sem garanhões — clique em '➕ Novo garanhão' para criar.")
+                    garanhao = ""
                 else:
-                    garanhao = garanhao_escolhido
+                    gid_sel = st.selectbox(
+                        t("label.garanhao_required"),
+                        options=garanhao_ids,
+                        index=default_idx,
+                        format_func=_fmt_garanhao,
+                        help=t("add_stock.required_name"),
+                        key="add_stock_garanhao_select",
+                    )
+                    garanhao = _fmt_garanhao(gid_sel)
+                    # Limpa o marcador de pré-selecção só depois de aplicar
+                    if novo_id is not None:
+                        st.session_state.pop("novo_animal_id", None)
+                        st.session_state.pop("novo_animal_nome", None)
+
+            with col_id_btn:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                if st.button(
+                    "➕ Novo garanhão",
+                    key="btn_novo_garanhao_stock",
+                    help="Criar novo garanhão",
+                    width="stretch",
+                ):
+                    st.session_state["abrir_modal_novo_garanhao"] = True
+                    st.rerun()
             with col_id2:
                 # Verificar se há proprietário recém-adicionado
                 if 'novo_proprietario_id' in st.session_state:
