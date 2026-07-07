@@ -1043,7 +1043,12 @@ def _render_seccao_acompanhamento(animal_id: int, estadia: dict) -> None:
 # ────────────────────────────────────────────────────────────────────────────
 # Tabs específicas para tipo='garanhao'
 # ────────────────────────────────────────────────────────────────────────────
-def _carregar_stock_garanhao(garanhao_nome: str) -> pd.DataFrame:
+def _carregar_stock_garanhao(animal_id: int) -> pd.DataFrame:
+    """Lotes de sémen deste garanhão — matching por FK (`ed.animal_id`).
+
+    Requer que a migration 023/024 tenha sincronizado `estoque_dono.animal_id`
+    e que a 025 tenha eliminado duplicados em `animais`.
+    """
     sql = """
         SELECT
             ed.data_embriovet         AS data_producao,
@@ -1060,11 +1065,11 @@ def _carregar_stock_garanhao(garanhao_nome: str) -> pd.DataFrame:
         FROM estoque_dono ed
         LEFT JOIN dono d        ON d.id = ed.dono_id
         LEFT JOIN contentores c ON c.id = ed.contentor_id
-        WHERE LOWER(ed.garanhao) = LOWER(%s)
+        WHERE ed.animal_id = %s
         ORDER BY ed.data_embriovet DESC, ed.id DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(garanhao_nome,))
+        return pd.read_sql_query(sql, conn, params=(int(animal_id),))
 
 
 def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
@@ -1082,7 +1087,12 @@ def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
     return total_palh, lotes_act, motil_avg, palh_internas, palh_externas
 
 
-def _carregar_inseminacoes_garanhao(garanhao_nome: str) -> pd.DataFrame:
+def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
+    """Inseminações deste garanhão — matching por FK (`i.animal_id_garanhao`).
+
+    O JOIN à égua também usa FK (`i.animal_id_egua`) para localizar a
+    estadia de inseminação correspondente.
+    """
     sql = """
         SELECT
             i.data_inseminacao,
@@ -1092,18 +1102,17 @@ def _carregar_inseminacoes_garanhao(garanhao_nome: str) -> pd.DataFrame:
             COALESCE(ai.resultado, 'pendente') AS resultado
         FROM inseminacoes i
         LEFT JOIN dono d ON d.id = i.dono_id
-        LEFT JOIN animais a ON LOWER(a.nome) = LOWER(i.egua)
         LEFT JOIN estadias e
-               ON e.animal_id = a.id
+               ON e.animal_id = i.animal_id_egua
               AND e.motivo = 'inseminacao'
               AND i.data_inseminacao BETWEEN e.data_entrada
                                          AND COALESCE(e.data_saida, CURRENT_DATE)
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
-        WHERE LOWER(i.garanhao) = LOWER(%s)
+        WHERE i.animal_id_garanhao = %s
         ORDER BY i.data_inseminacao DESC, i.id DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(garanhao_nome,))
+        return pd.read_sql_query(sql, conn, params=(int(animal_id),))
 
 
 def _kpis_fertilidade_garanhao(df: pd.DataFrame) -> tuple[int, int, str, float | None]:
@@ -1115,25 +1124,28 @@ def _kpis_fertilidade_garanhao(df: pd.DataFrame) -> tuple[int, int, str, float |
     return total, ges, f"{taxa:.0f} %", taxa
 
 
-def _ultima_producao_garanhao(garanhao_nome: str):
-    # data_embriovet é VARCHAR no schema legado — convertemos para DATE com
-    # NULLIF para tolerar valores vazios/strings inválidas.
+def _ultima_producao_garanhao(animal_id: int):
+    """Data da última produção — matching por FK (`animal_id`).
+
+    `data_embriovet` é VARCHAR no schema legado — convertemos para DATE
+    com `NULLIF` para tolerar valores vazios/strings inválidas.
+    """
     sql = """
         SELECT MAX(NULLIF(data_embriovet, '')::date) FROM estoque_dono
-        WHERE LOWER(garanhao) = LOWER(%s)
+        WHERE animal_id = %s
     """
     with get_connection() as conn:
         cur = conn.cursor()
         try:
-            cur.execute(sql, (garanhao_nome,))
+            cur.execute(sql, (int(animal_id),))
             row = cur.fetchone()
         except Exception:
             # Fallback: faz o parsing em Python se houver formatos inválidos
             conn.rollback()
             cur.execute(
                 "SELECT data_embriovet FROM estoque_dono "
-                "WHERE LOWER(garanhao) = LOWER(%s)",
-                (garanhao_nome,),
+                "WHERE animal_id = %s",
+                (int(animal_id),),
             )
             datas: list[date] = []
             for (val,) in cur.fetchall():
@@ -1150,8 +1162,8 @@ def _ultima_producao_garanhao(garanhao_nome: str):
 
 
 def _render_tab_producao_semen(animal: dict) -> None:
-    nome = animal.get("nome") or ""
-    df = _carregar_stock_garanhao(nome)
+    animal_id = int(animal.get("id"))
+    df = _carregar_stock_garanhao(animal_id)
     total_palh, lotes_act, motil_avg, palh_internas, palh_externas = _kpis_stock_garanhao(df)
 
     k1, k2, k3, k4, k5 = st.columns(5)
@@ -1245,12 +1257,13 @@ def _render_tab_fertilidade_garanhao(animal: dict) -> None:
 
 
 def _render_tab_alertas_garanhao(animal: dict) -> None:
+    animal_id = int(animal.get("id"))
     nome = animal.get("nome") or ""
-    df_stock = _carregar_stock_garanhao(nome)
-    df_ins = _carregar_inseminacoes_garanhao(nome)
+    df_stock = _carregar_stock_garanhao(animal_id)
+    df_ins = _carregar_inseminacoes_garanhao(animal_id)
     total_palh, _, _, _, _ = _kpis_stock_garanhao(df_stock)
     _, _, _, taxa_pct = _kpis_fertilidade_garanhao(df_ins)
-    ultima = _ultima_producao_garanhao(nome)
+    ultima = _ultima_producao_garanhao(animal_id)
 
     alertas_emitidos = 0
 

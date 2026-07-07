@@ -202,3 +202,176 @@ if __name__ == "__main__":
     import sys
 
     sys.exit(pytest.main([__file__, "-v", "-s"]))
+
+
+# ────────────────────────────────────────────────────────────────────
+# Índice único anti-duplicados (migration 025)
+# ────────────────────────────────────────────────────────────────────
+
+def test_indice_unico_impede_duplicados_nome_tipo(db_conn, dono_id):
+    """A UNIQUE INDEX `animais_nome_tipo_uniq` deve bloquear inserts com
+    o mesmo `(LOWER(TRIM(nome)), tipo)` — mesmo com case/espaços diferentes.
+    """
+    base = f"_TEST_UNIQ_{int(time.time() * 1000)}"
+    variantes = [base, f"  {base.lower()}  ", base.upper()]
+
+    ids_criados: list[int] = []
+    cur = db_conn.cursor()
+    try:
+        # 1º INSERT — deve passar
+        cur.execute(
+            "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+            "VALUES (%s, 'garanhao', %s, TRUE) RETURNING id",
+            (variantes[0], dono_id),
+        )
+        ids_criados.append(int(cur.fetchone()[0]))
+        db_conn.commit()
+
+        # 2º e 3º INSERTs — devem falhar com UniqueViolation
+        for variante in variantes[1:]:
+            try:
+                cur.execute(
+                    "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+                    "VALUES (%s, 'garanhao', %s, TRUE) RETURNING id",
+                    (variante, dono_id),
+                )
+                dupe_id = int(cur.fetchone()[0])
+                ids_criados.append(dupe_id)
+                pytest.fail(
+                    f"Insert duplicado ('{variante}') devia falhar mas "
+                    f"criou id={dupe_id}"
+                )
+            except psycopg2.errors.UniqueViolation:
+                db_conn.rollback()
+    finally:
+        cur.close()
+        if ids_criados:
+            c = db_conn.cursor()
+            c.execute(
+                "DELETE FROM animais WHERE id = ANY(%s)", (ids_criados,),
+            )
+            db_conn.commit()
+            c.close()
+
+
+def test_indice_unico_permite_mesmo_nome_tipos_diferentes(db_conn, dono_id):
+    """O índice é `(nome_lc, tipo)` — mesmo nome com tipos diferentes
+    deve continuar a ser permitido (ex.: "Tornado" égua + "Tornado" garanhão)."""
+    base = f"_TEST_TIPOS_{int(time.time() * 1000)}"
+    ids: list[int] = []
+    cur = db_conn.cursor()
+    try:
+        for tipo in ("egua", "garanhao"):
+            cur.execute(
+                "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+                "VALUES (%s, %s, %s, TRUE) RETURNING id",
+                (base, tipo, dono_id),
+            )
+            ids.append(int(cur.fetchone()[0]))
+            db_conn.commit()
+        assert len(ids) == 2
+        assert ids[0] != ids[1]
+    finally:
+        cur.close()
+        if ids:
+            c = db_conn.cursor()
+            c.execute("DELETE FROM animais WHERE id = ANY(%s)", (ids,))
+            db_conn.commit()
+            c.close()
+
+
+# ────────────────────────────────────────────────────────────────────
+# Ficha do garanhão via FK (`estoque_dono.animal_id`)
+# ────────────────────────────────────────────────────────────────────
+
+def test_carregar_stock_garanhao_usa_fk_animal_id(db_conn, dono_id):
+    """`_carregar_stock_garanhao(animal_id)` devolve lotes cuja FK
+    `estoque_dono.animal_id` coincide, ignorando lotes de outro garanhão
+    com o mesmo nome legado.
+    """
+    from modules.pages.animal_page import _carregar_stock_garanhao
+
+    nome = f"_TEST_STOCK_FK_{int(time.time() * 1000)}"
+
+    animal_id: int | None = None
+    lote_ids: list[int] = []
+    cur = db_conn.cursor()
+    try:
+        # Cria o garanhão
+        cur.execute(
+            "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+            "VALUES (%s, 'garanhao', %s, TRUE) RETURNING id",
+            (nome, dono_id),
+        )
+        animal_id = int(cur.fetchone()[0])
+
+        # Cria dois lotes ligados por FK — um com data válida, outro sem data
+        for palhetas in (10, 5):
+            cur.execute(
+                "INSERT INTO estoque_dono ("
+                "  garanhao, dono_id, animal_id, palhetas_produzidas, "
+                "  existencia_atual, data_embriovet"
+                ") VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (nome, dono_id, animal_id, palhetas, palhetas, "2025-01-15"),
+            )
+            lote_ids.append(int(cur.fetchone()[0]))
+        db_conn.commit()
+
+        # Query via FK deve devolver ambos os lotes
+        df = _carregar_stock_garanhao(animal_id)
+        assert len(df) == 2, (
+            f"esperado 2 lotes via FK, obtido {len(df)}"
+        )
+        assert set(df["palhetas_restantes"].tolist()) == {10, 5}
+
+        # Garantir que a query filtra por FK e não por nome — se
+        # inserirmos um lote com o mesmo nome mas `animal_id` diferente
+        # (aponta para um segundo garanhão), NÃO deve aparecer.
+        cur.execute(
+            "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+            "VALUES (%s, 'egua', %s, TRUE) RETURNING id",
+            (nome, dono_id),  # mesmo nome, tipo diferente — permitido
+        )
+        outro_animal_id = int(cur.fetchone()[0])
+        cur.execute(
+            "INSERT INTO estoque_dono ("
+            "  garanhao, dono_id, animal_id, palhetas_produzidas, "
+            "  existencia_atual"
+            ") VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (nome, dono_id, outro_animal_id, 999, 999),
+        )
+        lote_outro = int(cur.fetchone()[0])
+        lote_ids.append(lote_outro)
+        db_conn.commit()
+
+        df2 = _carregar_stock_garanhao(animal_id)
+        assert len(df2) == 2, (
+            "A query devia filtrar por animal_id (FK), não devia "
+            "trazer lotes com o mesmo nome mas animal_id diferente"
+        )
+        assert 999 not in set(df2["palhetas_restantes"].tolist())
+
+        # Cleanup do "outro" animal (apaga primeiro o lote — FK sem CASCADE)
+        cur.execute("DELETE FROM estoque_dono WHERE id = %s", (lote_outro,))
+        lote_ids.remove(lote_outro)
+        cur.execute(
+            "DELETE FROM animais WHERE id = %s", (outro_animal_id,),
+        )
+        db_conn.commit()
+    finally:
+        cur.close()
+        # Se algo falhou a meio, rollback antes do cleanup para libertar
+        # a transacção da ligação.
+        try:
+            db_conn.rollback()
+        except Exception:
+            pass
+        c = db_conn.cursor()
+        if lote_ids:
+            c.execute(
+                "DELETE FROM estoque_dono WHERE id = ANY(%s)", (lote_ids,),
+            )
+        if animal_id is not None:
+            c.execute("DELETE FROM animais WHERE id = %s", (animal_id,))
+        db_conn.commit()
+        c.close()
