@@ -2814,11 +2814,39 @@ elif aba == t("menu.add_stock"):
                     on_success=_on_garanhao_criado,
                 )
 
-            # Botão + fora do form (Alinhado à direita)
-            col_act1, col_act2 = st.columns([6, 2])
-            with col_act2:
-                if st.button(f"➕ {t('stock.new_owner')}", key="btn_add_prop_stock", help=t("stock.new_owner_help"), width="stretch"):
-                    modal_adicionar_proprietario()
+            # ── Sub-orquestração: quando o utilizador clica "+ Novo
+            # proprietário" DENTRO do modal do animal, o próprio modal
+            # activa `abrir_modal_prop_standalone` — fica ao dono da página
+            # abrir o modal do proprietário aqui. Depois, o novo dono fica
+            # imediatamente disponível no selectbox "Proprietário do sémen".
+            if st.session_state.get("abrir_modal_prop_standalone"):
+                del st.session_state["abrir_modal_prop_standalone"]
+                from modules.components.modal_proprietario import render_modal_proprietario
+                def _on_prop_criado(dono_id, dono_nome):
+                    st.session_state["novo_prop_id"] = dono_id
+                    st.session_state["novo_prop_nome"] = dono_nome
+                    # Bridge para o selectbox "Proprietário do sémen":
+                    st.session_state["novo_proprietario_id"] = dono_id
+                    st.session_state["reabrir_modal_animal"] = True
+                    st.rerun()
+                render_modal_proprietario(
+                    key="modal_prop_standalone_stock",
+                    on_success=_on_prop_criado,
+                )
+
+            if st.session_state.get("reabrir_modal_animal"):
+                del st.session_state["reabrir_modal_animal"]
+                from modules.components.modal_animal import render_modal_animal
+                def _on_garanhao_criado2(animal_id, animal_nome, estadia_id):
+                    st.session_state["novo_animal_id"] = int(animal_id)
+                    st.session_state["novo_animal_nome"] = animal_nome
+                    st.rerun()
+                render_modal_animal(
+                    key="modal_novo_garanhao_stock",
+                    tipo_default="garanhao",
+                    tipo_locked=True,
+                    on_success=_on_garanhao_criado2,
+                )
 
             # ── Identificação do Garanhão (FORA do form para permitir
             # pré-selecção de garanhão recém-criado via session_state) ────

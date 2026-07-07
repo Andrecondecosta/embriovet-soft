@@ -1,9 +1,16 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Maio 2026** — Perfil de Garanhão validado (4 abas: Resumo, Produção de sémen, Fertilidade, Alertas). Bug corrigido: `TypeError: unsupported operand type(s) for -: 'datetime.date' and 'str'` na aba Alertas — `data_embriovet` é VARCHAR no schema legado, agora convertido para DATE via SQL `NULLIF(...)::date` em `_ultima_producao_garanhao()` com fallback Python. P0 "Heatmap click bloqueado por DOM overlap" RESOLVIDO. P3 refactoring iniciado: extração de auth e DB para módulos dedicados (`modules/db.py`, `modules/services/auth_service.py`). `app.py` reduzido de 3623 → 3329 linhas (≈ 300 linhas extraídas).
+**Fev 2026** — Removido o botão "➕ Novo Proprietário" do formulário "Adicionar Stock" em `app.py`; a criação de proprietário passa exclusivamente pelo fluxo orquestrado do `modal_animal → modal_proprietario` (via `abrir_modal_prop_standalone` + `reabrir_modal_animal`). Criada suite de testes de integração `/app/tests/test_modal_animal.py` que valida `_criar_animal_e_estadia` — garante que um garanhão criado gera o FK correcto em `estadias.animal_id` e que a FK impede órfãos. Ambos os testes passam contra o Postgres do Render.
 
-## Changelog Recente (Maio 2026)
+## Changelog Recente (Fev 2026)
+- ✅ **Botão "➕ Novo Proprietário" removido do form "Adicionar Stock"** — proprietário criado via modal_animal fica disponível no selectbox "Proprietário do sémen" após `st.rerun()` (usa `novo_proprietario_id` como bridge, e `proprietarios` é recarregado no topo do script).
+- ✅ **Testes `/app/tests/test_modal_animal.py`** (2 testes, ambos passam):
+  - `test_criar_garanhao_gera_fk_correcto_em_estadias` — cria animal + estadia via `_criar_animal_e_estadia`, valida `animais.tipo='garanhao'`, `estadias.animal_id == animal_id`, e JOIN `animais ↔ estadias`.
+  - `test_fk_estadias_animal_id_impede_orfao` — confirma que a FK `estadias_animal_id_fkey` rejeita `animal_id` inexistente.
+- Infra: adicionado `/app/tests/conftest.py` (carrega `.env` + adiciona `/app` ao `sys.path`).
+
+## Changelog Anterior (Maio 2026)
 - ✅ **P0: Heatmap click corrigido** — A causa-raiz era uma regra CSS interna do Streamlit (`.stElementContainer:has([data-testid="stMarkdownContainer"] > style) { position: absolute }`) que aplicava `position: absolute` a qualquer markdown que começasse com `<style>`. O heatmap HTML começava com bloco `<style>` o que fazia o container saltar para o topo do DOM, sobrepondo-se a outros elementos. **Solução:** mover o CSS do heatmap para o bloco global de estilos da página (uma só vez) e fazer `build_heatmap_html()` retornar apenas o `<div>` da tabela.
 - ✅ **P3 refactoring inicial:** Criados `/app/modules/db.py` (pool + `get_connection`) e `/app/modules/services/auth_service.py` (auth/sessões/permissões). `app.py` agora importa em vez de definir.
 
