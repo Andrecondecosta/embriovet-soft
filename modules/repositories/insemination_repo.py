@@ -32,7 +32,8 @@ from modules.db import get_connection
 from modules.repositories.animal_repo import get_or_create_garanhao
 
 
-# Offsets D+14 / D+28 / D+45 (fixos por decisão de produto).
+# Offsets D+1 / D+14 / D+28 / D+45 (fixos por decisão de produto).
+DIAS_VER_OVULACAO = 1
 DIAS_1O_DIAGNOSTICO = 14
 DIAS_CONFIRMACAO = 28
 DIAS_2A_CONFIRMACAO = 45
@@ -121,6 +122,7 @@ def registar_inseminacao_completa(
     observacoes: Optional[str] = None,
     utilizador: str = "—",
     operation_id: Optional[str] = None,
+    criar_tarefa_d1: bool = True,
 ) -> dict:
     """Regista uma inseminação completa numa única transacção.
 
@@ -189,7 +191,8 @@ def registar_inseminacao_completa(
     if operation_id is None:
         operation_id = str(uuid.uuid4())
 
-    # Datas automáticas D+14/D+28/D+45 + parto previsto.
+    # Datas automáticas D+1/D+14/D+28/D+45 + parto previsto.
+    data_d1 = data_inseminacao + timedelta(days=DIAS_VER_OVULACAO)
     data_1o = data_inseminacao + timedelta(days=DIAS_1O_DIAGNOSTICO)
     data_conf = data_inseminacao + timedelta(days=DIAS_CONFIRMACAO)
     data_2a = data_inseminacao + timedelta(days=DIAS_2A_CONFIRMACAO)
@@ -320,6 +323,35 @@ def registar_inseminacao_completa(
             td_row = cur.fetchone()
             trabalho_diario_id = int(td_row[0]) if td_row else None
 
+            # 6. Tarefa opcional D+1 — verificação de ovulação (idempotente).
+            verificar_ovulacao_id: Optional[int] = None
+            if criar_tarefa_d1:
+                cur.execute(
+                    """
+                    INSERT INTO trabalho_diario (
+                        animal_id, estadia_id, data_tarefa, tipo, motivo,
+                        urgencia, criado_automaticamente, utilizador
+                    )
+                    SELECT %s, %s, %s, 'verificar_ovulacao', %s,
+                           'hoje', TRUE, %s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM trabalho_diario
+                        WHERE animal_id = %s AND estadia_id = %s
+                          AND data_tarefa = %s
+                          AND tipo = 'verificar_ovulacao'
+                    )
+                    RETURNING id
+                    """,
+                    (
+                        int(animal_id_egua), int(estadia_id), data_d1,
+                        f"Verificar ovulação (D+1) — inseminação {data_inseminacao.strftime('%d/%m/%Y')}",
+                        utilizador,
+                        int(animal_id_egua), int(estadia_id), data_d1,
+                    ),
+                )
+                td1_row = cur.fetchone()
+                verificar_ovulacao_id = int(td1_row[0]) if td1_row else None
+
             conn.commit()
         except Exception:
             conn.rollback()
@@ -331,11 +363,13 @@ def registar_inseminacao_completa(
         "inseminacao_ids": inseminacao_ids,
         "acompanhamento_id": acompanhamento_id,
         "trabalho_diario_id": trabalho_diario_id,
+        "verificar_ovulacao_id": verificar_ovulacao_id,
         "operation_id": operation_id,
         "animal_id_egua": int(animal_id_egua),
         "animal_id_garanhao": int(animal_id_garanhao),
         "estadia_id": int(estadia_id),
         "data_inseminacao": data_inseminacao,
+        "data_ver_ovulacao": data_d1,
         "data_1o_diagnostico": data_1o,
         "data_confirmacao": data_conf,
         "data_2a_confirmacao": data_2a,

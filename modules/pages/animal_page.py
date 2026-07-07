@@ -250,29 +250,49 @@ COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"]
 
 # ── Historial reprodutivo ──────────────────────────────────────────────────
 def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFrame:
-    """Histórico completo de inseminações da égua, com proprietário e resultado
-    (do acompanhamento da estadia que abrange a data, se existir)."""
+    """Histórico de inseminações da égua, **agrupado por `operation_id`**.
+
+    Numa inseminação multi-lote existe uma linha em `inseminacoes` por
+    lote, mas para o utilizador é uma só operação. Aqui agregamos por
+    `operation_id` (com fallback `solo_<id>` para linhas legacy sem
+    `operation_id`) — a coluna `palhetas_gastas` passa a ser o total da
+    operação e `num_lotes` conta os lotes envolvidos.
+    """
     sql = """
+        WITH ins AS (
+            SELECT
+                i.id,
+                i.data_inseminacao,
+                i.garanhao,
+                i.dono_id,
+                i.palhetas_gastas,
+                i.observacoes,
+                COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
+            FROM inseminacoes i
+            WHERE LOWER(i.egua) = LOWER(%s)
+        )
         SELECT
-            i.data_inseminacao,
-            i.garanhao,
-            d.nome           AS proprietario,
-            i.palhetas_gastas,
-            COALESCE(ai.resultado, 'pendente') AS resultado,
-            i.observacoes
-        FROM inseminacoes i
-        LEFT JOIN dono d ON d.id = i.dono_id
+            MIN(ins.data_inseminacao) AS data_inseminacao,
+            MAX(ins.garanhao)         AS garanhao,
+            MAX(d.nome)               AS proprietario,
+            SUM(ins.palhetas_gastas)  AS palhetas_gastas,
+            COUNT(*)                  AS num_lotes,
+            COALESCE(MAX(ai.resultado), 'pendente') AS resultado,
+            MAX(ins.observacoes)      AS observacoes,
+            ins.op_key
+        FROM ins
+        LEFT JOIN dono d ON d.id = ins.dono_id
         LEFT JOIN estadias e
                ON e.animal_id = %s
               AND e.motivo = 'inseminacao'
-              AND i.data_inseminacao BETWEEN e.data_entrada
-                                         AND COALESCE(e.data_saida, CURRENT_DATE)
+              AND ins.data_inseminacao BETWEEN e.data_entrada
+                                          AND COALESCE(e.data_saida, CURRENT_DATE)
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
-        WHERE LOWER(i.egua) = LOWER(%s)
-        ORDER BY i.data_inseminacao DESC, i.id DESC
+        GROUP BY ins.op_key
+        ORDER BY MIN(ins.data_inseminacao) DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(animal_id, animal_nome))
+        return pd.read_sql_query(sql, conn, params=(animal_nome, animal_id))
 
 
 def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
@@ -341,7 +361,16 @@ def _render_tab_historial_reprodutivo(animal: dict) -> None:
             cols[0].write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "—")
             cols[1].write(row["garanhao"] or "—")
             cols[2].write(row["proprietario"] or "—")
-            cols[3].write(int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else "—")
+            palhetas_val = int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else 0
+            num_lotes = int(row.get("num_lotes") or 1)
+            if num_lotes > 1:
+                cols[3].markdown(
+                    f"{palhetas_val} <span style='color:#64748b;font-size:.7rem;'>"
+                    f"({num_lotes} lotes)</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                cols[3].write(palhetas_val if palhetas_val else "—")
             cols[4].markdown(_badge_resultado(row["resultado"]), unsafe_allow_html=True)
             obs = row["observacoes"] or "—"
             obs_short = obs if len(obs) <= 60 else obs[:59] + "…"
@@ -1077,28 +1106,40 @@ def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
 
 
 def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
-    """Inseminações deste garanhão — matching por FK (`i.animal_id_garanhao`).
-
-    O JOIN à égua também usa FK (`i.animal_id_egua`) para localizar a
-    estadia de inseminação correspondente.
+    """Inseminações deste garanhão — matching por FK (`i.animal_id_garanhao`)
+    e **agrupadas por `operation_id`** para não duplicar operações multi-lote.
     """
     sql = """
+        WITH ins AS (
+            SELECT
+                i.id,
+                i.data_inseminacao,
+                i.egua,
+                i.dono_id,
+                i.animal_id_egua,
+                i.palhetas_gastas,
+                COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
+            FROM inseminacoes i
+            WHERE i.animal_id_garanhao = %s
+        )
         SELECT
-            i.data_inseminacao,
-            i.egua,
-            d.nome           AS proprietario,
-            i.palhetas_gastas,
-            COALESCE(ai.resultado, 'pendente') AS resultado
-        FROM inseminacoes i
-        LEFT JOIN dono d ON d.id = i.dono_id
+            MIN(ins.data_inseminacao) AS data_inseminacao,
+            MAX(ins.egua)             AS egua,
+            MAX(d.nome)               AS proprietario,
+            SUM(ins.palhetas_gastas)  AS palhetas_gastas,
+            COUNT(*)                  AS num_lotes,
+            COALESCE(MAX(ai.resultado), 'pendente') AS resultado,
+            ins.op_key
+        FROM ins
+        LEFT JOIN dono d ON d.id = ins.dono_id
         LEFT JOIN estadias e
-               ON e.animal_id = i.animal_id_egua
+               ON e.animal_id = ins.animal_id_egua
               AND e.motivo = 'inseminacao'
-              AND i.data_inseminacao BETWEEN e.data_entrada
-                                         AND COALESCE(e.data_saida, CURRENT_DATE)
+              AND ins.data_inseminacao BETWEEN e.data_entrada
+                                          AND COALESCE(e.data_saida, CURRENT_DATE)
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
-        WHERE i.animal_id_garanhao = %s
-        ORDER BY i.data_inseminacao DESC, i.id DESC
+        GROUP BY ins.op_key
+        ORDER BY MIN(ins.data_inseminacao) DESC
     """
     with get_connection() as conn:
         return pd.read_sql_query(sql, conn, params=(int(animal_id),))
@@ -1204,8 +1245,8 @@ def _render_tab_producao_semen(animal: dict) -> None:
 
 
 def _render_tab_fertilidade_garanhao(animal: dict) -> None:
-    nome = animal.get("nome") or ""
-    df = _carregar_inseminacoes_garanhao(nome)
+    animal_id = int(animal.get("id"))
+    df = _carregar_inseminacoes_garanhao(animal_id)
     total, ges, taxa_txt, _ = _kpis_fertilidade_garanhao(df)
 
     k1, k2, k3 = st.columns(3)
@@ -1241,7 +1282,16 @@ def _render_tab_fertilidade_garanhao(animal: dict) -> None:
         cols[0].write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "—")
         cols[1].write(row["egua"] or "—")
         cols[2].write(row["proprietario"] or "—")
-        cols[3].write(int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else "—")
+        palhetas_val = int(row["palhetas_gastas"]) if pd.notna(row["palhetas_gastas"]) else 0
+        num_lotes = int(row.get("num_lotes") or 1)
+        if num_lotes > 1:
+            cols[3].markdown(
+                f"{palhetas_val} <span style='color:#64748b;font-size:.7rem;'>"
+                f"({num_lotes} lotes)</span>",
+                unsafe_allow_html=True,
+            )
+        else:
+            cols[3].write(palhetas_val if palhetas_val else "—")
         cols[4].markdown(_badge_resultado(row["resultado"]), unsafe_allow_html=True)
 
 

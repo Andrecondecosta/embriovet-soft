@@ -513,6 +513,134 @@ def test_upsert_acompanhamento_datas_partilhado(db, egua_com_estadia):
     cur.close()
 
 
+# ────────────────────────────────────────────────────────────────────
+# Follow-up D+1 (verificar ovulação) — Pedido 3a
+# ────────────────────────────────────────────────────────────────────
+
+def test_tarefa_d1_criada_por_defeito(db, egua_com_estadia, stock_garanhao):
+    """`criar_tarefa_d1=True` (default) → tarefa D+1 em trabalho_diario."""
+    data_ins = date(2026, 6, 1)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[{"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 2}],
+    )
+    assert resultado["verificar_ovulacao_id"] is not None
+    assert resultado["data_ver_ovulacao"] == data_ins + timedelta(days=1)
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT data_tarefa, tipo FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo = 'verificar_ovulacao'",
+        (egua_com_estadia["estadia_id"],),
+    )
+    row = cur.fetchone()
+    assert row is not None, "tarefa D+1 devia ter sido criada"
+    assert row[0] == data_ins + timedelta(days=1)
+    cur.close()
+
+
+def test_tarefa_d1_pode_ser_desativada(db, egua_com_estadia, stock_garanhao):
+    """`criar_tarefa_d1=False` → não cria tarefa D+1 (mas D+14 é sempre)."""
+    data_ins = date(2026, 6, 15)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[{"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 1}],
+        criar_tarefa_d1=False,
+    )
+    assert resultado["verificar_ovulacao_id"] is None
+    assert resultado["trabalho_diario_id"] is not None  # D+14 continua
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo = 'verificar_ovulacao'",
+        (egua_com_estadia["estadia_id"],),
+    )
+    assert cur.fetchone()[0] == 0
+    cur.execute(
+        "SELECT COUNT(*) FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo = 'diagnostico_gestacao'",
+        (egua_com_estadia["estadia_id"],),
+    )
+    assert cur.fetchone()[0] == 1
+    cur.close()
+
+
+def test_tarefa_d1_idempotente(db, egua_com_estadia, stock_garanhao):
+    """Segundo call com os mesmos inputs não cria uma segunda tarefa D+1."""
+    args = dict(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=date(2026, 7, 1),
+        registros=[{"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 1}],
+    )
+    registar_inseminacao_completa(**args)
+    args["registros"] = [{"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 1}]
+    registar_inseminacao_completa(**args)
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo = 'verificar_ovulacao'",
+        (egua_com_estadia["estadia_id"],),
+    )
+    assert cur.fetchone()[0] == 1, (
+        "tarefa D+1 devia ser idempotente — apenas uma linha por estadia/data"
+    )
+    cur.close()
+
+
+# ────────────────────────────────────────────────────────────────────
+# Agrupamento por operation_id — Pedido 3b
+# ────────────────────────────────────────────────────────────────────
+
+def test_listagens_agrupam_por_operation_id(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Uma inseminação multi-lote aparece como UMA só linha (não duas)
+    nas listagens da ficha da égua e do garanhão."""
+    from modules.pages.animal_page import (
+        _carregar_inseminacoes_animal,
+        _carregar_inseminacoes_garanhao,
+    )
+    # Multi-lote: 2 lotes numa só operação
+    registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=date(2026, 8, 1),
+        registros=[
+            {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 4},
+            {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 2},
+        ],
+    )
+
+    # A ficha da égua deve mostrar 1 linha com palhetas=6 e num_lotes=2.
+    df_egua = _carregar_inseminacoes_animal(
+        egua_com_estadia["animal_id"], egua_com_estadia["nome"],
+    )
+    assert len(df_egua) == 1
+    assert int(df_egua.iloc[0]["palhetas_gastas"]) == 6
+    assert int(df_egua.iloc[0]["num_lotes"]) == 2
+
+    # A ficha do garanhão idem.
+    df_gar = _carregar_inseminacoes_garanhao(stock_garanhao["garanhao_id"])
+    assert len(df_gar) == 1
+    assert int(df_gar.iloc[0]["palhetas_gastas"]) == 6
+    assert int(df_gar.iloc[0]["num_lotes"]) == 2
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v", "-s"]))

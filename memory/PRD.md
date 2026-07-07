@@ -1,9 +1,24 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — Pedido 3 concluído: **unificação do registo de inseminações**. Criado `modules/repositories/insemination_repo.py` com `registar_inseminacao_completa(...)` — função única, transaccional, chamada pelo menu e pela ficha da égua. Preenche FKs (`animal_id_egua/garanhao`, `estadia_id`), gera datas automáticas D+14/D+28/D+45 em `acompanhamento_inseminacao`, cria tarefa D+14 em `trabalho_diario` e desconta palhetas multi-lote — tudo numa transacção. Menu "Registar Inseminação" passou a usar um **selectbox de éguas com estadia activa** (elimina texto livre). `get_or_create_garanhao` agora normaliza acentos e espaços internos ("Falcao"/"Falcão" = mesmo id). Migration 026 adiciona `unaccent` + `f_unaccent` IMMUTABLE + reconstroi o índice único com normalização acento/espaços. Suite de testes migrou para BD Postgres local isolada (`TEST_DATABASE_URL`), com 11 testes a passar em 0.5s.
+**Fev 2026** — Pedidos 3a (observações destacadas + checkbox D+1 opcional) e 3b (agrupamento por `operation_id` nas listagens) concluídos. Registo de inseminações passa agora a: (i) mostrar o campo de observações com label destacado ("🗒 Observações da inseminação") e placeholder útil (reflexo, edema, hora, protocolo hormonal), (ii) oferecer checkbox "🩺 Criar tarefa D+1 (verificar ovulação)" ligado por defeito; a tarefa D+14 continua sempre automática. Listagens das fichas (égua e garanhão) passam a agrupar por `operation_id` — inseminações multi-lote aparecem como UMA linha com o total de palhetas e a etiqueta "(N lotes)". 15 testes a passar em 0.62s.
 
-## Changelog Recente (Fev 2026)
+## Changelog Recente (Fev 2026 — Pedidos 3a + 3b)
+- ✅ **Pedido 3a — UX pós-inseminação**:
+  - `insemination_page.py` — campo de observações com label destacado + placeholder ("O que aconteceu? Reflexo, edema uterino, hora exacta, protocolo hormonal usado, etc.") + altura 110px.
+  - Novo checkbox `insem_criar_d1` ligado por defeito com help text.
+  - `insemination_repo.registar_inseminacao_completa(..., criar_tarefa_d1: bool = True)` — quando `True`, insere entrada `tipo='verificar_ovulacao'` idempotente em `trabalho_diario` na data D+1. A tarefa D+14 (`diagnostico_gestacao`) é sempre criada.
+  - Migration 027 — adiciona `verificar_ovulacao` ao CHECK constraint `trabalho_diario_tipo_check`.
+  - Return da função inclui `verificar_ovulacao_id` e `data_ver_ovulacao`.
+- ✅ **Pedido 3b — Agrupamento por `operation_id`**:
+  - `animal_page._carregar_inseminacoes_animal` — query reescrita com CTE + `GROUP BY COALESCE(operation_id::text, 'solo_' || id::text)`. Colunas: `data_inseminacao` (MIN), `garanhao` (MAX), `proprietario`, `palhetas_gastas` (SUM), `num_lotes` (COUNT), `resultado`, `observacoes`, `op_key`.
+  - `animal_page._carregar_inseminacoes_garanhao` — mesma técnica, sobre FK `animal_id_garanhao`. Bug secundário corrigido: `_render_tab_fertilidade_garanhao` estava a passar `nome` em vez de `animal_id` para a função (regressão do Pedido 2 que só se manifestava em runtime).
+  - Renderização: quando `num_lotes > 1` a coluna palhetas mostra "6 (2 lotes)" em vez de duplicar linhas.
+  - O dashboard já agregava por `operation_id` — nenhuma alteração necessária lá.
+- ✅ **Testes** — 4 novos em `test_insemination_repo.py` (`test_tarefa_d1_criada_por_defeito`, `test_tarefa_d1_pode_ser_desativada`, `test_tarefa_d1_idempotente`, `test_listagens_agrupam_por_operation_id`). Total **15 testes, 0.62s** contra a BD local.
+- ✅ Migrations aplicadas em produção Render e na BD de teste.
+
+## Changelog Anterior (Fev 2026 — Pedido 3)
 - ✅ **Migration 026 — normalização acentos + espaços**:
   - `CREATE EXTENSION IF NOT EXISTS unaccent`
   - `f_unaccent(text)` IMMUTABLE (wrapper obrigatório porque `unaccent` não é IMMUTABLE)
