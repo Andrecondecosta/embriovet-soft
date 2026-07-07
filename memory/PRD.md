@@ -1,9 +1,38 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — Pedido 2 concluído: ficha do garanhão agora liga por FK (`estoque_dono.animal_id`, `inseminacoes.animal_id_garanhao/egua`) em vez de `LOWER(garanhao)`, e criado `UNIQUE INDEX animais_nome_tipo_uniq ON animais (LOWER(TRIM(nome)), tipo)` via migration 025 (com dedupe de duplicados legados). Também concluído o Pedido 2c (botão "➕ Novo Proprietário" removido do "Adicionar Stock", criação via `modal_animal → modal_proprietario` funciona sem F5). Suite de testes `/app/tests/test_modal_animal.py` cobre agora 5 cenários (todos passam contra o Postgres do Render).
+**Fev 2026** — Pedido 3 concluído: **unificação do registo de inseminações**. Criado `modules/repositories/insemination_repo.py` com `registar_inseminacao_completa(...)` — função única, transaccional, chamada pelo menu e pela ficha da égua. Preenche FKs (`animal_id_egua/garanhao`, `estadia_id`), gera datas automáticas D+14/D+28/D+45 em `acompanhamento_inseminacao`, cria tarefa D+14 em `trabalho_diario` e desconta palhetas multi-lote — tudo numa transacção. Menu "Registar Inseminação" passou a usar um **selectbox de éguas com estadia activa** (elimina texto livre). `get_or_create_garanhao` agora normaliza acentos e espaços internos ("Falcao"/"Falcão" = mesmo id). Migration 026 adiciona `unaccent` + `f_unaccent` IMMUTABLE + reconstroi o índice único com normalização acento/espaços. Suite de testes migrou para BD Postgres local isolada (`TEST_DATABASE_URL`), com 11 testes a passar em 0.5s.
 
 ## Changelog Recente (Fev 2026)
+- ✅ **Migration 026 — normalização acentos + espaços**:
+  - `CREATE EXTENSION IF NOT EXISTS unaccent`
+  - `f_unaccent(text)` IMMUTABLE (wrapper obrigatório porque `unaccent` não é IMMUTABLE)
+  - `animais_nome_tipo_uniq` reconstruído com `LOWER(f_unaccent(TRIM(REGEXP_REPLACE(nome, '\\s+', ' ', 'g'))))`
+  - Aplicada em produção Render e na BD local de teste.
+- ✅ **`modules/repositories/insemination_repo.py` (novo)**:
+  - `registar_inseminacao_completa(*, animal_id_egua, estadia_id, dono_id, garanhao_nome, data_inseminacao, registros[], observacoes, utilizador, operation_id)` — cria inseminacoes (multi-lote), acompanhamento (D+14/D+28/D+45/parto), trabalho_diario (D+14), e desconta stock, tudo numa só transacção com rollback em qualquer erro.
+  - `upsert_acompanhamento_datas(...)` — primitiva partilhada de UPSERT em `acompanhamento_inseminacao`. Usada por `registar_inseminacao_completa` E pelo `_upsert_acompanhamento` da ficha da égua → uma só implementação.
+  - `listar_eguas_com_estadia_ativa()` — JOIN `animais × estadias` com filtro `data_saida IS NULL`, devolve `animal_id, nome, estadia_id, alojamento_nome/tipo, dono_id, dono_nome`.
+- ✅ **`modules/repositories/animal_repo.get_or_create_garanhao`** — normalização acento/espaços via `f_unaccent` + regex, alinhada com o índice único.
+- ✅ **`modules/pages/insemination_page.py`**:
+  - `st.text_input("Égua")` substituído por `st.selectbox` com formato "Nome — Box/Paddock — Proprietário".
+  - Sem éguas com estadia activa: warning + link para "Estadias e Visitas" (não permite texto livre).
+  - Criação → `registar_inseminacao_completa`. Edição continua a usar `registrar_inseminacao_multiplas` (backward compat, fora do scope deste pedido).
+- ✅ **`modules/pages/animal_page.py::_upsert_acompanhamento`** — reduzida a delegação para `insemination_repo.upsert_acompanhamento_datas` (elimina segunda implementação).
+- ✅ **BD de teste isolada** (`TEST_DATABASE_URL`):
+  - `tests/conftest.py` sobrescreve `DATABASE_URL` antes dos imports; se `TEST_DATABASE_URL` não estiver configurada, chama `pytest.skip` a nível de módulo (safety contra correr contra produção).
+  - PostgreSQL 15 local + schema replicado via `pg_dump 18` da produção + migrations 001-026 aplicadas.
+  - Ver `/app/tests/README.md` para instruções de setup.
+- ✅ **`tests/test_insemination_repo.py` (novo, 6 testes)**:
+  1. `test_get_or_create_garanhao_normaliza_acentos_e_espacos` — variantes acento/case/espaços apontam ao mesmo id.
+  2. `test_listar_eguas_so_devolve_com_estadia_ativa` — critério (d): estadia fechada → não aparece.
+  3. `test_registar_inseminacao_completa_fks_datas_stock` — critérios (a)+(b)+(e): FKs, texto = nome canónico, datas D+14/D+28/D+45, entrada em `trabalho_diario`, desconto multi-lote correcto.
+  4. `test_menu_e_ficha_produzem_mesmo_resultado` — critério (c): snapshot comparativo dos dois caminhos com os mesmos inputs.
+  5. `test_stock_insuficiente_falha_e_faz_rollback` — falha atómica: nada escrito, stock intacto.
+  6. `test_upsert_acompanhamento_datas_partilhado` — a primitiva partilhada é UPSERT (idempotente, 1 linha por estadia).
+- Total: **11 testes a passar em 0.54s** contra a BD local.
+
+## Changelog Anterior (Fev 2026 — Pedido 2)
 - ✅ **Migration 025 — dedupe + índice único anti-duplicados**:
   - Fusão de duplicados por `(LOWER(TRIM(nome)), tipo)` — mantém o `id` mais antigo, reaponta TODAS as FKs (`estoque_dono.animal_id`, `inseminacoes.animal_id_egua/garanhao`, `estadias.animal_id/animal_doador_id`, `diario_clinico.animal_id`, `trabalho_diario.animal_id`, `acompanhamento_inseminacao.animal_id`) e apaga os `id` mais recentes.
   - Cria `UNIQUE INDEX animais_nome_tipo_uniq ON animais (LOWER(TRIM(nome)), tipo)` sobre todos os registos (não apenas `ativo=TRUE`).

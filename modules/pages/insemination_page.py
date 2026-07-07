@@ -519,11 +519,56 @@ def run_insemination_page(ctx):
     
     st.markdown("---")
     
-    # 5. ÉGUA, DATA E OBSERVAÇÕES
+    # 5. ÉGUA (selectbox de éguas com estadia activa — obrigatório)
     render_zone_title(t("insemination.zone_details"), "insem-zone-title")
+
+    from modules.repositories.insemination_repo import (
+        listar_eguas_com_estadia_ativa,
+    )
+    eguas_ativas = listar_eguas_com_estadia_ativa()
+
+    if not eguas_ativas:
+        st.warning(
+            "Não existem éguas com estadia activa. Registe primeiro uma "
+            "estadia com motivo 'inseminação' no menu 'Estadias e Visitas'."
+        )
+        st.info(
+            "💡 As inseminações têm de ficar sempre ligadas a uma estadia "
+            "para o acompanhamento pós-inseminação (D+14/D+28/D+45) "
+            "funcionar."
+        )
+        return
+
+    def _fmt_egua(idx: int) -> str:
+        e = eguas_ativas[idx]
+        aloj = e.get("alojamento_nome") or "sem alojamento"
+        aloj_tipo = e.get("alojamento_tipo") or ""
+        aloj_label = f"{aloj} ({aloj_tipo})" if aloj_tipo else aloj
+        dono = e.get("dono_nome") or "sem proprietário"
+        return f"{e['nome']} — {aloj_label} — {dono}"
+
+    # Modo edição — se a operação em curso já tem égua, tentar
+    # pré-seleccioná-la na nova lista.
+    egua_edit_default = 0
+    if edit_mode and insemination_data:
+        for i, e in enumerate(eguas_ativas):
+            if e["nome"].strip().lower() == (
+                insemination_data.get("egua") or ""
+            ).strip().lower():
+                egua_edit_default = i
+                break
+
     c1, c2 = st.columns(2)
     with c1:
-        egua = st.text_input(t("label.mare"), key="insem_egua")
+        egua_idx = st.selectbox(
+            t("label.mare"),
+            options=list(range(len(eguas_ativas))),
+            index=egua_edit_default,
+            format_func=_fmt_egua,
+            key="insem_egua_select",
+        )
+        egua_sel = eguas_ativas[egua_idx]
+        egua = egua_sel["nome"]  # nome para retro-compatibilidade
     with c2:
         data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
     
@@ -561,29 +606,71 @@ def run_insemination_page(ctx):
         elif not egua:
             st.error(t("error.mare_required"))
         else:
-            registros = []
-            for l in linhas_finais:
-                registros.append(
+            if edit_mode:
+                # Modo edição continua a usar a função antiga (backward
+                # compat com operations multi-lote existentes). A
+                # unificação só cobre a criação — edição fica para uma
+                # iteração posterior.
+                registros = [
                     {
                         "garanhao": l.get("garanhao"),
                         "dono_id": l.get("dono_id"),
-                        "protocolo": l.get("protocolo"),
-                        "palhetas": int(l.get("qty", 0)),
-                        "stock_id": int(l.get("stock_id")),
+                        "protocolo": linha.get("protocolo"),
+                        "palhetas": int(linha.get("qty", 0)),
+                        "stock_id": int(linha.get("stock_id")),
                     }
+                    for linha in linhas_finais
+                ]
+                ok = registrar_inseminacao_multiplas(
+                    registros,
+                    data_insem,
+                    egua,
+                    insemination_data['id'] if insemination_data and not st.session_state.get('edit_insemination_op_id') else None,
+                    observacoes=observacoes or None,
+                    edit_operation_id=st.session_state.get('edit_insemination_op_id'),
                 )
-
-            ok = registrar_inseminacao_multiplas(
-                registros, 
-                data_insem, 
-                egua, 
-                insemination_data['id'] if edit_mode and insemination_data and not st.session_state.get('edit_insemination_op_id') else None,
-                observacoes=observacoes or None,
-                edit_operation_id=st.session_state.get('edit_insemination_op_id'),
-            )
-            if ok:
-                # Limpar modo de edição
-                st.session_state.pop('edit_insemination_id', None)
-                st.session_state.pop('edit_insemination_op_id', None)
-                st.session_state["insem_show_success"] = True
-                st.rerun()
+                if ok:
+                    st.session_state.pop('edit_insemination_id', None)
+                    st.session_state.pop('edit_insemination_op_id', None)
+                    st.session_state["insem_show_success"] = True
+                    st.rerun()
+            else:
+                # Fluxo unificado — mesma função usada pela ficha da égua.
+                from modules.repositories.insemination_repo import (
+                    registar_inseminacao_completa,
+                    InseminacaoError,
+                )
+                registros = [
+                    {
+                        "stock_id": int(linha.get("stock_id")),
+                        "palhetas": int(linha.get("qty", 0)),
+                        "protocolo": linha.get("protocolo"),
+                        "garanhao": linha.get("garanhao"),
+                    }
+                    for linha in linhas_finais
+                ]
+                try:
+                    registar_inseminacao_completa(
+                        animal_id_egua=int(egua_sel["animal_id"]),
+                        estadia_id=int(egua_sel["estadia_id"]),
+                        dono_id=int(egua_sel["dono_id"]),
+                        garanhao_nome=st.session_state.get(
+                            "insem_garanhao_principal"
+                        ) or (linhas_finais[0].get("garanhao") or ""),
+                        data_inseminacao=data_insem,
+                        registros=registros,
+                        observacoes=observacoes or None,
+                        utilizador=st.session_state.get(
+                            "user", {}
+                        ).get("username", "—"),
+                    )
+                    try:
+                        atualizar_status_proprietarios()
+                    except Exception:
+                        pass
+                    st.session_state["insem_show_success"] = True
+                    st.rerun()
+                except InseminacaoError as exc:
+                    st.error(f"❌ {exc}")
+                except Exception as exc:
+                    st.error(f"Erro ao registar: {exc}")

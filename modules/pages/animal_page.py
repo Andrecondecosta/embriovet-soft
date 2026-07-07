@@ -894,32 +894,21 @@ def _obter_acompanhamento(estadia_id: int) -> dict | None:
 
 
 def _upsert_acompanhamento(animal_id: int, estadia_id: int, dados: dict) -> None:
-    sql = """
-        INSERT INTO acompanhamento_inseminacao (
-            estadia_id, animal_id, data_inseminacao, data_1o_diagnostico,
-            data_confirmacao, data_2a_confirmacao, data_parto_previsto
-        ) VALUES (
-            %(estadia_id)s, %(animal_id)s, %(data_inseminacao)s,
-            %(data_1o_diagnostico)s, %(data_confirmacao)s,
-            %(data_2a_confirmacao)s, %(data_parto_previsto)s
-        )
-        ON CONFLICT (estadia_id) DO UPDATE SET
-            data_inseminacao    = EXCLUDED.data_inseminacao,
-            data_1o_diagnostico = EXCLUDED.data_1o_diagnostico,
-            data_confirmacao    = EXCLUDED.data_confirmacao,
-            data_2a_confirmacao = EXCLUDED.data_2a_confirmacao,
-            data_parto_previsto = EXCLUDED.data_parto_previsto
-    """
-    payload = {
-        "estadia_id": estadia_id,
-        "animal_id": animal_id,
-        **dados,
-    }
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, payload)
-        conn.commit()
-        cur.close()
+    """Delega para a implementação partilhada em `insemination_repo` —
+    garante que a lógica de UPSERT em `acompanhamento_inseminacao` é única
+    e usada por menu + ficha da égua."""
+    from modules.repositories.insemination_repo import (
+        upsert_acompanhamento_datas,
+    )
+    upsert_acompanhamento_datas(
+        estadia_id=estadia_id,
+        animal_id=animal_id,
+        data_inseminacao=dados.get("data_inseminacao"),
+        data_1o_diagnostico=dados.get("data_1o_diagnostico"),
+        data_confirmacao=dados.get("data_confirmacao"),
+        data_2a_confirmacao=dados.get("data_2a_confirmacao"),
+        data_parto_previsto=dados.get("data_parto_previsto"),
+    )
 
 
 def _atualizar_garanhao_estadia(estadia_id: int, garanhao: str | None) -> None:
