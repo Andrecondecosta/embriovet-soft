@@ -1,9 +1,27 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedidos 4b + 4c + item 3 concluídos**: (1) Circuito de trabalho fechado — painel de confirmação após registo de inseminação com 3 saídas (Trabalho Diário / Ficha da égua / Registar outra) + botão "➕ Registar inseminação" em tarefas `verificar_ovulacao`; (2) Ciclo estendido até ao parto — quando D+45 é positivo cria `pre_parto` (D+330-14, urgência 'amanha') e `parto_previsto` (D+330, urgência 'hoje'); padrão do parto reduzido de 340 → 330 dias; negativo tardio apaga estas tarefas também; (3) Uma égua tem no máximo UMA estadia aberta — validação em duas camadas: `_criar_estadia_apenas` faz raise `ValueError` amigável + UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` como safety net na BD. Testing agent independente validou **31/31 testes** (`/app/test_reports/iteration_34.json`).
+**Fev 2026** — **Pedido 5 (Ver Stock via FK) concluído**. Toda a página "Ver Stock", "Transferências", "Relatórios/PDFs" e o mapa passaram a ler o nome do garanhão a partir de `animais` via FK `estoque_dono.animal_id` (com `COALESCE(a.nome, e.garanhao)` como fallback para lotes legados sem FK). A coluna nova `garanhao_nome` no DataFrame vem da fonte única `animais.nome`, alinhando o filtro do Ver Stock com o do Adicionar Stock. Renomear um animal na ficha reflecte-se imediatamente em stock/transferências/relatórios sem tocar nos lotes. Cinco `carregar_*` receberam `@st.cache_data(ttl=60)` com invalidação em `editar_stock`/`deletar_stock` (primeira melhoria de performance). Testing agent independente validou **38/38 testes** (7 novos criados por ele em `test_stock_fk_garanhao.py`, report `/app/test_reports/iteration_35.json`).
 
-## Changelog Recente (Fev 2026 — Pedidos 4b + 4c + item 3)
+## Changelog Recente (Fev 2026 — Pedido 5)
+- ✅ **Leituras por FK**:
+  - `carregar_stock` — LEFT JOIN animais → nova coluna `garanhao_nome = COALESCE(a.nome, e.garanhao)`.
+  - `carregar_transferencias` — LEFT JOIN estoque_dono + animais → `garanhao = COALESCE(...)`.
+  - `carregar_transferencias_externas` — mesmo padrão com verificação defensiva de `estoque_id` no schema (fallback ao legado quando o schema é anterior).
+  - `obter_stock_contentor` — LEFT JOIN animais.
+  - `stock_page.py`, `stock_reporting.py::filter_stock_view`, `transfer_page.py` (selects de lotes + queries de edição), `reports_page.py` (todos os filtros/dataframes), `insemination_page.py` (filtros + queries de edição), `map_page.py` (JSON de lotes), `ui_kit.py` (search) — todos migrados para `garanhao_nome` / `COALESCE`.
+- ✅ **Cache de leitura (`@st.cache_data(ttl=60)`)**: aplicado em `carregar_stock`, `carregar_proprietarios`, `carregar_contentores`, `carregar_transferencias`, `carregar_transferencias_externas`.
+- ✅ **Invalidação após escritas**: `editar_stock` e `deletar_stock` chamam `st.cache_data.clear()`.
+- ✅ **Grep final limpo**: apenas 2 ocorrências restam, ambas expectáveis — `map_page.py:1155` (template JS que lê `lote.garanhao` — mas o build usa `garanhao_nome` como preferência) e `app.py:627` (fallback defensivo em `carregar_transferencias_externas` para schema legado sem `estoque_id`).
+- ✅ **Testes**: 7 novos em `tests/test_stock_fk_garanhao.py` (criados pelo testing agent) validam: (a) `garanhao_nome` correcto via COALESCE + fallback quando animal_id é NULL; (b) rename `animais.nome` reflecte em `carregar_stock` sem tocar em `estoque_dono.garanhao`; (c) `carregar_transferencias` resolve via FK; (d) `obter_stock_contentor` idem; (e) `filter_stock_view` prefere `garanhao_nome`.
+- **Total: 38 testes pytest, todos passam** (31 anteriores + 7 novos). Migrations em dia com produção Render.
+
+### Observações do testing agent (recomendações para backlog)
+- `app.py` já > 3485 linhas — considerar extrair `carregar_*` e `obter_*` para `modules/stock_repo.py` (facilita testes sem contornar top-level Streamlit).
+- Testes actuais replicam o SQL das funções decoradas com `@st.cache_data` (não podem importá-las directamente). Extrair queries para constantes de módulo tornaria isto mais robusto.
+- Migração pandas → SQLAlchemy engine continua adiada (decisão do utilizador). Warnings persistem, cosméticos.
+
+## Changelog Anterior (Fev 2026 — Pedidos 4b + 4c + item 3)
 - ✅ **Circuito de trabalho (4b)**:
   - `insemination_page._render_painel_confirmacao_insem(conf)` — resumo pós-registo (égua × garanhão, total palhetas, num_lotes, data, tarefas automáticas criadas) + 3 botões: primário "📋 Trabalho Diário", secundários "👁 Ver na ficha da égua" e "➕ Registar outra". Substitui o `st.dialog` antigo — mantém o formulário no fluxo principal.
   - `trabalho_diario_page._render_cartao_tarefa` — botão adicional "➕ Registar inseminação" em cartões de `verificar_ovulacao`. Reutiliza `insem_egua_prefill` (mecanismo do "Repetir inseminação") — égua e estadia pré-seleccionadas, sem texto livre.
