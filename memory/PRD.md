@@ -1,9 +1,44 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedido 6.1 (widget partos previstos) + Pedido 6.2 (extração pura de stock_repo)** concluídos. Widget "Partos previstos — próximos 30 dias" adicionado à secção "Hoje na clínica" do dashboard. Extração pura de 12 funções de dados de `app.py` para `modules/repositories/stock_repo.py` — código bit-for-bit igual, `app.py` reduziu de **3505 → 2897 linhas (−608)**. **Total: 64/64 pytest** (55 baseline + 9 novos widget partos; 1 teste ajustado com aprovação do user — guarda ficou mais estrito).
+**Fev 2026** — **Pedido 7 (Reorganização da navegação 13 → 6)** concluído. Menu lateral com **6 itens sem emojis**: `Dashboard · Estadias · Trabalho diário · Stock de sémen · Relatórios · Definições` (sem "Mais opções"). Página **Stock de sémen** funde 4 antigas com 4 tabs (Lotes · Garanhões · Mapa dos contentores · Transferências) e 2 botões topo (Adicionar lote · Importar). Inseminações deixam de ter menu — acessível via botão "Registar inseminação" em estadia activa (só éguas), ficha da égua, e existente no Trabalho Diário. **Definições** com 5 tabs (Marca · Alojamentos · Proprietários · Utilizadores · Idioma) respeitando permissões. Redirects legacy preservados via `_LEGACY_NAV_MAP`. **75/75 pytest passing** (64 baseline + 11 novos em `test_navegacao_pedido7.py`). Retest confirmou 2 fixes de integração (iteration_39.json 100%).
 
-## Changelog Recente (Fev 2026 — Pedidos 6.1 + 6.2)
+## Changelog Recente (Fev 2026 — Pedido 7)
+
+### Menu lateral (6 destinos)
+- ✅ `app.py`: novo bloco `menu_principal = [NAV_DASHBOARD, NAV_ESTADIAS, NAV_TRABALHO_DIARIO, NAV_STOCK_SEMEN, NAV_RELATORIOS, NAV_DEFINICOES]`. `menu_secundario = []` (sem "Mais opções").
+- ✅ Constantes de labels literais sem emojis.
+- ✅ `_LEGACY_NAV_MAP`: dicionário completo com os 13 antigos labels → destinos + `extra_state_dict` (ex.: `t("menu.map") → (NAV_STOCK_SEMEN, {"stock_semen_tab": "Mapa dos contentores"})`; `t("menu.register_insemination") → (NAV_TRABALHO_DIARIO, {"insem_flow_active": True})`).
+- ✅ `_resolve_nav_label()` helper aplicado no consumo do `aba_selecionada` — todos os redirects existentes continuam a funcionar.
+
+### Nova página `modules/pages/stock_semen_page.py`
+- ✅ 4 separadores: **Lotes** (`run_stock_page`), **Garanhões** (novo — `_carregar_garanhoes_com_stock` + botão "Ver ficha"), **Mapa dos contentores** (`run_map_page`), **Transferências** (`run_transfer_page`, com histórico e anular).
+- ✅ 2 botões topo: **Adicionar lote** e **Importar** (activam `stock_semen_view` que delega para `_render_add_stock_view` — extraído de `app.py` — e `run_import_page`).
+- ✅ Sem lógica de negócio; apenas orquestração.
+
+### Nova página `modules/pages/definicoes_page.py`
+- ✅ 5 separadores: **Marca** (delega `_run_settings_geral`), **Alojamentos** (`_render_tab_alojamentos`), **Proprietários** (`_render_owners_view` de `app.py`), **Utilizadores** (`_render_users_view`, só admin), **Idioma**.
+- ✅ Filtro `is_admin` gate no separador Utilizadores.
+
+### Botões de entrada para Inseminação
+- ✅ `estadias_page.py`: nova coluna com "Registar inseminação" em linhas activas (`animal_tipo == 'egua'`). Adicionada coluna `a.tipo AS animal_tipo` à SELECT de `_carregar_estadias`.
+- ✅ `animal_page.py`: novo botão "Registar inseminação" no tab "Resumo" da ficha da égua.
+- ✅ `trabalho_diario_page.py`: no topo, se `insem_flow_active` está setado, delega para `run_insemination_page` + botão "Voltar ao Trabalho Diário".
+- ✅ `insemination_page.py`: nos 2 botões pós-sucesso (Trabalho Diário / Ficha da égua), limpa `insem_flow_active` + `insem_egua_prefill` e usa strings literais nos redirects.
+
+### Bugs de integração encontrados e corrigidos no mesmo ciclo (via testing agent)
+- 🔧 **Bug 1 (Definições > Marca crash com NameError)**: `_run_settings_geral` esperava globals do próprio módulo `settings_page`. Fix: `_settings_module.__dict__.update(ctx)` em `run_definicoes_page`.
+- 🔧 **Bug 2 (Botão "Registar inseminação" nunca aparecia)**: query fazia `e.tipo_registo AS tipo` (valores `estadia`/`visita`) colidindo com o check `tipo == 'egua'` (espécie). Fix: adicionada coluna `a.tipo AS animal_tipo` e check ajustado.
+
+### Novos testes (11 em `tests/test_navegacao_pedido7.py`)
+- (a) menu com 6 itens exactos, sem emojis, sem "Mais opções"; `menu_secundario = []`
+- (b) mapeamento 13→6 completo em `_LEGACY_NAV_MAP`
+- (c) `_carregar_garanhoes_com_stock` inclui garanhões com stock e exclui lotes zerados
+- (d) `insem_flow_active` seta-se em estadias_page e animal_page; trabalho_diario delega para form; `insemination_page` limpa flag pós-sucesso
+- (e) `is_admin` gates separador Utilizadores em `definicoes_page`
+- Estrutura do orquestrador Stock de sémen (4 tabs + 2 botões topo, delega para pages existentes)
+
+## Changelog Anterior (Fev 2026 — Pedidos 6.1 + 6.2)
 
 ### 6.1 — Widget partos previstos (Dashboard, "Hoje na clínica")
 - ✅ Nova função `dashboard_repo.carregar_partos_previstos(dias=30)` — filtra `ai.resultado = 'gestacao_confirmada'`, `data_parto_previsto BETWEEN CURRENT_DATE AND CURRENT_DATE + Xdays`, `estadias.data_saida IS NULL`. Ordenado do mais próximo para o mais distante.

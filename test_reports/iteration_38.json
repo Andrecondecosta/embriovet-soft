@@ -1,0 +1,37 @@
+{
+  "summary": "Pedido 7 — Reorganização de navegação. Backend pytest 75/75 PASSA (incl. 11 novos em test_navegacao_pedido7.py). Smoke test frontend confirma sidebar com 6 itens exactos sem emojis, Stock de sémen com 4 tabs + 2 botões topo, Definições com 5 tabs (admin). Descobertos 2 bugs de integração no frontend Streamlit que os testes unitários não apanham: (1) NameError 'inject_stock_css' no tab Marca de Definições — o `globals().update(ctx)` está no módulo definicoes_page mas `_run_settings_geral` corre em settings_page com globals vazios; (2) Botão 'Registar inseminação' NUNCA aparece na lista de estadias activas porque o filtro usa `row['tipo']` que na SQL vem aliased como `tipo_registo` ('estadia'/'visita'), não a espécie do animal ('egua').",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "definicoes_page.py + settings_page.py (tab Marca)", "issue": "NameError: name 'inject_stock_css' is not defined em settings_page.py:216. Em `run_definicoes_page` faz-se `globals().update(ctx)` mas isso injecta no namespace de definicoes_page, não de settings_page onde vive `_run_settings_geral`. Consequentemente `inject_stock_css`, `inject_reports_css`, `render_zone_title`, `app_settings`, `update_branding_settings` ficam undefined quando `_run_settings_geral()` é chamado. O tab Marca fica completamente inutilizável (traceback visível para o utilizador).", "selector": "Definições > Marca", "priority": "CRITICAL"},
+      {"component": "estadias_page.py::_render_lista_estadias linha 821", "issue": "Botão 'Registar inseminação' nunca renderiza. A verificação `str(row.get('tipo') or '').lower() == 'egua'` está a testar o alias `tipo` da query `_carregar_estadias` (linha 99: `e.tipo_registo AS tipo` → valores 'estadia'/'visita'), não a espécie do animal. Nas 4 linhas activas visíveis (Matilde/londres/Paris/Égua Teste) todas mostram só 'Ver ficha' + 'Registar saída'. Fix: adicionar `a.tipo AS animal_tipo` na SELECT (linhas 95-111) e usar `row.get('animal_tipo')` no check da linha 821. Nota: os 11 testes novos em test_navegacao_pedido7.py passam porque mockam directamente `insem_flow_active` — não simulam o rendering real da lista.", "selector": "Estadias > Activas > coluna de acções (col 7)", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_navegacao_pedido7.py", "/app/test_reports/pytest/pytest_pedido7.xml"],
+  "action_items": [
+    "FIX 1 (Definições > Marca): propagar ctx para o namespace do módulo settings_page antes de chamar `_run_settings_geral`. Opções: (a) em definicoes_page.py, fazer `import modules.pages.settings_page as _sp; _sp.__dict__.update(ctx)` além do `globals().update(ctx)`, ou (b) refactorizar `_run_settings_geral` para receber ctx explicitamente e ler injectores via ctx.get(...) em vez de globals.",
+    "FIX 2 (Estadias > Registar inseminação): em modules/pages/estadias_page.py `_carregar_estadias` adicionar `a.tipo AS animal_tipo` à SELECT (linhas 95-111) e alterar linha 821 para `if str(row.get('animal_tipo') or '').lower() == 'egua':`. Adicionar teste de integração que confirme o botão aparece para éguas activas e não para outros animais.",
+    "Adicionar smoke test Playwright de renderização das páginas Definições e Estadias na CI para apanhar este tipo de bug de integração no futuro."
+  ],
+  "critical_code_review_comments": [
+    "Padrão `globals().update(ctx)` é frágil quando funções são chamadas cross-module (Pedido 7 introduziu esse pattern ao mover funções entre orquestradores). Considerar passar ctx explicitamente ou usar um objecto de contexto injectado.",
+    "Cobertura dos testes de Pedido 7 é boa mas não testa rendering — todos os testes chamam funções de repo/lógica com mocks. Sem smoke frontend, bugs de integração ficam invisíveis.",
+    "Query `_carregar_estadias` deveria retornar também `especie/animal.tipo` já que várias features (Registar inseminação, futuros filtros) dependem disso."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "60%"},
+  "test_credentials": "admin / admin123 (Streamlit em https://multi-lot-ops.preview.emergentagent.com/)",
+  "seed_data_creation": "Nenhuma. Base já contém 4 estadias activas de teste (Matilde, londres, Paris, Égua Teste).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Baseline pytest agora é 75/75. Após main agent corrigir os 2 bugs, revalidar: (1) clicar Definições > Marca sem traceback; (2) Estadias > Activas mostra 'Registar inseminação' entre 'Ver ficha' e 'Registar saída' nas éguas (Matilde, Paris, Égua Teste) mas não em cavalos/outros; (3) confirmar que clicar 'Registar inseminação' seta insem_flow_active e redirecciona para Trabalho diário.",
+  "rca_bugs": {
+    "bug1_marca_nameerror": "run_definicoes_page executa globals().update(ctx) no seu próprio módulo. _run_settings_geral vive em settings_page.py e usa nomes de módulo como `inject_stock_css` que só existem se algum código tiver feito globals().update(ctx) DENTRO de settings_page. Antes de Pedido 7 esse update era feito por run_settings_page(ctx) — mas essa função foi bypassed pelo novo orquestrador.",
+    "bug2_registar_inseminacao_never_shows": "O alias SQL `e.tipo_registo AS tipo` colide com a intenção do check `tipo == 'egua'` (espécie animal). tipo_registo ∈ {'estadia','visita'} nunca é 'egua'. Reprod: login admin → Estadias → Activas → não há botão 'Registar inseminação' em nenhuma das 4 linhas apesar de haver éguas (Matilde, Paris, Égua Teste). Mitigação imediata: adicionar `a.tipo AS animal_tipo` na SELECT e mudar o check."
+  }
+}

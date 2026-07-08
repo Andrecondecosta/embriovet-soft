@@ -2058,44 +2058,79 @@ if user.get("must_change_password"):
 
 render_header(app_settings, user)
 
-# Menu lateral adaptado às permissões
-# Menu Principal (sempre visível)
+# Menu lateral final (Pedido 7 — 6 itens, sem emojis, sem "Mais opções").
+# Todas as antigas entradas ficam acessíveis por sub-tabs/botões dentro
+# destes 6 sítios. As permissões restrigem apenas o conteúdo de cada
+# sítio (ex.: não-admin não vê o separador Utilizadores em Definições).
+NAV_DASHBOARD       = "Dashboard"
+NAV_ESTADIAS        = "Estadias"
+NAV_TRABALHO_DIARIO = "Trabalho diário"
+NAV_STOCK_SEMEN     = "Stock de sémen"
+NAV_RELATORIOS      = "Relatórios"
+NAV_DEFINICOES      = "Definições"
+
 menu_principal = [
-    t("menu.dashboard"),
-    "Estadias e Visitas",
-    "Trabalho diário",
+    NAV_DASHBOARD,
+    NAV_ESTADIAS,
+    NAV_TRABALHO_DIARIO,
+    NAV_STOCK_SEMEN,
+    NAV_RELATORIOS,
+    NAV_DEFINICOES,
 ]
+menu_secundario = []  # Sem "Mais opções" — todas as ações vivem dentro das páginas.
 
-# Menu Secundário (dentro do expander)
-menu_secundario = [
-    t("menu.map"),
-]
+# Retrocompatibilidade: redirects antigos (`st.session_state['aba_selecionada']`
+# = t("menu.stock")` / "Estadias e Visitas" / t("menu.map")` / ...) devem
+# continuar a funcionar sem tocar em cada call-site. Cada entrada mapeia
+# para `(nova_pagina, extra_state_dict)`.
+_LEGACY_NAV_MAP = {
+    t("menu.dashboard"):              (NAV_DASHBOARD, {}),
+    "Estadias e Visitas":             (NAV_ESTADIAS, {}),
+    "Trabalho diário":                (NAV_TRABALHO_DIARIO, {}),
+    t("menu.stock"):                  (NAV_STOCK_SEMEN, {"stock_semen_tab": "Lotes"}),
+    t("menu.map"):                    (NAV_STOCK_SEMEN, {"stock_semen_tab": "Mapa dos contentores"}),
+    t("menu.transfers"):              (NAV_STOCK_SEMEN, {"stock_semen_tab": "Transferências"}),
+    t("menu.add_stock"):              (NAV_STOCK_SEMEN, {"stock_semen_view": "add_stock"}),
+    t("menu.import"):                 (NAV_STOCK_SEMEN, {"stock_semen_view": "import"}),
+    # Registrar Inseminação vive dentro do Trabalho Diário via
+    # `insem_flow_active` (Pedido 7).
+    t("menu.register_insemination"): (NAV_TRABALHO_DIARIO, {"insem_flow_active": True}),
+    t("menu.owners"):                 (NAV_DEFINICOES, {"definicoes_tab": "Proprietários"}),
+    t("menu.users"):                  (NAV_DEFINICOES, {"definicoes_tab": "Utilizadores"}),
+    t("menu.settings"):               (NAV_DEFINICOES, {}),
+    t("menu.reports"):                (NAV_RELATORIOS, {}),
+}
 
-# Adicionar opções baseadas em permissões
-if verificar_permissao('Gestor'):
-    menu_principal.append(t("menu.add_stock"))
-    menu_principal.append(t("menu.register_insemination"))
-    menu_principal.append(t("menu.transfers"))
-    menu_secundario.append(t("menu.import"))
-    menu_secundario.append(t("menu.owners"))
 
-# Ver Stock e Relatórios sempre no menu principal (para todos)
-menu_principal.append(t("menu.stock"))
-menu_principal.append(t("menu.reports"))
+def _resolve_nav_label(label):
+    """Mapeia labels antigos (i18n) para os 6 destinos actuais.
 
-# Administrador tem acesso a mais opções secundárias
-if verificar_permissao('Administrador'):
-    menu_secundario.append(t("menu.users"))
-    menu_secundario.append(t("menu.settings"))
+    Devolve `(nav_target, extra_state_dict)`. Se `label` já for um dos 6
+    novos, devolve-o com dicionário vazio.
+    """
+    if label in menu_principal:
+        return (label, {})
+    return _LEGACY_NAV_MAP.get(label, (label, {}))
+
 
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
-    active_key = st.session_state['aba_selecionada']
+    raw = st.session_state['aba_selecionada']
     del st.session_state['aba_selecionada']
+    resolved, extras = _resolve_nav_label(raw)
+    active_key = resolved
+    for k, v in extras.items():
+        st.session_state[k] = v
     # Sinalizar redirect para o render_sidebar
     st.session_state['_nav_redirect_active'] = active_key
 else:
     active_key = st.session_state.get("_nav_last_active", menu_principal[0])
+    # Se o `_nav_last_active` guardado é de um menu antigo (ex.: reload
+    # cross-versão), normalizar.
+    if active_key not in menu_principal:
+        resolved, _ = _resolve_nav_label(active_key)
+        active_key = resolved
+        st.session_state["_nav_last_active"] = active_key
 
 aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 if sidebar_logout:
@@ -2189,44 +2224,49 @@ if proprietarios.empty:
     st.warning(t("owners.none_registered_warn"))
 
 # ------------------------------------------------------------
-# Router de páginas (Fase 3 da modularização)
+# Router de páginas (Pedido 7: 6 destinos)
 # ------------------------------------------------------------
-if aba == t("menu.map"):
-    run_map_page({**globals(), **locals()})
-    st.stop()
-
-if aba == t("menu.dashboard"):
+if aba == NAV_DASHBOARD:
     run_dashboard_page({**globals(), **locals()})
     st.stop()
 
-if aba == "Estadias e Visitas":
+if aba == NAV_ESTADIAS:
     run_estadias_page({**globals(), **locals()})
     st.stop()
 
-if aba == "Trabalho diário":
+if aba == NAV_TRABALHO_DIARIO:
     run_trabalho_diario_page({**globals(), **locals()})
     st.stop()
 
-if aba == t("menu.stock"):
-    run_stock_page({**globals(), **locals()})
-    st.stop()
-
-if aba == t("menu.transfers"):
-    run_transfer_page({**globals(), **locals()})
-    st.stop()
-
-if aba == t("menu.reports"):
+if aba == NAV_RELATORIOS:
     run_reports_page({**globals(), **locals()})
     st.stop()
 
-if aba == t("menu.settings"):
-    run_settings_page({**globals(), **locals()})
+# Stock de sémen: orquestrador com 4 tabs (Lotes, Garanhões, Mapa,
+# Transferências) e 2 botões topo (Adicionar lote, Importar).
+if aba == NAV_STOCK_SEMEN:
+    from modules.pages.stock_semen_page import run_stock_semen_page
+    run_stock_semen_page({**globals(), **locals()})
     st.stop()
 
-# ------------------------------------------------------------
-# ➕ Adicionar Stock
-# ------------------------------------------------------------
-elif aba == t("menu.add_stock"):
+# Definições: orquestrador com 5 separadores (Marca, Alojamentos,
+# Proprietários, Utilizadores, Idioma) respeitando permissões.
+if aba == NAV_DEFINICOES:
+    from modules.pages.definicoes_page import run_definicoes_page
+    run_definicoes_page({**globals(), **locals()})
+    st.stop()
+
+# Stock de sémen: dispatch de sub-views (add_stock / import).
+# Se `stock_semen_view` não estiver setado, o orquestrador com tabs
+# já correu acima (dentro de `run_stock_semen_page`) e não chegamos
+# aqui. Este bloco corre APÓS o `st.stop()` do NAV_STOCK_SEMEN principal
+# apenas quando o orquestrador tiver deferido a renderização — ver o
+# `_render_add_stock_view()` / `run_import_page()` abaixo.
+def _render_add_stock_view():
+    """Form 'Adicionar lote' — antigo bloco `elif aba == t('menu.add_stock')`
+    convertido em função para ser invocado pelo orquestrador de
+    'Stock de sémen' (Pedido 7). Lógica inalterada.
+    """
     st.header(t("add_stock.title"))
     primary = (app_settings or {}).get("primary_color") or "#E85D4A"
     inject_add_stock_form_css(primary_color=primary)
@@ -2464,25 +2504,22 @@ elif aba == t("menu.add_stock"):
                             # Marcar que usou o proprietário
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
-                            # Mudar aba para Ver Stock
-                            st.session_state['aba_selecionada'] = t("menu.stock")
+                            # Redirect para o separador "Lotes" do novo
+                            # Stock de sémen (Pedido 7).
+                            st.session_state['aba_selecionada'] = NAV_STOCK_SEMEN
+                            st.session_state['stock_semen_tab'] = "Lotes"
                             st.rerun()
 
-# ------------------------------------------------------------
-# 📥 Importar Sémen
-# ------------------------------------------------------------
-elif aba == t("menu.import"):
-    run_import_page({**globals(), **locals()})
-    st.stop()
 
 # ------------------------------------------------------------
-# 📝 Registrar Inseminação
+# Owners e Users management (moved to Definições em Pedido 7).
+# As funções abaixo são invocadas pelos separadores de
+# `modules.pages.definicoes_page`.
 # ------------------------------------------------------------
-elif aba == t("menu.register_insemination"):
-    run_insemination_page({**globals(), **locals()})
-    st.stop()
-
-elif aba == t("menu.owners"):
+def _render_owners_view():
+    """Bloco 'Gestão de Proprietários' — antigo `elif aba == t('menu.owners')`
+    convertido em função para o separador 'Proprietários' das Definições.
+    """
     st.header(t("owners.title"))
 
     # Verificar e criar coluna ativo se não existir
@@ -2699,9 +2736,13 @@ elif aba == t("menu.owners"):
                         st.rerun()
 
 # ------------------------------------------------------------
-# ⚙️ Gestão de Utilizadores (Apenas Administrador)
+# Gestão de Utilizadores (movido para Definições · Utilizadores)
 # ------------------------------------------------------------
-elif aba == t("menu.users"):
+def _render_users_view():
+    """Bloco 'Gestão de Utilizadores' — antigo `elif aba == t('menu.users')`
+    convertido em função para o separador 'Utilizadores' das Definições.
+    Apenas visível ao Administrador (filtro feito pelo orquestrador).
+    """
     st.header(t("users.title"))
 
     usuarios_df = carregar_usuarios()

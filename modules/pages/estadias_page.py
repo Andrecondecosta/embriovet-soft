@@ -97,6 +97,7 @@ def _carregar_estadias(apenas_activas: bool) -> pd.DataFrame:
             e.animal_id,
             a.nome                                       AS animal,
             e.tipo_registo                               AS tipo,
+            a.tipo                                       AS animal_tipo,
             d.nome                                       AS proprietario,
             e.motivo,
             e.estado,
@@ -767,10 +768,10 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
         return
 
     if apenas_activas:
-        col_w = [1.8, 0.9, 1.7, 1.3, 1.2, 0.9, 1.2, 1.4]
+        col_w = [1.6, 0.8, 1.5, 1.2, 1.1, 0.8, 1.2, 1.3, 1.3]
         headers = [
             "Animal", "Tipo", "Proprietário", "Motivo", "Estado",
-            "Dias", "", "",
+            "Dias", "", "", "",
         ]
     else:
         col_w = [1.8, 1, 1.8, 1.4, 1.3, 1, 1.2, 1.2]
@@ -814,6 +815,24 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
                     st.session_state["ver_animal_tab"] = 0
                     st.rerun()
             with cols[7]:
+                # Botão "Registar inseminação" (Pedido 7) — só faz sentido
+                # em éguas (o formulário filtra o dropdown por éguas ativas
+                # de qualquer forma; aqui só evitamos ruído visual em
+                # garanhões/outros).
+                if str(row.get("animal_tipo") or "").lower() == "egua":
+                    if st.button(
+                        "Registar inseminação",
+                        key=f"{key_prefix}_insem_{estadia_id}",
+                        width="stretch",
+                    ):
+                        st.session_state["insem_egua_prefill"] = {
+                            "animal_id": int(row["animal_id"]),
+                            "estadia_id": estadia_id,
+                        }
+                        st.session_state["insem_flow_active"] = True
+                        st.session_state["aba_selecionada"] = "Trabalho diário"
+                        st.rerun()
+            with cols[8]:
                 if st.button(
                     "Registar saída",
                     key=f"{key_prefix}_saida_{estadia_id}",
