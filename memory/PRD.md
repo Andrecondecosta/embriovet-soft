@@ -1,9 +1,27 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedido 5 (Ver Stock via FK) concluído**. Toda a página "Ver Stock", "Transferências", "Relatórios/PDFs" e o mapa passaram a ler o nome do garanhão a partir de `animais` via FK `estoque_dono.animal_id` (com `COALESCE(a.nome, e.garanhao)` como fallback para lotes legados sem FK). A coluna nova `garanhao_nome` no DataFrame vem da fonte única `animais.nome`, alinhando o filtro do Ver Stock com o do Adicionar Stock. Renomear um animal na ficha reflecte-se imediatamente em stock/transferências/relatórios sem tocar nos lotes. Cinco `carregar_*` receberam `@st.cache_data(ttl=60)` com invalidação em `editar_stock`/`deletar_stock` (primeira melhoria de performance). Testing agent independente validou **38/38 testes** (7 novos criados por ele em `test_stock_fk_garanhao.py`, report `/app/test_reports/iteration_35.json`).
+**Fev 2026** — **Correção ao Pedido 5 (Invalidação global de cache)** concluída. Introduzido um helper único `modules.db.invalidate_data_cache()` que faz `st.cache_data.clear()` com try/except (no-op em pytest). Todas as funções que fazem COMMIT em tabelas cobertas por `@st.cache_data` (`estoque_dono`, `dono`, `contentores`, `transferencias`, `transferencias_externas`, `animais`) passaram a chamar o helper após o commit. Criado `tests/test_cache_invalidation.py` com 5 novos testes (via monkeypatch/spy). **Total: 43/43 pytest** (38 baseline + 5 novos, report `/app/test_reports/iteration_36.json`).
 
-## Changelog Recente (Fev 2026 — Pedido 5)
+## Changelog Recente (Fev 2026 — Correção ao Pedido 5)
+- ✅ Novo helper `modules.db.invalidate_data_cache()` — chama `st.cache_data.clear()` protegido por try/except (seguro fora de contexto Streamlit).
+- ✅ **`app.py`** — 20+ funções de escrita agora chamam `invalidate_data_cache()` após `conn.commit()`: `atualizar_status_proprietarios`, `alternar_status_proprietario`, `editar_proprietario`, `atualizar_proprietario_stock`, `inserir_stock`, `registrar_inseminacao`, `registrar_inseminacao_multiplas` (3 branches: create/edit-op/edit-single), `registrar_inseminacao_linha`, `adicionar_proprietario`, `deletar_proprietario`, `editar_stock`, `deletar_stock`, `adicionar_contentor`, `editar_contentor`, `atualizar_posicao_contentor`, `atualizar_andar_lote`, `mover_lotes_por_andar`, `deletar_contentor`, `transferir_palhetas_parcial`, `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo`, `atualizar_transferencia_interna`, `atualizar_transferencia_externa`.
+- ✅ **`modules/repositories/insemination_repo.py`** — `registar_inseminacao_completa` e `registar_resultado` invalidam cache após commit.
+- ✅ **`modules/repositories/animal_repo.py`** — `get_or_create_garanhao` invalida cache apenas quando faz INSERT (SELECT-only não é invalidação).
+- ✅ **`modules/pages/dashboard_page.py`** — `reverter_acao` (transferências e inseminações) invalida cache após commit.
+- ✅ **`modules/pages/transfer_page.py`** — blocos inline de edição/reversão (interna e externa) invalidam cache após commit.
+- ✅ **`modules/pages/import_page.py`** — importação em bulk invalida cache após commit.
+- ✅ Substituídas as 2 ocorrências antigas de `try: st.cache_data.clear() except Exception: pass` em `editar_stock`/`deletar_stock` pelo helper unificado.
+- ✅ Novo ficheiro **`tests/test_cache_invalidation.py`** com 5 testes (monkeypatch de `invalidate_data_cache` em todos os módulos consumidores + validação em BD real):
+  - `test_get_or_create_garanhao_invalida_cache_quando_cria`
+  - `test_get_or_create_garanhao_nao_invalida_quando_ja_existe` (SELECT-only não invalida)
+  - `test_registar_inseminacao_completa_invalida_cache` (+ sanity do desconto: 20→17)
+  - `test_registar_resultado_invalida_cache` (D+14 positivo)
+  - `test_invalidate_data_cache_e_no_op_fora_streamlit`
+- ✅ **Critério de aceitação do user cumprido**: registar uma inseminação e abrir imediatamente o "Ver Stock" → os números já refletem o desconto (o cache é limpo antes do próximo request).
+- ✅ Smoke test: `/_stcore/health` = "ok" (200), `/` = 200.
+
+## Changelog Anterior (Fev 2026 — Pedido 5)
 - ✅ **Leituras por FK**:
   - `carregar_stock` — LEFT JOIN animais → nova coluna `garanhao_nome = COALESCE(a.nome, e.garanhao)`.
   - `carregar_transferencias` — LEFT JOIN estoque_dono + animais → `garanhao = COALESCE(...)`.
