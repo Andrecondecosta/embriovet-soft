@@ -1,9 +1,33 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedido 4 (ciclo de resultados da inseminação) concluído**. Nova função `insemination_repo.registar_resultado(operation_id, resultado, tipo_tarefa, data, observacoes, task_id)` fecha o ciclo reprodutivo numa só transacção: actualiza `inseminacoes.resultado`+`data_resultado` para todas as linhas do `operation_id`, actualiza `acompanhamento_inseminacao.resultado`, marca a `trabalho_diario` como concluída. Se positivo em D+14 cria D+28 (`confirmacao_gestacao`) e D+45 (`segunda_confirmacao`) idempotentes. Se negativo em qualquer etapa apaga tarefas futuras não concluídas e limpa `data_confirmacao/data_2a_confirmacao/data_parto_previsto`. UI em dois pontos: painel inline no Trabalho Diário ao clicar em tarefa de diagnóstico (Positivo/Negativo + observações; se negativo em D+14 mostra opções Repetir/Encerrar), e botões +/− na ficha da égua para operações pendentes (etapa D+14/D+28/D+45 inferida por dias passados). Testing agent independente validou **25/25 testes** e critérios (a)-(e) (`/app/test_reports/iteration_33.json`).
+**Fev 2026** — **Pedidos 4b + 4c + item 3 concluídos**: (1) Circuito de trabalho fechado — painel de confirmação após registo de inseminação com 3 saídas (Trabalho Diário / Ficha da égua / Registar outra) + botão "➕ Registar inseminação" em tarefas `verificar_ovulacao`; (2) Ciclo estendido até ao parto — quando D+45 é positivo cria `pre_parto` (D+330-14, urgência 'amanha') e `parto_previsto` (D+330, urgência 'hoje'); padrão do parto reduzido de 340 → 330 dias; negativo tardio apaga estas tarefas também; (3) Uma égua tem no máximo UMA estadia aberta — validação em duas camadas: `_criar_estadia_apenas` faz raise `ValueError` amigável + UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` como safety net na BD. Testing agent independente validou **31/31 testes** (`/app/test_reports/iteration_34.json`).
 
-## Changelog Recente (Fev 2026 — Pedido 4)
+## Changelog Recente (Fev 2026 — Pedidos 4b + 4c + item 3)
+- ✅ **Circuito de trabalho (4b)**:
+  - `insemination_page._render_painel_confirmacao_insem(conf)` — resumo pós-registo (égua × garanhão, total palhetas, num_lotes, data, tarefas automáticas criadas) + 3 botões: primário "📋 Trabalho Diário", secundários "👁 Ver na ficha da égua" e "➕ Registar outra". Substitui o `st.dialog` antigo — mantém o formulário no fluxo principal.
+  - `trabalho_diario_page._render_cartao_tarefa` — botão adicional "➕ Registar inseminação" em cartões de `verificar_ovulacao`. Reutiliza `insem_egua_prefill` (mecanismo do "Repetir inseminação") — égua e estadia pré-seleccionadas, sem texto livre.
+  - `_carregar_tarefas_semana` — passa a devolver também `estadia_id` (necessário para o botão).
+- ✅ **Tarefa de parto (4c)**:
+  - `DIAS_PARTO_PREVISTO = 330` (era 340). `DIAS_PRE_PARTO = 14`.
+  - **Migration 028** — adiciona `pre_parto` ao CHECK `trabalho_diario_tipo_check`.
+  - `registar_resultado` — nova ramificação para (positivo, `segunda_confirmacao`): cria pre_parto (D+316, urgência 'amanha', label "Parto previsto em ~2 semanas — preparar acompanhamento") e parto_previsto (D+330, urgência 'hoje'). Idempotente. Usa a `data_parto_previsto` do acompanhamento como âncora se estiver preenchida, caso contrário calcula a partir da `data_inseminacao`.
+  - Negativo tardio também apaga `pre_parto` e `parto_previsto` futuras não concluídas.
+- ✅ **Constraint estadias (item 3)**:
+  - **Migration 029** — `CREATE UNIQUE INDEX estadias_uma_aberta_por_animal ON estadias (animal_id) WHERE data_saida IS NULL`. Zero duplicados em produção no momento da aplicação.
+  - `estadias_page._criar_estadia_apenas` — valida antes do INSERT: `SELECT ... WHERE animal_id=%s AND data_saida IS NULL` → se existir faz `raise ValueError("Este animal já tem uma estadia em aberto (id=X). Feche a existente antes de criar uma nova.")`. Antecipa a constraint da BD com mensagem amigável.
+  - `modal_animal._criar_animal_e_estadia` não precisa da mesma validação porque cria animal + estadia em conjunto (por construção não há estadia prévia).
+- ✅ **6 novos testes** (total 31):
+  - `test_positivo_d45_cria_pre_parto_e_parto_previsto` (datas + urgências correctas)
+  - `test_pre_parto_idempotente_em_d45`
+  - `test_negativo_apaga_tambem_pre_parto`
+  - `test_criar_estadia_apenas_valida_estadia_aberta` (ValueError amigável)
+  - `test_constraint_bd_rejeita_segunda_estadia_aberta` (UniqueViolation)
+  - `test_migration_029_rejeita_segunda_estadia_aberta` (regressão da bug fix Matilde adaptado à nova constraint)
+- **Total: 31 testes, todos passam em 0.80s**. Migrations 028/029 aplicadas na BD de teste local e produção Render.
+- **Recusado (por decisão do utilizador):** migração pandas → SQLAlchemy engine. Pandas UserWarnings persistem em 3 chamadas de `pd.read_sql_query` (cosmético, não bloqueante) — fica em backlog para uma iteração de qualidade.
+
+## Changelog Anterior (Fev 2026 — Pedido 4 base)
 - ✅ **`insemination_repo.registar_resultado`** (transaccional):
   - `WHERE operation_id = %s::uuid` — actualiza multi-lote como um único evento.
   - Modo `task_id`: fecha uma tarefa específica; fallback (sem task_id): fecha todas as pendentes matching `(estadia_id, tipo_tarefa)`.
