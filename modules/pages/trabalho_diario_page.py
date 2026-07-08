@@ -265,6 +265,165 @@ def _injetar_css_cartoes() -> None:
     st.markdown(css, unsafe_allow_html=True)
 
 
+def _render_painel_resultado() -> bool:
+    """Painel inline para registar o resultado de uma tarefa de
+    diagnóstico (D+14/D+28/D+45). Devolve True se foi renderizado."""
+    task_id = st.session_state.get("resultado_task_id")
+    if not task_id:
+        return False
+
+    from modules.repositories.insemination_repo import (
+        InseminacaoError,
+        find_operation_por_tarefa,
+        registar_resultado,
+    )
+
+    info = find_operation_por_tarefa(int(task_id))
+    if info is None:
+        st.warning(
+            "Esta tarefa não está ligada a uma inseminação registada. "
+            "Marque como concluída manualmente na ficha do animal."
+        )
+        if st.button("← Voltar", key="btn_res_voltar_erro"):
+            st.session_state.pop("resultado_task_id", None)
+            st.session_state.pop("resultado_task_tipo", None)
+            st.rerun()
+        return True
+
+    tipo = str(info["tipo"])
+    label_etapa = {
+        "diagnostico_gestacao": "1º diagnóstico (D+14)",
+        "confirmacao_gestacao": "Confirmação (D+28)",
+        "segunda_confirmacao": "2ª confirmação (D+45)",
+    }.get(tipo, tipo)
+
+    st.markdown(
+        f"<div style='background:#fef3c7;border:1px solid #fde68a;"
+        f"border-radius:12px;padding:20px;margin-bottom:16px;'>"
+        f"<div style='font-size:.75rem;color:#78716c;text-transform:uppercase;"
+        f"letter-spacing:.5px;font-weight:700;margin-bottom:4px;'>"
+        f"Registar resultado — {label_etapa}</div>"
+        f"<div style='font-size:1.35rem;font-weight:700;color:#0f172a;'>"
+        f"{info['egua']} × {info['garanhao']}</div>"
+        f"<div style='font-size:.85rem;color:#64748b;margin-top:2px;'>"
+        f"Inseminação de {info['data_inseminacao'].strftime('%d/%m/%Y')} "
+        f"· {int(info['total_palhetas'] or 0)} palhetas em "
+        f"{int(info['num_lotes'] or 1)} lote(s)"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    obs = st.text_area(
+        "Observações do exame",
+        key=f"res_obs_{task_id}",
+        placeholder="Ex.: reflexo positivo, útero vazio, presença de embrião...",
+        height=90,
+    )
+
+    c1, c2, c3 = st.columns([1, 1, 0.6])
+    with c1:
+        clicked_pos = st.button(
+            "✓ Positivo", key=f"res_pos_{task_id}",
+            type="primary", width="stretch",
+        )
+    with c2:
+        clicked_neg = st.button(
+            "✗ Negativo", key=f"res_neg_{task_id}",
+            width="stretch",
+        )
+    with c3:
+        if st.button("Cancelar", key=f"res_cancel_{task_id}", width="stretch"):
+            st.session_state.pop("resultado_task_id", None)
+            st.session_state.pop("resultado_task_tipo", None)
+            st.rerun()
+
+    if clicked_pos or clicked_neg:
+        resultado = "positivo" if clicked_pos else "negativo"
+        try:
+            _ret = registar_resultado(
+                operation_id=str(info["operation_id"]),
+                resultado=resultado,
+                tipo_tarefa=tipo,
+                data=date.today(),
+                observacoes=obs or None,
+                utilizador=st.session_state.get("user", {}).get("username", "—"),
+                task_id=int(task_id),
+            )
+        except InseminacaoError as e:
+            st.error(f"❌ {e}")
+            return True
+
+        if resultado == "negativo" and tipo == "diagnostico_gestacao":
+            # Guardar dados para as opções pós-negativo (repetir / encerrar)
+            st.session_state["resultado_pos_neg"] = {
+                "animal_id": int(info["animal_id"]),
+                "estadia_id": int(info["estadia_id"]),
+                "dono_id": int(info["dono_id"]),
+                "egua": info["egua"],
+                "garanhao": info["garanhao"],
+            }
+            st.session_state.pop("resultado_task_id", None)
+            st.session_state.pop("resultado_task_tipo", None)
+            st.rerun()
+        else:
+            msg = "✓ Gestação confirmada — D+28 e D+45 adicionados à agenda." if resultado == "positivo" else "✗ Resultado negativo — ciclo encerrado."
+            st.success(msg)
+            st.session_state.pop("resultado_task_id", None)
+            st.session_state.pop("resultado_task_tipo", None)
+            st.rerun()
+
+    return True
+
+
+def _render_painel_pos_negativo() -> bool:
+    """Painel de escolha após negativo em D+14: Repetir ou Encerrar."""
+    dados = st.session_state.get("resultado_pos_neg")
+    if not dados:
+        return False
+
+    st.markdown(
+        f"<div style='background:#fee2e2;border:1px solid #fecaca;"
+        f"border-radius:12px;padding:20px;margin-bottom:16px;'>"
+        f"<div style='font-size:.75rem;color:#991b1b;text-transform:uppercase;"
+        f"letter-spacing:.5px;font-weight:700;margin-bottom:4px;'>"
+        f"Diagnóstico negativo</div>"
+        f"<div style='font-size:1.2rem;font-weight:700;color:#0f172a;'>"
+        f"{dados['egua']} × {dados['garanhao']} · não gestante</div>"
+        f"<div style='font-size:.85rem;color:#7f1d1d;margin-top:4px;'>"
+        f"O que quer fazer a seguir?</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("🔁 Repetir inseminação", key="btn_repetir_insem",
+                     type="primary", width="stretch"):
+            # Pré-preencher o formulário do menu de registo
+            st.session_state["insem_egua_prefill"] = {
+                "animal_id": dados["animal_id"],
+                "estadia_id": dados["estadia_id"],
+                "dono_id": dados["dono_id"],
+                "nome": dados["egua"],
+            }
+            st.session_state["insem_show_success"] = False
+            st.session_state.pop("resultado_pos_neg", None)
+            # Navegar para o menu "Registar Inseminação" (mesma chave que
+            # o dashboard usa em navigate-to-page).
+            from modules.i18n import t as _t
+            st.session_state["aba_selecionada"] = _t("menu.register_insemination")
+            st.rerun()
+    with c2:
+        if st.button("🗑 Encerrar ciclo", key="btn_encerrar_ciclo",
+                     width="stretch"):
+            st.session_state.pop("resultado_pos_neg", None)
+            st.success("Ciclo encerrado — operação marcada como falhada.")
+            st.rerun()
+
+    return True
+
+
 def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
     motivo = _resumir(row.get("motivo"), 30)
     tid = int(row["id"])
@@ -312,13 +471,27 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
         f"{cfg['icon']} {cfg['label'].upper()}"
     )
 
+    tipo_tarefa = row.get("tipo") or ""
+    tarefas_diagnostico = {
+        "diagnostico_gestacao",
+        "confirmacao_gestacao",
+        "segunda_confirmacao",
+    }
+    is_diagnostico = tipo_tarefa in tarefas_diagnostico
+
     if st.button(
         label,
         key=f"tdcard-{row['urgencia']}-{key_prefix}-{tid}",
         width="stretch",
     ):
-        st.session_state["ver_animal_id"] = int(row["animal_id"])
-        st.session_state["ver_animal_tab"] = 0
+        if is_diagnostico:
+            # Abre o painel de registo de resultado por baixo do cartão.
+            st.session_state["resultado_task_id"] = tid
+            st.session_state["resultado_task_tipo"] = tipo_tarefa
+        else:
+            # Restantes tipos → drill-down para a ficha do animal.
+            st.session_state["ver_animal_id"] = int(row["animal_id"])
+            st.session_state["ver_animal_tab"] = 0
         st.rerun()
 
 
@@ -371,6 +544,12 @@ def run_trabalho_diario_page(context: dict):
             context,
             st.session_state.get("ver_animal_tab", 0),
         )
+        return
+
+    # Painel de registo de resultado (D+14/D+28/D+45) — inline no topo
+    if _render_painel_resultado():
+        return
+    if _render_painel_pos_negativo():
         return
 
     # Geração automática de tarefas (idempotente)

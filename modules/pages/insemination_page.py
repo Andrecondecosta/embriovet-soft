@@ -548,9 +548,16 @@ def run_insemination_page(ctx):
         return f"{e['nome']} — {aloj_label} — {dono}"
 
     # Modo edição — se a operação em curso já tem égua, tentar
-    # pré-seleccioná-la na nova lista.
+    # pré-seleccioná-la na nova lista. Também consumir `insem_egua_prefill`
+    # que vem do botão "🔁 Repetir inseminação" do Trabalho Diário.
     egua_edit_default = 0
-    if edit_mode and insemination_data:
+    prefill = st.session_state.pop("insem_egua_prefill", None)
+    if prefill:
+        for i, e in enumerate(eguas_ativas):
+            if int(e["animal_id"]) == int(prefill["animal_id"]):
+                egua_edit_default = i
+                break
+    elif edit_mode and insemination_data:
         for i, e in enumerate(eguas_ativas):
             if e["nome"].strip().lower() == (
                 insemination_data.get("egua") or ""

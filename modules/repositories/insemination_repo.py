@@ -445,3 +445,272 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
     result = [dict(zip(cols, r)) for r in rows]
     result.sort(key=lambda x: (x["nome"] or "").lower())
     return result
+
+
+
+# ────────────────────────────────────────────────────────────────────
+# Ciclo de resultados (Pedido 4)
+# ────────────────────────────────────────────────────────────────────
+
+RESULTADO_POSITIVO = "positivo"
+RESULTADO_NEGATIVO = "negativo"
+
+# Mapeia o resultado UI ("positivo"/"negativo") + tipo da tarefa que o
+# registou → estado gravado em `inseminacoes.resultado`.
+# - D+14 positivo → 'gestacao_confirmada'
+# - D+14/D+28/D+45 negativo → 'falhou'
+# - D+28 / D+45 positivo → mantém 'gestacao_confirmada'
+TIPOS_TAREFA_RESULTADO = {
+    "diagnostico_gestacao",
+    "confirmacao_gestacao",
+    "segunda_confirmacao",
+}
+
+
+def find_operation_por_tarefa(task_id: int) -> Optional[dict]:
+    """Dado o id de uma tarefa de diagnóstico/confirmação, devolve os
+    dados da operação de inseminação a que pertence (via estadia_id).
+
+    Devolve `None` se não houver `inseminacoes` para essa estadia (a
+    tarefa não corresponde a uma inseminação registada)."""
+    sql = """
+        SELECT td.id, td.animal_id, td.estadia_id, td.tipo, td.data_tarefa,
+               i.operation_id, i.data_inseminacao, MIN(i.id) AS anchor_id,
+               COUNT(*) AS num_lotes,
+               SUM(i.palhetas_gastas) AS total_palhetas,
+               MAX(i.egua) AS egua, MAX(i.garanhao) AS garanhao,
+               MAX(i.dono_id) AS dono_id,
+               MAX(i.resultado) AS resultado_actual
+        FROM trabalho_diario td
+        LEFT JOIN inseminacoes i ON i.estadia_id = td.estadia_id
+        WHERE td.id = %s
+        GROUP BY td.id, td.animal_id, td.estadia_id, td.tipo, td.data_tarefa,
+                 i.operation_id, i.data_inseminacao
+        ORDER BY i.data_inseminacao DESC NULLS LAST, MIN(i.id) DESC
+        LIMIT 1
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (int(task_id),))
+        row = cur.fetchone()
+        cols = [d[0] for d in cur.description] if cur.description else []
+        cur.close()
+    if not row or row[cols.index("operation_id")] is None:
+        return None
+    return dict(zip(cols, row))
+
+
+def registar_resultado(
+    *,
+    operation_id: str,
+    resultado: str,
+    tipo_tarefa: str,
+    data: date,
+    observacoes: Optional[str] = None,
+    utilizador: str = "—",
+    task_id: Optional[int] = None,
+) -> dict:
+    """Regista o resultado de uma etapa de diagnóstico da operação.
+
+    Uma "operação" é o conjunto de linhas em `inseminacoes` que partilham
+    o mesmo `operation_id` (multi-lote conta como uma só operação).
+
+    Efeitos, tudo numa transacção:
+    - Actualiza `inseminacoes.resultado` + `data_resultado` para TODAS
+      as linhas da operação. `positivo` → 'gestacao_confirmada', `negativo`
+      → 'falhou'.
+    - Actualiza `acompanhamento_inseminacao.resultado` para a estadia
+      correspondente (compat legado + consultas rápidas).
+    - Marca a `trabalho_diario` correspondente como concluída (se
+      `task_id` for passado; caso contrário fecha todas as tarefas
+      abertas com `estadia_id + tipo_tarefa + data_tarefa`).
+    - Se **positivo** em `diagnostico_gestacao` (D+14):
+        - Cria tarefas D+28 (`confirmacao_gestacao`) e D+45
+          (`segunda_confirmacao`) idempotentes em `trabalho_diario`.
+    - Se **negativo** em qualquer etapa:
+        - Cancela (delete) tarefas futuras não concluídas da mesma
+          estadia (`confirmacao_gestacao`, `segunda_confirmacao`) que
+          ainda não tenham sido feitas.
+        - Limpa (`NULL`) as datas futuras em `acompanhamento_inseminacao`
+          (`data_confirmacao`, `data_2a_confirmacao`, `data_parto_previsto`).
+
+    Devolve dict com:
+        - `estadia_id`, `animal_id_egua`, `data_inseminacao`
+        - `resultado_gravado`: 'gestacao_confirmada' | 'falhou'
+        - `tarefas_criadas`: list[int] (ids de novas trabalho_diario)
+        - `tarefas_canceladas`: list[int]
+    """
+    if resultado not in (RESULTADO_POSITIVO, RESULTADO_NEGATIVO):
+        raise InseminacaoError(
+            f"resultado inválido: '{resultado}' — usa 'positivo' ou 'negativo'."
+        )
+    if tipo_tarefa not in TIPOS_TAREFA_RESULTADO:
+        raise InseminacaoError(
+            f"tipo_tarefa inválido: '{tipo_tarefa}'."
+        )
+    if not isinstance(data, date):
+        raise InseminacaoError("`data` tem que ser um `date`.")
+
+    resultado_gravado = (
+        "gestacao_confirmada"
+        if resultado == RESULTADO_POSITIVO
+        else "falhou"
+    )
+    obs_conclusao = f"{'✓ Positivo' if resultado == RESULTADO_POSITIVO else '✗ Negativo'}"
+    if observacoes and observacoes.strip():
+        obs_conclusao += f" — {observacoes.strip()}"
+
+    tarefas_criadas: list[int] = []
+    tarefas_canceladas: list[int] = []
+
+    with get_connection() as conn:
+        cur = conn.cursor()
+        try:
+            # 1. Fetch estadia_id + animal_id_egua + data_inseminacao (todas
+            #    as linhas da operação partilham estes valores).
+            cur.execute(
+                """
+                SELECT DISTINCT estadia_id, animal_id_egua, data_inseminacao
+                FROM inseminacoes
+                WHERE operation_id = %s::uuid
+                LIMIT 1
+                """,
+                (str(operation_id),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise InseminacaoError(
+                    f"operation_id={operation_id} não encontrado em `inseminacoes`."
+                )
+            estadia_id, animal_id_egua, data_inseminacao = row
+            estadia_id = int(estadia_id) if estadia_id is not None else None
+            animal_id_egua = int(animal_id_egua) if animal_id_egua is not None else None
+
+            # 2. Actualiza todas as linhas da operação.
+            cur.execute(
+                """
+                UPDATE inseminacoes
+                SET resultado = %s, data_resultado = %s, atualizado = TRUE
+                WHERE operation_id = %s::uuid
+                """,
+                (resultado_gravado, data, str(operation_id)),
+            )
+
+            # 3. Actualiza acompanhamento (se existir para a estadia).
+            if estadia_id is not None:
+                cur.execute(
+                    "UPDATE acompanhamento_inseminacao "
+                    "SET resultado = %s WHERE estadia_id = %s",
+                    (resultado_gravado, estadia_id),
+                )
+
+            # 4. Marca a(s) tarefa(s) correspondente(s) como concluída(s).
+            if task_id is not None:
+                cur.execute(
+                    """
+                    UPDATE trabalho_diario
+                    SET concluida = TRUE,
+                        data_conclusao = CURRENT_DATE,
+                        observacoes_conclusao = %s
+                    WHERE id = %s AND concluida = FALSE
+                    """,
+                    (obs_conclusao, int(task_id)),
+                )
+            elif estadia_id is not None:
+                cur.execute(
+                    """
+                    UPDATE trabalho_diario
+                    SET concluida = TRUE,
+                        data_conclusao = CURRENT_DATE,
+                        observacoes_conclusao = %s
+                    WHERE estadia_id = %s AND tipo = %s
+                      AND concluida = FALSE
+                    """,
+                    (obs_conclusao, estadia_id, tipo_tarefa),
+                )
+
+            # 5. Ramificação por resultado.
+            if resultado == RESULTADO_POSITIVO and tipo_tarefa == "diagnostico_gestacao":
+                # Criar D+28 e D+45 (idempotente).
+                data_28 = data_inseminacao + timedelta(days=DIAS_CONFIRMACAO)
+                data_45 = data_inseminacao + timedelta(days=DIAS_2A_CONFIRMACAO)
+
+                for d_target, tipo, label in (
+                    (data_28, "confirmacao_gestacao",
+                     f"Confirmação de gestação (D+28) — inseminação {data_inseminacao.strftime('%d/%m/%Y')}"),
+                    (data_45, "segunda_confirmacao",
+                     f"2ª confirmação (D+45) — inseminação {data_inseminacao.strftime('%d/%m/%Y')}"),
+                ):
+                    cur.execute(
+                        """
+                        INSERT INTO trabalho_diario (
+                            animal_id, estadia_id, data_tarefa, tipo,
+                            motivo, urgencia, criado_automaticamente,
+                            utilizador
+                        )
+                        SELECT %s, %s, %s, %s, %s, 'hoje', TRUE, %s
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM trabalho_diario
+                            WHERE animal_id = %s AND estadia_id = %s
+                              AND data_tarefa = %s AND tipo = %s
+                        )
+                        RETURNING id
+                        """,
+                        (
+                            animal_id_egua, estadia_id, d_target, tipo,
+                            label, utilizador,
+                            animal_id_egua, estadia_id, d_target, tipo,
+                        ),
+                    )
+                    r = cur.fetchone()
+                    if r:
+                        tarefas_criadas.append(int(r[0]))
+
+            elif resultado == RESULTADO_NEGATIVO and estadia_id is not None:
+                # Cancelar tarefas futuras não concluídas + limpar datas futuras
+                cur.execute(
+                    """
+                    DELETE FROM trabalho_diario
+                    WHERE estadia_id = %s
+                      AND tipo IN (
+                        'confirmacao_gestacao',
+                        'segunda_confirmacao',
+                        'parto_previsto'
+                      )
+                      AND concluida = FALSE
+                      AND data_tarefa >= %s
+                    RETURNING id
+                    """,
+                    (estadia_id, data),
+                )
+                tarefas_canceladas = [int(r[0]) for r in cur.fetchall()]
+
+                cur.execute(
+                    """
+                    UPDATE acompanhamento_inseminacao
+                    SET data_confirmacao = NULL,
+                        data_2a_confirmacao = NULL,
+                        data_parto_previsto = NULL
+                    WHERE estadia_id = %s
+                    """,
+                    (estadia_id,),
+                )
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+    return {
+        "operation_id": str(operation_id),
+        "estadia_id": estadia_id,
+        "animal_id_egua": animal_id_egua,
+        "data_inseminacao": data_inseminacao,
+        "resultado_gravado": resultado_gravado,
+        "data_resultado": data,
+        "tipo_tarefa": tipo_tarefa,
+        "tarefas_criadas": tarefas_criadas,
+        "tarefas_canceladas": tarefas_canceladas,
+    }

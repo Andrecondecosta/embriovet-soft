@@ -305,6 +305,67 @@ def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
     return total, gestacoes, f"{taxa:.0f} %"
 
 
+def _render_botoes_resultado_inline(operation_id: str, data_inseminacao) -> None:
+    """Renderiza dois pequenos botões (+/-) inline para registar o
+    resultado de uma inseminação pendente directamente na ficha da égua.
+
+    Usa a mesma função `registar_resultado` do Trabalho Diário. A etapa
+    (D+14/D+28/D+45) é deduzida pelos dias passados desde a inseminação.
+    """
+    from datetime import date as _date
+    from modules.repositories.insemination_repo import (
+        InseminacaoError,
+        registar_resultado,
+    )
+
+    hoje = _date.today()
+    dias = (hoje - data_inseminacao).days if data_inseminacao else 0
+    if dias >= 45:
+        tipo_tarefa = "segunda_confirmacao"
+        etapa = "D+45"
+    elif dias >= 28:
+        tipo_tarefa = "confirmacao_gestacao"
+        etapa = "D+28"
+    else:
+        tipo_tarefa = "diagnostico_gestacao"
+        etapa = "D+14"
+
+    key_base = f"resop_{str(operation_id).replace('-', '_')}"
+    c1, c2, _c3 = st.columns([0.9, 0.9, 2.2])
+    with c1:
+        clicked_pos = st.button(
+            f"✓ +  ({etapa})", key=f"{key_base}_pos",
+            width="stretch",
+        )
+    with c2:
+        clicked_neg = st.button(
+            f"✗ −  ({etapa})", key=f"{key_base}_neg",
+            width="stretch",
+        )
+
+    if clicked_pos or clicked_neg:
+        resultado = "positivo" if clicked_pos else "negativo"
+        try:
+            registar_resultado(
+                operation_id=str(operation_id),
+                resultado=resultado,
+                tipo_tarefa=tipo_tarefa,
+                data=hoje,
+                utilizador=st.session_state.get(
+                    "user", {}
+                ).get("username", "—"),
+            )
+            st.success(
+                "✓ Gestação confirmada — D+28/D+45 adicionados à agenda."
+                if resultado == "positivo"
+                else "✗ Resultado negativo — ciclo encerrado."
+            )
+            st.rerun()
+        except InseminacaoError as e:
+            st.error(f"❌ {e}")
+
+
+
 RESULTADO_BADGE = {
     "pendente":             ("Pendente",    "#475569", "#e2e8f0"),
     "gestacao_confirmada":  ("Gestação ✓",  "#15803d", "#dcfce7"),
@@ -376,6 +437,18 @@ def _render_tab_historial_reprodutivo(animal: dict) -> None:
             obs = row["observacoes"] or "—"
             obs_short = obs if len(obs) <= 60 else obs[:59] + "…"
             cols[5].write(obs_short)
+
+            # ── Registo de resultado (Pedido 4) ──
+            # Se ainda está `pendente` e é uma operação com operation_id
+            # real (não `solo_<id>` legado), permite marcar +/- inline
+            # a partir da ficha da égua.
+            op_key = row.get("op_key") or ""
+            eh_op_valida = not op_key.startswith("solo_")
+            if row["resultado"] == "pendente" and eh_op_valida and pd.notna(dt):
+                _render_botoes_resultado_inline(
+                    operation_id=op_key,
+                    data_inseminacao=dt.date() if hasattr(dt, "date") else dt,
+                )
 
     # ── Estadias anteriores ────────────────────────────────────────────────
     st.markdown("##### Estadias anteriores")
