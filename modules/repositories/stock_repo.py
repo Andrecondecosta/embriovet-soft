@@ -175,9 +175,19 @@ def carregar_transferencias_externas():
             elif "garanhao" in cols:
                 garanhao_expr = "te.garanhao"
 
+            # Se `garanhao` já vem por `te.*`, evitamos duplicar a coluna
+            # com o mesmo nome (senão o pandas rebenta com
+            # `cannot reindex on axis with duplicate labels`).
+            if "garanhao" in cols:
+                te_columns = ", ".join(
+                    f"te.{c}" for c in cols if c != "garanhao"
+                )
+                te_select = f"{te_columns}, {garanhao_expr} AS garanhao"
+            else:
+                te_select = f"te.*, {garanhao_expr} AS garanhao"
+
             query = f"""
-                SELECT te.*,
-                       {garanhao_expr} as garanhao,
+                SELECT {te_select},
                        d.nome as proprietario_origem
                 FROM transferencias_externas te
                 {estoque_join}

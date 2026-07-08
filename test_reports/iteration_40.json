@@ -1,0 +1,33 @@
+{
+  "summary": "Pedido 8 (Colheitas agendadas do garanhão). Backend: pytest 87/87 (75 baseline + 12 novos test_colheitas_agendadas.py) — TODOS PASSAM. Frontend smoke: ✅ Bug antigo `ValueError/reindex` de Stock de sémen > Garanhões CORRIGIDO (tab abre sem erro, 12 Ver ficha buttons); ✅ Widget 'COLHEITAS AGENDADAS' renderizado na tab Resumo da ficha do garanhão (Chacco blue) com date input + botão 'Agendar colheita' + secção 'PRÓXIMAS COLHEITAS (N)' com botão 'Cancelar'; ✅ Agendar colheita cria tarefa que aparece na lista; ✅ Trabalho Diário mostra cartão 'Colheita — Chacco blue' na coluna da data agendada com badge 🟢 AMANHÃ (formato exacto pedido). ❌ CRITICAL: clique no cartão 'Colheita — [nome]' redirecciona para Stock de sémen > Adicionar lote mas mostra ERRO 'Form Adicionar lote indisponível: reload da página' — NÃO é bug do Pedido 8, é bug PRE-EXISTENTE do Pedido 7 (mesmo erro reproduzível clicando o botão 'Adicionar lote' no topo de Stock de sémen). Impacto: bloqueia critério de aceitação (d) do Pedido 8 (prefill + concluir colheita ao guardar lote).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app.py::_render_add_stock_view (delegação via stock_semen_page._delegate_add_stock)", "issue": "Form 'Adicionar lote' indisponível: reload da página. Reproduzível de 2 formas: (1) Stock de sémen > botão 'Adicionar lote' no topo; (2) Trabalho Diário > clique em cartão 'Colheita — [nome]' (fluxo Pedido 8). Ambos terminam no mesmo erro.", "selector": "text=Form 'Adicionar lote' indisponível", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Pedido 8: Trabalho Diário → click Colheita card → Stock de sémen > Adicionar lote (com prefill do garanhão) → guardar → concluir_colheita", "issue": "Fluxo interrompido no passo do form Adicionar lote (ver ui_bugs acima). Impede validação end-to-end de: banner amarelo de contexto, prefill da selectbox de garanhão, chamada a `concluir_colheita` no save.", "affected_selectors": ["button:has-text('Colheita —')", "button:has-text('Adicionar lote')"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_colheitas_agendadas.py", "/app/test_reports/pytest/iteration_40.xml"],
+  "action_items": [
+    "CRITICAL FIX: Em /app/app.py mover a definição de `def _render_add_stock_view():` (actualmente linha 2265) para ANTES do bloco `if aba == NAV_STOCK_SEMEN:` (actualmente linha 2247). Alternativa: em `modules/pages/stock_semen_page.py::_delegate_add_stock`, importar a função directamente do módulo `__main__` / `app` em vez de a procurar em `ctx`. Este bug afecta TAMBÉM o botão 'Adicionar lote' do Pedido 7 — não é regressão do Pedido 8, é bug pre-existente que ficou por apanhar (iteration 39 não exercitou este botão).",
+    "Após o fix acima, re-testar o e2e do Pedido 8: agendar colheita hoje → Trabalho Diário → clicar cartão 'Colheita — [nome]' → confirmar banner amarelo + selectbox garanhão pré-seleccionada + save → colheita marcada concluída (desaparece do Trabalho Diário)."
+  ],
+  "critical_code_review_comments": [
+    "Root cause do bug crítico: `run_stock_semen_page({**globals(), **locals()})` a linha 2249 de app.py capta um snapshot de globals() ANTES de a linha 2265 (`def _render_add_stock_view`) ser executada nesta rerun do Streamlit. Como Streamlit re-executa o script top-down a cada rerun, o `def` só é registado em globals() DEPOIS do dispatch — quando já é tarde. O `_delegate_add_stock(ctx)` procura em `ctx.get('_render_add_stock_view')` e obtém None → fallback error.",
+    "O padrão de ctx via `{**globals(), **locals()}` continua a ser frágil (já flagged nos iterations 38 e 39). Este é o 3º incidente do mesmo anti-padrão. Recomenda-se refactor: importar explicitamente as funções necessárias nos módulos delegados em vez de as descobrir por reflexão no dict ctx.",
+    "Widget `colheitas_widget.render_colheitas_agendadas` funciona correctamente e a integração no `animal_page` (tab Resumo) está limpa. O `trabalho_diario_page._render_cartao_tarefa` também detecta correctamente `is_colheita` e renderiza 'Colheita — [nome]' com badge 🟢 AMANHÃ / hoje.",
+    "Repo `colheita_repo.py` bem estruturado: agendar/listar/cancelar/concluir com invalidação de cache e idempotência (retorna False se já concluída). Migração 030 minimalista e correcta.",
+    "Ruído persistente no console (herdado do iteration 39): 'Invalid color passed for widgetBackgroundColor in theme.sidebar: \"\"' — centenas de warnings. Não afecta funcionalidade mas polui logs."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (87/87)", "frontend": "80% (widget e agendamento funcionam; e2e prefill quebrado por bug pre-existente do Pedido 7)"},
+  "test_credentials": "admin / admin123 em https://multi-lot-ops.preview.emergentagent.com/",
+  "seed_data_creation": "Nenhuma via API. Durante os smoke tests foram criadas colheitas para Chacco blue (dia 09/07 e 08/07 2026) que ficam na BD para retest.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Bug crítico é fácil de corrigir (reordering em app.py). Após fix, revalidar TODO o fluxo do Pedido 8 (b→f). O widget, o repo, os testes pytest e a rota Trabalho Diário estão OK — só o form Adicionar lote é que precisa ficar acessível para completar o e2e. Backend 87/87 já confirmado. Chacco blue já tem colheita agendada para 09/07/2026 na BD teste — usar para retest.",
+  "rca_of_the_issue": "Forward-reference bug em app.py. Linhas relevantes: 2247-2250 (dispatch para stock_semen_page) e 2265+ (def _render_add_stock_view). O `{**globals(), **locals()}` no dispatch captura globals() no momento em que o snapshot é criado — antes do `def` ser processado pelo interpretador Python nesta rerun do Streamlit. Reprodução: (1) Stock de sémen > botão 'Adicionar lote', OU (2) Trabalho Diário > clique em qualquer cartão 'Colheita — [nome]'. Sintoma: `st.error(\"Form 'Adicionar lote' indisponível: reload da página.\")` em stock_semen_page.py:213 porque `ctx.get('_render_add_stock_view')` é None. Fix: mover `def _render_add_stock_view()` para ANTES da linha 2247 (uma edit de reordenação) OU mudar `_delegate_add_stock` para importar `from app import _render_add_stock_view` (requer cuidado com import circular, mas app.py já é módulo raíz)."
+}

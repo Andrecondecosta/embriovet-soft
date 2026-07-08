@@ -1450,6 +1450,15 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
 
         with tab_resumo:
             _render_tab_resumo(animal)
+            # Painel "Colheitas agendadas" (Pedido 8)
+            st.markdown("---")
+            from modules.components.colheitas_widget import (
+                render_colheitas_agendadas,
+            )
+            render_colheitas_agendadas(
+                animal_id=int(animal["id"]),
+                garanhao_nome=animal.get("nome") or "—",
+            )
         with tab_producao:
             _render_tab_producao_semen(animal)
         with tab_fert:

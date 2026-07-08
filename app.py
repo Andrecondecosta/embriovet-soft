@@ -2271,6 +2271,22 @@ def _render_add_stock_view():
     primary = (app_settings or {}).get("primary_color") or "#E85D4A"
     inject_add_stock_form_css(primary_color=primary)
 
+    # Banner de contexto quando a entrada vem duma colheita agendada
+    # (Pedido 8). O prefill é consumido apenas após o guardar do lote.
+    _colheita_ctx = st.session_state.get("colheita_garanhao_prefill")
+    if _colheita_ctx:
+        col_msg, col_x = st.columns([7, 1])
+        with col_msg:
+            st.info(
+                f"🐎 A registar produção da **colheita agendada** para "
+                f"**{_colheita_ctx.get('garanhao_nome') or 'garanhão'}**. "
+                f"Ao guardar, a tarefa será marcada como concluída."
+            )
+        with col_x:
+            if st.button("Cancelar", key="colheita-prefill-cancel"):
+                st.session_state.pop("colheita_garanhao_prefill", None)
+                st.rerun()
+
     if proprietarios.empty:
         st.warning(t("add_stock.no_owners"))
         if st.button(t("add_stock.add_first_owner"), type="primary"):
@@ -2347,13 +2363,20 @@ def _render_add_stock_view():
             st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
             col_id1, col_id_btn, col_id2 = st.columns([3, 1, 3])
             with col_id1:
-                # Selectbox por id (permite pré-seleccionar via novo_animal_id)
+                # Selectbox por id (permite pré-seleccionar via novo_animal_id
+                # ou via `colheita_garanhao_prefill` — Pedido 8).
                 garanhao_ids = garanhoes_df["id"].tolist()
                 # Se acabámos de criar um garanhão, força a pré-selecção
                 novo_id = st.session_state.get("novo_animal_id")
+                # Prefill de colheita agendada (Pedido 8): não fazer pop
+                # aqui — só depois de guardar o lote (para poder concluir
+                # a tarefa correspondente).
+                colheita_prefill = st.session_state.get("colheita_garanhao_prefill")
                 default_idx = 0
                 if novo_id is not None and int(novo_id) in garanhao_ids:
                     default_idx = garanhao_ids.index(int(novo_id))
+                elif colheita_prefill and int(colheita_prefill.get("animal_id") or 0) in garanhao_ids:
+                    default_idx = garanhao_ids.index(int(colheita_prefill["animal_id"]))
 
                 def _fmt_garanhao(gid):
                     r = garanhoes_df.loc[garanhoes_df["id"] == gid]
@@ -2504,6 +2527,26 @@ def _render_add_stock_view():
                             # Marcar que usou o proprietário
                             if 'novo_proprietario_id' in st.session_state:
                                 st.session_state['novo_proprietario_usado'] = True
+                            # Se o guardar foi despoletado por uma colheita
+                            # agendada (Pedido 8), conclui a tarefa.
+                            _colheita_prefill = st.session_state.pop(
+                                "colheita_garanhao_prefill", None
+                            )
+                            if _colheita_prefill and _colheita_prefill.get("tarefa_id"):
+                                try:
+                                    from modules.repositories.colheita_repo import (
+                                        concluir_colheita,
+                                    )
+                                    concluir_colheita(
+                                        int(_colheita_prefill["tarefa_id"]),
+                                        utilizador=st.session_state.get(
+                                            "user", {}
+                                        ).get("username", "sistema"),
+                                    )
+                                except Exception as _e:
+                                    logger.warning(
+                                        f"Não foi possível concluir a colheita: {_e}"
+                                    )
                             # Redirect para o separador "Lotes" do novo
                             # Stock de sémen (Pedido 7).
                             st.session_state['aba_selecionada'] = NAV_STOCK_SEMEN

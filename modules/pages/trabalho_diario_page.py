@@ -480,6 +480,15 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
     tarefas_para_inseminar = {"verificar_ovulacao"}
     is_diagnostico = tipo_tarefa in tarefas_diagnostico
     is_inseminar = tipo_tarefa in tarefas_para_inseminar
+    is_colheita = tipo_tarefa == "colheita"
+
+    # Label especial para colheitas: "Colheita — [garanhão]"
+    if is_colheita:
+        label = (
+            f"**Colheita — {row['animal']}**\n\n"
+            f"{motivo}\n\n"
+            f"{cfg['icon']} {cfg['label'].upper()}"
+        )
 
     if st.button(
         label,
@@ -490,6 +499,19 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
             # Abre o painel de registo de resultado por baixo do cartão.
             st.session_state["resultado_task_id"] = tid
             st.session_state["resultado_task_tipo"] = tipo_tarefa
+        elif is_colheita:
+            # Colheita → activa o prefill do form Adicionar Lote
+            # (Stock de sémen · Adicionar lote) com o garanhão
+            # pré-preenchido. A conclusão da tarefa acontece dentro
+            # do `inserir_stock` quando o prefill está setado.
+            st.session_state["colheita_garanhao_prefill"] = {
+                "animal_id": int(row["animal_id"]),
+                "garanhao_nome": row.get("animal") or "",
+                "tarefa_id": tid,
+            }
+            st.session_state["aba_selecionada"] = "Stock de sémen"
+            st.session_state["stock_semen_view"] = "add_stock"
+            st.rerun()
         else:
             # Restantes tipos → drill-down para a ficha do animal.
             st.session_state["ver_animal_id"] = int(row["animal_id"])
