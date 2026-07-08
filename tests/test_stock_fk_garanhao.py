@@ -373,10 +373,30 @@ def test_filter_stock_view_fallback_garanhao_legado():
 # ────────────────────────────────────────────────────────────────────
 
 def test_grep_final_no_leituras_da_coluna_texto():
-    """Confirma que apenas duas ocorrências permanecem, ambas
-    intencionais (map_page.js template + fallback defensivo em
-    carregar_transferencias_externas quando o schema legado não
-    tem `estoque_id`)."""
+    """Guarda de arquitetura: leituras da coluna texto `garanhao` só
+    podem existir em dois sítios muito específicos, e mais em lado
+    nenhum (nem em `app.py`, nem em `modules/pages/*`, nem em nenhum
+    outro repositório).
+
+    As duas ocorrências toleradas são:
+
+    1. `modules/pages/map_page.py` — template JavaScript inline que
+       lê `lote.garanhao` de um objecto já construído em Python (o
+       objecto usa `garanhao_nome` como preferência; o campo texto é
+       apenas fallback compat).
+    2. `modules/repositories/stock_repo.py` — expressão
+       `garanhao_expr = "te.garanhao"` dentro de
+       `carregar_transferencias_externas`, ligada ao ramo defensivo
+       para schemas legados que **ainda não têm** `estoque_id` na
+       tabela `transferencias_externas`. Assim que a migração de
+       schema for feita este ramo pode ser removido.
+
+    Objectivo do teste: se alguém voltar a introduzir uma leitura de
+    `e.garanhao` no `app.py` ou nas pages, o teste falha e força a
+    conversa. Este guarda ficou mais estrito após o Pedido 6.2
+    (extração de `stock_repo.py`) — antes aceitava a ocorrência em
+    `app.py` porque o fallback vivia lá.
+    """
     import subprocess
 
     cmd = (
@@ -394,6 +414,24 @@ def test_grep_final_no_leituras_da_coluna_texto():
         + "\n".join(linhas)
     )
     joined = "\n".join(linhas)
-    # As duas ocorrências esperadas
-    assert "map_page.py" in joined or len(linhas) == 0
-    assert "app.py" in joined or len(linhas) <= 1
+
+    # Nenhuma ocorrência pode viver no `app.py` nem em nenhum ficheiro
+    # de `modules/pages/` (exceto `map_page.py`, coberto abaixo).
+    for ln in linhas:
+        assert "app.py" not in ln, (
+            f"leitura de `e.garanhao` reintroduzida em app.py: {ln!r}"
+        )
+        if "modules/pages/" in ln:
+            assert "map_page.py" in ln, (
+                f"leitura de `e.garanhao` reintroduzida numa page: {ln!r}"
+            )
+
+    # Ocorrências toleradas — apenas nestes dois caminhos.
+    caminhos_permitidos = (
+        "modules/pages/map_page.py",
+        "modules/repositories/stock_repo.py",
+    )
+    for ln in linhas:
+        assert any(p in ln for p in caminhos_permitidos), (
+            f"leitura de `e.garanhao` fora dos caminhos autorizados: {ln!r}"
+        )
