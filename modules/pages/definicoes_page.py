@@ -18,6 +18,7 @@ from __future__ import annotations
 import streamlit as st
 
 from modules.i18n import t
+from modules.pages import settings_page as _settings_module
 from modules.pages.settings_page import (
     _render_tab_alojamentos,
     _run_settings_geral,
@@ -29,6 +30,12 @@ def run_definicoes_page(ctx: dict) -> None:
     # Injectar globals para as funções que dependem de `app_settings`,
     # `update_branding_settings`, etc. (padrão herdado do settings_page).
     globals().update(ctx)
+    # Também injectar no namespace do `settings_page` — o padrão
+    # `globals().update(ctx)` legado exige que `_run_settings_geral`
+    # e `_render_tab_alojamentos` vejam `inject_stock_css`,
+    # `app_settings`, `update_branding_settings`, etc. no seu próprio
+    # módulo. Sem isto, o tab Marca dá `NameError`.
+    _settings_module.__dict__.update(ctx)
 
     st.header(t("settings.title"))
 

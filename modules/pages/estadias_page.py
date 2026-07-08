@@ -97,6 +97,7 @@ def _carregar_estadias(apenas_activas: bool) -> pd.DataFrame:
             e.animal_id,
             a.nome                                       AS animal,
             e.tipo_registo                               AS tipo,
+            a.tipo                                       AS animal_tipo,
             d.nome                                       AS proprietario,
             e.motivo,
             e.estado,
@@ -818,7 +819,7 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
                 # em éguas (o formulário filtra o dropdown por éguas ativas
                 # de qualquer forma; aqui só evitamos ruído visual em
                 # garanhões/outros).
-                if str(row.get("tipo") or "").lower() == "egua":
+                if str(row.get("animal_tipo") or "").lower() == "egua":
                     if st.button(
                         "Registar inseminação",
                         key=f"{key_prefix}_insem_{estadia_id}",
