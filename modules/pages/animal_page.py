@@ -257,6 +257,10 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
     `operation_id` (com fallback `solo_<id>` para linhas legacy sem
     `operation_id`) — a coluna `palhetas_gastas` passa a ser o total da
     operação e `num_lotes` conta os lotes envolvidos.
+
+    O JOIN a `acompanhamento_inseminacao` usa `i.estadia_id` (FK do
+    Pedido 3) — evita a multiplicação de linhas quando a égua tem mais
+    do que uma estadia aberta a cobrir a data da inseminação.
     """
     sql = """
         WITH ins AS (
@@ -265,11 +269,13 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
                 i.data_inseminacao,
                 i.garanhao,
                 i.dono_id,
+                i.estadia_id,
                 i.palhetas_gastas,
                 i.observacoes,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
-            WHERE LOWER(i.egua) = LOWER(%s)
+            WHERE i.animal_id_egua = %s
+               OR (i.animal_id_egua IS NULL AND LOWER(i.egua) = LOWER(%s))
         )
         SELECT
             MIN(ins.data_inseminacao) AS data_inseminacao,
@@ -282,17 +288,12 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
-        LEFT JOIN estadias e
-               ON e.animal_id = %s
-              AND e.motivo = 'inseminacao'
-              AND ins.data_inseminacao BETWEEN e.data_entrada
-                                          AND COALESCE(e.data_saida, CURRENT_DATE)
-        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(animal_nome, animal_id))
+        return pd.read_sql_query(sql, conn, params=(int(animal_id), animal_nome))
 
 
 def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
@@ -302,6 +303,67 @@ def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
     gestacoes = int((df["resultado"] == "gestacao_confirmada").sum())
     taxa = (gestacoes / total) * 100
     return total, gestacoes, f"{taxa:.0f} %"
+
+
+def _render_botoes_resultado_inline(operation_id: str, data_inseminacao) -> None:
+    """Renderiza dois pequenos botões (+/-) inline para registar o
+    resultado de uma inseminação pendente directamente na ficha da égua.
+
+    Usa a mesma função `registar_resultado` do Trabalho Diário. A etapa
+    (D+14/D+28/D+45) é deduzida pelos dias passados desde a inseminação.
+    """
+    from datetime import date as _date
+    from modules.repositories.insemination_repo import (
+        InseminacaoError,
+        registar_resultado,
+    )
+
+    hoje = _date.today()
+    dias = (hoje - data_inseminacao).days if data_inseminacao else 0
+    if dias >= 45:
+        tipo_tarefa = "segunda_confirmacao"
+        etapa = "D+45"
+    elif dias >= 28:
+        tipo_tarefa = "confirmacao_gestacao"
+        etapa = "D+28"
+    else:
+        tipo_tarefa = "diagnostico_gestacao"
+        etapa = "D+14"
+
+    key_base = f"resop_{str(operation_id).replace('-', '_')}"
+    c1, c2, _c3 = st.columns([0.9, 0.9, 2.2])
+    with c1:
+        clicked_pos = st.button(
+            f"✓ +  ({etapa})", key=f"{key_base}_pos",
+            width="stretch",
+        )
+    with c2:
+        clicked_neg = st.button(
+            f"✗ −  ({etapa})", key=f"{key_base}_neg",
+            width="stretch",
+        )
+
+    if clicked_pos or clicked_neg:
+        resultado = "positivo" if clicked_pos else "negativo"
+        try:
+            registar_resultado(
+                operation_id=str(operation_id),
+                resultado=resultado,
+                tipo_tarefa=tipo_tarefa,
+                data=hoje,
+                utilizador=st.session_state.get(
+                    "user", {}
+                ).get("username", "—"),
+            )
+            st.success(
+                "✓ Gestação confirmada — D+28/D+45 adicionados à agenda."
+                if resultado == "positivo"
+                else "✗ Resultado negativo — ciclo encerrado."
+            )
+            st.rerun()
+        except InseminacaoError as e:
+            st.error(f"❌ {e}")
+
 
 
 RESULTADO_BADGE = {
@@ -375,6 +437,18 @@ def _render_tab_historial_reprodutivo(animal: dict) -> None:
             obs = row["observacoes"] or "—"
             obs_short = obs if len(obs) <= 60 else obs[:59] + "…"
             cols[5].write(obs_short)
+
+            # ── Registo de resultado (Pedido 4) ──
+            # Se ainda está `pendente` e é uma operação com operation_id
+            # real (não `solo_<id>` legado), permite marcar +/- inline
+            # a partir da ficha da égua.
+            op_key = row.get("op_key") or ""
+            eh_op_valida = not op_key.startswith("solo_")
+            if row["resultado"] == "pendente" and eh_op_valida and pd.notna(dt):
+                _render_botoes_resultado_inline(
+                    operation_id=op_key,
+                    data_inseminacao=dt.date() if hasattr(dt, "date") else dt,
+                )
 
     # ── Estadias anteriores ────────────────────────────────────────────────
     st.markdown("##### Estadias anteriores")
@@ -1108,6 +1182,10 @@ def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
 def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
     """Inseminações deste garanhão — matching por FK (`i.animal_id_garanhao`)
     e **agrupadas por `operation_id`** para não duplicar operações multi-lote.
+
+    O JOIN à `acompanhamento_inseminacao` usa `i.estadia_id` (FK do
+    Pedido 3) — evita a multiplicação de linhas quando a égua tem
+    múltiplas estadias abertas.
     """
     sql = """
         WITH ins AS (
@@ -1117,6 +1195,7 @@ def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
                 i.egua,
                 i.dono_id,
                 i.animal_id_egua,
+                i.estadia_id,
                 i.palhetas_gastas,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
@@ -1132,12 +1211,7 @@ def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
-        LEFT JOIN estadias e
-               ON e.animal_id = ins.animal_id_egua
-              AND e.motivo = 'inseminacao'
-              AND ins.data_inseminacao BETWEEN e.data_entrada
-                                          AND COALESCE(e.data_saida, CURRENT_DATE)
-        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """

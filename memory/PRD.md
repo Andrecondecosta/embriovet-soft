@@ -1,9 +1,67 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — Pedidos 3a (observações destacadas + checkbox D+1 opcional) e 3b (agrupamento por `operation_id` nas listagens) concluídos. Registo de inseminações passa agora a: (i) mostrar o campo de observações com label destacado ("🗒 Observações da inseminação") e placeholder útil (reflexo, edema, hora, protocolo hormonal), (ii) oferecer checkbox "🩺 Criar tarefa D+1 (verificar ovulação)" ligado por defeito; a tarefa D+14 continua sempre automática. Listagens das fichas (égua e garanhão) passam a agrupar por `operation_id` — inseminações multi-lote aparecem como UMA linha com o total de palhetas e a etiqueta "(N lotes)". 15 testes a passar em 0.62s.
+**Fev 2026** — **Pedidos 4b + 4c + item 3 concluídos**: (1) Circuito de trabalho fechado — painel de confirmação após registo de inseminação com 3 saídas (Trabalho Diário / Ficha da égua / Registar outra) + botão "➕ Registar inseminação" em tarefas `verificar_ovulacao`; (2) Ciclo estendido até ao parto — quando D+45 é positivo cria `pre_parto` (D+330-14, urgência 'amanha') e `parto_previsto` (D+330, urgência 'hoje'); padrão do parto reduzido de 340 → 330 dias; negativo tardio apaga estas tarefas também; (3) Uma égua tem no máximo UMA estadia aberta — validação em duas camadas: `_criar_estadia_apenas` faz raise `ValueError` amigável + UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` como safety net na BD. Testing agent independente validou **31/31 testes** (`/app/test_reports/iteration_34.json`).
 
-## Changelog Recente (Fev 2026 — Pedidos 3a + 3b)
+## Changelog Recente (Fev 2026 — Pedidos 4b + 4c + item 3)
+- ✅ **Circuito de trabalho (4b)**:
+  - `insemination_page._render_painel_confirmacao_insem(conf)` — resumo pós-registo (égua × garanhão, total palhetas, num_lotes, data, tarefas automáticas criadas) + 3 botões: primário "📋 Trabalho Diário", secundários "👁 Ver na ficha da égua" e "➕ Registar outra". Substitui o `st.dialog` antigo — mantém o formulário no fluxo principal.
+  - `trabalho_diario_page._render_cartao_tarefa` — botão adicional "➕ Registar inseminação" em cartões de `verificar_ovulacao`. Reutiliza `insem_egua_prefill` (mecanismo do "Repetir inseminação") — égua e estadia pré-seleccionadas, sem texto livre.
+  - `_carregar_tarefas_semana` — passa a devolver também `estadia_id` (necessário para o botão).
+- ✅ **Tarefa de parto (4c)**:
+  - `DIAS_PARTO_PREVISTO = 330` (era 340). `DIAS_PRE_PARTO = 14`.
+  - **Migration 028** — adiciona `pre_parto` ao CHECK `trabalho_diario_tipo_check`.
+  - `registar_resultado` — nova ramificação para (positivo, `segunda_confirmacao`): cria pre_parto (D+316, urgência 'amanha', label "Parto previsto em ~2 semanas — preparar acompanhamento") e parto_previsto (D+330, urgência 'hoje'). Idempotente. Usa a `data_parto_previsto` do acompanhamento como âncora se estiver preenchida, caso contrário calcula a partir da `data_inseminacao`.
+  - Negativo tardio também apaga `pre_parto` e `parto_previsto` futuras não concluídas.
+- ✅ **Constraint estadias (item 3)**:
+  - **Migration 029** — `CREATE UNIQUE INDEX estadias_uma_aberta_por_animal ON estadias (animal_id) WHERE data_saida IS NULL`. Zero duplicados em produção no momento da aplicação.
+  - `estadias_page._criar_estadia_apenas` — valida antes do INSERT: `SELECT ... WHERE animal_id=%s AND data_saida IS NULL` → se existir faz `raise ValueError("Este animal já tem uma estadia em aberto (id=X). Feche a existente antes de criar uma nova.")`. Antecipa a constraint da BD com mensagem amigável.
+  - `modal_animal._criar_animal_e_estadia` não precisa da mesma validação porque cria animal + estadia em conjunto (por construção não há estadia prévia).
+- ✅ **6 novos testes** (total 31):
+  - `test_positivo_d45_cria_pre_parto_e_parto_previsto` (datas + urgências correctas)
+  - `test_pre_parto_idempotente_em_d45`
+  - `test_negativo_apaga_tambem_pre_parto`
+  - `test_criar_estadia_apenas_valida_estadia_aberta` (ValueError amigável)
+  - `test_constraint_bd_rejeita_segunda_estadia_aberta` (UniqueViolation)
+  - `test_migration_029_rejeita_segunda_estadia_aberta` (regressão da bug fix Matilde adaptado à nova constraint)
+- **Total: 31 testes, todos passam em 0.80s**. Migrations 028/029 aplicadas na BD de teste local e produção Render.
+- **Recusado (por decisão do utilizador):** migração pandas → SQLAlchemy engine. Pandas UserWarnings persistem em 3 chamadas de `pd.read_sql_query` (cosmético, não bloqueante) — fica em backlog para uma iteração de qualidade.
+
+## Changelog Anterior (Fev 2026 — Pedido 4 base)
+- ✅ **`insemination_repo.registar_resultado`** (transaccional):
+  - `WHERE operation_id = %s::uuid` — actualiza multi-lote como um único evento.
+  - Modo `task_id`: fecha uma tarefa específica; fallback (sem task_id): fecha todas as pendentes matching `(estadia_id, tipo_tarefa)`.
+  - Positivo D+14: INSERT idempotente D+28 + D+45 em `trabalho_diario`. Positivo D+28/D+45: mantém 'gestacao_confirmada'.
+  - Negativo: DELETE tarefas futuras não concluídas (`confirmacao_gestacao`, `segunda_confirmacao`, `parto_previsto`, `data_tarefa >= data`) + NULL nas datas futuras do acompanhamento.
+- ✅ **`insemination_repo.find_operation_por_tarefa(task_id)`** — devolve dict agregado (operation_id, egua, garanhao, num_lotes, total_palhetas, resultado_actual).
+- ✅ **`trabalho_diario_page`**:
+  - `_render_painel_resultado()` — painel inline com Positivo/Negativo + textarea observações. Aparece antes do render normal quando `resultado_task_id` está em session_state.
+  - `_render_painel_pos_negativo()` — mostra opções "🔁 Repetir inseminação" / "🗑 Encerrar ciclo" após negativo em D+14.
+  - `_render_cartao_tarefa` — clique em tarefa de tipo diagnóstico abre painel em vez de drill-down ao animal.
+- ✅ **`insemination_page`** — pré-selecciona a égua via `st.session_state['insem_egua_prefill']` (do botão "Repetir").
+- ✅ **`animal_page._render_botoes_resultado_inline`** — botões +/− na ficha da égua (historial reprodutivo) para operações pendentes com operation_id real (ignora legado `solo_<id>`). Chama a mesma função repo.
+- ✅ **8 novos testes em `test_resultado_ciclo.py`**:
+  1. `test_positivo_d14_cria_d28_e_d45_e_marca_gestacao`
+  2. `test_positivo_d14_idempotente_nao_duplica_tarefas`
+  3. `test_negativo_d14_marca_falhou_e_nao_cria_futuras`
+  4. `test_negativo_d28_perde_gestacao_e_cancela_d45`
+  5. `test_menu_e_ficha_registam_resultado_identico` (snapshot compare)
+  6. `test_multi_lote_partilha_resultado_e_data`
+  7. `test_find_operation_por_tarefa`
+  8. `test_resultado_invalido_erra` (3 assertions)
+- **Total: 25 testes, todos passam em 0.71s** contra a BD de teste local. Validado independentemente pelo testing_agent.
+
+## Changelog Anterior (Fev 2026 — Bug fix "Matilde")
+- ✅ **`registar_inseminacao_completa`** — nova etapa 0 de canonicalização: `SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY id ASC LIMIT 1`. Se não há estadia aberta → `raise InseminacaoError`. Se há, usa sempre a mais antiga (ignora estadia_id passado). Nunca cria estadias.
+- ✅ **`listar_eguas_com_estadia_ativa`** — `SELECT DISTINCT ON (a.id) ... ORDER BY a.id, e.data_entrada ASC, e.id ASC` + re-sort por nome em Python. Uma égua com múltiplas estadias abertas devolve apenas UMA linha (a mais antiga).
+- ✅ **`_carregar_inseminacoes_animal` / `_carregar_inseminacoes_garanhao`** — LEFT JOIN a `acompanhamento_inseminacao` agora via `ai.estadia_id = ins.estadia_id` (FK do Pedido 3), eliminando a multiplicação de linhas quando há 2 estadias abertas.
+- ✅ **2 novos testes** em `test_insemination_repo.py`:
+  - `test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas` — reproduz o bug: cria mare + estadia_original, insere 2ª estadia aberta na mão, chama a função passando o estadia_id errado. Assere que resultado usa a original, tarefas+inseminacoes ficam na original, ficha mostra 10 palhetas/2 lotes (não 20/4), selectbox devolve 1 linha, nenhuma estadia nova criada.
+  - `test_registo_falha_se_egua_nao_tem_estadia_ativa` — sem estadia aberta → `InseminacaoError` sem criar estadia às escondidas.
+- ✅ **Total: 17 testes pytest, todos passam em 0.60s** contra a BD de teste local. Testing agent independente confirmou.
+- Nota: BD de teste local teve de ser re-provisionada durante o ciclo (o container perdeu o Postgres 15 e o cliente 18). Ficou documentado em `/app/tests/README.md`.
+
+## Changelog Anterior (Fev 2026 — Pedidos 3a + 3b)
 - ✅ **Pedido 3a — UX pós-inseminação**:
   - `insemination_page.py` — campo de observações com label destacado + placeholder ("O que aconteceu? Reflexo, edema uterino, hora exacta, protocolo hormonal usado, etc.") + altura 110px.
   - Novo checkbox `insem_criar_d1` ligado por defeito com help text.

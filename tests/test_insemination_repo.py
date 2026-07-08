@@ -641,6 +641,167 @@ def test_listagens_agrupam_por_operation_id(
     assert int(df_gar.iloc[0]["num_lotes"]) == 2
 
 
+# ────────────────────────────────────────────────────────────────────
+# Regressão — Bug estadia duplicada / palhetas multiplicadas
+# ────────────────────────────────────────────────────────────────────
+
+def test_registo_canonicaliza_para_estadia_ativa(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Mesmo passando um estadia_id errado (ex.: uma estadia FECHADA de
+    outra data), a função canonicaliza para a estadia aberta da égua.
+
+    (Depois da migration 029, é impossível ter 2 estadias abertas em
+    simultâneo — a defesa em profundidade continua útil caso o caller
+    passe qualquer estadia_id inválido.)
+    """
+    from modules.pages.animal_page import _carregar_inseminacoes_animal
+
+    animal_id = egua_com_estadia["animal_id"]
+    estadia_original = egua_com_estadia["estadia_id"]
+
+    # Criar uma estadia FECHADA para a mesma égua (não bate na constraint 029)
+    cur = db.cursor()
+    cur.execute(
+        """
+        INSERT INTO estadias (
+            tipo_registo, animal_id, alojamento_id, dono_id,
+            data_entrada, data_saida, motivo, estado
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """,
+        (
+            "estadia", animal_id, egua_com_estadia["alojamento_id"],
+            egua_com_estadia["dono_id"],
+            date.today() - timedelta(days=100),
+            date.today() - timedelta(days=90),
+            "inseminacao", "internado",
+        ),
+    )
+    estadia_fechada = int(cur.fetchone()[0])
+    db.commit()
+    cur.close()
+
+    try:
+        eguas = [
+            e for e in listar_eguas_com_estadia_ativa()
+            if e["animal_id"] == animal_id
+        ]
+        assert len(eguas) == 1
+        assert eguas[0]["estadia_id"] == estadia_original
+
+        # Passa POR ENGANO a estadia fechada — a função deve canonicalizar
+        resultado = registar_inseminacao_completa(
+            animal_id_egua=animal_id,
+            estadia_id=estadia_fechada,  # errada de propósito
+            dono_id=egua_com_estadia["dono_id"],
+            garanhao_nome=stock_garanhao["nome"],
+            data_inseminacao=date(2026, 9, 1),
+            registros=[
+                {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 6},
+                {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 4},
+            ],
+        )
+        assert resultado["estadia_id"] == estadia_original
+
+        # Tarefas + inseminacoes na estadia canónica
+        cur = db.cursor()
+        cur.execute(
+            "SELECT DISTINCT estadia_id FROM trabalho_diario "
+            "WHERE animal_id = %s AND criado_automaticamente = TRUE",
+            (animal_id,),
+        )
+        assert {r[0] for r in cur.fetchall()} == {estadia_original}
+
+        cur.execute(
+            "SELECT DISTINCT estadia_id FROM inseminacoes "
+            "WHERE animal_id_egua = %s",
+            (animal_id,),
+        )
+        assert {r[0] for r in cur.fetchall()} == {estadia_original}
+
+        # Ficha sem multiplicação
+        df = _carregar_inseminacoes_animal(animal_id, egua_com_estadia["nome"])
+        assert len(df) == 1
+        assert int(df.iloc[0]["palhetas_gastas"]) == 10
+        assert int(df.iloc[0]["num_lotes"]) == 2
+        cur.close()
+    finally:
+        cur = db.cursor()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        cur.execute(
+            "UPDATE inseminacoes SET estadia_id = NULL WHERE estadia_id = %s",
+            (estadia_fechada,),
+        )
+        cur.execute("DELETE FROM estadias WHERE id = %s", (estadia_fechada,))
+        db.commit()
+        cur.close()
+
+
+def test_migration_029_rejeita_segunda_estadia_aberta(db, egua_com_estadia):
+    """A UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` da
+    migration 029 rejeita qualquer INSERT que crie uma segunda estadia
+    aberta para o mesmo animal — defesa em profundidade contra o bug
+    original."""
+    cur = db.cursor()
+    with pytest.raises(psycopg2.errors.UniqueViolation):
+        cur.execute(
+            """
+            INSERT INTO estadias (
+                tipo_registo, animal_id, alojamento_id, dono_id,
+                data_entrada, motivo, estado
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "estadia", egua_com_estadia["animal_id"],
+                egua_com_estadia["alojamento_id"],
+                egua_com_estadia["dono_id"], date.today(),
+                "inseminacao", "internado",
+            ),
+        )
+    db.rollback()
+    cur.close()
+
+
+def test_registo_falha_se_egua_nao_tem_estadia_ativa(db, dono_id, stock_garanhao):
+    """Se a égua não tem qualquer estadia aberta, a função erra com
+    `InseminacaoError` em vez de criar uma estadia às escondidas."""
+    cur = db.cursor()
+    cur.execute(
+        "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+        "VALUES (%s, 'egua', %s, TRUE) RETURNING id",
+        (f"_TEST_EGUA_SEM_ESTADIA_{int(time.time() * 1000)}", dono_id),
+    )
+    animal_id = int(cur.fetchone()[0])
+    db.commit()
+    cur.close()
+
+    try:
+        with pytest.raises(InseminacaoError):
+            registar_inseminacao_completa(
+                animal_id_egua=animal_id,
+                estadia_id=-1,  # inexistente
+                dono_id=dono_id,
+                garanhao_nome=stock_garanhao["nome"],
+                data_inseminacao=date.today(),
+                registros=[
+                    {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 1}
+                ],
+            )
+        # Nenhuma estadia devia ter sido criada.
+        cur = db.cursor()
+        cur.execute("SELECT COUNT(*) FROM estadias WHERE animal_id = %s", (animal_id,))
+        assert cur.fetchone()[0] == 0
+        cur.close()
+    finally:
+        cur = db.cursor()
+        cur.execute("DELETE FROM animais WHERE id = %s", (animal_id,))
+        db.commit()
+        cur.close()
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v", "-s"]))

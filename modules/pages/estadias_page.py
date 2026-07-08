@@ -199,8 +199,31 @@ def _ensure_externo_constraints() -> None:
 
 
 def _criar_estadia_apenas(payload: dict) -> int:
-    """Insere uma nova linha em `estadias` (sem criar animal). Devolve o id."""
-    sql = """
+    """Insere uma nova linha em `estadias` (sem criar animal). Devolve o id.
+
+    Valida primeiro que **não existe já uma estadia aberta** para o
+    mesmo animal — a UNIQUE INDEX PARCIAL da migration 029 impede a
+    nível de BD, mas validamos aqui em Python para poder mostrar uma
+    mensagem amigável (`ValueError`) antes de a exceção de BD ser
+    disparada.
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        if payload.get("data_saida") is None:
+            cur.execute(
+                "SELECT id FROM estadias WHERE animal_id = %s "
+                "AND data_saida IS NULL LIMIT 1",
+                (int(payload["animal_id"]),),
+            )
+            row = cur.fetchone()
+            if row:
+                cur.close()
+                raise ValueError(
+                    "Este animal já tem uma estadia em aberto "
+                    f"(id={row[0]}). Feche a existente antes de criar uma nova."
+                )
+        cur.execute(
+            """
         INSERT INTO estadias (
             tipo_registo, animal_id, alojamento_id, dono_id,
             data_entrada, data_saida, motivo, estado,
@@ -208,11 +231,7 @@ def _criar_estadia_apenas(payload: dict) -> int:
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) RETURNING id
-    """
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            sql,
+        """,
             (
                 payload["tipo_registo"],
                 int(payload["animal_id"]),
