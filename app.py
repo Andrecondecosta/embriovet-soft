@@ -60,7 +60,24 @@ from modules.pages.import_page import run_import_page
 from modules.pages.estadias_page import run_estadias_page
 from modules.pages.trabalho_diario_page import run_trabalho_diario_page
 from modules.i18n import t, get_i18n_diagnostics
-from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection
+from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection, invalidate_data_cache
+from modules.repositories.stock_repo import (
+    carregar_proprietarios,
+    carregar_stock,
+    carregar_inseminacoes,
+    carregar_transferencias,
+    carregar_transferencias_externas,
+    carregar_contentores,
+    obter_stock_contentor,
+    inserir_stock,
+    editar_stock,
+    deletar_stock,
+    transferir_palhetas_parcial,
+    transferir_stock_interno,
+    transferir_stock_interno_com_localizacao,
+    transferir_palhetas_externo,
+    transferir_stock_externo,
+)
 from modules.services.auth_service import (
     criar_hash_password,
     ensure_admin_user_exists,
@@ -290,24 +307,8 @@ def update_welcome_completed(completed=True):
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
-def carregar_proprietarios(apenas_ativos=False):
-    """Carrega lista de proprietarios do banco de dados
-
-    Args:
-        apenas_ativos: Se True, retorna apenas proprietários ativos
-    """
-    try:
-        with get_connection() as conn:
-            query = "SELECT * FROM dono"
-            if apenas_ativos:
-                query += " WHERE ativo = TRUE"
-            query += " ORDER BY nome"
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar proprietarios: {e}")
-        st.error(f"Erro ao carregar proprietarios: {e}")
-        return pd.DataFrame()
+# `carregar_proprietarios` está em modules.repositories.stock_repo
+# (importada no topo deste ficheiro).
 
 
 def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
@@ -360,6 +361,7 @@ def atualizar_status_proprietarios():
 
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             return True
     except Exception as e:
         logger.error(f"Erro ao atualizar status: {e}")
@@ -441,7 +443,8 @@ def alternar_status_proprietario(proprietario_id):
             cur.close()
             conn.close()
             logger.info(f"🔒 Conexão fechada")
-
+            invalidate_data_cache()
+            
             return novo_status
         else:
             if cur:
@@ -504,108 +507,16 @@ def editar_proprietario(proprietario_id, dados):
             ))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário editado: ID {proprietario_id}")
             return True
     except Exception as e:
         logger.error(f"Erro ao editar proprietário: {e}")
         return False
 
-def carregar_stock(apenas_ativos=True):
-    """Carrega stock completo com informações de proprietario e contentor
-
-    Args:
-        apenas_ativos: Se True, retorna apenas stock de proprietários ativos
-    """
-    try:
-        with get_connection() as conn:
-            query = """
-                SELECT e.*,
-                       d.nome as proprietario_nome,
-                       c.codigo as contentor_codigo
-                FROM estoque_dono e
-                LEFT JOIN dono d ON e.dono_id = d.id
-                LEFT JOIN contentores c ON e.contentor_id = c.id
-                WHERE e.existencia_atual > 0
-            """
-            if apenas_ativos:
-                query += " AND d.ativo = TRUE"
-            query += " ORDER BY e.garanhao, e.id"
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar stock: {e}")
-        st.error(f"Erro ao carregar stock: {e}")
-        return pd.DataFrame()
-
-def carregar_inseminacoes():
-    """Carrega histórico de inseminações"""
-    try:
-        with get_connection() as conn:
-            query = """
-                SELECT i.*, d.nome as proprietario_nome
-                FROM inseminacoes i
-                LEFT JOIN dono d ON i.dono_id = d.id
-                ORDER BY i.data_inseminacao DESC
-            """
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar inseminações: {e}")
-        st.error(f"Erro ao carregar inseminações: {e}")
-        return pd.DataFrame()
-
-def carregar_transferencias():
-    """Carrega histórico de transferências"""
-    try:
-        with get_connection() as conn:
-            query = """
-                SELECT t.*,
-                       e.garanhao,
-                       d1.nome as proprietario_origem,
-                       d2.nome as proprietario_destino
-                FROM transferencias t
-                LEFT JOIN estoque_dono e ON t.estoque_id = e.id
-                LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
-                LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
-                ORDER BY t.data_transferencia DESC
-            """
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar transferências: {e}")
-        return pd.DataFrame()
-
-def carregar_transferencias_externas():
-    """Carrega histórico de transferências externas (vendas/envios)"""
-    try:
-        with get_connection() as conn:
-            # Verificar se a tabela existe
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'transferencias_externas'
-                );
-            """)
-            tabela_existe = cur.fetchone()[0]
-            cur.close()
-
-            if not tabela_existe:
-                logger.warning("Tabela transferencias_externas não existe")
-                return pd.DataFrame()
-
-            query = """
-                SELECT te.*,
-                       d.nome as proprietario_origem
-                FROM transferencias_externas te
-                LEFT JOIN dono d ON te.proprietario_origem_id = d.id
-                ORDER BY te.data_transferencia DESC
-            """
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar transferências externas: {e}")
-        return pd.DataFrame()
+# `carregar_stock`, `carregar_inseminacoes`, `carregar_transferencias`,
+# `carregar_transferencias_externas` estão em
+# modules.repositories.stock_repo (importadas no topo deste ficheiro).
 
 def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int, dados_transf_ext):
     """Gera PDF com histórico completo do garanhão"""
@@ -775,6 +686,7 @@ def atualizar_proprietario_stock(stock_id, novo_dono_id):
             )
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário atualizado: stock_id={stock_id}, novo_dono_id={novo_dono_id}")
             return True
     except Exception as e:
@@ -785,103 +697,8 @@ def atualizar_proprietario_stock(stock_id, novo_dono_id):
 # ------------------------------------------------------------
 # 💾 Funções de inserção
 # ------------------------------------------------------------
-def inserir_stock(dados):
-    """Insere novo stock no banco de dados"""
-    try:
-        if not dados.get("Garanhão"):
-            st.error(t("error.stallion_required"))
-            return False
-
-        if not dados.get("Contentor"):
-            st.error(t("error.container_required"))
-            return False
-
-        if not dados.get("Canister"):
-            st.error(t("error.canister_required"))
-            return False
-
-        if not dados.get("Andar"):
-            st.error(t("error.floor_required"))
-            return False
-
-        palhetas_val = to_py(dados.get("Palhetas", 0)) or 0
-        try:
-            palhetas_int = int(palhetas_val)
-        except Exception:
-            st.error(t("error.straws_numeric"))
-            return False
-
-        if palhetas_int < 0:
-            st.error(t("error.straws_negative"))
-            return False
-
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            # Obter utilizador atual
-            username = st.session_state.get('user', {}).get('username', 'desconhecido')
-
-            # Resolver animal_id do garanhão (cria em `animais` se necessário)
-            from modules.repositories.animal_repo import get_or_create_garanhao
-            animal_id = get_or_create_garanhao(dados.get("Garanhão"))
-
-            params = (
-                to_py(dados.get("Garanhão")),
-                to_py(dados.get("Proprietário")),
-                to_py(dados.get("Data")),
-                to_py(dados.get("Origem")),
-                to_py(dados.get("Palhetas")),
-                to_py(dados.get("Qualidade")),
-                to_py(dados.get("Concentração")),
-                to_py(dados.get("Motilidade")),
-                to_py(dados.get("Certificado")),
-                to_py(dados.get("Dose")),
-                to_py(dados.get("Observações")),
-                to_py(dados.get("Palhetas")),
-                to_py(dados.get("Palhetas")),
-                to_py(dados.get("Contentor")),
-                to_py(dados.get("Canister")),
-                to_py(dados.get("Andar")),
-                to_py(dados.get("Cor")),
-                username,
-                animal_id,
-            )
-
-            cur.execute(
-                """
-                INSERT INTO estoque_dono (
-                    garanhao, dono_id, data_embriovet, origem_externa,
-                    palhetas_produzidas, qualidade, concentracao, motilidade,
-                    certificado, dose, observacoes,
-                    quantidade_inicial, existencia_atual,
-                    contentor_id, canister, andar, cor,
-                    criado_por, data_criacao, animal_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)
-                RETURNING id, garanhao
-                """,
-                params,
-            )
-
-            # Obter ID e garanhão do stock inserido
-            result = cur.fetchone()
-            stock_id = result[0]
-            garanhao_nome = result[1]
-
-            conn.commit()
-            cur.close()
-            logger.info(f"Stock inserido: {dados.get('Garanhão')} (ID: {stock_id})")
-
-            # Guardar informações para redirecionamento
-            st.session_state['ultimo_stock_id'] = stock_id
-            st.session_state['ultimo_garanhao'] = garanhao_nome
-            st.session_state['redirecionar_ver_stock'] = True
-
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao inserir stock: {e}")
-        st.error(f"Erro ao inserir stock: {e}")
-        return False
+# `inserir_stock` está em modules.repositories.stock_repo
+# (importada no topo deste ficheiro).
 
 def registrar_inseminacao(registro):
     """Registra uma inseminação e atualiza o stock"""
@@ -952,7 +769,8 @@ def registrar_inseminacao(registro):
 
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
-
+            invalidate_data_cache()
+            
             logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
             return True
 
@@ -1069,6 +887,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     logger.info(f"✏️ Operação ATUALIZADA (op={edit_operation_id}): égua={egua}, total={total_pal}")
                     cur.close()
                     atualizar_status_proprietarios()
+                    invalidate_data_cache()
                     return True
 
             # ─── MODO EDIÇÃO SINGLE ROW (backward compat) ────────────────────────
@@ -1143,6 +962,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                 logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}")
                 cur.close()
                 atualizar_status_proprietarios()
+                invalidate_data_cache()
                 return True
 
             # ─── MODO CRIAÇÃO ─────────────────────────────────────────────────────
@@ -1181,6 +1001,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             conn.commit()
             cur.close()
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✅ Inseminação criada (op={new_operation_id}): {egua} - {total_pal} palhetas")
             return True
 
@@ -1236,6 +1057,7 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
             cur.close()
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             return True
 
     except Exception as e:
@@ -1280,6 +1102,7 @@ def adicionar_proprietario(dados):
             proprietario_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário adicionado: {dados.get('nome')}")
             return proprietario_id
     except Exception as e:
@@ -1310,6 +1133,7 @@ def deletar_proprietario(proprietario_id):
             cur.execute("DELETE FROM dono WHERE id = %s", (to_py(proprietario_id),))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário deletado: ID {proprietario_id}")
             return True
 
@@ -1321,94 +1145,15 @@ def deletar_proprietario(proprietario_id):
 # ------------------------------------------------------------
 # 📝 Funções de Edição de Stock
 # ------------------------------------------------------------
-def editar_stock(stock_id, dados):
-    """Edita um lote de stock"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                UPDATE estoque_dono SET
-                    garanhao = %s,
-                    dono_id = %s,
-                    data_embriovet = %s,
-                    origem_externa = %s,
-                    palhetas_produzidas = %s,
-                    qualidade = %s,
-                    concentracao = %s,
-                    motilidade = %s,
-                    certificado = %s,
-                    dose = %s,
-                    observacoes = %s,
-                    existencia_atual = %s,
-                    contentor_id = %s,
-                    canister = %s,
-                    andar = %s,
-                    cor = %s
-                WHERE id = %s
-                """,
-                (
-                    to_py(dados.get("garanhao")),
-                    to_py(dados.get("dono_id")),
-                    to_py(dados.get("data")),
-                    to_py(dados.get("origem")),
-                    to_py(dados.get("palhetas_produzidas")),
-                    to_py(dados.get("qualidade")),
-                    to_py(dados.get("concentracao")),
-                    to_py(dados.get("motilidade")),
-                    to_py(dados.get("certificado")),
-                    to_py(dados.get("dose")),
-                    to_py(dados.get("observacoes")),
-                    to_py(dados.get("existencia")),
-                    to_py(dados.get("contentor_id")),
-                    to_py(dados.get("canister")),
-                    to_py(dados.get("andar")),
-                    to_py(dados.get("cor")),
-                    to_py(stock_id),
-                ),
-            )
-            conn.commit()
-            cur.close()
-            logger.info(f"Stock editado: ID {stock_id}")
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao editar stock: {e}")
-        st.error(f"Erro ao editar stock: {e}")
-        return False
-
-def deletar_stock(stock_id):
-    """Deleta um lote de stock"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
-            conn.commit()
-            cur.close()
-            logger.info(f"Stock deletado: ID {stock_id}")
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao deletar stock: {e}")
-        st.error(f"Erro ao deletar stock: {e}")
-        return False
+# `editar_stock` e `deletar_stock` estão em
+# modules.repositories.stock_repo (importadas no topo deste ficheiro).
 
 # ------------------------------------------------------------
 # 🗺️ Funções de Gestão de Contentores
 # ------------------------------------------------------------
 
-def carregar_contentores(apenas_ativos=True):
-    """Carrega todos os contentores"""
-    try:
-        with get_connection() as conn:
-            query = "SELECT * FROM contentores"
-            if apenas_ativos:
-                query += " WHERE ativo = TRUE"
-            query += " ORDER BY codigo"
-            df = pd.read_sql_query(query, conn)
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao carregar contentores: {e}")
-        st.error(f"Erro ao carregar contentores: {e}")
-        return pd.DataFrame()
+# `carregar_contentores` está em modules.repositories.stock_repo
+# (importada no topo deste ficheiro).
 
 def adicionar_contentor(dados):
     """Adiciona novo contentor"""
@@ -1431,6 +1176,7 @@ def adicionar_contentor(dados):
             contentor_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor criado: {dados.get('codigo')} (ID: {contentor_id})")
             return contentor_id
     except Exception as e:
@@ -1458,6 +1204,7 @@ def editar_contentor(contentor_id, dados):
             ))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor editado: ID {contentor_id}")
             return True
     except Exception as e:
@@ -1477,6 +1224,7 @@ def atualizar_posicao_contentor(contentor_id, x, y):
             """, (to_py(x), to_py(y), to_py(contentor_id)))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Posição do contentor atualizada: ID {contentor_id} -> X={x}, Y={y}")
             return True
     except Exception as e:
@@ -1495,6 +1243,7 @@ def atualizar_andar_lote(estoque_id: int, novo_andar: int, novo_canister: int = 
                 cur.execute("UPDATE estoque_dono SET andar = %s WHERE id = %s", (novo_andar, estoque_id))
             conn.commit()
             cur.close()
+        invalidate_data_cache()
         return True
     except Exception as e:
         logger.error(f"Erro ao atualizar posição de lote: {e}")
@@ -1519,6 +1268,7 @@ def mover_lotes_por_andar(contentor_id: int, andar_origem: int, andar_destino: i
             count = cur.rowcount
             conn.commit()
             cur.close()
+        invalidate_data_cache()
         return count
     except Exception as e:
         logger.error(f"Erro ao mover lotes por andar: {e}")
@@ -1548,6 +1298,7 @@ def deletar_contentor(contentor_id):
             cur.execute("DELETE FROM contentores WHERE id = %s", (to_py(contentor_id),))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor deletado: ID {contentor_id}")
             return True
 
@@ -1556,31 +1307,8 @@ def deletar_contentor(contentor_id):
         st.error(f"Erro ao deletar contentor: {e}")
         return False
 
-def obter_stock_contentor(contentor_id):
-    """Obtém informações de stock de um contentor específico"""
-    try:
-        with get_connection() as conn:
-            query = """
-                SELECT
-                    e.id,
-                    e.garanhao,
-                    d.nome as proprietario_nome,
-                    e.canister,
-                    e.andar,
-                    e.existencia_atual,
-                    e.qualidade,
-                    e.data_embriovet,
-                    e.origem_externa
-                FROM estoque_dono e
-                LEFT JOIN dono d ON e.dono_id = d.id
-                WHERE e.contentor_id = %s AND e.existencia_atual > 0
-                ORDER BY e.canister, e.andar, e.garanhao
-            """
-            df = pd.read_sql_query(query, conn, params=(contentor_id,))
-        return df
-    except Exception as e:
-        logger.error(f"Erro ao obter stock do contentor: {e}")
-        return pd.DataFrame()
+# `obter_stock_contentor` está em modules.repositories.stock_repo
+# (importada no topo deste ficheiro).
 
 def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
     """Aplica filtro de data em um DataFrame"""
@@ -1610,287 +1338,11 @@ def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
         return df
 
 
-def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade, operation_id=None):
-    """Transfere quantidade parcial de palhetas para outro proprietário"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            # Buscar dados do lote origem
-            cur.execute("""
-                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
-                       contentor_id, canister, andar, animal_id
-                FROM estoque_dono WHERE id = %s
-            """, (to_py(stock_origem_id),))
-
-            origem = cur.fetchone()
-            if not origem:
-                st.error(t("error.origin_lot_not_found"))
-                return False
-            
-            (garanhao, prop_origem_id, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs, cor, contentor_id, canister, andar, animal_id) = origem
-            
-            exist_atual = int(to_py(exist_atual) or 0)
-            quantidade_int = int(to_py(quantidade) or 0)
-
-            if quantidade_int <= 0:
-                st.error(t("error.qty_positive"))
-                return False
-
-            if quantidade_int > exist_atual:
-                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
-                return False
-
-            # Atualizar stock origem (diminuir)
-            cur.execute("""
-                UPDATE estoque_dono
-                SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
-
-            # Verificar se já existe lote do destino com mesmo garanhão e mesma localização
-            cur.execute("""
-                SELECT id, existencia_atual
-                FROM estoque_dono
-                WHERE garanhao = %s AND dono_id = %s AND id != %s
-                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
-                AND COALESCE(canister, 0) = COALESCE(%s, 0)
-                AND COALESCE(andar, 0) = COALESCE(%s, 0)
-                LIMIT 1
-            """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id),
-                  to_py(contentor_id), to_py(canister), to_py(andar)))
-
-            lote_destino = cur.fetchone()
-
-            if lote_destino:
-                # Já existe lote, adicionar palhetas
-                cur.execute("""
-                    UPDATE estoque_dono
-                    SET existencia_atual = existencia_atual + %s
-                    WHERE id = %s
-                """, (quantidade_int, lote_destino[0]))
-            else:
-                # Criar novo lote para o destino (mantém mesma localização)
-                cur.execute("""
-                    INSERT INTO estoque_dono (
-                        garanhao, dono_id, data_embriovet, origem_externa,
-                        palhetas_produzidas, qualidade, concentracao, motilidade,
-                        local_armazenagem, certificado, dose, observacoes,
-                        quantidade_inicial, existencia_atual, cor,
-                        contentor_id, canister, andar, animal_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    to_py(garanhao), to_py(proprietario_destino_id), to_py(data_emb), to_py(origem_ext),
-                    quantidade_int, to_py(qual), to_py(conc), to_py(mot),
-                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
-                    quantidade_int, quantidade_int, to_py(cor),
-                    to_py(contentor_id), to_py(canister), to_py(andar),
-                    to_py(animal_id)
-                ))
-            
-            # Registrar transferência
-            cur.execute("""
-                INSERT INTO transferencias (
-                    estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia, utilizador, operation_id
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
-            """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—'), operation_id))
-            
-            conn.commit()
-            cur.close()
-
-            # Verificar e desativar proprietários com stock = 0
-            atualizar_status_proprietarios()
-
-            logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao transferir palhetas: {e}")
-        st.error(f"Erro ao transferir palhetas: {e}")
-        return False
-
-# Alias para compatibilidade
-transferir_stock_interno = transferir_palhetas_parcial
-
-def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, stock_origem_id, quantidade,
-                                              contentor_id_novo, canister_novo, andar_novo, operation_id=None):
-    """Transfere palhetas para outro proprietário e muda a localização"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            # Buscar dados do lote origem
-            cur.execute("""
-                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
-                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
-                       animal_id
-                FROM estoque_dono WHERE id = %s
-            """, (to_py(stock_origem_id),))
-
-            origem = cur.fetchone()
-            if not origem:
-                st.error(t("error.origin_lot_not_found"))
-                return False
-            
-            (garanhao, prop_origem_db, exist_atual, data_emb, origem_ext, 
-             qual, conc, mot, local, cert, dose, obs, cor, animal_id) = origem
-            
-            exist_atual = int(to_py(exist_atual) or 0)
-            quantidade_int = int(to_py(quantidade) or 0)
-
-            if quantidade_int <= 0:
-                st.error(t("error.qty_positive"))
-                return False
-
-            if quantidade_int > exist_atual:
-                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
-                return False
-
-            # Atualizar stock origem (diminuir)
-            cur.execute("""
-                UPDATE estoque_dono
-                SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
-
-            # Verificar se já existe lote do destino com mesmo garanhão e mesma NOVA localização
-            cur.execute("""
-                SELECT id, existencia_atual
-                FROM estoque_dono
-                WHERE garanhao = %s AND dono_id = %s AND id != %s
-                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
-                AND COALESCE(canister, 0) = COALESCE(%s, 0)
-                AND COALESCE(andar, 0) = COALESCE(%s, 0)
-                LIMIT 1
-            """, (to_py(garanhao), to_py(prop_destino_id), to_py(stock_origem_id),
-                  to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)))
-
-            lote_destino = cur.fetchone()
-
-            if lote_destino:
-                # Já existe lote na nova localização, adicionar palhetas
-                cur.execute("""
-                    UPDATE estoque_dono
-                    SET existencia_atual = existencia_atual + %s
-                    WHERE id = %s
-                """, (quantidade_int, lote_destino[0]))
-            else:
-                # Criar novo lote para o destino com NOVA localização
-                cur.execute("""
-                    INSERT INTO estoque_dono (
-                        garanhao, dono_id, data_embriovet, origem_externa,
-                        palhetas_produzidas, qualidade, concentracao, motilidade,
-                        local_armazenagem, certificado, dose, observacoes,
-                        quantidade_inicial, existencia_atual, cor,
-                        contentor_id, canister, andar, animal_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    to_py(garanhao), to_py(prop_destino_id), to_py(data_emb), to_py(origem_ext),
-                    quantidade_int, to_py(qual), to_py(conc), to_py(mot),
-                    to_py(local), to_py(cert), to_py(dose), to_py(obs),
-                    quantidade_int, quantidade_int, to_py(cor),
-                    to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo),
-                    to_py(animal_id)
-                ))
-
-            # Registrar transferência na tabela de transferências
-            cur.execute("""
-                INSERT INTO transferencias (
-                    estoque_id, proprietario_origem_id, proprietario_destino_id,
-                    quantidade, data_transferencia, utilizador, operation_id
-                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
-            """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—'), operation_id))
-            
-            conn.commit()
-            cur.close()
-
-            # Verificar e desativar proprietários com stock = 0
-            atualizar_status_proprietarios()
-
-            logger.info(f"Transferência com mudança de local: {quantidade_int} palhetas de {prop_origem_id} para {prop_destino_id}")
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao transferir palhetas com nova localização: {e}")
-        st.error(f"Erro ao transferir palhetas: {e}")
-        return False
-
-def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes="", operation_id=None):
-    """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            # Buscar dados do lote origem
-            cur.execute("""
-                SELECT garanhao, dono_id, existencia_atual
-                FROM estoque_dono WHERE id = %s
-            """, (to_py(stock_origem_id),))
-
-            origem = cur.fetchone()
-            if not origem:
-                st.error(t("error.origin_lot_not_found"))
-                return False
-
-            garanhao, prop_origem_id, exist_atual = origem
-            exist_atual = int(to_py(exist_atual) or 0)
-            quantidade_int = int(to_py(quantidade) or 0)
-
-            if quantidade_int <= 0:
-                st.error(t("error.qty_positive"))
-                return False
-
-            if quantidade_int > exist_atual:
-                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
-                return False
-
-            # Atualizar stock origem (diminuir)
-            cur.execute("""
-                UPDATE estoque_dono
-                SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
-
-            # Registrar transferência externa
-            cur.execute("""
-                INSERT INTO transferencias_externas (
-                    estoque_id, proprietario_origem_id, garanhao,
-                    destinatario_externo, quantidade, tipo, observacoes,
-                    data_transferencia, utilizador, operation_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
-            """, (
-                to_py(stock_origem_id),
-                to_py(prop_origem_id),
-                to_py(garanhao),
-                to_py(destinatario_externo),
-                quantidade_int,
-                to_py(tipo),
-                to_py(observacoes),
-                st.session_state.get('user', {}).get('username', '—'),
-                operation_id
-            ))
-
-            conn.commit()
-            cur.close()
-
-            # Verificar e desativar proprietários com stock = 0
-            atualizar_status_proprietarios()
-
-            logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao transferir para externo: {e}")
-        st.error(f"Erro ao transferir para externo: {e}")
-        return False
-
-# Alias para compatibilidade
-transferir_stock_externo = transferir_palhetas_externo
+# As 3 funções de transferência (`transferir_palhetas_parcial`,
+# `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo`)
+# e os aliases (`transferir_stock_interno`, `transferir_stock_externo`)
+# estão em modules.repositories.stock_repo (importados no topo deste
+# ficheiro).
 
 
 def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, nova_quantidade,
@@ -2035,6 +1487,7 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
                 logger.warning(f"Auditoria de transferência interna não registada: {ae}")
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✏️ Transferência interna ATUALIZADA: ID {transfer_id}")
             return True
 
@@ -2123,6 +1576,7 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
             })
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✏️ Transferência externa ATUALIZADA: ID {transfer_id}")
             return True
 

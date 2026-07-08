@@ -28,7 +28,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Optional
 
-from modules.db import get_connection
+from modules.db import get_connection, invalidate_data_cache
 from modules.repositories.animal_repo import get_or_create_garanhao
 
 
@@ -383,6 +383,8 @@ def registar_inseminacao_completa(
             raise
         finally:
             cur.close()
+
+    invalidate_data_cache()
 
     return {
         "inseminacao_ids": inseminacao_ids,
@@ -754,6 +756,8 @@ def registar_resultado(
             raise
         finally:
             cur.close()
+
+    invalidate_data_cache()
 
     return {
         "operation_id": str(operation_id),

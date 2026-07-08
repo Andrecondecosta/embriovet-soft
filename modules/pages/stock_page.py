@@ -26,7 +26,10 @@ def run_stock_page(ctx: dict):
     )
 
     if not stock.empty:
-        garanhaos_disponiveis = sorted(stock["garanhao"].dropna().unique())
+        # Fonte canónica do garanhão: `garanhao_nome` vem do LEFT JOIN
+        # a `animais` via FK (`e.animal_id`) e cai para `e.garanhao` em
+        # lotes legados sem FK. Não usamos mais a coluna de texto.
+        garanhaos_disponiveis = sorted(stock["garanhao_nome"].dropna().unique())
 
         # Verificar se há redirecionamento de stock recém-adicionado
         filtro_default = None
@@ -58,7 +61,7 @@ def run_stock_page(ctx: dict):
             with f1:
                 filtro_props = st.multiselect(
                     t("label.owner_plural"),
-                    sorted(stock[stock["garanhao"] == filtro]["proprietario_nome"].dropna().unique()),
+                    sorted(stock[stock["garanhao_nome"] == filtro]["proprietario_nome"].dropna().unique()),
                     key="stock_filter_props",
                 )
             with f2:
@@ -240,7 +243,7 @@ def run_stock_page(ctx: dict):
                         lote_transf_int, lote_transf_ext = filter_lot_transfer_history(
                             transf_hist_all,
                             transf_ext_hist_all,
-                            garanhao=row.get("garanhao"),
+                            garanhao=row.get("garanhao_nome") or row.get("garanhao"),
                             owner_name=proprietario_nome,
                         )
 

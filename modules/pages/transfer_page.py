@@ -1,6 +1,9 @@
 from modules.i18n import t
 import streamlit as st
 import pandas as pd
+from modules.db import invalidate_data_cache
+from modules.repositories.dashboard_repo import carregar_atividade_recente_agrupada
+from modules.repositories.transfer_repo import reverter_operacao
 
 
 def run_transfer_page(ctx):
@@ -33,11 +36,13 @@ def run_transfer_page(ctx):
                         SELECT t.id, t.estoque_id, t.proprietario_origem_id, t.proprietario_destino_id,
                                t.quantidade, t.data_transferencia,
                                d1.nome as origem_nome, d2.nome as destino_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa, t.operation_id
+                               COALESCE(a.nome, e.garanhao) as garanhao,
+                               e.data_embriovet, e.origem_externa, t.operation_id
                         FROM transferencias t
                         LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                         LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                         LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                        LEFT JOIN animais a ON a.id = e.animal_id
                         WHERE t.id = %s
                     """, (transfer_id,))
                 elif transfer_type == "transfer_external":
@@ -45,10 +50,12 @@ def run_transfer_page(ctx):
                         SELECT te.id, te.estoque_id, te.proprietario_origem_id, te.destinatario_externo,
                                te.quantidade, te.data_transferencia, te.tipo, te.observacoes,
                                d.nome as origem_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa, te.operation_id
+                               COALESCE(a.nome, e.garanhao) as garanhao,
+                               e.data_embriovet, e.origem_externa, te.operation_id
                         FROM transferencias_externas te
                         LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                         LEFT JOIN estoque_dono e ON te.estoque_id = e.id
+                        LEFT JOIN animais a ON a.id = e.animal_id
                         WHERE te.id = %s
                     """, (transfer_id,))
                 
@@ -101,10 +108,12 @@ def run_transfer_page(ctx):
                                 cur.execute("""
                                     SELECT t.estoque_id, t.quantidade,
                                            e.existencia_atual, e.data_embriovet, e.origem_externa,
-                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           e.contentor_id, e.canister, e.andar,
+                                           COALESCE(a.nome, e.garanhao) as garanhao,
                                            t.proprietario_origem_id, d.nome as origem_nome
                                     FROM transferencias t
                                     JOIN estoque_dono e ON t.estoque_id = e.id
+                                    LEFT JOIN animais a ON a.id = e.animal_id
                                     LEFT JOIN dono d ON t.proprietario_origem_id = d.id
                                     WHERE t.operation_id = %s::uuid
                                     ORDER BY t.id
@@ -113,10 +122,12 @@ def run_transfer_page(ctx):
                                 cur.execute("""
                                     SELECT te.estoque_id, te.quantidade,
                                            e.existencia_atual, e.data_embriovet, e.origem_externa,
-                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           e.contentor_id, e.canister, e.andar,
+                                           COALESCE(a.nome, e.garanhao) as garanhao,
                                            te.proprietario_origem_id, d.nome as origem_nome
                                     FROM transferencias_externas te
                                     JOIN estoque_dono e ON te.estoque_id = e.id
+                                    LEFT JOIN animais a ON a.id = e.animal_id
                                     LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                                     WHERE te.operation_id = %s::uuid
                                     ORDER BY te.id
@@ -265,7 +276,7 @@ def run_transfer_page(ctx):
     def lote_payload(row):
         return {
             "stock_id": int(row.get("id")),
-            "garanhao": row.get("garanhao"),
+            "garanhao": row.get("garanhao_nome") or row.get("garanhao"),
             "dono_id": to_py(row.get("dono_id")),
             "proprietario_nome": row.get("proprietario_nome") or "—",
             "ref": lote_ref(row),
@@ -286,11 +297,12 @@ def run_transfer_page(ctx):
     stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
     if stock_disponivel.empty:
         st.warning(t("transfer.no_stock_available"))
+        _render_historico_operacoes()
         return
 
     # Inicializar garanhao padrão se necessário
     if st.session_state["transfer_garanhao"] is None:
-        garanhaos_unicos = sorted(stock_disponivel["garanhao"].dropna().unique())
+        garanhaos_unicos = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
         if garanhaos_unicos:
             st.session_state["transfer_garanhao"] = garanhaos_unicos[0]
 
@@ -327,7 +339,7 @@ def run_transfer_page(ctx):
             return
         
         # Filtrar lotes
-        modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
+        modal_df = stock_disponivel[stock_disponivel["garanhao_nome"] == gar_sel].copy()
         if prop_sel:
             modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
 
@@ -427,7 +439,7 @@ def run_transfer_page(ctx):
     render_zone_title(t("transfer.zone_selection"), "transfer-zone-title")
     
     # 1. CAVALO
-    garanhaos_disponiveis = sorted(stock_disponivel["garanhao"].dropna().unique())
+    garanhaos_disponiveis = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
     idx_gar = 0
     if st.session_state["transfer_garanhao"] and st.session_state["transfer_garanhao"] in garanhaos_disponiveis:
         idx_gar = garanhaos_disponiveis.index(st.session_state["transfer_garanhao"])
@@ -727,6 +739,7 @@ def run_transfer_page(ctx):
                                     cur.execute("DELETE FROM transferencias WHERE id = %s", (transfer_data['id'],))
                                 conn.commit()
                                 cur.close()
+                                invalidate_data_cache()
                         except Exception as e:
                             st.error(f"Erro ao reverter transferência: {e}")
                             sucesso = False
@@ -850,6 +863,7 @@ def run_transfer_page(ctx):
                                     cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (transfer_data['id'],))
                                 conn.commit()
                                 cur.close()
+                                invalidate_data_cache()
                         except Exception as e:
                             st.error(f"Erro ao reverter transferência externa: {e}")
                             sucesso = False
@@ -915,3 +929,143 @@ def run_transfer_page(ctx):
                         st.session_state.pop('edit_transfer_op_id', None)
                         st.session_state["transfer_show_success"] = True
                         st.rerun()
+
+    # ── Histórico de operações (movido do dashboard) ────────────────────
+    _render_historico_operacoes()
+
+
+def _render_historico_operacoes():
+    """Histórico de operações (transferências + inseminações) com botões
+    de editar / anular. Movido do antigo modal do dashboard — a acção
+    pertence à página onde as operações vivem.
+
+    Toda a leitura vem de `dashboard_repo.carregar_atividade_recente_agrupada`
+    (já agrupada por `operation_id`), e a anulação usa
+    `transfer_repo.reverter_operacao` (FK-based).
+    """
+    st.markdown("---")
+    st.markdown(
+        "<div class='transfer-zone-title'>Histórico de operações</div>",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        ops = carregar_atividade_recente_agrupada(limit=20)
+    except Exception as e:
+        st.error(f"Erro ao carregar histórico: {e}")
+        return
+
+    if not ops:
+        st.info("Ainda não há operações registadas.")
+        return
+
+    # Pedido de confirmação de anulação — chave única por op.
+    pending = None
+    for op in ops:
+        key_conf = _confirm_key(op)
+        if st.session_state.get(key_conf):
+            pending = op
+            break
+
+    if pending:
+        _render_confirmacao_anulacao(pending)
+        return
+
+    for idx, op in enumerate(ops):
+        _render_linha_historico(op, idx)
+
+
+def _confirm_key(op: dict) -> str:
+    op_id = op.get("operation_id") or f"solo-{op['action_id']}"
+    return f"transfer-history-confirm-{op['tipo']}-{op_id}"
+
+
+def _fmt_hist_ts(val) -> str:
+    if not val:
+        return "—"
+    try:
+        return val.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return str(val)
+
+
+def _render_linha_historico(op: dict, idx: int) -> None:
+    op_id = op.get("operation_id") or f"solo-{op['action_id']}"
+    key_edit = f"transfer-history-edit-{op['tipo']}-{op_id}-{idx}"
+    key_del = f"transfer-history-delete-{op['tipo']}-{op_id}-{idx}"
+
+    col_info, col_edit, col_del = st.columns([9, 1, 1])
+    with col_info:
+        st.markdown(f"**{op['acao']}** · {_fmt_hist_ts(op['ts'])}")
+        st.caption(op["detalhe"])
+
+    with col_edit:
+        # Apenas transferências podem ser editadas via este botão — as
+        # inseminações são editadas via `insemination_page` (mantém a
+        # regra antiga).
+        if op["tipo"] in ("transfer_internal", "transfer_external"):
+            if st.button("✏️", key=key_edit, help="Editar", type="secondary"):
+                st.session_state["edit_transfer_id"] = op["action_id"]
+                st.session_state["edit_transfer_type"] = op["tipo"]
+                st.session_state["edit_transfer_op_id"] = op.get("operation_id")
+                for k in [
+                    "transfer_tipo", "transfer_linhas", "transfer_garanhao",
+                    "transfer_proprietario", "transfer_dest_interno",
+                    "transfer_dest_externo", "transfer_destinatario_externo",
+                    "transfer_motivo", "transfer_observacoes",
+                ]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+        elif op["tipo"] == "insemination":
+            if st.button("✏️", key=key_edit, help="Editar inseminação",
+                         type="secondary"):
+                st.session_state["edit_insemination_id"] = op["action_id"]
+                st.session_state["edit_insemination_op_id"] = op.get("operation_id")
+                st.session_state["aba_selecionada"] = t("menu.register_insemination")
+                st.rerun()
+
+    with col_del:
+        if st.button("🗑️", key=key_del, help="Anular", type="secondary"):
+            st.session_state[_confirm_key(op)] = True
+            st.rerun()
+
+    st.markdown("---")
+
+
+def _render_confirmacao_anulacao(op: dict) -> None:
+    st.warning("⚠️ **Esta ação é irreversível!**")
+    st.markdown(
+        f"""
+        **O que vai acontecer:**
+        - ❌ Registo de **{op['acao']}** será eliminado
+        - ↩️ **{op['quantidade']} palhetas** ({op['num_lotes']} lote(s))
+          serão revertidas ao estado anterior
+        """
+    )
+    col_ok, col_cancel, _ = st.columns([1, 1, 2])
+    with col_ok:
+        if st.button(
+            "✅ Sim, anular",
+            key="transfer-history-confirm-ok",
+            type="primary",
+            width="stretch",
+        ):
+            sucesso = reverter_operacao(
+                tipo=op["tipo"],
+                action_id=op["action_id"],
+                operation_id=op.get("operation_id"),
+            )
+            st.session_state.pop(_confirm_key(op), None)
+            if sucesso:
+                st.success("✅ Operação anulada.")
+                st.rerun()
+            else:
+                st.error("❌ Erro ao anular operação. Ver logs.")
+    with col_cancel:
+        if st.button(
+            "Cancelar",
+            key="transfer-history-confirm-cancel",
+            width="stretch",
+        ):
+            st.session_state.pop(_confirm_key(op), None)
+            st.rerun()

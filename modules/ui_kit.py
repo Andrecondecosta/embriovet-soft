@@ -747,11 +747,16 @@ def _pesquisa_global(termo: str) -> dict:
             out["donos"] = [{"id": int(r[0]), "nome": r[1]} for r in cur.fetchall()]
 
             cur.execute(
-                "SELECT garanhao, SUM(existencia_atual)::int AS palhetas "
-                "FROM estoque_dono "
-                "WHERE LOWER(garanhao) LIKE LOWER(%s) AND existencia_atual > 0 "
-                "GROUP BY garanhao "
-                "ORDER BY (LOWER(garanhao) = LOWER(%s)) DESC, garanhao "
+                "SELECT nome, palhetas FROM ("
+                "  SELECT COALESCE(a.nome, ed.garanhao) AS nome, "
+                "         SUM(ed.existencia_atual)::int AS palhetas "
+                "  FROM estoque_dono ed "
+                "  LEFT JOIN animais a ON a.id = ed.animal_id "
+                "  WHERE ed.existencia_atual > 0 "
+                "  GROUP BY COALESCE(a.nome, ed.garanhao) "
+                ") t "
+                "WHERE LOWER(nome) LIKE LOWER(%s) "
+                "ORDER BY (LOWER(nome) = LOWER(%s)) DESC, nome "
                 "LIMIT 2",
                 (like, termo_clean),
             )

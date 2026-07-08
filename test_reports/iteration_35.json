@@ -1,0 +1,25 @@
+{
+  "summary": "Pedido 5 (Ver Stock via FK a `animais`) validado. Suite completa 38/38 passa (31 regressão + 7 novos). Novos testes cobrem: (a) `carregar_stock` devolve `garanhao_nome` via COALESCE(a.nome, e.garanhao) + fallback quando animal_id é NULL; (b) UPDATE animais.nome reflecte em `garanhao_nome` sem tocar em `estoque_dono.garanhao` (retro-compat preservada); (c) `carregar_transferencias` resolve nome via FK; (d) `obter_stock_contentor` idem; (e) `filter_stock_view` prefere `garanhao_nome` com fallback ao legado. Grep final devolve apenas as 2 ocorrências esperadas: `modules/pages/map_page.py:1155` (template JS — build lê `garanhao_nome` como preferência) e `app.py:627` (fallback defensivo em `carregar_transferencias_externas` quando schema legado não tem `estoque_id`).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_stock_fk_garanhao.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "app.py já ultrapassa 3485 linhas — considerar splitar carregar_* e obter_* para um módulo dedicado (ex: modules/stock_repo.py) para reduzir superfície e facilitar testes sem contornar o top-level Streamlit.",
+    "As funções `carregar_stock`/`carregar_transferencias`/`obter_stock_contentor` estão decoradas com `@st.cache_data(ttl=60)`. Isso impede importá-las directamente nos testes (top-level `st.session_state['user']` explode). Os testes replicam o SQL — funcional mas frágil se o SQL divergir. Recomendação: extrair as queries SQL para constantes ao nível de módulo (ou para modules/stock_repo.py) que os testes possam importar directamente.",
+    "Uso de `pd.read_sql_query(sql, conn)` com conexão psycopg2 gera warnings do pandas (não bloqueante, mas apoia migrar para SQLAlchemy no futuro).",
+    "`carregar_transferencias_externas` faz um fallback `te.garanhao` quando o schema legado só tem coluna texto — está correcto e comentado, mas idealmente uma migração deveria adicionar `estoque_id` para eliminar o caminho legado."
+  ],
+  "updated_files": [
+    "/app/tests/test_stock_fk_garanhao.py (novo, 7 testes)"
+  ],
+  "success_rate": {"backend": "100% (38/38)", "frontend": "N/A"},
+  "test_credentials": "N/A (BD directa via TEST_DATABASE_URL)",
+  "seed_data_creation": "Cada teste cria/apaga o seu próprio animal + lotes (+ contentor se necessário). Sem seed persistente.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Suite completa em /app/tests/ (5 ficheiros, 38 testes). BD Postgres 15 local em embriovet_test. `TEST_DATABASE_URL` no ambiente é obrigatória. Para testar funções cache_data-decoradas do app.py, os testes replicam o SQL — se refactor futuro extrair essas queries para módulo próprio, actualizar os testes."
+}

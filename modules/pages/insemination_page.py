@@ -200,7 +200,8 @@ def run_insemination_page(ctx):
                         if edit_operation_id:
                             # Multi-lote: carregar todos os lotes pelo operation_id
                             cur.execute("""
-                                SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
+                                SELECT ed.id, COALESCE(a.nome, ed.garanhao) AS garanhao,
+                                       ed.dono_id, ed.existencia_atual,
                                        ed.data_embriovet, ed.origem_externa, ed.motilidade,
                                        ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
                                        ed.contentor_id, ed.canister, ed.andar,
@@ -208,6 +209,7 @@ def run_insemination_page(ctx):
                                        i.palhetas_gastas
                                 FROM inseminacoes i
                                 JOIN estoque_dono ed ON i.estoque_id = ed.id
+                                LEFT JOIN animais a ON a.id = ed.animal_id
                                 LEFT JOIN dono d ON ed.dono_id = d.id
                                 LEFT JOIN contentores c ON ed.contentor_id = c.id
                                 WHERE i.operation_id = %s::uuid
@@ -217,7 +219,8 @@ def run_insemination_page(ctx):
                         else:
                             # Single lote (backward compat): carregar por estoque_id
                             cur.execute("""
-                                SELECT ed.id, ed.garanhao, ed.dono_id, ed.existencia_atual,
+                                SELECT ed.id, COALESCE(a.nome, ed.garanhao) AS garanhao,
+                                       ed.dono_id, ed.existencia_atual,
                                        ed.data_embriovet, ed.origem_externa, ed.motilidade,
                                        ed.dose, ed.cor, ed.concentracao, ed.local_armazenagem,
                                        ed.contentor_id, ed.canister, ed.andar,
@@ -225,6 +228,7 @@ def run_insemination_page(ctx):
                                        i.palhetas_gastas
                                 FROM inseminacoes i
                                 JOIN estoque_dono ed ON i.estoque_id = ed.id
+                                LEFT JOIN animais a ON a.id = ed.animal_id
                                 LEFT JOIN dono d ON ed.dono_id = d.id
                                 LEFT JOIN contentores c ON ed.contentor_id = c.id
                                 WHERE i.id = %s AND i.estoque_id IS NOT NULL
@@ -320,7 +324,7 @@ def run_insemination_page(ctx):
     def lote_payload(row):
         return {
             "stock_id": int(row.get("id")),
-            "garanhao": row.get("garanhao"),
+            "garanhao": row.get("garanhao_nome") or row.get("garanhao"),
             "dono_id": to_py(row.get("dono_id")),
             "proprietario_nome": row.get("proprietario_nome") or "—",
             "ref": lote_ref(row),
@@ -348,7 +352,7 @@ def run_insemination_page(ctx):
 
     # Inicializar garanhao padrão se necessário
     if st.session_state["insem_garanhao_principal"] is None:
-        garanhaos_unicos = sorted(stock_disponivel["garanhao"].dropna().unique())
+        garanhaos_unicos = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
         if garanhaos_unicos:
             st.session_state["insem_garanhao_principal"] = garanhaos_unicos[0]
 
@@ -363,7 +367,7 @@ def run_insemination_page(ctx):
             return
         
         # Filtrar lotes
-        modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
+        modal_df = stock_disponivel[stock_disponivel["garanhao_nome"] == gar_sel].copy()
         if prop_sel:  # Se proprietário foi selecionado
             modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
 
@@ -460,7 +464,7 @@ def run_insemination_page(ctx):
     render_zone_title(t("insemination.zone_selection"), "insem-zone-title")
     
     # 1. CAVALO
-    garanhaos_disponiveis = sorted(stock_disponivel["garanhao"].dropna().unique())
+    garanhaos_disponiveis = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
     # Em modo edição, garantir que o garanhão da inseminação aparece na lista
     gar_edit = st.session_state.get("insem_garanhao_principal")
     if edit_mode and gar_edit and gar_edit not in garanhaos_disponiveis:

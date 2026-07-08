@@ -1,9 +1,86 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedidos 4b + 4c + item 3 concluídos**: (1) Circuito de trabalho fechado — painel de confirmação após registo de inseminação com 3 saídas (Trabalho Diário / Ficha da égua / Registar outra) + botão "➕ Registar inseminação" em tarefas `verificar_ovulacao`; (2) Ciclo estendido até ao parto — quando D+45 é positivo cria `pre_parto` (D+330-14, urgência 'amanha') e `parto_previsto` (D+330, urgência 'hoje'); padrão do parto reduzido de 340 → 330 dias; negativo tardio apaga estas tarefas também; (3) Uma égua tem no máximo UMA estadia aberta — validação em duas camadas: `_criar_estadia_apenas` faz raise `ValueError` amigável + UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` como safety net na BD. Testing agent independente validou **31/31 testes** (`/app/test_reports/iteration_34.json`).
+**Fev 2026** — **Pedido 6.1 (widget partos previstos) + Pedido 6.2 (extração pura de stock_repo)** concluídos. Widget "Partos previstos — próximos 30 dias" adicionado à secção "Hoje na clínica" do dashboard. Extração pura de 12 funções de dados de `app.py` para `modules/repositories/stock_repo.py` — código bit-for-bit igual, `app.py` reduziu de **3505 → 2897 linhas (−608)**. **Total: 64/64 pytest** (55 baseline + 9 novos widget partos; 1 teste ajustado com aprovação do user — guarda ficou mais estrito).
 
-## Changelog Recente (Fev 2026 — Pedidos 4b + 4c + item 3)
+## Changelog Recente (Fev 2026 — Pedidos 6.1 + 6.2)
+
+### 6.1 — Widget partos previstos (Dashboard, "Hoje na clínica")
+- ✅ Nova função `dashboard_repo.carregar_partos_previstos(dias=30)` — filtra `ai.resultado = 'gestacao_confirmada'`, `data_parto_previsto BETWEEN CURRENT_DATE AND CURRENT_DATE + Xdays`, `estadias.data_saida IS NULL`. Ordenado do mais próximo para o mais distante.
+- ✅ Helper `_render_partos_previstos` em `dashboard_page.py` — colunas Égua · Data prevista · Dias restantes ("hoje"/"amanhã"/"em N dias"). Só leitura, sem criar tarefas.
+- ✅ Exclui: gestações falhadas, sem resultado, estadias encerradas, partos fora da janela ou no passado.
+- ✅ 9 testes em `tests/test_partos_previstos.py`.
+
+### 6.2 — Extração pura para `modules/repositories/stock_repo.py`
+- ✅ Novo `stock_repo.py` (714 linhas), 12 funções + 2 aliases copiadas bit-for-bit de `app.py`:
+  - Leituras com `@st.cache_data`: `carregar_proprietarios`, `carregar_stock`, `carregar_transferencias`, `carregar_transferencias_externas`, `carregar_contentores`
+  - Leituras sem cache: `carregar_inseminacoes`, `obter_stock_contentor`
+  - Escritas: `inserir_stock`, `editar_stock`, `deletar_stock`
+  - 3 transferências: `transferir_palhetas_parcial` (+alias `transferir_stock_interno`), `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo` (+alias `transferir_stock_externo`)
+- ✅ `app.py`: **3505 → 2897 linhas (−608 líquidas)**. `from modules.repositories.stock_repo import ...` no topo mantém compat total dos call-sites.
+- ✅ Zero alteração de lógica. Única diferença: nas 3 transferências, `atualizar_status_proprietarios()` é resolvida via **lazy import** dentro da função para evitar ciclo com `app.py`.
+- ✅ 1 teste ajustado com aprovação (opção "a"): `test_grep_final_no_leituras_da_coluna_texto` — rejeita EXPLICITAMENTE ocorrências em `app.py` e em `modules/pages/*` (excepto `map_page.py`), aceita apenas em `modules/repositories/stock_repo.py` (fallback defensivo schema legado) e `map_page.py` (template JS). Guarda mais estrito do que antes. Docstring explica o porquê.
+- ✅ Todos os restantes 63 testes passam **sem qualquer modificação**.
+
+### Onde ficou cada função extraída
+| Função | Origem | Destino |
+|---|---|---|
+| `carregar_proprietarios`, `carregar_stock`, `carregar_inseminacoes`, `carregar_transferencias`, `carregar_transferencias_externas`, `carregar_contentores`, `obter_stock_contentor`, `inserir_stock`, `editar_stock`, `deletar_stock`, `transferir_palhetas_parcial` (+alias `transferir_stock_interno`), `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo` (+alias `transferir_stock_externo`) | `app.py` (várias linhas) | `modules/repositories/stock_repo.py` |
+
+### Branch e commit
+- Branch: `pedido6-widget-partos-refactor-stock`
+- Commit: `d4c99ee` — "Pedido 6.1+6.2: Widget partos previstos + extração stock_repo"
+
+## Changelog Anterior (Fev 2026 — Pedido 6)
+- ✅ **Novo `modules/repositories/dashboard_repo.py`** (100% leitura): `carregar_kpis_stock`, `carregar_kpis_clinicos` (com `insem_mes_operacoes` DISTINCT operation_id), `carregar_tarefas_hoje`, `carregar_stock_atencao(limite=5)` (via FK), `carregar_stock_por_contentor`, `carregar_stock_por_proprietario`, `carregar_atividade_recente_agrupada(limit=10)` (agrupa por operation_id em memória — 1 linha por operação com num_lotes e quantidade somada).
+- ✅ **Novo `modules/repositories/transfer_repo.py`** (escrita): `reverter_operacao(tipo, action_id, operation_id)` — uma transacção, rollback em falha, FK-based lookup do lote destino (`animal_id + dono_id + contentor_id + canister + andar` — sem texto), invalida cache no sucesso. Substitui o antigo `reverter_acao` do dashboard.
+- ✅ **`dashboard_page.py` reescrito** — decomposto em funções puras (`_render_kpis_stock`, `_render_kpis_clinicos`, `_render_hoje_na_clinica`, `_render_stock_atencao`, `_render_graficos`, `_render_atividade_recente`, `_render_acoes_rapidas`). Zero `UPDATE`/`DELETE`/`INSERT` — validado por grep no teste. Ficha KPI clínica destacada visualmente (verde) para contraste com stock.
+- ✅ **`transfer_page.py`** — nova secção "Histórico de operações" no fim (chamada mesmo quando não há stock disponível). Botões editar (transferências → carrega form em modo edição; inseminações → redireciona) e anular (`reverter_operacao` + confirmação inline). Sem `st.dialog` aninhado.
+- ✅ **12 novos testes em `test_dashboard_pedido6.py`** cobrindo os 5 critérios:
+  - (a) grep de `UPDATE/DELETE/INSERT` em `dashboard_page.py` e `dashboard_repo.py`
+  - (b) reversão de transferência interna e inseminação; validação de tipo
+  - (c) `estadias_ativas` bate com `COUNT(*) FROM estadias WHERE data_saida IS NULL`; `tarefas_hoje` bate com trabalho_diario
+  - (d) inseminação multi-lote → 1 linha em `carregar_atividade_recente_agrupada` com `num_lotes=2` e quantidade somada
+  - (e) `insem_mes_operacoes` incrementa +1 mesmo com 2 linhas de mesmo `operation_id`
+  - Extras: `stock_atencao` reflecte rename em `animais.nome` sem tocar `estoque_dono.garanhao`; `tarefas_hoje` filtra corretamente
+
+## Changelog Anterior (Fev 2026 — Correção ao Pedido 5)
+- ✅ Novo helper `modules.db.invalidate_data_cache()` — chama `st.cache_data.clear()` protegido por try/except (seguro fora de contexto Streamlit).
+- ✅ **`app.py`** — 20+ funções de escrita agora chamam `invalidate_data_cache()` após `conn.commit()`: `atualizar_status_proprietarios`, `alternar_status_proprietario`, `editar_proprietario`, `atualizar_proprietario_stock`, `inserir_stock`, `registrar_inseminacao`, `registrar_inseminacao_multiplas` (3 branches: create/edit-op/edit-single), `registrar_inseminacao_linha`, `adicionar_proprietario`, `deletar_proprietario`, `editar_stock`, `deletar_stock`, `adicionar_contentor`, `editar_contentor`, `atualizar_posicao_contentor`, `atualizar_andar_lote`, `mover_lotes_por_andar`, `deletar_contentor`, `transferir_palhetas_parcial`, `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo`, `atualizar_transferencia_interna`, `atualizar_transferencia_externa`.
+- ✅ **`modules/repositories/insemination_repo.py`** — `registar_inseminacao_completa` e `registar_resultado` invalidam cache após commit.
+- ✅ **`modules/repositories/animal_repo.py`** — `get_or_create_garanhao` invalida cache apenas quando faz INSERT (SELECT-only não é invalidação).
+- ✅ **`modules/pages/dashboard_page.py`** — `reverter_acao` (transferências e inseminações) invalida cache após commit.
+- ✅ **`modules/pages/transfer_page.py`** — blocos inline de edição/reversão (interna e externa) invalidam cache após commit.
+- ✅ **`modules/pages/import_page.py`** — importação em bulk invalida cache após commit.
+- ✅ Substituídas as 2 ocorrências antigas de `try: st.cache_data.clear() except Exception: pass` em `editar_stock`/`deletar_stock` pelo helper unificado.
+- ✅ Novo ficheiro **`tests/test_cache_invalidation.py`** com 5 testes (monkeypatch de `invalidate_data_cache` em todos os módulos consumidores + validação em BD real):
+  - `test_get_or_create_garanhao_invalida_cache_quando_cria`
+  - `test_get_or_create_garanhao_nao_invalida_quando_ja_existe` (SELECT-only não invalida)
+  - `test_registar_inseminacao_completa_invalida_cache` (+ sanity do desconto: 20→17)
+  - `test_registar_resultado_invalida_cache` (D+14 positivo)
+  - `test_invalidate_data_cache_e_no_op_fora_streamlit`
+- ✅ **Critério de aceitação do user cumprido**: registar uma inseminação e abrir imediatamente o "Ver Stock" → os números já refletem o desconto (o cache é limpo antes do próximo request).
+- ✅ Smoke test: `/_stcore/health` = "ok" (200), `/` = 200.
+
+## Changelog Anterior (Fev 2026 — Pedido 5)
+- ✅ **Leituras por FK**:
+  - `carregar_stock` — LEFT JOIN animais → nova coluna `garanhao_nome = COALESCE(a.nome, e.garanhao)`.
+  - `carregar_transferencias` — LEFT JOIN estoque_dono + animais → `garanhao = COALESCE(...)`.
+  - `carregar_transferencias_externas` — mesmo padrão com verificação defensiva de `estoque_id` no schema (fallback ao legado quando o schema é anterior).
+  - `obter_stock_contentor` — LEFT JOIN animais.
+  - `stock_page.py`, `stock_reporting.py::filter_stock_view`, `transfer_page.py` (selects de lotes + queries de edição), `reports_page.py` (todos os filtros/dataframes), `insemination_page.py` (filtros + queries de edição), `map_page.py` (JSON de lotes), `ui_kit.py` (search) — todos migrados para `garanhao_nome` / `COALESCE`.
+- ✅ **Cache de leitura (`@st.cache_data(ttl=60)`)**: aplicado em `carregar_stock`, `carregar_proprietarios`, `carregar_contentores`, `carregar_transferencias`, `carregar_transferencias_externas`.
+- ✅ **Invalidação após escritas**: `editar_stock` e `deletar_stock` chamam `st.cache_data.clear()`.
+- ✅ **Grep final limpo**: apenas 2 ocorrências restam, ambas expectáveis — `map_page.py:1155` (template JS que lê `lote.garanhao` — mas o build usa `garanhao_nome` como preferência) e `app.py:627` (fallback defensivo em `carregar_transferencias_externas` para schema legado sem `estoque_id`).
+- ✅ **Testes**: 7 novos em `tests/test_stock_fk_garanhao.py` (criados pelo testing agent) validam: (a) `garanhao_nome` correcto via COALESCE + fallback quando animal_id é NULL; (b) rename `animais.nome` reflecte em `carregar_stock` sem tocar em `estoque_dono.garanhao`; (c) `carregar_transferencias` resolve via FK; (d) `obter_stock_contentor` idem; (e) `filter_stock_view` prefere `garanhao_nome`.
+- **Total: 38 testes pytest, todos passam** (31 anteriores + 7 novos). Migrations em dia com produção Render.
+
+### Observações do testing agent (recomendações para backlog)
+- `app.py` já > 3485 linhas — considerar extrair `carregar_*` e `obter_*` para `modules/stock_repo.py` (facilita testes sem contornar top-level Streamlit).
+- Testes actuais replicam o SQL das funções decoradas com `@st.cache_data` (não podem importá-las directamente). Extrair queries para constantes de módulo tornaria isto mais robusto.
+- Migração pandas → SQLAlchemy engine continua adiada (decisão do utilizador). Warnings persistem, cosméticos.
+
+## Changelog Anterior (Fev 2026 — Pedidos 4b + 4c + item 3)
 - ✅ **Circuito de trabalho (4b)**:
   - `insemination_page._render_painel_confirmacao_insem(conf)` — resumo pós-registo (égua × garanhão, total palhetas, num_lotes, data, tarefas automáticas criadas) + 3 botões: primário "📋 Trabalho Diário", secundários "👁 Ver na ficha da égua" e "➕ Registar outra". Substitui o `st.dialog` antigo — mantém o formulário no fluxo principal.
   - `trabalho_diario_page._render_cartao_tarefa` — botão adicional "➕ Registar inseminação" em cartões de `verificar_ovulacao`. Reutiliza `insem_egua_prefill` (mecanismo do "Repetir inseminação") — égua e estadia pré-seleccionadas, sem texto livre.
