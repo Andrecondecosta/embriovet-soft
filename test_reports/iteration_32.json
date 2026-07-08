@@ -1,0 +1,32 @@
+{
+  "summary": "Reexecutei a suite pytest completa (17 testes) em /app/tests contra TEST_DATABASE_URL local (Postgres 15, embriovet_test). Todos os 17 testes passam em 0.58s, incluindo o teste de regressão principal `test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas` que reproduz o bug da égua Matilde (2 estadias abertas → canonicaliza para a mais antiga → sem duplicação de palhetas), e o edge case `test_registo_falha_se_egua_nao_tem_estadia_ativa` (raise InseminacaoError + 0 estadias criadas). Critérios de aceitação (a)-(e) todos validados. Nenhuma regressão sobre os 15 testes anteriores (D+1 idempotente, agrupamento operation_id, stock insuficiente rollback, dedupe unaccent, FKs de estadias, índices únicos, etc.).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "modules/pages/animal_page.py:296,1091,1146", "issue": "UserWarning do pandas: `pd.read_sql_query` invocado com conexão psycopg2 crua em vez de SQLAlchemy engine. Não afecta resultados nem testes, mas emite warning em 3 sítios. Considerar migrar para SQLAlchemy ou suprimir via filterwarnings."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_insemination_repo.py",
+    "/app/tests/test_modal_animal.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Opcional: migrar chamadas `pd.read_sql_query(sql, conn, ...)` em animal_page.py para SQLAlchemy engine para eliminar UserWarnings (não bloqueante)."
+  ],
+  "critical_code_review_comments": [
+    "A canonicalização de estadia via `min(id) WHERE data_saida IS NULL` é robusta e o teste cobre o cenário do bug reportado (2 estadias abertas em simultâneo).",
+    "O LEFT JOIN por `i.estadia_id` (FK) em vez de join por data range × animal_id elimina a multiplicação combinatória — abordagem correcta.",
+    "`DISTINCT ON (a.id) ORDER BY a.id, data_entrada ASC, id ASC` em listar_eguas_com_estadia_ativa garante 1 linha/égua e escolhe determinisicamente a mais antiga — consistente com a canonicalização em registar_inseminacao_completa.",
+    "Edge case bem coberto: raise InseminacaoError quando não há estadia aberta, com asserção de COUNT(*)=0 depois."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (testing_type=backend only)"},
+  "test_credentials": "TEST_DATABASE_URL=postgresql://embriovet_test:embriovet_test@localhost:5432/embriovet_test (definida em /app/.env)",
+  "seed_data_creation": "Nenhuma nova seed criada — os testes usam fixtures existentes (conftest.py) que criam/limpam dados TEST_ por teste.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "17/17 testes pytest a passar. Postgres 15 local corre em localhost:5432, arrancar com `su - postgres -c 'pg_ctlcluster 15 main start'` se necessário. Correr suite: `cd /app && python3 -m pytest tests/ -v`. Não correr contra DATABASE_URL (produção Render) — o conftest.py força skip se TEST_DATABASE_URL não estiver definida.",
+  "rca of the issue": "Bug original: (1) `registar_inseminacao_completa` aceitava qualquer estadia_id passado sem validar/canonicalizar, permitindo criar/usar estadias diferentes; (2) `_carregar_inseminacoes_animal` fazia LEFT JOIN a estadias por (animal_id + data range) o que multiplicava linhas quando havia N estadias abertas sobrepostas → 10 palhetas × 2 estadias = 20; 2 lotes × 2 estadias = 4 lotes. Fix aplicado: canonicalização para MIN(id) das estadias abertas + JOIN direto por i.estadia_id (FK). Validado pelo teste de regressão que cria 2 estadias abertas, passa estadia_id errada de propósito, e verifica que (i) resultado usa estadia mais antiga, (ii) todas as tarefas + inseminacoes ficam nessa estadia, (iii) ficha mostra 10/2 (não 20/4), (iv) selectbox devolve 1 linha, (v) nenhuma estadia nova é criada."
+}

@@ -257,6 +257,10 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
     `operation_id` (com fallback `solo_<id>` para linhas legacy sem
     `operation_id`) — a coluna `palhetas_gastas` passa a ser o total da
     operação e `num_lotes` conta os lotes envolvidos.
+
+    O JOIN a `acompanhamento_inseminacao` usa `i.estadia_id` (FK do
+    Pedido 3) — evita a multiplicação de linhas quando a égua tem mais
+    do que uma estadia aberta a cobrir a data da inseminação.
     """
     sql = """
         WITH ins AS (
@@ -265,11 +269,13 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
                 i.data_inseminacao,
                 i.garanhao,
                 i.dono_id,
+                i.estadia_id,
                 i.palhetas_gastas,
                 i.observacoes,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
-            WHERE LOWER(i.egua) = LOWER(%s)
+            WHERE i.animal_id_egua = %s
+               OR (i.animal_id_egua IS NULL AND LOWER(i.egua) = LOWER(%s))
         )
         SELECT
             MIN(ins.data_inseminacao) AS data_inseminacao,
@@ -282,17 +288,12 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
-        LEFT JOIN estadias e
-               ON e.animal_id = %s
-              AND e.motivo = 'inseminacao'
-              AND ins.data_inseminacao BETWEEN e.data_entrada
-                                          AND COALESCE(e.data_saida, CURRENT_DATE)
-        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(animal_nome, animal_id))
+        return pd.read_sql_query(sql, conn, params=(int(animal_id), animal_nome))
 
 
 def _kpis_inseminacoes(df: pd.DataFrame) -> tuple[int, int, str]:
@@ -1108,6 +1109,10 @@ def _kpis_stock_garanhao(df: pd.DataFrame) -> tuple[int, int, str, int, int]:
 def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
     """Inseminações deste garanhão — matching por FK (`i.animal_id_garanhao`)
     e **agrupadas por `operation_id`** para não duplicar operações multi-lote.
+
+    O JOIN à `acompanhamento_inseminacao` usa `i.estadia_id` (FK do
+    Pedido 3) — evita a multiplicação de linhas quando a égua tem
+    múltiplas estadias abertas.
     """
     sql = """
         WITH ins AS (
@@ -1117,6 +1122,7 @@ def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
                 i.egua,
                 i.dono_id,
                 i.animal_id_egua,
+                i.estadia_id,
                 i.palhetas_gastas,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
@@ -1132,12 +1138,7 @@ def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
-        LEFT JOIN estadias e
-               ON e.animal_id = ins.animal_id_egua
-              AND e.motivo = 'inseminacao'
-              AND ins.data_inseminacao BETWEEN e.data_entrada
-                                          AND COALESCE(e.data_saida, CURRENT_DATE)
-        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = e.id
+        LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """

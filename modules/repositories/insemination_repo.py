@@ -198,8 +198,8 @@ def registar_inseminacao_completa(
     data_2a = data_inseminacao + timedelta(days=DIAS_2A_CONFIRMACAO)
     data_parto = data_inseminacao + timedelta(days=DIAS_PARTO_PREVISTO)
 
-    # ── Resolução do garanhão (fora do bloco with — get_or_create abre
-    #    a sua própria conexão e faz commit isolado, o que é aceitável).
+    # Resolução do garanhão (fora do bloco with — get_or_create abre
+    # a sua própria conexão e faz commit isolado, o que é aceitável).
     animal_id_garanhao = get_or_create_garanhao(garanhao_nome)
     if animal_id_garanhao is None:
         raise InseminacaoError(
@@ -211,6 +211,30 @@ def registar_inseminacao_completa(
     with get_connection() as conn:
         cur = conn.cursor()
         try:
+            # 0. Canonicalização da estadia — REUTILIZA sempre a estadia
+            #    aberta MAIS ANTIGA da égua (menor id), mesmo que o
+            #    chamador tenha passado outra. Isto previne o bug em
+            #    que duas estadias abertas em simultâneo faziam a
+            #    inseminação e as tarefas ficarem numa estadia
+            #    diferente da que já tinha, por exemplo, a tarefa
+            #    `primeira_observacao`.
+            cur.execute(
+                """
+                SELECT id
+                FROM estadias
+                WHERE animal_id = %s AND data_saida IS NULL
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (int(animal_id_egua),),
+            )
+            row_est = cur.fetchone()
+            if not row_est:
+                raise InseminacaoError(
+                    f"Égua id={animal_id_egua} não tem estadia activa. "
+                    f"Crie primeiro uma estadia."
+                )
+            estadia_id = int(row_est[0])
             # Nomes canónicos (a partir de `animais`) para os campos texto.
             egua_nome = _fetch_nome_canonico(cur, animal_id_egua)
             gar_nome = _fetch_nome_canonico(cur, animal_id_garanhao)
@@ -381,6 +405,10 @@ def registar_inseminacao_completa(
 def listar_eguas_com_estadia_ativa() -> list[dict]:
     """Devolve as éguas com estadia aberta (`data_saida IS NULL`).
 
+    Uma égua com **múltiplas** estadias abertas devolve **uma só linha**
+    (a estadia aberta mais antiga) para evitar duplicação no selectbox
+    do menu e garantir que o registo cai sempre na mesma estadia.
+
     Usada pelo selectbox do menu "Registar Inseminação" — não permite
     inseminações fora de estadias registadas.
 
@@ -391,7 +419,8 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
         - `dono_id`, `dono_nome`
     """
     sql = """
-        SELECT a.id AS animal_id, a.nome,
+        SELECT DISTINCT ON (a.id)
+               a.id AS animal_id, a.nome,
                e.id AS estadia_id, e.data_entrada, e.motivo,
                e.alojamento_id, al.nome AS alojamento_nome,
                al.tipo AS alojamento_tipo,
@@ -404,7 +433,7 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
           AND a.ativo = TRUE
           AND e.data_saida IS NULL
           AND e.tipo_registo IN ('estadia', 'visita')
-        ORDER BY LOWER(a.nome)
+        ORDER BY a.id, e.data_entrada ASC, e.id ASC
     """
     with get_connection() as conn:
         cur = conn.cursor()
@@ -412,4 +441,7 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
         rows = cur.fetchall()
         cols = [d[0] for d in cur.description]
         cur.close()
-    return [dict(zip(cols, r)) for r in rows]
+    # Re-ordenar por nome (o DISTINCT ON forçou ORDER BY a.id primeiro)
+    result = [dict(zip(cols, r)) for r in rows]
+    result.sort(key=lambda x: (x["nome"] or "").lower())
+    return result

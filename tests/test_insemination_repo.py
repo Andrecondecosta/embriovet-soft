@@ -641,6 +641,176 @@ def test_listagens_agrupam_por_operation_id(
     assert int(df_gar.iloc[0]["num_lotes"]) == 2
 
 
+# ────────────────────────────────────────────────────────────────────
+# Regressão — Bug estadia duplicada / palhetas multiplicadas
+# ────────────────────────────────────────────────────────────────────
+
+def test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Cenário reproduzido em produção (égua Matilde):
+    - Uma égua com 2 estadias abertas em simultâneo (11 e 12).
+    - Antes da correcção: `registar_inseminacao_completa` não canonicalizava
+      a estadia, e o JOIN em `_carregar_inseminacoes_animal` fazia
+      multiplicação por 2 (2 estadias × 2 lotes = 4 linhas → "20 (4 lotes)"
+      para uma operação real de 10 palhetas em 2 lotes).
+
+    Depois da correcção:
+    (a) o registo deve reutilizar a estadia canónica (mais antiga aberta)
+        e não criar uma nova;
+    (b) todas as tarefas automáticas ficam na estadia canónica;
+    (c) a ficha da égua mostra as palhetas reais (10, 2 lotes), não o dobro;
+    (d) o selectbox devolve UMA linha por égua mesmo com 2 estadias abertas.
+    """
+    from modules.pages.animal_page import _carregar_inseminacoes_animal
+
+    animal_id = egua_com_estadia["animal_id"]
+    estadia_original = egua_com_estadia["estadia_id"]
+
+    # Simular o bug: criar uma segunda estadia aberta para a mesma égua.
+    cur = db.cursor()
+    cur.execute(
+        """
+        INSERT INTO estadias (
+            tipo_registo, animal_id, alojamento_id, dono_id,
+            data_entrada, motivo, estado
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """,
+        (
+            "estadia", animal_id, egua_com_estadia["alojamento_id"],
+            egua_com_estadia["dono_id"], date.today(),
+            "inseminacao", "internado",
+        ),
+    )
+    estadia_duplicada = int(cur.fetchone()[0])
+    db.commit()
+    cur.close()
+
+    # A canónica é a MAIS ANTIGA (menor id) — a estadia_original.
+    assert estadia_duplicada > estadia_original
+
+    try:
+        # (d) selectbox devolve UMA linha por égua mesmo com 2 estadias abertas
+        eguas = [
+            e for e in listar_eguas_com_estadia_ativa()
+            if e["animal_id"] == animal_id
+        ]
+        assert len(eguas) == 1, (
+            f"Selectbox devia devolver 1 linha por égua, obteve {len(eguas)}"
+        )
+        # E devolve a estadia canónica (mais antiga)
+        assert eguas[0]["estadia_id"] == estadia_original
+
+        # (a)+(b) Registar inseminação passando POR ENGANO a estadia
+        # duplicada — a função deve canonicalizar e usar a original.
+        resultado = registar_inseminacao_completa(
+            animal_id_egua=animal_id,
+            estadia_id=estadia_duplicada,  # ← errada de propósito
+            dono_id=egua_com_estadia["dono_id"],
+            garanhao_nome=stock_garanhao["nome"],
+            data_inseminacao=date(2026, 9, 1),
+            registros=[
+                {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 6},
+                {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 4},
+            ],
+        )
+        assert resultado["estadia_id"] == estadia_original, (
+            "A função devia ter canonicalizado para a estadia original "
+            f"(id={estadia_original}), mas usou {resultado['estadia_id']}."
+        )
+
+        # (b) Todas as tarefas automáticas (D+1 + D+14) na estadia original.
+        cur = db.cursor()
+        cur.execute(
+            "SELECT tipo, estadia_id FROM trabalho_diario "
+            "WHERE animal_id = %s ORDER BY id",
+            (animal_id,),
+        )
+        tarefas = cur.fetchall()
+        assert all(t[1] == estadia_original for t in tarefas), (
+            f"Tarefas devem ficar todas na estadia canónica: {tarefas}"
+        )
+
+        # As inseminacoes também ficam ligadas à estadia canónica.
+        cur.execute(
+            "SELECT estadia_id FROM inseminacoes "
+            "WHERE animal_id_egua = %s",
+            (animal_id,),
+        )
+        estadias_ins = {r[0] for r in cur.fetchall()}
+        assert estadias_ins == {estadia_original}
+        cur.close()
+
+        # (c) A ficha mostra 10 palhetas em 2 lotes — NÃO 20 em 4 lotes.
+        df = _carregar_inseminacoes_animal(animal_id, egua_com_estadia["nome"])
+        assert len(df) == 1, f"esperada 1 linha, obtidas {len(df)}"
+        assert int(df.iloc[0]["palhetas_gastas"]) == 10, (
+            f"esperado 10 palhetas, obtido {df.iloc[0]['palhetas_gastas']}"
+        )
+        assert int(df.iloc[0]["num_lotes"]) == 2, (
+            f"esperado 2 lotes, obtido {df.iloc[0]['num_lotes']}"
+        )
+    finally:
+        # Cleanup da estadia duplicada (a original é limpa pela fixture)
+        cur = db.cursor()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        cur.execute(
+            "DELETE FROM trabalho_diario WHERE estadia_id = %s",
+            (estadia_duplicada,),
+        )
+        cur.execute(
+            "DELETE FROM acompanhamento_inseminacao WHERE estadia_id = %s",
+            (estadia_duplicada,),
+        )
+        cur.execute(
+            "UPDATE inseminacoes SET estadia_id = NULL WHERE estadia_id = %s",
+            (estadia_duplicada,),
+        )
+        cur.execute("DELETE FROM estadias WHERE id = %s", (estadia_duplicada,))
+        db.commit()
+        cur.close()
+
+
+def test_registo_falha_se_egua_nao_tem_estadia_ativa(db, dono_id, stock_garanhao):
+    """Se a égua não tem qualquer estadia aberta, a função erra com
+    `InseminacaoError` em vez de criar uma estadia às escondidas."""
+    cur = db.cursor()
+    cur.execute(
+        "INSERT INTO animais (nome, tipo, dono_id, ativo) "
+        "VALUES (%s, 'egua', %s, TRUE) RETURNING id",
+        (f"_TEST_EGUA_SEM_ESTADIA_{int(time.time() * 1000)}", dono_id),
+    )
+    animal_id = int(cur.fetchone()[0])
+    db.commit()
+    cur.close()
+
+    try:
+        with pytest.raises(InseminacaoError):
+            registar_inseminacao_completa(
+                animal_id_egua=animal_id,
+                estadia_id=-1,  # inexistente
+                dono_id=dono_id,
+                garanhao_nome=stock_garanhao["nome"],
+                data_inseminacao=date.today(),
+                registros=[
+                    {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 1}
+                ],
+            )
+        # Nenhuma estadia devia ter sido criada.
+        cur = db.cursor()
+        cur.execute("SELECT COUNT(*) FROM estadias WHERE animal_id = %s", (animal_id,))
+        assert cur.fetchone()[0] == 0
+        cur.close()
+    finally:
+        cur = db.cursor()
+        cur.execute("DELETE FROM animais WHERE id = %s", (animal_id,))
+        db.commit()
+        cur.close()
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v", "-s"]))
