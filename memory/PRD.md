@@ -1,9 +1,37 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedido 6 (Dashboard como visão do dia)** concluído. Dashboard 100% leitura: retirada toda a lógica de anulação de transferências (UPDATEs/DELETEs de `reverter_acao`) para o novo `modules/repositories/transfer_repo.py` (FK-based, sem lookup por texto), usada no histórico da `transfer_page.py`. Adicionados 4 KPIs clínicos (estadias ativas, tarefas de hoje com urgentes, gestações confirmadas, inseminações do mês por DISTINCT operation_id), secção "Hoje na clínica" (tarefas do trabalho diário + botão para agenda) e "Stock a precisar de atenção" (existência ≤ 5, via FK garanhao_nome). Atividade recente agora agrupada por operation_id (1 linha por operação). **Total: 55/55 pytest** (43 baseline + 12 novos em `test_dashboard_pedido6.py`, report `/app/test_reports/iteration_37.json`).
+**Fev 2026** — **Pedido 6.1 (widget partos previstos) + Pedido 6.2 (extração pura de stock_repo)** concluídos. Widget "Partos previstos — próximos 30 dias" adicionado à secção "Hoje na clínica" do dashboard. Extração pura de 12 funções de dados de `app.py` para `modules/repositories/stock_repo.py` — código bit-for-bit igual, `app.py` reduziu de **3505 → 2897 linhas (−608)**. **Total: 64/64 pytest** (55 baseline + 9 novos widget partos; 1 teste ajustado com aprovação do user — guarda ficou mais estrito).
 
-## Changelog Recente (Fev 2026 — Pedido 6)
+## Changelog Recente (Fev 2026 — Pedidos 6.1 + 6.2)
+
+### 6.1 — Widget partos previstos (Dashboard, "Hoje na clínica")
+- ✅ Nova função `dashboard_repo.carregar_partos_previstos(dias=30)` — filtra `ai.resultado = 'gestacao_confirmada'`, `data_parto_previsto BETWEEN CURRENT_DATE AND CURRENT_DATE + Xdays`, `estadias.data_saida IS NULL`. Ordenado do mais próximo para o mais distante.
+- ✅ Helper `_render_partos_previstos` em `dashboard_page.py` — colunas Égua · Data prevista · Dias restantes ("hoje"/"amanhã"/"em N dias"). Só leitura, sem criar tarefas.
+- ✅ Exclui: gestações falhadas, sem resultado, estadias encerradas, partos fora da janela ou no passado.
+- ✅ 9 testes em `tests/test_partos_previstos.py`.
+
+### 6.2 — Extração pura para `modules/repositories/stock_repo.py`
+- ✅ Novo `stock_repo.py` (714 linhas), 12 funções + 2 aliases copiadas bit-for-bit de `app.py`:
+  - Leituras com `@st.cache_data`: `carregar_proprietarios`, `carregar_stock`, `carregar_transferencias`, `carregar_transferencias_externas`, `carregar_contentores`
+  - Leituras sem cache: `carregar_inseminacoes`, `obter_stock_contentor`
+  - Escritas: `inserir_stock`, `editar_stock`, `deletar_stock`
+  - 3 transferências: `transferir_palhetas_parcial` (+alias `transferir_stock_interno`), `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo` (+alias `transferir_stock_externo`)
+- ✅ `app.py`: **3505 → 2897 linhas (−608 líquidas)**. `from modules.repositories.stock_repo import ...` no topo mantém compat total dos call-sites.
+- ✅ Zero alteração de lógica. Única diferença: nas 3 transferências, `atualizar_status_proprietarios()` é resolvida via **lazy import** dentro da função para evitar ciclo com `app.py`.
+- ✅ 1 teste ajustado com aprovação (opção "a"): `test_grep_final_no_leituras_da_coluna_texto` — rejeita EXPLICITAMENTE ocorrências em `app.py` e em `modules/pages/*` (excepto `map_page.py`), aceita apenas em `modules/repositories/stock_repo.py` (fallback defensivo schema legado) e `map_page.py` (template JS). Guarda mais estrito do que antes. Docstring explica o porquê.
+- ✅ Todos os restantes 63 testes passam **sem qualquer modificação**.
+
+### Onde ficou cada função extraída
+| Função | Origem | Destino |
+|---|---|---|
+| `carregar_proprietarios`, `carregar_stock`, `carregar_inseminacoes`, `carregar_transferencias`, `carregar_transferencias_externas`, `carregar_contentores`, `obter_stock_contentor`, `inserir_stock`, `editar_stock`, `deletar_stock`, `transferir_palhetas_parcial` (+alias `transferir_stock_interno`), `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo` (+alias `transferir_stock_externo`) | `app.py` (várias linhas) | `modules/repositories/stock_repo.py` |
+
+### Branch e commit
+- Branch: `pedido6-widget-partos-refactor-stock`
+- Commit: `d4c99ee` — "Pedido 6.1+6.2: Widget partos previstos + extração stock_repo"
+
+## Changelog Anterior (Fev 2026 — Pedido 6)
 - ✅ **Novo `modules/repositories/dashboard_repo.py`** (100% leitura): `carregar_kpis_stock`, `carregar_kpis_clinicos` (com `insem_mes_operacoes` DISTINCT operation_id), `carregar_tarefas_hoje`, `carregar_stock_atencao(limite=5)` (via FK), `carregar_stock_por_contentor`, `carregar_stock_por_proprietario`, `carregar_atividade_recente_agrupada(limit=10)` (agrupa por operation_id em memória — 1 linha por operação com num_lotes e quantidade somada).
 - ✅ **Novo `modules/repositories/transfer_repo.py`** (escrita): `reverter_operacao(tipo, action_id, operation_id)` — uma transacção, rollback em falha, FK-based lookup do lote destino (`animal_id + dono_id + contentor_id + canister + andar` — sem texto), invalida cache no sucesso. Substitui o antigo `reverter_acao` do dashboard.
 - ✅ **`dashboard_page.py` reescrito** — decomposto em funções puras (`_render_kpis_stock`, `_render_kpis_clinicos`, `_render_hoje_na_clinica`, `_render_stock_atencao`, `_render_graficos`, `_render_atividade_recente`, `_render_acoes_rapidas`). Zero `UPDATE`/`DELETE`/`INSERT` — validado por grep no teste. Ficha KPI clínica destacada visualmente (verde) para contraste com stock.
