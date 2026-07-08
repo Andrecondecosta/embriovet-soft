@@ -1,9 +1,22 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Correção ao Pedido 5 (Invalidação global de cache)** concluída. Introduzido um helper único `modules.db.invalidate_data_cache()` que faz `st.cache_data.clear()` com try/except (no-op em pytest). Todas as funções que fazem COMMIT em tabelas cobertas por `@st.cache_data` (`estoque_dono`, `dono`, `contentores`, `transferencias`, `transferencias_externas`, `animais`) passaram a chamar o helper após o commit. Criado `tests/test_cache_invalidation.py` com 5 novos testes (via monkeypatch/spy). **Total: 43/43 pytest** (38 baseline + 5 novos, report `/app/test_reports/iteration_36.json`).
+**Fev 2026** — **Pedido 6 (Dashboard como visão do dia)** concluído. Dashboard 100% leitura: retirada toda a lógica de anulação de transferências (UPDATEs/DELETEs de `reverter_acao`) para o novo `modules/repositories/transfer_repo.py` (FK-based, sem lookup por texto), usada no histórico da `transfer_page.py`. Adicionados 4 KPIs clínicos (estadias ativas, tarefas de hoje com urgentes, gestações confirmadas, inseminações do mês por DISTINCT operation_id), secção "Hoje na clínica" (tarefas do trabalho diário + botão para agenda) e "Stock a precisar de atenção" (existência ≤ 5, via FK garanhao_nome). Atividade recente agora agrupada por operation_id (1 linha por operação). **Total: 55/55 pytest** (43 baseline + 12 novos em `test_dashboard_pedido6.py`, report `/app/test_reports/iteration_37.json`).
 
-## Changelog Recente (Fev 2026 — Correção ao Pedido 5)
+## Changelog Recente (Fev 2026 — Pedido 6)
+- ✅ **Novo `modules/repositories/dashboard_repo.py`** (100% leitura): `carregar_kpis_stock`, `carregar_kpis_clinicos` (com `insem_mes_operacoes` DISTINCT operation_id), `carregar_tarefas_hoje`, `carregar_stock_atencao(limite=5)` (via FK), `carregar_stock_por_contentor`, `carregar_stock_por_proprietario`, `carregar_atividade_recente_agrupada(limit=10)` (agrupa por operation_id em memória — 1 linha por operação com num_lotes e quantidade somada).
+- ✅ **Novo `modules/repositories/transfer_repo.py`** (escrita): `reverter_operacao(tipo, action_id, operation_id)` — uma transacção, rollback em falha, FK-based lookup do lote destino (`animal_id + dono_id + contentor_id + canister + andar` — sem texto), invalida cache no sucesso. Substitui o antigo `reverter_acao` do dashboard.
+- ✅ **`dashboard_page.py` reescrito** — decomposto em funções puras (`_render_kpis_stock`, `_render_kpis_clinicos`, `_render_hoje_na_clinica`, `_render_stock_atencao`, `_render_graficos`, `_render_atividade_recente`, `_render_acoes_rapidas`). Zero `UPDATE`/`DELETE`/`INSERT` — validado por grep no teste. Ficha KPI clínica destacada visualmente (verde) para contraste com stock.
+- ✅ **`transfer_page.py`** — nova secção "Histórico de operações" no fim (chamada mesmo quando não há stock disponível). Botões editar (transferências → carrega form em modo edição; inseminações → redireciona) e anular (`reverter_operacao` + confirmação inline). Sem `st.dialog` aninhado.
+- ✅ **12 novos testes em `test_dashboard_pedido6.py`** cobrindo os 5 critérios:
+  - (a) grep de `UPDATE/DELETE/INSERT` em `dashboard_page.py` e `dashboard_repo.py`
+  - (b) reversão de transferência interna e inseminação; validação de tipo
+  - (c) `estadias_ativas` bate com `COUNT(*) FROM estadias WHERE data_saida IS NULL`; `tarefas_hoje` bate com trabalho_diario
+  - (d) inseminação multi-lote → 1 linha em `carregar_atividade_recente_agrupada` com `num_lotes=2` e quantidade somada
+  - (e) `insem_mes_operacoes` incrementa +1 mesmo com 2 linhas de mesmo `operation_id`
+  - Extras: `stock_atencao` reflecte rename em `animais.nome` sem tocar `estoque_dono.garanhao`; `tarefas_hoje` filtra corretamente
+
+## Changelog Anterior (Fev 2026 — Correção ao Pedido 5)
 - ✅ Novo helper `modules.db.invalidate_data_cache()` — chama `st.cache_data.clear()` protegido por try/except (seguro fora de contexto Streamlit).
 - ✅ **`app.py`** — 20+ funções de escrita agora chamam `invalidate_data_cache()` após `conn.commit()`: `atualizar_status_proprietarios`, `alternar_status_proprietario`, `editar_proprietario`, `atualizar_proprietario_stock`, `inserir_stock`, `registrar_inseminacao`, `registrar_inseminacao_multiplas` (3 branches: create/edit-op/edit-single), `registrar_inseminacao_linha`, `adicionar_proprietario`, `deletar_proprietario`, `editar_stock`, `deletar_stock`, `adicionar_contentor`, `editar_contentor`, `atualizar_posicao_contentor`, `atualizar_andar_lote`, `mover_lotes_por_andar`, `deletar_contentor`, `transferir_palhetas_parcial`, `transferir_stock_interno_com_localizacao`, `transferir_palhetas_externo`, `atualizar_transferencia_interna`, `atualizar_transferencia_externa`.
 - ✅ **`modules/repositories/insemination_repo.py`** — `registar_inseminacao_completa` e `registar_resultado` invalidam cache após commit.
