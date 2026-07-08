@@ -343,7 +343,7 @@ def run_map_page(ctx: dict):
                             observacao = lote.get('origem_externa')
 
                         lotes.append({
-                            "garanhao": lote.get('garanhao') or "—",
+                            "garanhao": lote.get('garanhao_nome') or lote.get('garanhao') or "—",
                             "proprietario": lote.get('proprietario_nome') or "—",
                             "quantidade": int(lote.get('existencia_atual') or 0),
                             "canister": int(lote.get('canister') or 0),
@@ -1586,4 +1586,4 @@ def run_map_page(ctx: dict):
 
                                 for _, lote in stock_andar.iterrows():
                                     ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
-                                    st.markdown(f"  - {lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+                                    st.markdown(f"  - {lote.get('garanhao_nome') or lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")

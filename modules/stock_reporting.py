@@ -5,7 +5,10 @@ def filter_stock_view(stock_df, garanhao, owner_filters=None, min_palhetas=0, in
     if stock_df.empty:
         return stock_df
 
-    df = stock_df[stock_df["garanhao"] == garanhao].copy()
+    # Preferir a coluna canónica `garanhao_nome` (via FK a `animais`); cai
+    # para `garanhao` (texto legado) se a canónica não existir no DataFrame.
+    col = "garanhao_nome" if "garanhao_nome" in stock_df.columns else "garanhao"
+    df = stock_df[stock_df[col] == garanhao].copy()
 
     if owner_filters:
         df = df[df["proprietario_nome"].isin(owner_filters)]

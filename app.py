@@ -290,6 +290,7 @@ def update_welcome_completed(completed=True):
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
 # ------------------------------------------------------------
+@st.cache_data(ttl=60)
 def carregar_proprietarios(apenas_ativos=False):
     """Carrega lista de proprietarios do banco de dados
     
@@ -510,26 +511,31 @@ def editar_proprietario(proprietario_id, dados):
         logger.error(f"Erro ao editar proprietário: {e}")
         return False
 
+@st.cache_data(ttl=60)
 def carregar_stock(apenas_ativos=True):
-    """Carrega stock completo com informações de proprietario e contentor
-    
-    Args:
-        apenas_ativos: Se True, retorna apenas stock de proprietários ativos
+    """Carrega stock completo com informações de proprietario, contentor
+    e nome canónico do garanhão (via FK `animal_id` → `animais.nome`).
+
+    Adiciona a coluna `garanhao_nome` — usada pela UI em vez de `garanhao`
+    (texto legado). `COALESCE(a.nome, e.garanhao)` mantém retro-compat
+    para lotes cujo `animal_id` ainda não foi sincronizado.
     """
     try:
         with get_connection() as conn:
             query = """
-                SELECT e.*, 
+                SELECT e.*,
                        d.nome as proprietario_nome,
-                       c.codigo as contentor_codigo
+                       c.codigo as contentor_codigo,
+                       COALESCE(a.nome, e.garanhao) as garanhao_nome
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
                 LEFT JOIN contentores c ON e.contentor_id = c.id
+                LEFT JOIN animais a ON a.id = e.animal_id
                 WHERE e.existencia_atual > 0
             """
             if apenas_ativos:
                 query += " AND d.ativo = TRUE"
-            query += " ORDER BY e.garanhao, e.id"
+            query += " ORDER BY garanhao_nome, e.id"
             df = pd.read_sql_query(query, conn)
         return df
     except Exception as e:
@@ -554,17 +560,19 @@ def carregar_inseminacoes():
         st.error(f"Erro ao carregar inseminações: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=60)
 def carregar_transferencias():
-    """Carrega histórico de transferências"""
+    """Carrega histórico de transferências (com nome canónico do garanhão via FK)."""
     try:
         with get_connection() as conn:
             query = """
-                SELECT t.*, 
-                       e.garanhao,
+                SELECT t.*,
+                       COALESCE(a.nome, e.garanhao) as garanhao,
                        d1.nome as proprietario_origem,
                        d2.nome as proprietario_destino
                 FROM transferencias t
                 LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                LEFT JOIN animais a ON a.id = e.animal_id
                 LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                 LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                 ORDER BY t.data_transferencia DESC
@@ -575,8 +583,11 @@ def carregar_transferencias():
         logger.error(f"Erro ao carregar transferências: {e}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=60)
 def carregar_transferencias_externas():
-    """Carrega histórico de transferências externas (vendas/envios)"""
+    """Carrega histórico de transferências externas (vendas/envios) com
+    o nome canónico do garanhão via FK.
+    """
     try:
         with get_connection() as conn:
             # Verificar se a tabela existe
@@ -594,10 +605,33 @@ def carregar_transferencias_externas():
                 logger.warning("Tabela transferencias_externas não existe")
                 return pd.DataFrame()
             
-            query = """
-                SELECT te.*, 
+            # Verifica se `garanhao` já existe (colunas variam entre schemas
+            # legados); em qualquer caso preferimos o nome canónico via FK.
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'transferencias_externas'"
+            )
+            cols = {r[0] for r in cur.fetchall()}
+            cur.close()
+
+            estoque_join = ""
+            garanhao_expr = "NULL"
+            if "estoque_id" in cols:
+                estoque_join = (
+                    "LEFT JOIN estoque_dono e ON te.estoque_id = e.id "
+                    "LEFT JOIN animais a ON a.id = e.animal_id "
+                )
+                garanhao_expr = "COALESCE(a.nome, e.garanhao)"
+            elif "garanhao" in cols:
+                garanhao_expr = "te.garanhao"
+
+            query = f"""
+                SELECT te.*,
+                       {garanhao_expr} as garanhao,
                        d.nome as proprietario_origem
                 FROM transferencias_externas te
+                {estoque_join}
                 LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                 ORDER BY te.data_transferencia DESC
             """
@@ -1370,6 +1404,8 @@ def editar_stock(stock_id, dados):
             conn.commit()
             cur.close()
             logger.info(f"Stock editado: ID {stock_id}")
+            try: st.cache_data.clear()
+            except Exception: pass
             return True
     except Exception as e:
         logger.error(f"Erro ao editar stock: {e}")
@@ -1385,6 +1421,8 @@ def deletar_stock(stock_id):
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")
+            try: st.cache_data.clear()
+            except Exception: pass
             return True
     except Exception as e:
         logger.error(f"Erro ao deletar stock: {e}")
@@ -1395,6 +1433,7 @@ def deletar_stock(stock_id):
 # 🗺️ Funções de Gestão de Contentores
 # ------------------------------------------------------------
 
+@st.cache_data(ttl=60)
 def carregar_contentores(apenas_ativos=True):
     """Carrega todos os contentores"""
     try:
@@ -1557,13 +1596,14 @@ def deletar_contentor(contentor_id):
         return False
 
 def obter_stock_contentor(contentor_id):
-    """Obtém informações de stock de um contentor específico"""
+    """Obtém informações de stock de um contentor específico
+    (nome do garanhão via FK `animais`, fallback ao texto legado)."""
     try:
         with get_connection() as conn:
             query = """
                 SELECT 
                     e.id,
-                    e.garanhao,
+                    COALESCE(a.nome, e.garanhao) AS garanhao,
                     d.nome as proprietario_nome,
                     e.canister,
                     e.andar,
@@ -1573,8 +1613,9 @@ def obter_stock_contentor(contentor_id):
                     e.origem_externa
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
+                LEFT JOIN animais a ON a.id = e.animal_id
                 WHERE e.contentor_id = %s AND e.existencia_atual > 0
-                ORDER BY e.canister, e.andar, e.garanhao
+                ORDER BY e.canister, e.andar, garanhao
             """
             df = pd.read_sql_query(query, conn, params=(contentor_id,))
         return df

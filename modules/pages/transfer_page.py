@@ -33,11 +33,13 @@ def run_transfer_page(ctx):
                         SELECT t.id, t.estoque_id, t.proprietario_origem_id, t.proprietario_destino_id,
                                t.quantidade, t.data_transferencia,
                                d1.nome as origem_nome, d2.nome as destino_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa, t.operation_id
+                               COALESCE(a.nome, e.garanhao) as garanhao,
+                               e.data_embriovet, e.origem_externa, t.operation_id
                         FROM transferencias t
                         LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
                         LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
                         LEFT JOIN estoque_dono e ON t.estoque_id = e.id
+                        LEFT JOIN animais a ON a.id = e.animal_id
                         WHERE t.id = %s
                     """, (transfer_id,))
                 elif transfer_type == "transfer_external":
@@ -45,10 +47,12 @@ def run_transfer_page(ctx):
                         SELECT te.id, te.estoque_id, te.proprietario_origem_id, te.destinatario_externo,
                                te.quantidade, te.data_transferencia, te.tipo, te.observacoes,
                                d.nome as origem_nome,
-                               e.garanhao, e.data_embriovet, e.origem_externa, te.operation_id
+                               COALESCE(a.nome, e.garanhao) as garanhao,
+                               e.data_embriovet, e.origem_externa, te.operation_id
                         FROM transferencias_externas te
                         LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                         LEFT JOIN estoque_dono e ON te.estoque_id = e.id
+                        LEFT JOIN animais a ON a.id = e.animal_id
                         WHERE te.id = %s
                     """, (transfer_id,))
                 
@@ -101,10 +105,12 @@ def run_transfer_page(ctx):
                                 cur.execute("""
                                     SELECT t.estoque_id, t.quantidade,
                                            e.existencia_atual, e.data_embriovet, e.origem_externa,
-                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           e.contentor_id, e.canister, e.andar,
+                                           COALESCE(a.nome, e.garanhao) as garanhao,
                                            t.proprietario_origem_id, d.nome as origem_nome
                                     FROM transferencias t
                                     JOIN estoque_dono e ON t.estoque_id = e.id
+                                    LEFT JOIN animais a ON a.id = e.animal_id
                                     LEFT JOIN dono d ON t.proprietario_origem_id = d.id
                                     WHERE t.operation_id = %s::uuid
                                     ORDER BY t.id
@@ -113,10 +119,12 @@ def run_transfer_page(ctx):
                                 cur.execute("""
                                     SELECT te.estoque_id, te.quantidade,
                                            e.existencia_atual, e.data_embriovet, e.origem_externa,
-                                           e.contentor_id, e.canister, e.andar, e.garanhao,
+                                           e.contentor_id, e.canister, e.andar,
+                                           COALESCE(a.nome, e.garanhao) as garanhao,
                                            te.proprietario_origem_id, d.nome as origem_nome
                                     FROM transferencias_externas te
                                     JOIN estoque_dono e ON te.estoque_id = e.id
+                                    LEFT JOIN animais a ON a.id = e.animal_id
                                     LEFT JOIN dono d ON te.proprietario_origem_id = d.id
                                     WHERE te.operation_id = %s::uuid
                                     ORDER BY te.id
@@ -265,7 +273,7 @@ def run_transfer_page(ctx):
     def lote_payload(row):
         return {
             "stock_id": int(row.get("id")),
-            "garanhao": row.get("garanhao"),
+            "garanhao": row.get("garanhao_nome") or row.get("garanhao"),
             "dono_id": to_py(row.get("dono_id")),
             "proprietario_nome": row.get("proprietario_nome") or "—",
             "ref": lote_ref(row),
@@ -290,7 +298,7 @@ def run_transfer_page(ctx):
 
     # Inicializar garanhao padrão se necessário
     if st.session_state["transfer_garanhao"] is None:
-        garanhaos_unicos = sorted(stock_disponivel["garanhao"].dropna().unique())
+        garanhaos_unicos = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
         if garanhaos_unicos:
             st.session_state["transfer_garanhao"] = garanhaos_unicos[0]
 
@@ -327,7 +335,7 @@ def run_transfer_page(ctx):
             return
         
         # Filtrar lotes
-        modal_df = stock_disponivel[stock_disponivel["garanhao"] == gar_sel].copy()
+        modal_df = stock_disponivel[stock_disponivel["garanhao_nome"] == gar_sel].copy()
         if prop_sel:
             modal_df = modal_df[modal_df["proprietario_nome"] == prop_sel]
 
@@ -427,7 +435,7 @@ def run_transfer_page(ctx):
     render_zone_title(t("transfer.zone_selection"), "transfer-zone-title")
     
     # 1. CAVALO
-    garanhaos_disponiveis = sorted(stock_disponivel["garanhao"].dropna().unique())
+    garanhaos_disponiveis = sorted(stock_disponivel["garanhao_nome"].dropna().unique())
     idx_gar = 0
     if st.session_state["transfer_garanhao"] and st.session_state["transfer_garanhao"] in garanhaos_disponiveis:
         idx_gar = garanhaos_disponiveis.index(st.session_state["transfer_garanhao"])
