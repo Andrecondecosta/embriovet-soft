@@ -1,9 +1,33 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — Bug fix: registo de inseminação criava estadia duplicada + palhetas apareciam a dobrar. Correcção: `registar_inseminacao_completa` canonicaliza sempre para a estadia aberta mais antiga da égua (`MIN(id) WHERE data_saida IS NULL`) — nunca cria estadia nova, e ignora estadia_id passado se houver outra mais antiga aberta. `listar_eguas_com_estadia_ativa` passa a `DISTINCT ON (a.id)` (uma linha por égua). `_carregar_inseminacoes_animal/garanhao` fazem `LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id` em vez de join por (animal_id + data_range) que multiplicava linhas quando havia estadias abertas sobrepostas. **17/17 testes pytest passam**, validado independentemente pelo testing_agent (report `/app/test_reports/iteration_32.json`).
+**Fev 2026** — **Pedido 4 (ciclo de resultados da inseminação) concluído**. Nova função `insemination_repo.registar_resultado(operation_id, resultado, tipo_tarefa, data, observacoes, task_id)` fecha o ciclo reprodutivo numa só transacção: actualiza `inseminacoes.resultado`+`data_resultado` para todas as linhas do `operation_id`, actualiza `acompanhamento_inseminacao.resultado`, marca a `trabalho_diario` como concluída. Se positivo em D+14 cria D+28 (`confirmacao_gestacao`) e D+45 (`segunda_confirmacao`) idempotentes. Se negativo em qualquer etapa apaga tarefas futuras não concluídas e limpa `data_confirmacao/data_2a_confirmacao/data_parto_previsto`. UI em dois pontos: painel inline no Trabalho Diário ao clicar em tarefa de diagnóstico (Positivo/Negativo + observações; se negativo em D+14 mostra opções Repetir/Encerrar), e botões +/− na ficha da égua para operações pendentes (etapa D+14/D+28/D+45 inferida por dias passados). Testing agent independente validou **25/25 testes** e critérios (a)-(e) (`/app/test_reports/iteration_33.json`).
 
-## Changelog Recente (Fev 2026 — Bug fix "Matilde")
+## Changelog Recente (Fev 2026 — Pedido 4)
+- ✅ **`insemination_repo.registar_resultado`** (transaccional):
+  - `WHERE operation_id = %s::uuid` — actualiza multi-lote como um único evento.
+  - Modo `task_id`: fecha uma tarefa específica; fallback (sem task_id): fecha todas as pendentes matching `(estadia_id, tipo_tarefa)`.
+  - Positivo D+14: INSERT idempotente D+28 + D+45 em `trabalho_diario`. Positivo D+28/D+45: mantém 'gestacao_confirmada'.
+  - Negativo: DELETE tarefas futuras não concluídas (`confirmacao_gestacao`, `segunda_confirmacao`, `parto_previsto`, `data_tarefa >= data`) + NULL nas datas futuras do acompanhamento.
+- ✅ **`insemination_repo.find_operation_por_tarefa(task_id)`** — devolve dict agregado (operation_id, egua, garanhao, num_lotes, total_palhetas, resultado_actual).
+- ✅ **`trabalho_diario_page`**:
+  - `_render_painel_resultado()` — painel inline com Positivo/Negativo + textarea observações. Aparece antes do render normal quando `resultado_task_id` está em session_state.
+  - `_render_painel_pos_negativo()` — mostra opções "🔁 Repetir inseminação" / "🗑 Encerrar ciclo" após negativo em D+14.
+  - `_render_cartao_tarefa` — clique em tarefa de tipo diagnóstico abre painel em vez de drill-down ao animal.
+- ✅ **`insemination_page`** — pré-selecciona a égua via `st.session_state['insem_egua_prefill']` (do botão "Repetir").
+- ✅ **`animal_page._render_botoes_resultado_inline`** — botões +/− na ficha da égua (historial reprodutivo) para operações pendentes com operation_id real (ignora legado `solo_<id>`). Chama a mesma função repo.
+- ✅ **8 novos testes em `test_resultado_ciclo.py`**:
+  1. `test_positivo_d14_cria_d28_e_d45_e_marca_gestacao`
+  2. `test_positivo_d14_idempotente_nao_duplica_tarefas`
+  3. `test_negativo_d14_marca_falhou_e_nao_cria_futuras`
+  4. `test_negativo_d28_perde_gestacao_e_cancela_d45`
+  5. `test_menu_e_ficha_registam_resultado_identico` (snapshot compare)
+  6. `test_multi_lote_partilha_resultado_e_data`
+  7. `test_find_operation_por_tarefa`
+  8. `test_resultado_invalido_erra` (3 assertions)
+- **Total: 25 testes, todos passam em 0.71s** contra a BD de teste local. Validado independentemente pelo testing_agent.
+
+## Changelog Anterior (Fev 2026 — Bug fix "Matilde")
 - ✅ **`registar_inseminacao_completa`** — nova etapa 0 de canonicalização: `SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY id ASC LIMIT 1`. Se não há estadia aberta → `raise InseminacaoError`. Se há, usa sempre a mais antiga (ignora estadia_id passado). Nunca cria estadias.
 - ✅ **`listar_eguas_com_estadia_ativa`** — `SELECT DISTINCT ON (a.id) ... ORDER BY a.id, e.data_entrada ASC, e.id ASC` + re-sort por nome em Python. Uma égua com múltiplas estadias abertas devolve apenas UMA linha (a mais antiga).
 - ✅ **`_carregar_inseminacoes_animal` / `_carregar_inseminacoes_garanhao`** — LEFT JOIN a `acompanhamento_inseminacao` agora via `ai.estadia_id = ins.estadia_id` (FK do Pedido 3), eliminando a multiplicação de linhas quando há 2 estadias abertas.
