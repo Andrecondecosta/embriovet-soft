@@ -168,6 +168,41 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 
+# ─── Partos previstos ─────────────────────────────────────────────────
+def carregar_partos_previstos(dias: int = 30) -> pd.DataFrame:
+    """Éguas com parto previsto nos próximos `dias` dias.
+
+    Filtros:
+    - `acompanhamento_inseminacao.resultado = 'gestacao_confirmada'`
+      (só gestações confirmadas em curso; exclui 'falhou' e NULL)
+    - `data_parto_previsto` entre hoje e hoje+`dias` dias
+    - `estadias.data_saida IS NULL` (estadia ainda aberta)
+
+    Devolve colunas: `egua`, `data_parto_previsto`, `dias_restantes`,
+    `estadia_id`, `animal_id`.
+    Ordenado do parto mais próximo para o mais distante.
+    """
+    sql = """
+        SELECT
+            a.nome                                   AS egua,
+            ai.data_parto_previsto                   AS data_parto_previsto,
+            (ai.data_parto_previsto - CURRENT_DATE)::int AS dias_restantes,
+            ai.estadia_id,
+            a.id                                     AS animal_id
+        FROM acompanhamento_inseminacao ai
+        JOIN estadias e ON e.id = ai.estadia_id
+        JOIN animais a  ON a.id = ai.animal_id
+        WHERE ai.resultado = 'gestacao_confirmada'
+          AND ai.data_parto_previsto IS NOT NULL
+          AND ai.data_parto_previsto BETWEEN CURRENT_DATE
+                                          AND CURRENT_DATE + (%s || ' days')::interval
+          AND e.data_saida IS NULL
+        ORDER BY ai.data_parto_previsto ASC, a.nome ASC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(int(dias),))
+
+
 # ─── Stock a precisar de atenção ──────────────────────────────────────
 def carregar_stock_atencao(limite: int = 5, top: int = 10) -> pd.DataFrame:
     """Lotes com existência baixa (existencia_atual <= limite), com

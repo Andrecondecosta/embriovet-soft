@@ -32,6 +32,7 @@ from modules.repositories.dashboard_repo import (
     carregar_atividade_recente_agrupada,
     carregar_kpis_clinicos,
     carregar_kpis_stock,
+    carregar_partos_previstos,
     carregar_stock_atencao,
     carregar_stock_por_contentor,
     carregar_stock_por_proprietario,
@@ -271,6 +272,44 @@ def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
         st.rerun()
 
 
+def _render_partos_previstos(df: pd.DataFrame, dias: int) -> None:
+    """Widget de partos previstos nos próximos `dias` dias (só leitura).
+
+    Só mostra operações com `resultado = 'gestacao_confirmada'` — nunca
+    gestações falhadas. Ordenado do mais próximo para o mais distante.
+    """
+    st.markdown(
+        f"<div class='dash-section-title'>Partos previstos — próximos "
+        f"{dias} dias</div>",
+        unsafe_allow_html=True,
+    )
+    if df.empty:
+        st.info("Sem partos previstos neste horizonte.")
+        return
+
+    def _fmt_dias(n: int) -> str:
+        n = int(n)
+        if n == 0:
+            return "hoje"
+        if n == 1:
+            return "amanhã"
+        return f"em {n} dias"
+
+    display = pd.DataFrame({
+        "Égua": df["egua"].fillna("—"),
+        "Data prevista": df["data_parto_previsto"].apply(
+            lambda d: d.strftime("%d/%m/%Y") if d else "—"
+        ),
+        "Dias restantes": df["dias_restantes"].apply(_fmt_dias),
+    })
+    st.dataframe(
+        display,
+        use_container_width=True,
+        hide_index=True,
+        height=min(220, 40 + 35 * len(display)),
+    )
+
+
 def _render_stock_atencao(df: pd.DataFrame, limite: int) -> None:
     st.markdown(
         f"<div class='dash-section-title'>Stock a precisar de atenção "
@@ -451,6 +490,15 @@ def run_dashboard_page(ctx: dict) -> None:
         st.error(f"Erro ao carregar tarefas de hoje: {e}")
         df_hoje = pd.DataFrame()
     _render_hoje_na_clinica(df_hoje)
+
+    # Widget partos previstos (secção "Hoje na clínica")
+    DIAS_PARTOS = 30
+    try:
+        df_partos = carregar_partos_previstos(dias=DIAS_PARTOS)
+    except Exception as e:
+        st.error(f"Erro ao carregar partos previstos: {e}")
+        df_partos = pd.DataFrame()
+    _render_partos_previstos(df_partos, DIAS_PARTOS)
 
     # Stock a precisar de atenção
     LIMITE_STOCK_ATENCAO = int(app_settings.get("stock_atencao_limite") or 5)
