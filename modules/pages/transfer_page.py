@@ -1,6 +1,7 @@
 from modules.i18n import t
 import streamlit as st
 import pandas as pd
+from modules.db import invalidate_data_cache
 
 
 def run_transfer_page(ctx):
@@ -735,6 +736,7 @@ def run_transfer_page(ctx):
                                     cur.execute("DELETE FROM transferencias WHERE id = %s", (transfer_data['id'],))
                                 conn.commit()
                                 cur.close()
+                                invalidate_data_cache()
                         except Exception as e:
                             st.error(f"Erro ao reverter transferência: {e}")
                             sucesso = False
@@ -858,6 +860,7 @@ def run_transfer_page(ctx):
                                     cur.execute("DELETE FROM transferencias_externas WHERE id = %s", (transfer_data['id'],))
                                 conn.commit()
                                 cur.close()
+                                invalidate_data_cache()
                         except Exception as e:
                             st.error(f"Erro ao reverter transferência externa: {e}")
                             sucesso = False

@@ -7,6 +7,7 @@ import html as _html_lib
 from io import BytesIO
 import pandas as pd
 from modules.i18n import t
+from modules.db import invalidate_data_cache
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -895,6 +896,7 @@ def _executar_importacao(linhas):
 
             conn.commit()
             cur.close()
+        invalidate_data_cache()
 
         st.session_state["import_report"] = pd.DataFrame(report_rows)
         st.session_state["import_wiz_step"] = 4

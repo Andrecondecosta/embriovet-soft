@@ -101,3 +101,21 @@ def get_connection():
     finally:
         if conn:
             pool.putconn(conn)
+
+
+def invalidate_data_cache():
+    """Limpa o `st.cache_data` (todas as vistas com cache).
+
+    Deve ser chamado após qualquer COMMIT que altere tabelas cujas
+    leituras estejam decoradas com `@st.cache_data` — nomeadamente
+    `estoque_dono`, `dono`, `contentores`, `transferencias`,
+    `transferencias_externas` e `animais`.
+
+    É seguro chamar fora de um contexto Streamlit (ex: testes pytest);
+    nesses casos actua como no-op.
+    """
+    try:
+        st.cache_data.clear()
+    except Exception:
+        # Fora de contexto Streamlit ou runtime não inicializado.
+        pass

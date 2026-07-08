@@ -1,0 +1,15 @@
+{
+  "summary": "Backend-only regression + new cache-invalidation contract verified. 43/43 pytest passing (38 baseline + 5 new in test_cache_invalidation.py). Streamlit smoke test OK: /_stcore/health returns 'ok' (200) and / returns 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/test_cache_invalidation.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": ["pandas.read_sql_query is called with raw psycopg2 connections in several modules (animal_page.py, test_stock_fk_garanhao.py) — pandas warns this is unsupported; consider migrating to SQLAlchemy engine to future-proof."],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (Streamlit smoke only, 200 OK)"},
+  "test_credentials": "TEST_DATABASE_URL used from /app/.env (local postgres embriovet_test).",
+  "seed_data_creation": "None — tests self-seed via fixtures.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Streamlit app is served under supervisor service `streamlit` on port 3000. Do NOT touch supervisor services frontend/backend (FATAL by design). Run tests with: cd /app && TEST_DATABASE_URL=postgresql://embriovet_test:embriovet_test@localhost:5432/embriovet_test python -m pytest tests/ -q. Cache-invalidation contract enforced via modules.db.invalidate_data_cache() which no-ops outside Streamlit runtime."
+}

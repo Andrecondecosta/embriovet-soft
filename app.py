@@ -60,7 +60,7 @@ from modules.pages.import_page import run_import_page
 from modules.pages.estadias_page import run_estadias_page
 from modules.pages.trabalho_diario_page import run_trabalho_diario_page
 from modules.i18n import t, get_i18n_diagnostics
-from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection
+from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection, invalidate_data_cache
 from modules.services.auth_service import (
     criar_hash_password,
     ensure_admin_user_exists,
@@ -361,6 +361,7 @@ def atualizar_status_proprietarios():
             
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             return True
     except Exception as e:
         logger.error(f"Erro ao atualizar status: {e}")
@@ -442,6 +443,7 @@ def alternar_status_proprietario(proprietario_id):
             cur.close()
             conn.close()
             logger.info(f"🔒 Conexão fechada")
+            invalidate_data_cache()
             
             return novo_status
         else:
@@ -505,6 +507,7 @@ def editar_proprietario(proprietario_id, dados):
             ))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário editado: ID {proprietario_id}")
             return True
     except Exception as e:
@@ -809,6 +812,7 @@ def atualizar_proprietario_stock(stock_id, novo_dono_id):
             )
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário atualizado: stock_id={stock_id}, novo_dono_id={novo_dono_id}")
             return True
     except Exception as e:
@@ -903,6 +907,7 @@ def inserir_stock(dados):
 
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Stock inserido: {dados.get('Garanhão')} (ID: {stock_id})")
             
             # Guardar informações para redirecionamento
@@ -986,6 +991,7 @@ def registrar_inseminacao(registro):
             
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             
             logger.info(f"Inseminação registrada: {registro.get('egua')} - {palhetas_int} palhetas")
             return True
@@ -1103,6 +1109,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                     logger.info(f"✏️ Operação ATUALIZADA (op={edit_operation_id}): égua={egua}, total={total_pal}")
                     cur.close()
                     atualizar_status_proprietarios()
+                    invalidate_data_cache()
                     return True
 
             # ─── MODO EDIÇÃO SINGLE ROW (backward compat) ────────────────────────
@@ -1177,6 +1184,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
                 logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}")
                 cur.close()
                 atualizar_status_proprietarios()
+                invalidate_data_cache()
                 return True
 
             # ─── MODO CRIAÇÃO ─────────────────────────────────────────────────────
@@ -1215,6 +1223,7 @@ def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, inseminat
             conn.commit()
             cur.close()
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✅ Inseminação criada (op={new_operation_id}): {egua} - {total_pal} palhetas")
             return True
 
@@ -1270,6 +1279,7 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
             cur.close()
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             return True
 
     except Exception as e:
@@ -1314,6 +1324,7 @@ def adicionar_proprietario(dados):
             proprietario_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário adicionado: {dados.get('nome')}")
             return proprietario_id
     except Exception as e:
@@ -1344,6 +1355,7 @@ def deletar_proprietario(proprietario_id):
             cur.execute("DELETE FROM dono WHERE id = %s", (to_py(proprietario_id),))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Proprietário deletado: ID {proprietario_id}")
             return True
 
@@ -1404,8 +1416,7 @@ def editar_stock(stock_id, dados):
             conn.commit()
             cur.close()
             logger.info(f"Stock editado: ID {stock_id}")
-            try: st.cache_data.clear()
-            except Exception: pass
+            invalidate_data_cache()
             return True
     except Exception as e:
         logger.error(f"Erro ao editar stock: {e}")
@@ -1421,8 +1432,7 @@ def deletar_stock(stock_id):
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")
-            try: st.cache_data.clear()
-            except Exception: pass
+            invalidate_data_cache()
             return True
     except Exception as e:
         logger.error(f"Erro ao deletar stock: {e}")
@@ -1470,6 +1480,7 @@ def adicionar_contentor(dados):
             contentor_id = cur.fetchone()[0]
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor criado: {dados.get('codigo')} (ID: {contentor_id})")
             return contentor_id
     except Exception as e:
@@ -1497,6 +1508,7 @@ def editar_contentor(contentor_id, dados):
             ))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor editado: ID {contentor_id}")
             return True
     except Exception as e:
@@ -1516,6 +1528,7 @@ def atualizar_posicao_contentor(contentor_id, x, y):
             """, (to_py(x), to_py(y), to_py(contentor_id)))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Posição do contentor atualizada: ID {contentor_id} -> X={x}, Y={y}")
             return True
     except Exception as e:
@@ -1534,6 +1547,7 @@ def atualizar_andar_lote(estoque_id: int, novo_andar: int, novo_canister: int = 
                 cur.execute("UPDATE estoque_dono SET andar = %s WHERE id = %s", (novo_andar, estoque_id))
             conn.commit()
             cur.close()
+        invalidate_data_cache()
         return True
     except Exception as e:
         logger.error(f"Erro ao atualizar posição de lote: {e}")
@@ -1558,6 +1572,7 @@ def mover_lotes_por_andar(contentor_id: int, andar_origem: int, andar_destino: i
             count = cur.rowcount
             conn.commit()
             cur.close()
+        invalidate_data_cache()
         return count
     except Exception as e:
         logger.error(f"Erro ao mover lotes por andar: {e}")
@@ -1587,6 +1602,7 @@ def deletar_contentor(contentor_id):
             cur.execute("DELETE FROM contentores WHERE id = %s", (to_py(contentor_id),))
             conn.commit()
             cur.close()
+            invalidate_data_cache()
             logger.info(f"Contentor deletado: ID {contentor_id}")
             return True
             
@@ -1745,6 +1761,7 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
             
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             
             logger.info(f"Transferência: {quantidade_int} palhetas de {prop_origem_id} para {proprietario_destino_id}")
             return True
@@ -1852,6 +1869,7 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
             
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             
             logger.info(f"Transferência com mudança de local: {quantidade_int} palhetas de {prop_origem_id} para {prop_destino_id}")
             return True
@@ -1921,6 +1939,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             
             logger.info(f"Transferência externa: {quantidade_int} palhetas para {destinatario_externo}")
             return True
@@ -2076,6 +2095,7 @@ def atualizar_transferencia_interna(transfer_id, novo_estoque_id, novo_dest_id, 
                 logger.warning(f"Auditoria de transferência interna não registada: {ae}")
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✏️ Transferência interna ATUALIZADA: ID {transfer_id}")
             return True
 
@@ -2164,6 +2184,7 @@ def atualizar_transferencia_externa(transfer_id, novo_estoque_id, novo_destinata
             })
 
             atualizar_status_proprietarios()
+            invalidate_data_cache()
             logger.info(f"✏️ Transferência externa ATUALIZADA: ID {transfer_id}")
             return True
 

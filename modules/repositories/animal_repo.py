@@ -6,7 +6,7 @@ import re
 import unicodedata
 from typing import Optional
 
-from modules.db import get_connection
+from modules.db import get_connection, invalidate_data_cache
 
 
 def _normalizar_nome(nome: Optional[str]) -> str:
@@ -63,4 +63,5 @@ def get_or_create_garanhao(nome: Optional[str]) -> Optional[int]:
         new_id = int(cur.fetchone()[0])
         conn.commit()
         cur.close()
+        invalidate_data_cache()
         return new_id

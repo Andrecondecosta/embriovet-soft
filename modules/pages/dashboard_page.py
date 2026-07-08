@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 from modules.i18n import t
+from modules.db import invalidate_data_cache
 
 
 def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, quantidade, operation_id=None):
@@ -75,6 +76,7 @@ def reverter_acao(tipo, action_id, estoque_id, prop_origem_id, prop_destino_id, 
             
             # Atualizar status dos proprietários
             globals()['atualizar_status_proprietarios']()
+            invalidate_data_cache()
             
             return True
             
