@@ -538,3 +538,132 @@ def test_resultado_invalido_erra(db, egua_com_estadia, stock_garanhao):
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v", "-s"]))
+
+
+# ────────────────────────────────────────────────────────────────────
+# Pedido 4b — tarefa de parto (D+330) + pre_parto (D-14 do parto)
+# ────────────────────────────────────────────────────────────────────
+
+def test_positivo_d45_cria_pre_parto_e_parto_previsto(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Sequência positiva D+14 → D+28 → D+45: no positivo em D+45 são
+    criadas as tarefas `pre_parto` (D+330-14 = D+316) e `parto_previsto`
+    (D+330 desde a inseminação)."""
+    data_ins = date(2026, 3, 1)
+    res = _registar_operacao(egua_com_estadia, stock_garanhao, (3,), data_ins)
+    op_id = res["operation_id"]
+
+    # D+14 positivo
+    r_d14 = registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="diagnostico_gestacao",
+        data=data_ins + timedelta(days=14),
+    )
+    d28_task = next(
+        tid for tid in r_d14["tarefas_criadas"]
+    )  # primeiro é o D+28 (ordem no INSERT)
+
+    # D+28 positivo
+    registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="confirmacao_gestacao",
+        data=data_ins + timedelta(days=28),
+        task_id=d28_task,
+    )
+
+    # D+45 positivo → deve criar pre_parto (D+316) e parto_previsto (D+330)
+    r_d45 = registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="segunda_confirmacao",
+        data=data_ins + timedelta(days=45),
+    )
+    assert len(r_d45["tarefas_criadas"]) == 2
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT tipo, data_tarefa, urgencia FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo IN ('pre_parto','parto_previsto') "
+        "ORDER BY data_tarefa",
+        (egua_com_estadia["estadia_id"],),
+    )
+    rows = cur.fetchall()
+    assert len(rows) == 2
+
+    tipos = {r[0]: (r[1], r[2]) for r in rows}
+    assert tipos["pre_parto"][0] == data_ins + timedelta(days=330 - 14)
+    assert tipos["pre_parto"][1] == "amanha"
+    assert tipos["parto_previsto"][0] == data_ins + timedelta(days=330)
+    assert tipos["parto_previsto"][1] == "hoje"
+    cur.close()
+
+
+def test_pre_parto_idempotente_em_d45(db, egua_com_estadia, stock_garanhao):
+    """Positivo em D+45 duas vezes não duplica pre_parto/parto_previsto."""
+    data_ins = date(2026, 4, 1)
+    res = _registar_operacao(egua_com_estadia, stock_garanhao, (2,), data_ins)
+    op_id = res["operation_id"]
+
+    registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="diagnostico_gestacao",
+        data=data_ins + timedelta(days=14),
+    )
+    r1 = registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="segunda_confirmacao",
+        data=data_ins + timedelta(days=45),
+    )
+    r2 = registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="segunda_confirmacao",
+        data=data_ins + timedelta(days=45),
+    )
+    assert len(r1["tarefas_criadas"]) == 2
+    assert len(r2["tarefas_criadas"]) == 0
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo IN ('pre_parto','parto_previsto')",
+        (egua_com_estadia["estadia_id"],),
+    )
+    assert cur.fetchone()[0] == 2
+    cur.close()
+
+
+def test_negativo_apaga_tambem_pre_parto(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Se depois de tudo positivo houver uma perda tardia, o negativo
+    também apaga `pre_parto` e `parto_previsto` futuras."""
+    data_ins = date(2026, 5, 1)
+    res = _registar_operacao(egua_com_estadia, stock_garanhao, (2,), data_ins)
+    op_id = res["operation_id"]
+
+    registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="diagnostico_gestacao",
+        data=data_ins + timedelta(days=14),
+    )
+    registar_resultado(
+        operation_id=op_id, resultado="positivo",
+        tipo_tarefa="segunda_confirmacao",
+        data=data_ins + timedelta(days=45),
+    )
+    # Negativo em D+45 numa nova validação (perda tardia)
+    r_neg = registar_resultado(
+        operation_id=op_id, resultado="negativo",
+        tipo_tarefa="segunda_confirmacao",
+        data=data_ins + timedelta(days=60),
+    )
+    assert len(r_neg["tarefas_canceladas"]) >= 2  # pre_parto + parto_previsto
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM trabalho_diario "
+        "WHERE estadia_id = %s AND tipo IN ('pre_parto','parto_previsto')",
+        (egua_com_estadia["estadia_id"],),
+    )
+    assert cur.fetchone()[0] == 0
+    cur.close()

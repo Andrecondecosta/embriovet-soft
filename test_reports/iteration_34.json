@@ -1,0 +1,21 @@
+{
+  "summary": "Regression + new feature backend testing for Pedido 4b+4c: migrations 028/029, DIAS_PARTO_PREVISTO=330, DIAS_PRE_PARTO=14, positivo D+45 cria pre_parto+parto_previsto, idempotência, negativo apaga, e constraint estadia aberta (Python + BD). Todos os 31 testes passaram (0.80s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/tests/test_resultado_ciclo.py",
+    "/app/tests/test_estadias_constraint.py",
+    "/app/tests/test_insemination_repo.py",
+    "/app/test_reports/pytest/iteration_34.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Pandas + psycopg2 raw connection warnings persistem em animal_page.py (linhas 296, 1164, 1219) — considerar SQLAlchemy engine ou usar cursor+fetchall para eliminar UserWarning (cosmético)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "skipped"},
+  "seed_data_creation": "Nenhum (fixtures pytest tratam do setup/teardown por teste)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Todos os 31 testes pytest passam consistentemente (~0.8s). Cobertura: migrations 028 (pre_parto CHECK), 029 (UNIQUE INDEX estadias abertas), DIAS_PARTO_PREVISTO=330/DIAS_PRE_PARTO=14, positivo D+45 → cria pre_parto (data+316, urgencia='amanha') + parto_previsto (data+330, urgencia='hoje'), idempotência, negativo apaga futuras. Constraint estadia em duas camadas (ValueError Python + UniqueViolation BD). TEST_DATABASE_URL: postgresql://embriovet_test:embriovet_test@localhost:5432/embriovet_test. Comando: cd /app && TEST_DATABASE_URL=... python3 -m pytest tests/ -v"
+}

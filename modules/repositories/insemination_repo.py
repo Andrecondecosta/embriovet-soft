@@ -37,7 +37,8 @@ DIAS_VER_OVULACAO = 1
 DIAS_1O_DIAGNOSTICO = 14
 DIAS_CONFIRMACAO = 28
 DIAS_2A_CONFIRMACAO = 45
-DIAS_PARTO_PREVISTO = 340  # ~11 meses de gestação em equinos
+DIAS_PARTO_PREVISTO = 330  # ~11 meses de gestação em equinos (padrão)
+DIAS_PRE_PARTO = 14  # antecedência da tarefa "preparar acompanhamento"
 
 
 class InseminacaoError(Exception):
@@ -666,6 +667,56 @@ def registar_resultado(
                     if r:
                         tarefas_criadas.append(int(r[0]))
 
+            elif resultado == RESULTADO_POSITIVO and tipo_tarefa == "segunda_confirmacao":
+                # Positivo em D+45 confirma a gestação até ao fim.
+                # Criar tarefas de parto: pré-parto (D+330-14) e parto
+                # previsto (D+330). Idempotente.
+                cur.execute(
+                    "SELECT data_parto_previsto FROM acompanhamento_inseminacao "
+                    "WHERE estadia_id = %s",
+                    (estadia_id,),
+                )
+                row_acomp = cur.fetchone()
+                data_parto = (
+                    row_acomp[0] if row_acomp and row_acomp[0]
+                    else data_inseminacao + timedelta(days=DIAS_PARTO_PREVISTO)
+                )
+                data_pre_parto = data_parto - timedelta(days=DIAS_PRE_PARTO)
+
+                for d_target, tipo, label, urg in (
+                    (data_pre_parto, "pre_parto",
+                     f"Parto previsto em ~2 semanas — preparar acompanhamento "
+                     f"(inseminação {data_inseminacao.strftime('%d/%m/%Y')})",
+                     "amanha"),
+                    (data_parto, "parto_previsto",
+                     f"Parto previsto — inseminação {data_inseminacao.strftime('%d/%m/%Y')}",
+                     "hoje"),
+                ):
+                    cur.execute(
+                        """
+                        INSERT INTO trabalho_diario (
+                            animal_id, estadia_id, data_tarefa, tipo,
+                            motivo, urgencia, criado_automaticamente,
+                            utilizador
+                        )
+                        SELECT %s, %s, %s, %s, %s, %s, TRUE, %s
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM trabalho_diario
+                            WHERE animal_id = %s AND estadia_id = %s
+                              AND data_tarefa = %s AND tipo = %s
+                        )
+                        RETURNING id
+                        """,
+                        (
+                            animal_id_egua, estadia_id, d_target, tipo,
+                            label, urg, utilizador,
+                            animal_id_egua, estadia_id, d_target, tipo,
+                        ),
+                    )
+                    r = cur.fetchone()
+                    if r:
+                        tarefas_criadas.append(int(r[0]))
+
             elif resultado == RESULTADO_NEGATIVO and estadia_id is not None:
                 # Cancelar tarefas futuras não concluídas + limpar datas futuras
                 cur.execute(
@@ -675,6 +726,7 @@ def registar_resultado(
                       AND tipo IN (
                         'confirmacao_gestacao',
                         'segunda_confirmacao',
+                        'pre_parto',
                         'parto_previsto'
                       )
                       AND concluida = FALSE

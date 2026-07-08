@@ -3,6 +3,70 @@ import streamlit as st
 from modules.i18n import t
 
 
+
+def _render_painel_confirmacao_insem(conf: dict) -> None:
+    """Painel pós-registo: resumo da inseminação + 3 saídas para fechar
+    o circuito de trabalho (Pedido 4b)."""
+    import streamlit as _st
+    from modules.i18n import t as _t
+
+    _st.markdown(
+        f"<div style='background:#dcfce7;border:1px solid #86efac;"
+        f"border-radius:12px;padding:24px;margin-bottom:20px;'>"
+        f"<div style='font-size:.75rem;color:#15803d;text-transform:uppercase;"
+        f"letter-spacing:.6px;font-weight:700;margin-bottom:6px;'>"
+        f"✓ Inseminação registada</div>"
+        f"<div style='font-size:1.4rem;font-weight:800;color:#0f172a;'>"
+        f"{conf['egua']} × {conf['garanhao']}</div>"
+        f"<div style='font-size:.9rem;color:#166534;margin-top:6px;line-height:1.6;'>"
+        f"<b>{conf['total_palhetas']}</b> palheta(s) em <b>{conf['num_lotes']}</b> lote(s) · "
+        f"data <b>{conf['data_inseminacao'].strftime('%d/%m/%Y')}</b>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    _st.markdown("**Tarefas automáticas criadas:**")
+    if conf.get("criou_d1") and conf.get("data_ver_ovulacao"):
+        _st.markdown(
+            f"- 🩺 **{conf['data_ver_ovulacao'].strftime('%d/%m/%Y')}** — "
+            f"Verificar ovulação (D+1)"
+        )
+    _st.markdown(
+        f"- 🔬 **{conf['data_1o_diagnostico'].strftime('%d/%m/%Y')}** — "
+        f"1º diagnóstico de gestação (D+14)"
+    )
+
+    _st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2, c3 = _st.columns([1.2, 1, 1])
+    with c1:
+        if _st.button("📋 Trabalho Diário", type="primary",
+                      key="conf_ir_trabalho", width="stretch"):
+            _st.session_state.pop("insem_confirmacao", None)
+            _st.session_state["aba_selecionada"] = _t("menu.daily_work")
+            _st.rerun()
+    with c2:
+        if _st.button("👁 Ver na ficha da égua",
+                      key="conf_ver_ficha", width="stretch"):
+            animal_id = int(conf["animal_id_egua"])
+            _st.session_state.pop("insem_confirmacao", None)
+            # Drill-down para a ficha, tab historial reprodutivo (índice 3)
+            _st.session_state["ver_animal_id"] = animal_id
+            _st.session_state["ver_animal_tab"] = 3
+            _st.session_state["aba_selecionada"] = _t("menu.stock")  # ficha vive dentro do fluxo de stock
+            _st.rerun()
+    with c3:
+        if _st.button("➕ Registar outra", key="conf_outra",
+                      width="stretch"):
+            _st.session_state.pop("insem_confirmacao", None)
+            _st.session_state["insem_linhas"] = {}
+            _st.session_state["insem_garanhao_principal"] = None
+            _st.session_state["insem_prop_principal"] = None
+            _st.session_state.pop("insem_observacoes", None)
+            _st.rerun()
+
+
+
 def run_insemination_page(ctx):
     globals().update(ctx)
 
@@ -235,6 +299,12 @@ def run_insemination_page(ctx):
 
     if st.session_state["insem_show_success"]:
         show_success_dialog()
+
+    # ── Painel de confirmação pós-registo (Pedido 4b) ──
+    conf = st.session_state.get("insem_confirmacao")
+    if conf:
+        _render_painel_confirmacao_insem(conf)
+        return
 
     def lote_ref(row):
         return row.get("origem_externa") or row.get("data_embriovet") or f"Lote #{row.get('id')}"
@@ -636,8 +706,8 @@ def run_insemination_page(ctx):
                 # iteração posterior.
                 registros = [
                     {
-                        "garanhao": l.get("garanhao"),
-                        "dono_id": l.get("dono_id"),
+                        "garanhao": linha.get("garanhao"),
+                        "dono_id": linha.get("dono_id"),
                         "protocolo": linha.get("protocolo"),
                         "palhetas": int(linha.get("qty", 0)),
                         "stock_id": int(linha.get("stock_id")),
@@ -673,7 +743,7 @@ def run_insemination_page(ctx):
                     for linha in linhas_finais
                 ]
                 try:
-                    registar_inseminacao_completa(
+                    ret = registar_inseminacao_completa(
                         animal_id_egua=int(egua_sel["animal_id"]),
                         estadia_id=int(egua_sel["estadia_id"]),
                         dono_id=int(egua_sel["dono_id"]),
@@ -692,7 +762,22 @@ def run_insemination_page(ctx):
                         atualizar_status_proprietarios()
                     except Exception:
                         pass
-                    st.session_state["insem_show_success"] = True
+                    # Guarda o resumo para o painel de confirmação e limpa
+                    # o formulário; o painel é renderizado no rerun.
+                    st.session_state["insem_confirmacao"] = {
+                        "egua": egua_sel["nome"],
+                        "garanhao": st.session_state.get("insem_garanhao_principal"),
+                        "total_palhetas": ret["total_palhetas"],
+                        "num_lotes": len(ret["inseminacao_ids"]),
+                        "data_inseminacao": data_insem,
+                        "data_ver_ovulacao": ret.get("data_ver_ovulacao"),
+                        "data_1o_diagnostico": ret["data_1o_diagnostico"],
+                        "criou_d1": ret.get("verificar_ovulacao_id") is not None,
+                        "animal_id_egua": int(egua_sel["animal_id"]),
+                        "estadia_id": ret["estadia_id"],
+                        "dono_id": int(egua_sel["dono_id"]),
+                    }
+                    st.session_state["insem_linhas"] = {}
                     st.rerun()
                 except InseminacaoError as exc:
                     st.error(f"❌ {exc}")

@@ -645,67 +645,54 @@ def test_listagens_agrupam_por_operation_id(
 # Regressão — Bug estadia duplicada / palhetas multiplicadas
 # ────────────────────────────────────────────────────────────────────
 
-def test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas(
+def test_registo_canonicaliza_para_estadia_ativa(
     db, egua_com_estadia, stock_garanhao,
 ):
-    """Cenário reproduzido em produção (égua Matilde):
-    - Uma égua com 2 estadias abertas em simultâneo (11 e 12).
-    - Antes da correcção: `registar_inseminacao_completa` não canonicalizava
-      a estadia, e o JOIN em `_carregar_inseminacoes_animal` fazia
-      multiplicação por 2 (2 estadias × 2 lotes = 4 linhas → "20 (4 lotes)"
-      para uma operação real de 10 palhetas em 2 lotes).
+    """Mesmo passando um estadia_id errado (ex.: uma estadia FECHADA de
+    outra data), a função canonicaliza para a estadia aberta da égua.
 
-    Depois da correcção:
-    (a) o registo deve reutilizar a estadia canónica (mais antiga aberta)
-        e não criar uma nova;
-    (b) todas as tarefas automáticas ficam na estadia canónica;
-    (c) a ficha da égua mostra as palhetas reais (10, 2 lotes), não o dobro;
-    (d) o selectbox devolve UMA linha por égua mesmo com 2 estadias abertas.
+    (Depois da migration 029, é impossível ter 2 estadias abertas em
+    simultâneo — a defesa em profundidade continua útil caso o caller
+    passe qualquer estadia_id inválido.)
     """
     from modules.pages.animal_page import _carregar_inseminacoes_animal
 
     animal_id = egua_com_estadia["animal_id"]
     estadia_original = egua_com_estadia["estadia_id"]
 
-    # Simular o bug: criar uma segunda estadia aberta para a mesma égua.
+    # Criar uma estadia FECHADA para a mesma égua (não bate na constraint 029)
     cur = db.cursor()
     cur.execute(
         """
         INSERT INTO estadias (
             tipo_registo, animal_id, alojamento_id, dono_id,
-            data_entrada, motivo, estado
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+            data_entrada, data_saida, motivo, estado
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
         (
             "estadia", animal_id, egua_com_estadia["alojamento_id"],
-            egua_com_estadia["dono_id"], date.today(),
+            egua_com_estadia["dono_id"],
+            date.today() - timedelta(days=100),
+            date.today() - timedelta(days=90),
             "inseminacao", "internado",
         ),
     )
-    estadia_duplicada = int(cur.fetchone()[0])
+    estadia_fechada = int(cur.fetchone()[0])
     db.commit()
     cur.close()
 
-    # A canónica é a MAIS ANTIGA (menor id) — a estadia_original.
-    assert estadia_duplicada > estadia_original
-
     try:
-        # (d) selectbox devolve UMA linha por égua mesmo com 2 estadias abertas
         eguas = [
             e for e in listar_eguas_com_estadia_ativa()
             if e["animal_id"] == animal_id
         ]
-        assert len(eguas) == 1, (
-            f"Selectbox devia devolver 1 linha por égua, obteve {len(eguas)}"
-        )
-        # E devolve a estadia canónica (mais antiga)
+        assert len(eguas) == 1
         assert eguas[0]["estadia_id"] == estadia_original
 
-        # (a)+(b) Registar inseminação passando POR ENGANO a estadia
-        # duplicada — a função deve canonicalizar e usar a original.
+        # Passa POR ENGANO a estadia fechada — a função deve canonicalizar
         resultado = registar_inseminacao_completa(
             animal_id_egua=animal_id,
-            estadia_id=estadia_duplicada,  # ← errada de propósito
+            estadia_id=estadia_fechada,  # errada de propósito
             dono_id=egua_com_estadia["dono_id"],
             garanhao_nome=stock_garanhao["nome"],
             data_inseminacao=date(2026, 9, 1),
@@ -714,64 +701,68 @@ def test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas(
                 {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 4},
             ],
         )
-        assert resultado["estadia_id"] == estadia_original, (
-            "A função devia ter canonicalizado para a estadia original "
-            f"(id={estadia_original}), mas usou {resultado['estadia_id']}."
-        )
+        assert resultado["estadia_id"] == estadia_original
 
-        # (b) Todas as tarefas automáticas (D+1 + D+14) na estadia original.
+        # Tarefas + inseminacoes na estadia canónica
         cur = db.cursor()
         cur.execute(
-            "SELECT tipo, estadia_id FROM trabalho_diario "
-            "WHERE animal_id = %s ORDER BY id",
+            "SELECT DISTINCT estadia_id FROM trabalho_diario "
+            "WHERE animal_id = %s AND criado_automaticamente = TRUE",
             (animal_id,),
         )
-        tarefas = cur.fetchall()
-        assert all(t[1] == estadia_original for t in tarefas), (
-            f"Tarefas devem ficar todas na estadia canónica: {tarefas}"
-        )
+        assert {r[0] for r in cur.fetchall()} == {estadia_original}
 
-        # As inseminacoes também ficam ligadas à estadia canónica.
         cur.execute(
-            "SELECT estadia_id FROM inseminacoes "
+            "SELECT DISTINCT estadia_id FROM inseminacoes "
             "WHERE animal_id_egua = %s",
             (animal_id,),
         )
-        estadias_ins = {r[0] for r in cur.fetchall()}
-        assert estadias_ins == {estadia_original}
-        cur.close()
+        assert {r[0] for r in cur.fetchall()} == {estadia_original}
 
-        # (c) A ficha mostra 10 palhetas em 2 lotes — NÃO 20 em 4 lotes.
+        # Ficha sem multiplicação
         df = _carregar_inseminacoes_animal(animal_id, egua_com_estadia["nome"])
-        assert len(df) == 1, f"esperada 1 linha, obtidas {len(df)}"
-        assert int(df.iloc[0]["palhetas_gastas"]) == 10, (
-            f"esperado 10 palhetas, obtido {df.iloc[0]['palhetas_gastas']}"
-        )
-        assert int(df.iloc[0]["num_lotes"]) == 2, (
-            f"esperado 2 lotes, obtido {df.iloc[0]['num_lotes']}"
-        )
+        assert len(df) == 1
+        assert int(df.iloc[0]["palhetas_gastas"]) == 10
+        assert int(df.iloc[0]["num_lotes"]) == 2
+        cur.close()
     finally:
-        # Cleanup da estadia duplicada (a original é limpa pela fixture)
         cur = db.cursor()
         try:
             db.rollback()
         except Exception:
             pass
         cur.execute(
-            "DELETE FROM trabalho_diario WHERE estadia_id = %s",
-            (estadia_duplicada,),
-        )
-        cur.execute(
-            "DELETE FROM acompanhamento_inseminacao WHERE estadia_id = %s",
-            (estadia_duplicada,),
-        )
-        cur.execute(
             "UPDATE inseminacoes SET estadia_id = NULL WHERE estadia_id = %s",
-            (estadia_duplicada,),
+            (estadia_fechada,),
         )
-        cur.execute("DELETE FROM estadias WHERE id = %s", (estadia_duplicada,))
+        cur.execute("DELETE FROM estadias WHERE id = %s", (estadia_fechada,))
         db.commit()
         cur.close()
+
+
+def test_migration_029_rejeita_segunda_estadia_aberta(db, egua_com_estadia):
+    """A UNIQUE INDEX PARCIAL `estadias_uma_aberta_por_animal` da
+    migration 029 rejeita qualquer INSERT que crie uma segunda estadia
+    aberta para o mesmo animal — defesa em profundidade contra o bug
+    original."""
+    cur = db.cursor()
+    with pytest.raises(psycopg2.errors.UniqueViolation):
+        cur.execute(
+            """
+            INSERT INTO estadias (
+                tipo_registo, animal_id, alojamento_id, dono_id,
+                data_entrada, motivo, estado
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "estadia", egua_com_estadia["animal_id"],
+                egua_com_estadia["alojamento_id"],
+                egua_com_estadia["dono_id"], date.today(),
+                "inseminacao", "internado",
+            ),
+        )
+    db.rollback()
+    cur.close()
 
 
 def test_registo_falha_se_egua_nao_tem_estadia_ativa(db, dono_id, stock_garanhao):

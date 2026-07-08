@@ -76,6 +76,7 @@ def _carregar_tarefas_semana(seg: date, dom: date) -> pd.DataFrame:
         SELECT
             td.id,
             td.animal_id,
+            td.estadia_id,
             a.nome    AS animal,
             td.tipo,
             td.motivo,
@@ -477,7 +478,9 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
         "confirmacao_gestacao",
         "segunda_confirmacao",
     }
+    tarefas_para_inseminar = {"verificar_ovulacao"}
     is_diagnostico = tipo_tarefa in tarefas_diagnostico
+    is_inseminar = tipo_tarefa in tarefas_para_inseminar
 
     if st.button(
         label,
@@ -493,6 +496,25 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
             st.session_state["ver_animal_id"] = int(row["animal_id"])
             st.session_state["ver_animal_tab"] = 0
         st.rerun()
+
+    # Atalho "Registar inseminação" para tarefas onde inseminar é a
+    # acção natural (ex.: `verificar_ovulacao`) — reutiliza o prefill
+    # `insem_egua_prefill` do fluxo "Repetir".
+    if is_inseminar and row.get("estadia_id"):
+        if st.button(
+            "➕ Registar inseminação",
+            key=f"tdinsem-{key_prefix}-{tid}",
+            width="stretch",
+        ):
+            from modules.i18n import t as _t
+            st.session_state["insem_egua_prefill"] = {
+                "animal_id": int(row["animal_id"]),
+                "estadia_id": int(row["estadia_id"]),
+                "dono_id": None,  # resolvido no menu
+                "nome": row.get("animal") or "",
+            }
+            st.session_state["aba_selecionada"] = _t("menu.register_insemination")
+            st.rerun()
 
 
 def _render_cabecalho_dia(dia: date) -> None:
