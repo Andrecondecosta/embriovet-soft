@@ -1,9 +1,19 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — Pedidos 3a (observações destacadas + checkbox D+1 opcional) e 3b (agrupamento por `operation_id` nas listagens) concluídos. Registo de inseminações passa agora a: (i) mostrar o campo de observações com label destacado ("🗒 Observações da inseminação") e placeholder útil (reflexo, edema, hora, protocolo hormonal), (ii) oferecer checkbox "🩺 Criar tarefa D+1 (verificar ovulação)" ligado por defeito; a tarefa D+14 continua sempre automática. Listagens das fichas (égua e garanhão) passam a agrupar por `operation_id` — inseminações multi-lote aparecem como UMA linha com o total de palhetas e a etiqueta "(N lotes)". 15 testes a passar em 0.62s.
+**Fev 2026** — Bug fix: registo de inseminação criava estadia duplicada + palhetas apareciam a dobrar. Correcção: `registar_inseminacao_completa` canonicaliza sempre para a estadia aberta mais antiga da égua (`MIN(id) WHERE data_saida IS NULL`) — nunca cria estadia nova, e ignora estadia_id passado se houver outra mais antiga aberta. `listar_eguas_com_estadia_ativa` passa a `DISTINCT ON (a.id)` (uma linha por égua). `_carregar_inseminacoes_animal/garanhao` fazem `LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id` em vez de join por (animal_id + data_range) que multiplicava linhas quando havia estadias abertas sobrepostas. **17/17 testes pytest passam**, validado independentemente pelo testing_agent (report `/app/test_reports/iteration_32.json`).
 
-## Changelog Recente (Fev 2026 — Pedidos 3a + 3b)
+## Changelog Recente (Fev 2026 — Bug fix "Matilde")
+- ✅ **`registar_inseminacao_completa`** — nova etapa 0 de canonicalização: `SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY id ASC LIMIT 1`. Se não há estadia aberta → `raise InseminacaoError`. Se há, usa sempre a mais antiga (ignora estadia_id passado). Nunca cria estadias.
+- ✅ **`listar_eguas_com_estadia_ativa`** — `SELECT DISTINCT ON (a.id) ... ORDER BY a.id, e.data_entrada ASC, e.id ASC` + re-sort por nome em Python. Uma égua com múltiplas estadias abertas devolve apenas UMA linha (a mais antiga).
+- ✅ **`_carregar_inseminacoes_animal` / `_carregar_inseminacoes_garanhao`** — LEFT JOIN a `acompanhamento_inseminacao` agora via `ai.estadia_id = ins.estadia_id` (FK do Pedido 3), eliminando a multiplicação de linhas quando há 2 estadias abertas.
+- ✅ **2 novos testes** em `test_insemination_repo.py`:
+  - `test_registo_reusa_estadia_ativa_e_nao_duplica_palhetas` — reproduz o bug: cria mare + estadia_original, insere 2ª estadia aberta na mão, chama a função passando o estadia_id errado. Assere que resultado usa a original, tarefas+inseminacoes ficam na original, ficha mostra 10 palhetas/2 lotes (não 20/4), selectbox devolve 1 linha, nenhuma estadia nova criada.
+  - `test_registo_falha_se_egua_nao_tem_estadia_ativa` — sem estadia aberta → `InseminacaoError` sem criar estadia às escondidas.
+- ✅ **Total: 17 testes pytest, todos passam em 0.60s** contra a BD de teste local. Testing agent independente confirmou.
+- Nota: BD de teste local teve de ser re-provisionada durante o ciclo (o container perdeu o Postgres 15 e o cliente 18). Ficou documentado em `/app/tests/README.md`.
+
+## Changelog Anterior (Fev 2026 — Pedidos 3a + 3b)
 - ✅ **Pedido 3a — UX pós-inseminação**:
   - `insemination_page.py` — campo de observações com label destacado + placeholder ("O que aconteceu? Reflexo, edema uterino, hora exacta, protocolo hormonal usado, etc.") + altura 110px.
   - Novo checkbox `insem_criar_d1` ligado por defeito com help text.
