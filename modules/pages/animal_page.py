@@ -1464,6 +1464,22 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
 
     with tab_resumo:
         _render_tab_resumo(animal)
+        # Atalho "Registar inseminação" (Pedido 7). Só faz sentido em
+        # éguas activas; o form filtra igualmente pelas éguas com estadia
+        # aberta, portanto não expomos o botão quando a égua está fora.
+        if (animal.get("tipo") or "").lower() == "egua":
+            st.markdown("---")
+            if st.button(
+                "Registar inseminação",
+                key=f"animal-page-insem-{animal_id}",
+                type="primary",
+            ):
+                st.session_state["insem_egua_prefill"] = {
+                    "animal_id": int(animal_id),
+                }
+                st.session_state["insem_flow_active"] = True
+                st.session_state["aba_selecionada"] = "Trabalho diário"
+                st.rerun()
 
     with tab_clinico:
         _render_tab_diario_clinico(animal_id)

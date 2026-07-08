@@ -43,17 +43,24 @@ def _render_painel_confirmacao_insem(conf: dict) -> None:
         if _st.button("📋 Trabalho Diário", type="primary",
                       key="conf_ir_trabalho", width="stretch"):
             _st.session_state.pop("insem_confirmacao", None)
-            _st.session_state["aba_selecionada"] = _t("menu.daily_work")
+            _st.session_state.pop("insem_flow_active", None)
+            _st.session_state.pop("insem_egua_prefill", None)
+            _st.session_state["aba_selecionada"] = "Trabalho diário"
             _st.rerun()
     with c2:
         if _st.button("👁 Ver na ficha da égua",
                       key="conf_ver_ficha", width="stretch"):
             animal_id = int(conf["animal_id_egua"])
             _st.session_state.pop("insem_confirmacao", None)
+            _st.session_state.pop("insem_flow_active", None)
+            _st.session_state.pop("insem_egua_prefill", None)
             # Drill-down para a ficha, tab historial reprodutivo (índice 3)
             _st.session_state["ver_animal_id"] = animal_id
             _st.session_state["ver_animal_tab"] = 3
-            _st.session_state["aba_selecionada"] = _t("menu.stock")  # ficha vive dentro do fluxo de stock
+            # Ficha da égua vive dentro do fluxo do Trabalho Diário
+            # (que renderiza a `run_animal_page` quando `ver_animal_id`
+            # está setado).
+            _st.session_state["aba_selecionada"] = "Trabalho diário"
             _st.rerun()
     with c3:
         if _st.button("➕ Registar outra", key="conf_outra",

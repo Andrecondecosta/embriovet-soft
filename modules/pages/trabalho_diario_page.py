@@ -410,10 +410,9 @@ def _render_painel_pos_negativo() -> bool:
             }
             st.session_state["insem_show_success"] = False
             st.session_state.pop("resultado_pos_neg", None)
-            # Navegar para o menu "Registar Inseminação" (mesma chave que
-            # o dashboard usa em navigate-to-page).
-            from modules.i18n import t as _t
-            st.session_state["aba_selecionada"] = _t("menu.register_insemination")
+            # Pedido 7: Registar inseminação vive dentro do Trabalho
+            # Diário — activamos o flow flag e ficamos no mesmo sítio.
+            st.session_state["insem_flow_active"] = True
             st.rerun()
     with c2:
         if st.button("🗑 Encerrar ciclo", key="btn_encerrar_ciclo",
@@ -506,14 +505,13 @@ def _render_cartao_tarefa(row: dict, key_prefix: str) -> None:
             key=f"tdinsem-{key_prefix}-{tid}",
             width="stretch",
         ):
-            from modules.i18n import t as _t
             st.session_state["insem_egua_prefill"] = {
                 "animal_id": int(row["animal_id"]),
                 "estadia_id": int(row["estadia_id"]),
                 "dono_id": None,  # resolvido no menu
                 "nome": row.get("animal") or "",
             }
-            st.session_state["aba_selecionada"] = _t("menu.register_insemination")
+            st.session_state["insem_flow_active"] = True
             st.rerun()
 
 
@@ -553,6 +551,22 @@ def _render_coluna_dia(dia: date, df_dia: pd.DataFrame, idx: int) -> None:
 # ────────────────────────────────────────────────────────────────────────────
 def run_trabalho_diario_page(context: dict):
     """Trabalho diário — agenda semanal."""
+
+    # Fluxo "Registar inseminação" (Pedido 7): quando um botão externo
+    # (estadia, ficha da égua, Repetir, tarefa) activa este flag, o
+    # Trabalho Diário delega para o form de inseminação. O flag é
+    # limpo automaticamente pelo `insemination_page` no fim do fluxo,
+    # ou por qualquer clique na sidebar (`_clear_page_state` limpa
+    # tudo com prefixo `insem_`).
+    if st.session_state.get("insem_flow_active"):
+        from modules.pages.insemination_page import run_insemination_page
+        if st.button("← Voltar ao Trabalho Diário",
+                     key="btn_voltar_insem_flow"):
+            st.session_state.pop("insem_flow_active", None)
+            st.session_state.pop("insem_egua_prefill", None)
+            st.rerun()
+        run_insemination_page(context)
+        return
 
     # Drill-down para ficha do animal
     if st.session_state.get("ver_animal_id") is not None:
