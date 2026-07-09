@@ -2224,44 +2224,11 @@ if proprietarios.empty:
     st.warning(t("owners.none_registered_warn"))
 
 # ------------------------------------------------------------
-# Router de páginas (Pedido 7: 6 destinos)
-# ------------------------------------------------------------
-if aba == NAV_DASHBOARD:
-    run_dashboard_page({**globals(), **locals()})
-    st.stop()
+# --- Vistas legadas movidas antes do router para acessibilidade ---
+# (Pedido 8 fix: `st.stop()` no router impede que os `def` abaixo
+# sejam executados; mantê-los aqui garante que os orquestradores
+# em stock_semen_page/definicoes_page conseguem `from app import ...`)
 
-if aba == NAV_ESTADIAS:
-    run_estadias_page({**globals(), **locals()})
-    st.stop()
-
-if aba == NAV_TRABALHO_DIARIO:
-    run_trabalho_diario_page({**globals(), **locals()})
-    st.stop()
-
-if aba == NAV_RELATORIOS:
-    run_reports_page({**globals(), **locals()})
-    st.stop()
-
-# Stock de sémen: orquestrador com 4 tabs (Lotes, Garanhões, Mapa,
-# Transferências) e 2 botões topo (Adicionar lote, Importar).
-if aba == NAV_STOCK_SEMEN:
-    from modules.pages.stock_semen_page import run_stock_semen_page
-    run_stock_semen_page({**globals(), **locals()})
-    st.stop()
-
-# Definições: orquestrador com 5 separadores (Marca, Alojamentos,
-# Proprietários, Utilizadores, Idioma) respeitando permissões.
-if aba == NAV_DEFINICOES:
-    from modules.pages.definicoes_page import run_definicoes_page
-    run_definicoes_page({**globals(), **locals()})
-    st.stop()
-
-# Stock de sémen: dispatch de sub-views (add_stock / import).
-# Se `stock_semen_view` não estiver setado, o orquestrador com tabs
-# já correu acima (dentro de `run_stock_semen_page`) e não chegamos
-# aqui. Este bloco corre APÓS o `st.stop()` do NAV_STOCK_SEMEN principal
-# apenas quando o orquestrador tiver deferido a renderização — ver o
-# `_render_add_stock_view()` / `run_import_page()` abaixo.
 def _render_add_stock_view():
     """Form 'Adicionar lote' — antigo bloco `elif aba == t('menu.add_stock')`
     convertido em função para ser invocado pelo orquestrador de
@@ -2555,6 +2522,7 @@ def _render_add_stock_view():
 
 
 # ------------------------------------------------------------
+
 # Owners e Users management (moved to Definições em Pedido 7).
 # As funções abaixo são invocadas pelos separadores de
 # `modules.pages.definicoes_page`.
@@ -2779,6 +2747,7 @@ def _render_owners_view():
                         st.rerun()
 
 # ------------------------------------------------------------
+
 # Gestão de Utilizadores (movido para Definições · Utilizadores)
 # ------------------------------------------------------------
 def _render_users_view():
@@ -2954,6 +2923,47 @@ def _render_users_view():
 # ------------------------------------------------------------
 # Footer
 # ------------------------------------------------------------
+
+# --- Fim das vistas legadas ---
+
+# Router de páginas (Pedido 7: 6 destinos)
+# ------------------------------------------------------------
+if aba == NAV_DASHBOARD:
+    run_dashboard_page({**globals(), **locals()})
+    st.stop()
+
+if aba == NAV_ESTADIAS:
+    run_estadias_page({**globals(), **locals()})
+    st.stop()
+
+if aba == NAV_TRABALHO_DIARIO:
+    run_trabalho_diario_page({**globals(), **locals()})
+    st.stop()
+
+if aba == NAV_RELATORIOS:
+    run_reports_page({**globals(), **locals()})
+    st.stop()
+
+# Stock de sémen: orquestrador com 4 tabs (Lotes, Garanhões, Mapa,
+# Transferências) e 2 botões topo (Adicionar lote, Importar).
+if aba == NAV_STOCK_SEMEN:
+    from modules.pages.stock_semen_page import run_stock_semen_page
+    run_stock_semen_page({**globals(), **locals()})
+    st.stop()
+
+# Definições: orquestrador com 5 separadores (Marca, Alojamentos,
+# Proprietários, Utilizadores, Idioma) respeitando permissões.
+if aba == NAV_DEFINICOES:
+    from modules.pages.definicoes_page import run_definicoes_page
+    run_definicoes_page({**globals(), **locals()})
+    st.stop()
+
+# Stock de sémen: dispatch de sub-views (add_stock / import).
+# Se `stock_semen_view` não estiver setado, o orquestrador com tabs
+# já correu acima (dentro de `run_stock_semen_page`) e não chegamos
+# aqui. Este bloco corre APÓS o `st.stop()` do NAV_STOCK_SEMEN principal
+# apenas quando o orquestrador tiver deferido a renderização — ver o
+# `_render_add_stock_view()` / `run_import_page()` abaixo.
 st.sidebar.markdown("---")
 st.sidebar.markdown(t("footer.version"))
 st.sidebar.markdown(t("footer.auth"))

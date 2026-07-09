@@ -205,11 +205,22 @@ def _render_tab_garanhoes(ctx: dict) -> None:
 def _delegate_add_stock(ctx: dict) -> None:
     """Invoca o form existente em `app.py::_render_add_stock_view`.
 
-    Feito por reflexão para evitar import circular (a `app.py` é o
-    módulo raiz que já importa esta página).
+    Resolvemos o símbolo via `sys.modules['__main__']` — nunca fazer
+    `from app import ...` no runtime porque o `app.py` é o entry-point
+    do Streamlit e um import forçaria uma segunda execução top-down
+    do ficheiro (com colisão de keys em `st.text_input`, `st.button`,
+    etc.). Ao passar por `sys.modules['__main__']` reutilizamos o
+    módulo já carregado — que a esta altura da execução já processou
+    os `def` necessários (foram movidos para antes do router em
+    Pedido 8/hotfix).
     """
-    render_fn = ctx.get("_render_add_stock_view")
-    if render_fn is None:
-        st.error("Form 'Adicionar lote' indisponível: reload da página.")
+    import sys
+    main = sys.modules.get('__main__')
+    fn = getattr(main, '_render_add_stock_view', None)
+    if fn is None:
+        # Fallback: talvez `main` seja outra coisa (testes). Tenta ctx.
+        fn = (ctx or {}).get('_render_add_stock_view')
+    if fn is None:
+        st.error("Form 'Adicionar lote' indisponível. Reload da página.")
         return
-    render_fn()
+    fn()

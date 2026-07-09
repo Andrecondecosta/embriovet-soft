@@ -64,21 +64,28 @@ def run_definicoes_page(ctx: dict) -> None:
     with tabs[1]:
         _render_tab_alojamentos()
 
+    import sys as _sys
+    _main = _sys.modules.get('__main__')
+
     with tabs[2]:
-        owners_fn = ctx.get("_render_owners_view")
-        if owners_fn is None:
+        _fn = getattr(_main, '_render_owners_view', None) if _main else None
+        if _fn is None:
+            _fn = ctx.get('_render_owners_view')
+        if _fn is None:
             st.error("Vista de Proprietários indisponível.")
         else:
-            owners_fn()
+            _fn()
 
     idx = 3
     if is_admin:
         with tabs[idx]:
-            users_fn = ctx.get("_render_users_view")
-            if users_fn is None:
+            _fn = getattr(_main, '_render_users_view', None) if _main else None
+            if _fn is None:
+                _fn = ctx.get('_render_users_view')
+            if _fn is None:
                 st.error("Vista de Utilizadores indisponível.")
             else:
-                users_fn()
+                _fn()
         idx += 1
 
     with tabs[idx]:

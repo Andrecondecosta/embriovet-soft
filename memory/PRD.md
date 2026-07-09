@@ -1,9 +1,36 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
-**Fev 2026** — **Pedido 7 (Reorganização da navegação 13 → 6)** concluído. Menu lateral com **6 itens sem emojis**: `Dashboard · Estadias · Trabalho diário · Stock de sémen · Relatórios · Definições` (sem "Mais opções"). Página **Stock de sémen** funde 4 antigas com 4 tabs (Lotes · Garanhões · Mapa dos contentores · Transferências) e 2 botões topo (Adicionar lote · Importar). Inseminações deixam de ter menu — acessível via botão "Registar inseminação" em estadia activa (só éguas), ficha da égua, e existente no Trabalho Diário. **Definições** com 5 tabs (Marca · Alojamentos · Proprietários · Utilizadores · Idioma) respeitando permissões. Redirects legacy preservados via `_LEGACY_NAV_MAP`. **75/75 pytest passing** (64 baseline + 11 novos em `test_navegacao_pedido7.py`). Retest confirmou 2 fixes de integração (iteration_39.json 100%).
+**Fev 2026** — **Pedido 8 (Colheitas agendadas do garanhão)** concluído. Novo tipo de tarefa `colheita` em `trabalho_diario`. Migration 030 acrescenta o tipo ao CHECK e torna `estadia_id` nullable (opção documentada de menor impacto, aprovada dentro do critério do enunciado). Novo `modules/repositories/colheita_repo.py` com agendar/listar/cancelar/concluir. Widget reutilizável em `modules/components/colheitas_widget.py` na ficha do garanhão. Trabalho Diário renderiza cartão "Colheita — [nome]" e clique abre form Adicionar lote com garanhão pré-selecionado e conclui a tarefa no save. **87/87 pytest passing** (75 baseline + 12 novos em `test_colheitas_agendadas.py`). 3 bugs de integração encontrados e corrigidos no mesmo ciclo.
 
-## Changelog Recente (Fev 2026 — Pedido 7)
+## Changelog Recente (Fev 2026 — Pedido 8)
+
+### Colheitas agendadas
+- ✅ **Migração 030** (`030_colheita_task_type.sql`): adiciona `'colheita'` ao `trabalho_diario_tipo_check` + `ALTER COLUMN estadia_id DROP NOT NULL`. Aplicada em BD teste e produção. Documentado que os SELECTs existentes já toleram NULL (nenhum faz JOIN obrigatório com `estadias`).
+- ✅ **Novo `modules/repositories/colheita_repo.py`**: `agendar_colheita`, `listar_colheitas_futuras`, `cancelar_colheita` (só se não concluída), `concluir_colheita` (idempotente). Todos invalidam cache.
+- ✅ **Novo `modules/components/colheitas_widget.py::render_colheitas_agendadas`**: seletor de data + botão "Agendar colheita" + lista das futuras com botão Cancelar. Integrado na ficha do garanhão (tab Resumo).
+- ✅ **Trabalho Diário**: `_render_cartao_tarefa` detecta `is_colheita`, renderiza label "Colheita — [nome do garanhão]", clique activa `colheita_garanhao_prefill` + redirect a Stock de sémen · Adicionar lote.
+- ✅ **`app.py::_render_add_stock_view`**: banner amarelo de contexto quando `colheita_garanhao_prefill` está setado; `default_idx` do selectbox de garanhão respeita o prefill; após save chama `concluir_colheita`.
+
+### Bugs de integração corrigidos no mesmo ciclo
+- 🔧 **Bug pré-existente Pedido 7** (`ValueError: cannot reindex on axis with duplicate labels`) em `carregar_transferencias_externas` — bloqueava Stock de sémen > Garanhões. Fix: listagem explícita de colunas em vez de `te.*` para evitar coluna `garanhao` duplicada.
+- 🔧 **Forward-reference bug** — `def _render_add_stock_view()` (e as duas outras vistas legadas) estavam DEPOIS do `st.stop()` do router, portanto nunca eram registadas no namespace do módulo. Fix: movidas para ANTES do router (`# Router de páginas`) via reorganização automática em `app.py` (3 blocos: add_stock 293 linhas, owners 224, users 175).
+- 🔧 **Duplicate execution bug** — `from app import _render_add_stock_view` re-executava `app.py` como segundo módulo, gerando `StreamlitDuplicateElementKey`. Fix: resolução via `sys.modules['__main__']` (reutiliza o módulo `__main__` já carregado) com fallback ao `ctx`.
+
+### Novos testes (12 em `tests/test_colheitas_agendadas.py`)
+- Agendar cria tarefa com `estadia_id NULL`, tipo `colheita`, urgência calculada.
+- Listar futuras ordena por data e ignora passadas/concluídas.
+- Concluir é idempotente; cancelar só remove se não concluída.
+- Dashboard `carregar_tarefas_hoje` inclui colheita para hoje.
+- Trabalho Diário renderiza `is_colheita` + prefill.
+- `_render_add_stock_view` gere prefill + conclusão da tarefa.
+- Migração 030 permite `tipo='colheita'` com `estadia_id NULL`.
+
+### Branch e verificação end-to-end
+- Branch: `pedido8-colheitas-garanhao`
+- Verificação frontend: clicar cartão "Colheita — Chacco blue" no Trabalho Diário → form Adicionar Lote abre com banner amarelo "A registar produção da colheita agendada para Chacco blue" + selectbox garanhão pré-preenchida com "Chacco blue" + zero erros de DuplicateElementKey.
+
+## Changelog Anterior (Fev 2026 — Pedido 7)
 
 ### Menu lateral (6 destinos)
 - ✅ `app.py`: novo bloco `menu_principal = [NAV_DASHBOARD, NAV_ESTADIAS, NAV_TRABALHO_DIARIO, NAV_STOCK_SEMEN, NAV_RELATORIOS, NAV_DEFINICOES]`. `menu_secundario = []` (sem "Mais opções").
