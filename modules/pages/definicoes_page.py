@@ -65,20 +65,14 @@ def run_definicoes_page(ctx: dict) -> None:
         _render_tab_alojamentos()
 
     with tabs[2]:
-        owners_fn = ctx.get("_render_owners_view")
-        if owners_fn is None:
-            st.error("Vista de Proprietários indisponível.")
-        else:
-            owners_fn()
+        from modules.pages.owners_view import _render_owners_view
+        _render_owners_view()
 
     idx = 3
     if is_admin:
         with tabs[idx]:
-            users_fn = ctx.get("_render_users_view")
-            if users_fn is None:
-                st.error("Vista de Utilizadores indisponível.")
-            else:
-                users_fn()
+            from modules.pages.users_view import _render_users_view
+            _render_users_view()
         idx += 1
 
     with tabs[idx]:

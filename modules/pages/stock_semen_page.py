@@ -203,13 +203,11 @@ def _render_tab_garanhoes(ctx: dict) -> None:
 # ─── Delegação para o form 'Adicionar lote' (em app.py) ──────────────
 
 def _delegate_add_stock(ctx: dict) -> None:
-    """Invoca o form existente em `app.py::_render_add_stock_view`.
+    """Invoca o form 'Adicionar lote' extraído para
+    `modules.pages.add_stock_view` (Pedido 9 · Fase 1).
 
-    Feito por reflexão para evitar import circular (a `app.py` é o
-    módulo raiz que já importa esta página).
+    Import direto no topo do módulo — o `sys.modules['__main__']`
+    do último ciclo foi eliminado.
     """
-    render_fn = ctx.get("_render_add_stock_view")
-    if render_fn is None:
-        st.error("Form 'Adicionar lote' indisponível: reload da página.")
-        return
-    render_fn()
+    from modules.pages.add_stock_view import _render_add_stock_view
+    _render_add_stock_view()
