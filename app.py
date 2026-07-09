@@ -230,7 +230,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
         elements = []
         styles = getSampleStyleSheet()
-        
+
         # Estilo customizado
         titulo_style = ParagraphStyle(
             'CustomTitle',
@@ -240,7 +240,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             spaceAfter=12,
             alignment=1  # Center
         )
-        
+
         subtitulo_style = ParagraphStyle(
             'CustomSubtitle',
             parent=styles['Heading2'],
@@ -248,16 +248,16 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             textColor=colors.HexColor('#2e5c9a'),
             spaceAfter=10
         )
-        
+
         # Título
         elements.append(Paragraph(f"Relatório Completo: {garanhao_nome}", titulo_style))
         elements.append(Paragraph(f"Gerado em: {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
         elements.append(Spacer(1, 0.5*cm))
-        
+
         # STOCK
         if not dados_stock.empty:
             elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
-            
+
             stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
             for _, row in dados_stock.iterrows():
                 stock_data.append([
@@ -267,7 +267,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('qualidade', '—')),
                     str(row.get('local_armazenagem', 'N/A'))[:20]
                 ])
-            
+
             t = Table(stock_data, colWidths=[4*cm, 3*cm, 2.5*cm, 2.5*cm, 4*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
@@ -281,11 +281,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # INSEMINAÇÕES
         if not dados_insem.empty:
             elements.append(Paragraph("📝 Histórico de Inseminações", subtitulo_style))
-            
+
             insem_data = [['Data', 'Égua', 'Proprietário', 'Palhetas']]
             for _, row in dados_insem.iterrows():
                 insem_data.append([
@@ -294,7 +294,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_nome', 'N/A'))[:25],
                     str(int(row.get('palhetas_gastas', 0)))
                 ])
-            
+
             t = Table(insem_data, colWidths=[3*cm, 5*cm, 5*cm, 3*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -308,11 +308,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # TRANSFERÊNCIAS INTERNAS
         if not dados_transf_int.empty:
             elements.append(Paragraph("🔄 Transferências Internas", subtitulo_style))
-            
+
             transf_data = [['Data', 'De', 'Para', 'Palhetas']]
             for _, row in dados_transf_int.iterrows():
                 transf_data.append([
@@ -321,7 +321,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(row.get('proprietario_destino', 'N/A'))[:20],
                     str(int(row.get('quantidade', 0)))
                 ])
-            
+
             t = Table(transf_data, colWidths=[3*cm, 4.5*cm, 4.5*cm, 3*cm])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -335,11 +335,11 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
             ]))
             elements.append(t)
             elements.append(Spacer(1, 0.5*cm))
-        
+
         # TRANSFERÊNCIAS EXTERNAS
         if not dados_transf_ext.empty:
             elements.append(Paragraph("📤 Transferências Externas (Vendas/Doações)", subtitulo_style))
-            
+
             for _, row in dados_transf_ext.iterrows():
                 transf_ext_data = [['Data', 'De', 'Para', 'Palhetas', 'Tipo']]
                 transf_ext_data.append([
@@ -349,7 +349,7 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     str(int(row.get('quantidade', 0))),
                     str(row.get('tipo', 'N/A'))[:15]
                 ])
-                
+
                 t = Table(transf_ext_data, colWidths=[2.5*cm, 3.5*cm, 3.5*cm, 2.5*cm, 3*cm])
                 t.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
@@ -362,20 +362,20 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
                     ('GRID', (0, 0), (-1, -1), 1, colors.black)
                 ]))
                 elements.append(t)
-                
+
                 # Adicionar observações se existirem
                 obs = row.get('observacoes', '')
                 if obs and str(obs) != 'nan' and str(obs).strip():
                     obs_style = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, leftIndent=10)
                     elements.append(Paragraph(f"<b>Observações:</b> {str(obs)}", obs_style))
-                
+
                 elements.append(Spacer(1, 0.3*cm))
-        
+
         # Gerar PDF
         doc.build(elements)
         buffer.seek(0)
         return buffer
-        
+
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {e}")
         return None
@@ -446,7 +446,7 @@ def registrar_inseminacao(registro):
 
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
             invalidate_data_cache()
@@ -760,24 +760,24 @@ def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
     """Aplica filtro de data em um DataFrame"""
     if df.empty:
         return df
-    
+
     if coluna_data not in df.columns:
         return df
-    
+
     df_filtrado = df.copy()
-    
+
     try:
         # Converter coluna para datetime se necessário
         if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
             df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
-        
+
         # Aplicar filtros
         if data_inicio:
             df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
-        
+
         if data_fim:
             df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
-        
+
         return df_filtrado
     except Exception as e:
         logger.error(f"Erro ao aplicar filtro de data: {e}")
