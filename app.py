@@ -162,6 +162,24 @@ from modules.repositories.settings_repo import (
     update_welcome_completed,
 )
 
+from modules.repositories.owner_repo import (
+    atualizar_status_proprietarios,
+    alternar_status_proprietario,
+    editar_proprietario,
+    atualizar_proprietario_stock,
+    adicionar_proprietario,
+    deletar_proprietario,
+)
+
+from modules.repositories.owner_repo import (
+    atualizar_status_proprietarios,
+    alternar_status_proprietario,
+    editar_proprietario,
+    atualizar_proprietario_stock,
+    adicionar_proprietario,
+    deletar_proprietario,
+)
+
 
 # ------------------------------------------------------------
 # 📥 Funções de carregamento de dados
@@ -190,192 +208,6 @@ def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
     except Exception as e:
         logger.error(f"Erro ao registar histórico de edição: {e}")
 
-
-def atualizar_status_proprietarios():
-    """
-    Desativa automaticamente proprietários quando stock chega a 0.
-    NUNCA reativa automaticamente - controle manual após desativação.
-    """
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            # APENAS desativar proprietários que estão ATIVOS e têm stock = 0
-            # Nunca forçar ativação ou desativação se já está inativo
-            cur.execute("""
-                UPDATE dono SET ativo = FALSE
-                WHERE ativo = TRUE
-                AND id IN (
-                    SELECT d.id FROM dono d
-                    LEFT JOIN (
-                        SELECT dono_id, SUM(existencia_atual) as total_stock
-                        FROM estoque_dono
-                        GROUP BY dono_id
-                    ) s ON d.id = s.dono_id
-                    WHERE COALESCE(s.total_stock, 0) = 0
-                )
-            """)
-            
-            # NÃO ativar automaticamente - apenas controle manual!
-            # Removido: código que ativava automaticamente com stock > 0
-            
-            conn.commit()
-            cur.close()
-            invalidate_data_cache()
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao atualizar status: {e}")
-        return False
-
-def alternar_status_proprietario(proprietario_id):
-    """Alterna o status ativo/inativo de um proprietário"""
-    conn = None
-    cur = None
-    try:
-        # Pegar credenciais
-        db_name = os.getenv("DB_NAME", "embriovet")
-        db_user = os.getenv("DB_USER", "postgres")
-        db_pass = os.getenv("DB_PASSWORD", "123")
-        db_host = os.getenv("DB_HOST", "localhost")
-        db_port = os.getenv("DB_PORT", "5432")
-        
-        logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
-        logger.info(f"🆔 Proprietário ID recebido: {proprietario_id} (tipo: {type(proprietario_id)})")
-        
-        # Converter ID para int
-        prop_id_int = int(proprietario_id)
-        logger.info(f"🆔 Proprietário ID convertido: {prop_id_int} (tipo: {type(prop_id_int)})")
-        
-        # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
-        conn = psycopg2.connect(
-            dbname=db_name,
-            user=db_user,
-            password=db_pass,
-            host=db_host,
-            port=db_port
-        )
-        
-        # FORÇAR AUTOCOMMIT - COMMIT IMEDIATO APÓS CADA COMANDO
-        conn.set_session(autocommit=True)
-        cur = conn.cursor()
-        
-        logger.info(f"✅ AUTOCOMMIT ativado")
-        
-        # Verificar o valor atual
-        sql_select = "SELECT ativo FROM dono WHERE id = %s"
-        logger.info(f"📋 SQL SELECT: {sql_select} com id={prop_id_int}")
-        cur.execute(sql_select, (prop_id_int,))
-        status_antes = cur.fetchone()
-        logger.info(f"📋 Status ANTES: {status_antes}")
-        
-        if not status_antes:
-            logger.error(f"❌ Proprietário com ID {prop_id_int} não encontrado!")
-            cur.close()
-            conn.close()
-            return None
-        
-        # Calcular novo valor
-        novo_valor = not status_antes[0]
-        logger.info(f"🔄 Novo valor calculado: {novo_valor} (tipo: {type(novo_valor)})")
-        
-        # UPDATE direto (SEM to_py)
-        sql_update = "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo"
-        logger.info(f"📝 SQL UPDATE: {sql_update}")
-        logger.info(f"📝 Parâmetros: ativo={novo_valor}, id={prop_id_int}")
-        
-        cur.execute(sql_update, (novo_valor, prop_id_int))
-        
-        resultado = cur.fetchone()
-        logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
-        
-        if resultado:
-            novo_status = resultado[0]
-            logger.info(f"✅ UPDATE executado com sucesso. Novo status: {novo_status}")
-            
-            # Verificar com SELECT
-            cur.execute("SELECT ativo FROM dono WHERE id = %s", (prop_id_int,))
-            status_verificacao = cur.fetchone()
-            logger.info(f"🔍 Verificação final: {status_verificacao}")
-            
-            # Verificar FORA da conexão Python
-            logger.info(f"⚠️ Execute no terminal: psql -U postgres -d embriovet -c \"SELECT id, nome, ativo FROM dono WHERE id={prop_id_int};\"")
-            
-            cur.close()
-            conn.close()
-            logger.info(f"🔒 Conexão fechada")
-            invalidate_data_cache()
-            
-            return novo_status
-        else:
-            if cur:
-                cur.close()
-            if conn:
-                conn.close()
-            logger.error(f"❌ UPDATE não retornou resultado")
-            return None
-            
-    except Exception as e:
-        logger.error(f"💥 ERRO: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        if conn:
-            try:
-                conn.close()
-            except:
-                pass
-        st.error(f"Erro: {e}")
-        return None
-
-def editar_proprietario(proprietario_id, dados):
-    """Edita informações do proprietário"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            
-            # Verificar se já existe outro proprietário com este nome
-            cur.execute(
-                "SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s) AND id != %s", 
-                (to_py(dados.get('nome')), to_py(proprietario_id))
-            )
-            existe = cur.fetchone()
-            
-            if existe:
-                st.error(f"❌ Já existe outro proprietário com o nome '{dados.get('nome')}'")
-                return False
-            
-            cur.execute("""
-                UPDATE dono SET
-                    nome = %s,
-                    email = %s,
-                    telemovel = %s,
-                    nome_completo = %s,
-                    nif = %s,
-                    morada = %s,
-                    codigo_postal = %s,
-                    cidade = %s
-                WHERE id = %s
-            """, (
-                to_py(dados.get('nome')),
-                to_py(dados.get('email')),
-                to_py(dados.get('telemovel')),
-                to_py(dados.get('nome_completo')),
-                to_py(dados.get('nif')),
-                to_py(dados.get('morada')),
-                to_py(dados.get('codigo_postal')),
-                to_py(dados.get('cidade')),
-                to_py(proprietario_id)
-            ))
-            conn.commit()
-            cur.close()
-            invalidate_data_cache()
-            logger.info(f"Proprietário editado: ID {proprietario_id}")
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao editar proprietário: {e}")
-        return False
-
-# `carregar_stock`, `carregar_inseminacoes`, `carregar_transferencias`,
-# `carregar_transferencias_externas` estão em
-# modules.repositories.stock_repo (importadas no topo deste ficheiro).
 
 def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int, dados_transf_ext):
     """Gera PDF com histórico completo do garanhão"""
@@ -533,31 +365,6 @@ def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {e}")
         return None
-
-def atualizar_proprietario_stock(stock_id, novo_dono_id):
-    """Atualiza o proprietario de um item de stock"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE estoque_dono SET dono_id = %s WHERE id = %s",
-                (to_py(novo_dono_id), to_py(stock_id)),
-            )
-            conn.commit()
-            cur.close()
-            invalidate_data_cache()
-            logger.info(f"Proprietário atualizado: stock_id={stock_id}, novo_dono_id={novo_dono_id}")
-            return True
-    except Exception as e:
-        logger.error(f"Erro ao atualizar proprietario: {e}")
-        st.error(f"Erro ao atualizar proprietario: {e}")
-        return False
-
-# ------------------------------------------------------------
-# 💾 Funções de inserção
-# ------------------------------------------------------------
-# `inserir_stock` está em modules.repositories.stock_repo
-# (importada no topo deste ficheiro).
 
 def registrar_inseminacao(registro):
     """Registra uma inseminação e atualiza o stock"""
@@ -927,93 +734,6 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
 # ------------------------------------------------------------
 # 👥 Funções de Gestão de Proprietários
 # ------------------------------------------------------------
-def adicionar_proprietario(dados):
-    """Adiciona novo proprietário com todos os campos"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            
-            # Verificar se já existe proprietário com este nome
-            cur.execute("SELECT id FROM dono WHERE LOWER(nome) = LOWER(%s)", (to_py(dados.get('nome')),))
-            existe = cur.fetchone()
-            
-            if existe:
-                st.error(f"❌ Já existe um proprietário com o nome '{dados.get('nome')}'")
-                return None
-            
-            cur.execute(
-                """
-                INSERT INTO dono (nome, email, telemovel, nome_completo, nif, morada, codigo_postal, cidade, ativo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-                RETURNING id
-                """,
-                (
-                    to_py(dados.get('nome')),
-                    to_py(dados.get('email')),
-                    to_py(dados.get('telemovel')),
-                    to_py(dados.get('nome_completo')),
-                    to_py(dados.get('nif')),
-                    to_py(dados.get('morada')),
-                    to_py(dados.get('codigo_postal')),
-                    to_py(dados.get('cidade'))
-                ),
-            )
-            proprietario_id = cur.fetchone()[0]
-            conn.commit()
-            cur.close()
-            invalidate_data_cache()
-            logger.info(f"Proprietário adicionado: {dados.get('nome')}")
-            return proprietario_id
-    except Exception as e:
-        logger.error(f"Erro ao adicionar proprietário: {e}")
-        st.error(f"Erro ao adicionar proprietário: {e}")
-        return None
-
-def deletar_proprietario(proprietario_id):
-    """Deleta proprietário (apenas se não tiver stock)"""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            cur.execute("SELECT COUNT(*) FROM estoque_dono WHERE dono_id = %s", (to_py(proprietario_id),))
-            count = cur.fetchone()[0] or 0
-
-            if count > 0:
-                st.error(f"❌ Não é possível deletar! Este proprietário tem {count} lotes de stock.")
-                return False
-
-            cur.execute("SELECT COUNT(*) FROM inseminacoes WHERE dono_id = %s", (to_py(proprietario_id),))
-            count_insem = cur.fetchone()[0] or 0
-
-            if count_insem > 0:
-                st.error(f"❌ Não é possível deletar! Este proprietário tem {count_insem} inseminações registadas.")
-                return False
-
-            cur.execute("DELETE FROM dono WHERE id = %s", (to_py(proprietario_id),))
-            conn.commit()
-            cur.close()
-            invalidate_data_cache()
-            logger.info(f"Proprietário deletado: ID {proprietario_id}")
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao deletar proprietário: {e}")
-        st.error(f"Erro ao deletar proprietário: {e}")
-        return False
-
-# ------------------------------------------------------------
-# 📝 Funções de Edição de Stock
-# ------------------------------------------------------------
-# `editar_stock` e `deletar_stock` estão em
-# modules.repositories.stock_repo (importadas no topo deste ficheiro).
-
-# ------------------------------------------------------------
-# 🗺️ Funções de Gestão de Contentores
-# ------------------------------------------------------------
-
-# `carregar_contentores` está em modules.repositories.stock_repo
-# (importada no topo deste ficheiro).
-
 def adicionar_contentor(dados):
     """Adiciona novo contentor"""
     try:
