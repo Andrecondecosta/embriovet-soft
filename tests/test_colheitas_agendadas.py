@@ -164,7 +164,10 @@ def test_trabalho_diario_page_trata_tipo_colheita():
 
 
 def test_add_stock_view_lida_com_prefill_colheita():
-    src = Path("/app/app.py").read_text()
+    # Após Pedido 9 · Fase 1, a view mudou de `app.py` para
+    # `modules/pages/add_stock_view.py` (extração pura, zero
+    # alteração de lógica).
+    src = Path("/app/modules/pages/add_stock_view.py").read_text()
     # Prefill respeitado no default_idx da selectbox
     assert 'colheita_garanhao_prefill' in src
     # Após save, conclusão da tarefa
