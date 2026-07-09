@@ -12,6 +12,49 @@ from typing import Callable, Optional
 import streamlit as st
 
 from modules.db import get_connection
+from modules.i18n import t
+from modules.repositories.owner_repo import adicionar_proprietario
+
+
+# ------------------------------------------------------------
+# 💬 Modal "criação rápida" (versão legada extraída de app.py em Pedido 9)
+# ------------------------------------------------------------
+@st.dialog(t("owners.add_new_title"))
+def modal_adicionar_proprietario():
+    """Modal para adicionar novo proprietário rapidamente.
+
+    Extraído bit-for-bit de `app.py` (Pedido 9 · Fase 1). Preserva o
+    comportamento anterior — nome curto único, callback via
+    ``st.session_state['novo_proprietario_id']`` — para não quebrar os
+    fluxos de `add_stock_view` / `owners_view`.
+    """
+    novo_nome = st.text_input(t("owners.name_required"), key="modal_novo_prop")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(t("btn.add"), type="primary", width="stretch"):
+            if not novo_nome:
+                st.error(t("error.name_required"))
+            else:
+                dados_novo = {
+                    "nome": novo_nome,
+                    "email": None,
+                    "telemovel": None,
+                    "nome_completo": None,
+                    "nif": None,
+                    "morada": None,
+                    "codigo_postal": None,
+                    "cidade": None,
+                }
+                prop_id = adicionar_proprietario(dados_novo)
+                if prop_id:
+                    st.session_state["novo_proprietario_id"] = prop_id
+                    st.session_state["novo_proprietario_nome"] = novo_nome
+                    st.success(t("owners.added", name=novo_nome))
+                    st.rerun()
+    with col2:
+        if st.button(t("btn.cancel"), width="stretch"):
+            st.rerun()
 
 
 def _existe_dono_com_nome(nome: str) -> bool:

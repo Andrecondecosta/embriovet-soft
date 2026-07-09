@@ -1,6 +1,9 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
+**Fev 2026** — **Pedido 9 · Fase 1 (fix boot pós-extração)** concluído. Após a extração de `add_stock_view`, `owners_view` e `users_view` de `app.py`, o boot do Streamlit crashava com `ImportError: cannot import name 'modal_adicionar_proprietario'`. Fix: função legada `modal_adicionar_proprietario` movida de `app.py` para `modules/components/modal_proprietario.py` (bit-for-bit, mesmo `@st.dialog`, mesma lógica). Import de compatibilidade adicionado em `app.py`. `import pandas as pd` que estava a faltar em `add_stock_view.py` também foi adicionado. **91/91 pytest passing**. Smoke test HTTP 200 com sidebar "Stock de sémen" visível e Dashboard a renderizar KPIs (1369 palhetas, 18 lotes, 3 tarefas de hoje). Fase 2 (`globals().update(ctx)` página a página) pronta para arrancar após validação do utilizador.
+
+## Última Atualização Anterior
 **Fev 2026** — **Pedido 8 (Colheitas agendadas do garanhão)** concluído. Novo tipo de tarefa `colheita` em `trabalho_diario`. Migration 030 acrescenta o tipo ao CHECK e torna `estadia_id` nullable (opção documentada de menor impacto, aprovada dentro do critério do enunciado). Novo `modules/repositories/colheita_repo.py` com agendar/listar/cancelar/concluir. Widget reutilizável em `modules/components/colheitas_widget.py` na ficha do garanhão. Trabalho Diário renderiza cartão "Colheita — [nome]" e clique abre form Adicionar lote com garanhão pré-selecionado e conclui a tarefa no save. **87/87 pytest passing** (75 baseline + 12 novos em `test_colheitas_agendadas.py`). 3 bugs de integração encontrados e corrigidos no mesmo ciclo.
 
 ## Changelog Recente (Fev 2026 — Pedido 8)

@@ -1621,32 +1621,13 @@ if st.session_state.pop("_just_navigated", False):
     )
 
 # ------------------------------------------------------------
-# 💬 Modal para adicionar proprietário
+# 💬 Modal "adicionar proprietário" — extraído para
+# `modules/components/modal_proprietario.py` no Pedido 9 · Fase 1.
+# Importado ao nível do módulo para manter compatibilidade dos fluxos
+# antigos que referenciavam `modal_adicionar_proprietario` no escopo do
+# `__main__` (ex.: quando o utilizador chega via router legado).
 # ------------------------------------------------------------
-@st.dialog(t("owners.add_new_title"))
-def modal_adicionar_proprietario():
-    """Modal para adicionar novo proprietário rapidamente"""
-    novo_nome = st.text_input(t("owners.name_required"), key="modal_novo_prop")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(t("btn.add"), type="primary", width="stretch"):
-            if not novo_nome:
-                st.error(t("error.name_required"))
-            else:
-                # Criar dados mínimos
-                dados_novo = {'nome': novo_nome, 'email': None, 'telemovel': None, 
-                              'nome_completo': None, 'nif': None, 'morada': None,
-                              'codigo_postal': None, 'cidade': None}
-                prop_id = adicionar_proprietario(dados_novo)
-                if prop_id:
-                    st.session_state['novo_proprietario_id'] = prop_id
-                    st.session_state['novo_proprietario_nome'] = novo_nome
-                    st.success(t("owners.added", name=novo_nome))
-                    st.rerun()
-    with col2:
-        if st.button(t("btn.cancel"), width="stretch"):
-            st.rerun()
+from modules.components.modal_proprietario import modal_adicionar_proprietario  # noqa: E402,F401
 
 # Carregar dados
 try:
