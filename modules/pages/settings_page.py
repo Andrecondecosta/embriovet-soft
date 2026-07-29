@@ -4,6 +4,15 @@ import streamlit as st
 
 from modules.db import get_connection
 from modules.i18n import t
+from modules.repositories.settings_repo import (
+    get_app_settings,
+    update_branding_settings,
+)
+from modules.ui_kit import (
+    inject_reports_css,
+    inject_stock_css,
+    render_zone_title,
+)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -199,7 +208,10 @@ def _render_tab_alojamentos() -> None:
 
 
 def run_settings_page(ctx: dict):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido na assinatura por compatibilidade
+    # com o router, mas as dependências já vêm por import explícito no
+    # topo do módulo. Nenhum `globals().update(ctx)`.
+    del ctx
 
     st.header(t("settings.title"))
 
@@ -218,6 +230,7 @@ def _run_settings_geral():
 
     render_zone_title(t("settings.branding"), "insem-zone-title")
 
+    app_settings = get_app_settings() or {}
     current_company = app_settings.get("company_name") if app_settings else t("common.system")
     current_lang = app_settings.get("language", "pt-PT") if app_settings else "pt-PT"
     current_logo = app_settings.get("logo_base64") if app_settings else None

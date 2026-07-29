@@ -8,9 +8,12 @@
 
 As permissões são respeitadas pelo próprio orquestrador — utilizadores
 não-admin não vêem o separador **Utilizadores**. O conteúdo dos tabs
-Proprietários e Utilizadores delega para as funções `_render_owners_view`
-e `_render_users_view` definidas em `app.py` (movidas em Pedido 7 sem
-alteração de lógica).
+Proprietários e Utilizadores delega para as vistas extraídas
+`_render_owners_view` e `_render_users_view` em `modules/pages/`.
+
+Pedido 9 · Fase 2: `ctx` já não é usado. As dependências vêm por import
+explícito (`_run_settings_geral`, `_render_tab_alojamentos` e as vistas
+importam o que precisam).
 """
 
 from __future__ import annotations
@@ -18,32 +21,25 @@ from __future__ import annotations
 import streamlit as st
 
 from modules.i18n import t
-from modules.pages import settings_page as _settings_module
 from modules.pages.settings_page import (
     _render_tab_alojamentos,
     _run_settings_geral,
 )
+from modules.services.auth_service import verificar_permissao
 
 
 def run_definicoes_page(ctx: dict) -> None:
     """Entry-point da nova página Definições (Pedido 7)."""
-    # Injectar globals para as funções que dependem de `app_settings`,
-    # `update_branding_settings`, etc. (padrão herdado do settings_page).
-    globals().update(ctx)
-    # Também injectar no namespace do `settings_page` — o padrão
-    # `globals().update(ctx)` legado exige que `_run_settings_geral`
-    # e `_render_tab_alojamentos` vejam `inject_stock_css`,
-    # `app_settings`, `update_branding_settings`, etc. no seu próprio
-    # módulo. Sem isto, o tab Marca dá `NameError`.
-    _settings_module.__dict__.update(ctx)
+    # `ctx` mantido na assinatura por compatibilidade com o router,
+    # mas nada é injetado — imports explícitos no topo cobrem tudo.
+    del ctx
 
     st.header(t("settings.title"))
 
     # Consumir eventual redirect para separador específico.
     _pending_tab = st.session_state.pop("definicoes_tab", None)
 
-    verificar_permissao = ctx.get("verificar_permissao")
-    is_admin = verificar_permissao and verificar_permissao("Administrador")
+    is_admin = bool(verificar_permissao("Administrador"))
 
     labels = ["Marca", "Alojamentos", "Proprietários"]
     if is_admin:

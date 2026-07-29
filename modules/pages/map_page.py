@@ -1,8 +1,30 @@
 # Typed page module (Fase 3)
+import json
+import logging
+import time
+
+import streamlit as st
+
 from modules.i18n import t
+from modules.repositories.container_repo import (
+    adicionar_contentor,
+    atualizar_posicao_contentor,
+)
+from modules.repositories.settings_repo import get_app_settings
+from modules.repositories.stock_repo import (
+    carregar_contentores,
+    obter_stock_contentor,
+)
+
+logger = logging.getLogger(__name__)
+
 
 def run_map_page(ctx: dict):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
+    # injetado — imports explícitos no topo cobrem tudo.
+    del ctx
+    app_settings = get_app_settings() or {}
+
     # Carregar contentores
     contentores_df = carregar_contentores()
 

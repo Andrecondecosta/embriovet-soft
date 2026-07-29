@@ -1,13 +1,28 @@
 from modules.i18n import t
 import streamlit as st
 import pandas as pd
-from modules.db import invalidate_data_cache
+from modules.components.modal_proprietario import modal_adicionar_proprietario
+from modules.db import get_connection, invalidate_data_cache
+from modules.repositories.audit_repo import registar_historico_edicao
 from modules.repositories.dashboard_repo import carregar_atividade_recente_agrupada
+from modules.repositories.stock_repo import (
+    carregar_contentores,
+    carregar_proprietarios,
+    transferir_stock_externo,
+    transferir_stock_interno,
+    transferir_stock_interno_com_localizacao,
+)
 from modules.repositories.transfer_repo import reverter_operacao
+from modules.ui_kit import render_zone_title
 
 
 def run_transfer_page(ctx):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
+    # injetado — imports explícitos no topo cobrem tudo. Recarregamos
+    # `contentores` e `proprietarios` explicitamente (usam `@st.cache_data`).
+    del ctx
+    contentores = carregar_contentores(apenas_ativos=True)
+    proprietarios = carregar_proprietarios(apenas_ativos=True)
 
     st.header(t("transfer.title"))
     
