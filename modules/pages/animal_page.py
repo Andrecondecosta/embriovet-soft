@@ -1434,6 +1434,9 @@ def _render_tab_alertas_garanhao(animal: dict) -> None:
 
 def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
     """Página de detalhe de um animal com 4 tabs (variam consoante o tipo)."""
+    # Pedido 9 · Fase 2: `context` já não é usado — assinatura mantida por
+    # compat com os callers (estadias_page, trabalho_diario_page, sidebar).
+    del context
 
     animal = _carregar_animal(animal_id)
     if not animal:

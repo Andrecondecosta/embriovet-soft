@@ -1,6 +1,23 @@
 # PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
+**Fev 2026** — **Pedido 9 · Fase 2 (globals().update(ctx) eliminado)** ✅ concluído. Todas as páginas em `modules/pages/` migradas para imports explícitos no topo; nenhum `globals().update(ctx)` ou `__dict__.update(ctx)` restante no código (só um comentário histórico em `settings_page.py:213`). Extrações auxiliares realizadas para viabilizar imports puros: `registar_historico_edicao` → `modules/repositories/audit_repo.py`, `registrar_inseminacao_multiplas` → `modules/repositories/insemination_repo.py`, `gerar_pdf_garanhao` + `aplicar_filtro_data` → `modules/pages/reports_page.py`. `app.py` continua a re-exportar tudo por compat com o namespace `__main__` legado. **91/91 pytest passing** em cada uma das 11 páginas refatoradas. Smoke test HTTP 200 e screenshots validando Dashboard, Definições, Relatórios, Stock de sémen (Lotes/Transferências) — todas renderizam com dados reais.
+
+### Ordem executada (1 página por commit, pytest + smoke entre cada)
+1. ✅ `settings_page` + `definicoes_page`
+2. ✅ `reports_page` (+ extração de PDF/filtro)
+3. ✅ `import_page`
+4. ✅ `insemination_page` (+ extração de `registrar_inseminacao_multiplas`)
+5. ✅ `transfer_page` (+ uso de `audit_repo`)
+6. ✅ `stock_semen_page` (já era compliant — só passa ctx adiante)
+7. ✅ `estadias_page` (já era compliant)
+8. ✅ `trabalho_diario_page` (já era compliant)
+9. ✅ `animal_page` (`context` param dead — `del context`)
+10. ✅ `dashboard_page` (substituído `ctx.get("app_settings")` por `get_app_settings()`)
+11. ✅ `map_page`
+    **Bónus:** ✅ `stock_page` (também tinha `globals().update(ctx)`)
+
+## Última Atualização Anterior
 **Fev 2026** — **Pedido 9 · Fase 1 (fix boot pós-extração)** concluído. Após a extração de `add_stock_view`, `owners_view` e `users_view` de `app.py`, o boot do Streamlit crashava com `ImportError: cannot import name 'modal_adicionar_proprietario'`. Fix: função legada `modal_adicionar_proprietario` movida de `app.py` para `modules/components/modal_proprietario.py` (bit-for-bit, mesmo `@st.dialog`, mesma lógica). Import de compatibilidade adicionado em `app.py`. `import pandas as pd` que estava a faltar em `add_stock_view.py` também foi adicionado. **91/91 pytest passing**. Smoke test HTTP 200 com sidebar "Stock de sémen" visível e Dashboard a renderizar KPIs (1369 palhetas, 18 lotes, 3 tarefas de hoje). Fase 2 (`globals().update(ctx)` página a página) pronta para arrancar após validação do utilizador.
 
 ## Última Atualização Anterior

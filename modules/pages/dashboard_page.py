@@ -38,6 +38,7 @@ from modules.repositories.dashboard_repo import (
     carregar_stock_por_proprietario,
     carregar_tarefas_hoje,
 )
+from modules.repositories.settings_repo import get_app_settings
 
 # Labels curtas para o tipo de tarefa (mais legíveis que o valor bruto).
 _LABEL_TIPO_TAREFA = {
@@ -454,11 +455,11 @@ def _render_acoes_rapidas() -> None:
 def run_dashboard_page(ctx: dict) -> None:
     """Entry-point da página (chamado pelo router).
 
-    NOTA: `ctx` é actualmente usado apenas para `app_settings`. Todos os
-    dados vêm agora do repositório e não do contexto injectado (o que
-    permitiu remover a dependência forte de `globals().update(ctx)`).
+    Pedido 9 · Fase 2: `ctx` já não é usado. `app_settings` vem via
+    `get_app_settings()` (cacheado em `settings_repo`).
     """
-    app_settings = (ctx or {}).get("app_settings") or {}
+    del ctx
+    app_settings = get_app_settings() or {}
     company_name = app_settings.get("company_name") or "Sistema"
     primary_color = app_settings.get("primary_color") or "#1D4ED8"
 

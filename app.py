@@ -185,6 +185,14 @@ from modules.pages.add_stock_view import _render_add_stock_view
 from modules.pages.owners_view import _render_owners_view
 from modules.pages.users_view import _render_users_view
 
+# Helpers extraídos para modules.pages.reports_page (Pedido 9 · Fase 2)
+# Reimportados aqui apenas para preservar o namespace legado do
+# `__main__` (nenhum consumidor externo depende disto, mas mantém
+# a compat com scripts que faziam `from app import ...`).
+from modules.pages.reports_page import (  # noqa: F401
+    aplicar_filtro_data, gerar_pdf_garanhao,
+)
+
 from modules.repositories.owner_repo import (
     atualizar_status_proprietarios,
     alternar_status_proprietario,
@@ -202,183 +210,19 @@ from modules.repositories.owner_repo import (
 # (importada no topo deste ficheiro).
 
 
-def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
-    """Regista uma edição no histórico de auditoria"""
-    try:
-        utilizador = st.session_state.get('user', {}).get('username', '—')
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO historico_edicoes (tabela_nome, record_id, dados_antigos, dados_novos, utilizador_nome)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (
-                tabela, record_id,
-                json.dumps(dados_antigos, default=str),
-                json.dumps(dados_novos, default=str),
-                utilizador
-            ))
-            conn.commit()
-            cur.close()
-    except Exception as e:
-        logger.error(f"Erro ao registar histórico de edição: {e}")
+# `registar_historico_edicao` movida para
+# `modules/repositories/audit_repo.py` (Pedido 9 · Fase 2).
+from modules.repositories.audit_repo import registar_historico_edicao  # noqa: E402,F401
+
+# `registrar_inseminacao_multiplas` movida para
+# `modules/repositories/insemination_repo.py` (Pedido 9 · Fase 2).
+from modules.repositories.insemination_repo import (  # noqa: E402,F401
+    registrar_inseminacao_multiplas,
+)
 
 
-def gerar_pdf_garanhao(garanhao_nome, dados_stock, dados_insem, dados_transf_int, dados_transf_ext):
-    """Gera PDF com histórico completo do garanhão"""
-    try:
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
-        elements = []
-        styles = getSampleStyleSheet()
-
-        # Estilo customizado
-        titulo_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=18,
-            textColor=colors.HexColor('#1f4788'),
-            spaceAfter=12,
-            alignment=1  # Center
-        )
-
-        subtitulo_style = ParagraphStyle(
-            'CustomSubtitle',
-            parent=styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor('#2e5c9a'),
-            spaceAfter=10
-        )
-
-        # Título
-        elements.append(Paragraph(f"Relatório Completo: {garanhao_nome}", titulo_style))
-        elements.append(Paragraph(f"Gerado em: {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
-        elements.append(Spacer(1, 0.5*cm))
-
-        # STOCK
-        if not dados_stock.empty:
-            elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
-
-            stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
-            for _, row in dados_stock.iterrows():
-                stock_data.append([
-                    str(row.get('proprietario_nome', 'N/A'))[:30],
-                    str(row.get('data_embriovet', 'N/A'))[:10],
-                    str(int(row.get('existencia_atual', 0))),
-                    str(row.get('qualidade', '—')),
-                    str(row.get('local_armazenagem', 'N/A'))[:20]
-                ])
-
-            t = Table(stock_data, colWidths=[4*cm, 3*cm, 2.5*cm, 2.5*cm, 4*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4788')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 0.5*cm))
-
-        # INSEMINAÇÕES
-        if not dados_insem.empty:
-            elements.append(Paragraph("📝 Histórico de Inseminações", subtitulo_style))
-
-            insem_data = [['Data', 'Égua', 'Proprietário', 'Palhetas']]
-            for _, row in dados_insem.iterrows():
-                insem_data.append([
-                    str(row.get('data_inseminacao', 'N/A'))[:10],
-                    str(row.get('egua', 'N/A'))[:25],
-                    str(row.get('proprietario_nome', 'N/A'))[:25],
-                    str(int(row.get('palhetas_gastas', 0)))
-                ])
-
-            t = Table(insem_data, colWidths=[3*cm, 5*cm, 5*cm, 3*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 0.5*cm))
-
-        # TRANSFERÊNCIAS INTERNAS
-        if not dados_transf_int.empty:
-            elements.append(Paragraph("🔄 Transferências Internas", subtitulo_style))
-
-            transf_data = [['Data', 'De', 'Para', 'Palhetas']]
-            for _, row in dados_transf_int.iterrows():
-                transf_data.append([
-                    str(row.get('data_transferencia', 'N/A'))[:10],
-                    str(row.get('proprietario_origem', 'N/A'))[:20],
-                    str(row.get('proprietario_destino', 'N/A'))[:20],
-                    str(int(row.get('quantidade', 0)))
-                ])
-
-            t = Table(transf_data, colWidths=[3*cm, 4.5*cm, 4.5*cm, 3*cm])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            elements.append(t)
-            elements.append(Spacer(1, 0.5*cm))
-
-        # TRANSFERÊNCIAS EXTERNAS
-        if not dados_transf_ext.empty:
-            elements.append(Paragraph("📤 Transferências Externas (Vendas/Doações)", subtitulo_style))
-
-            for _, row in dados_transf_ext.iterrows():
-                transf_ext_data = [['Data', 'De', 'Para', 'Palhetas', 'Tipo']]
-                transf_ext_data.append([
-                    str(row.get('data_transferencia', 'N/A'))[:10],
-                    str(row.get('proprietario_origem', 'N/A'))[:18],
-                    str(row.get('destinatario_externo', 'N/A'))[:18],
-                    str(int(row.get('quantidade', 0))),
-                    str(row.get('tipo', 'N/A'))[:15]
-                ])
-
-                t = Table(transf_ext_data, colWidths=[2.5*cm, 3.5*cm, 3.5*cm, 2.5*cm, 3*cm])
-                t.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2e5c9a')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                elements.append(t)
-
-                # Adicionar observações se existirem
-                obs = row.get('observacoes', '')
-                if obs and str(obs) != 'nan' and str(obs).strip():
-                    obs_style = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, leftIndent=10)
-                    elements.append(Paragraph(f"<b>Observações:</b> {str(obs)}", obs_style))
-
-                elements.append(Spacer(1, 0.3*cm))
-
-        # Gerar PDF
-        doc.build(elements)
-        buffer.seek(0)
-        return buffer
-
-    except Exception as e:
-        logger.error(f"Erro ao gerar PDF: {e}")
-        return None
+# `gerar_pdf_garanhao` movida para `modules/pages/reports_page.py`
+# (Pedido 9 · Fase 2). Import feito no topo deste ficheiro.
 
 def registrar_inseminacao(registro):
     """Registra uma inseminação e atualiza o stock"""
@@ -460,235 +304,10 @@ def registrar_inseminacao(registro):
         return False
 
 
-def registrar_inseminacao_multiplas(registros, data_inseminacao, egua, insemination_id=None, observacoes=None, edit_operation_id=None):
-    """Registra múltiplas linhas de inseminação ou atualiza uma operação existente.
-    
-    - edit_operation_id: UUID da operação a editar (apaga todos os lotes e re-insere)
-    - insemination_id: ID da linha individual a editar (backward compat para operações antigas)
-    """
-    try:
-        if not egua:
-            st.error(t("error.mare_required"))
-            return False
-        if not registros:
-            st.error(t("error.select_lot_line"))
-            return False
+# `registrar_inseminacao_multiplas` movida para
+# `modules/repositories/insemination_repo.py` (Pedido 9 · Fase 2).
+# Reimportada no topo deste ficheiro.
 
-        total_pal = sum(int(r.get("palhetas", 0)) for r in registros)
-
-        with get_connection() as conn:
-            cur = conn.cursor()
-
-            # ─── MODO EDIÇÃO COM operation_id ────────────────────────────────────
-            if edit_operation_id:
-                # 1. Carregar dados antigos de TODOS os lotes da operação
-                cur.execute("""
-                    SELECT i.id, i.estoque_id, i.palhetas_gastas,
-                           i.garanhao, i.dono_id, i.egua, i.data_inseminacao,
-                           i.protocolo, i.observacoes, d.nome AS dono_nome
-                    FROM inseminacoes i
-                    LEFT JOIN dono d ON i.dono_id = d.id
-                    WHERE i.operation_id = %s
-                    ORDER BY i.id
-                """, (edit_operation_id,))
-                old_rows = cur.fetchall()
-
-                if not old_rows:
-                    # operation_id não encontrado → fallback para single-row edit
-                    edit_operation_id = None
-                else:
-                    old_for_audit = old_rows[0]  # usar primeiro para auditoria
-
-                    # 2. Devolver palhetas de TODOS os lotes antigos ao stock
-                    for row in old_rows:
-                        if row[1]:  # estoque_id not null
-                            cur.execute(
-                                "UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s",
-                                (int(row[2] or 0), row[1])
-                            )
-
-                    # 3. Eliminar TODOS os registos antigos da operação
-                    cur.execute(
-                        "DELETE FROM inseminacoes WHERE operation_id = %s",
-                        (edit_operation_id,)
-                    )
-
-                    # 4. Re-inserir todos os novos lotes com o mesmo operation_id
-                    first_new_id = None
-                    for reg in registros:
-                        stock_id = to_py(reg.get("stock_id"))
-                        palhetas = int(reg.get("palhetas", 0))
-                        cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
-                        result = cur.fetchone()
-                        if not result:
-                            st.error(f"❌ Lote #{stock_id} não encontrado")
-                            return False
-                        if int(result[0] or 0) < palhetas:
-                            st.error(f"❌ Estoque insuficiente no lote #{stock_id}! Disponível: {int(result[0] or 0)}")
-                            return False
-                        cur.execute("""
-                            INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
-                                protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE)
-                            RETURNING id
-                        """, (
-                            to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
-                            to_py(data_inseminacao), to_py(egua),
-                            to_py(reg.get("protocolo")), palhetas,
-                            to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
-                            stock_id, edit_operation_id,
-                        ))
-                        new_row = cur.fetchone()
-                        if first_new_id is None and new_row:
-                            first_new_id = new_row[0]
-                        cur.execute(
-                            "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                            (palhetas, stock_id)
-                        )
-
-                    conn.commit()
-
-                    # Auditoria - usar o ID do NOVO registo para que apareça no dashboard
-                    first = old_for_audit
-                    audit_record_id = first_new_id or first[0]
-                    cur2 = conn.cursor()
-                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(registros[0].get("dono_id")),))
-                    new_dono = (cur2.fetchone() or ['—'])[0]
-                    cur2.close()
-                    registar_historico_edicao('inseminacoes', audit_record_id, {
-                        'Égua': str(first[5] or '—'), 'Garanhão': str(first[3] or '—'),
-                        'Palhetas': int(first[2] or 0), 'Data': str(first[6] or ''),
-                        'Proprietário': str(first[9] or '—'), 'Observações': str(first[8] or '—'),
-                    }, {
-                        'Égua': str(egua or '—'), 'Garanhão': str(registros[0].get("garanhao", '—')),
-                        'Palhetas': total_pal, 'Data': str(data_inseminacao or ''),
-                        'Proprietário': str(new_dono or '—'), 'Observações': str(observacoes or '—'),
-                    })
-                    logger.info(f"✏️ Operação ATUALIZADA (op={edit_operation_id}): égua={egua}, total={total_pal}")
-                    cur.close()
-                    atualizar_status_proprietarios()
-                    invalidate_data_cache()
-                    return True
-
-            # ─── MODO EDIÇÃO SINGLE ROW (backward compat) ────────────────────────
-            if insemination_id and not edit_operation_id:
-                cur.execute("""
-                    SELECT i.garanhao, i.dono_id, i.palhetas_gastas, i.egua,
-                           i.data_inseminacao, i.protocolo,
-                           d.nome AS dono_nome, i.observacoes, i.estoque_id
-                    FROM inseminacoes i
-                    LEFT JOIN dono d ON i.dono_id = d.id
-                    WHERE i.id = %s
-                """, (insemination_id,))
-                old_data = cur.fetchone()
-
-                if old_data:
-                    old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes, old_estoque_id = old_data
-                    if old_estoque_id:
-                        cur.execute(
-                            "UPDATE estoque_dono SET existencia_atual = existencia_atual + %s WHERE id = %s",
-                            (int(old_palhetas), old_estoque_id)
-                        )
-
-                primeiro_registro = registros[0]
-                cur.execute("""
-                    UPDATE inseminacoes
-                    SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
-                        egua = %s, palhetas_gastas = %s, observacoes = %s,
-                        atualizado = TRUE, utilizador = %s, estoque_id = %s
-                    WHERE id = %s
-                """, (
-                    to_py(primeiro_registro.get("garanhao")), to_py(primeiro_registro.get("dono_id")),
-                    to_py(data_inseminacao), to_py(egua), total_pal,
-                    to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
-                    to_py(primeiro_registro.get("stock_id")), insemination_id
-                ))
-
-                for reg in registros:
-                    stock_id = to_py(reg.get("stock_id"))
-                    palhetas = int(reg.get("palhetas", 0))
-                    cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
-                    result = cur.fetchone()
-                    if not result:
-                        st.error(f"❌ Lote #{stock_id} não encontrado")
-                        return False
-                    if int(result[0] or 0) < palhetas:
-                        st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
-                        return False
-                    cur.execute(
-                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                        (palhetas, stock_id)
-                    )
-
-                conn.commit()
-
-                if old_data:
-                    cur2 = conn.cursor()
-                    cur2.execute("SELECT nome FROM dono WHERE id = %s", (to_py(primeiro_registro.get("dono_id")),))
-                    new_dono_nome = (cur2.fetchone() or ['—'])[0]
-                    cur2.close()
-                    registar_historico_edicao('inseminacoes', insemination_id, {
-                        'Égua': str(old_egua or '—'), 'Garanhão': str(old_garanhao or '—'),
-                        'Palhetas': int(old_palhetas or 0), 'Data': str(old_data_insem or ''),
-                        'Protocolo': str(old_protocolo or '—'), 'Proprietário': str(old_dono_nome or '—'),
-                        'Observações': str(old_observacoes or '—'),
-                    }, {
-                        'Égua': str(egua or '—'), 'Garanhão': str(primeiro_registro.get("garanhao", '—')),
-                        'Palhetas': total_pal, 'Data': str(data_inseminacao or ''),
-                        'Protocolo': str(primeiro_registro.get("protocolo", '—')),
-                        'Proprietário': str(new_dono_nome or '—'), 'Observações': str(observacoes or '—'),
-                    })
-
-                logger.info(f"✏️ Inseminação ATUALIZADA: ID {insemination_id}, égua={egua}")
-                cur.close()
-                atualizar_status_proprietarios()
-                invalidate_data_cache()
-                return True
-
-            # ─── MODO CRIAÇÃO ─────────────────────────────────────────────────────
-            import uuid as _uuid
-            new_operation_id = str(_uuid.uuid4())
-
-            for reg in registros:
-                stock_id = to_py(reg.get("stock_id"))
-                palhetas = int(reg.get("palhetas", 0))
-
-                cur.execute("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (stock_id,))
-                result = cur.fetchone()
-                if not result:
-                    st.error(f"❌ Lote #{stock_id} não encontrado")
-                    return False
-                if int(result[0] or 0) < palhetas:
-                    st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
-                    return False
-
-                cur.execute("""
-                    INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
-                        protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid)
-                """, (
-                    to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
-                    to_py(data_inseminacao), to_py(egua),
-                    to_py(reg.get("protocolo")), palhetas,
-                    to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
-                    stock_id, new_operation_id,
-                ))
-                cur.execute(
-                    "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                    (palhetas, stock_id)
-                )
-
-            conn.commit()
-            cur.close()
-            atualizar_status_proprietarios()
-            invalidate_data_cache()
-            logger.info(f"✅ Inseminação criada (op={new_operation_id}): {egua} - {total_pal} palhetas")
-            return True
-
-    except Exception as e:
-        logger.error(f"Erro ao processar inseminação: {e}")
-        st.error(f"Erro ao processar inseminação: {e}")
-        return False
 
 def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, protocolo, palhetas, stock_id):
     """Registra UMA linha de inseminação"""
@@ -756,32 +375,8 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
 # `obter_stock_contentor` está em modules.repositories.stock_repo
 # (importada no topo deste ficheiro).
 
-def aplicar_filtro_data(df, coluna_data, data_inicio=None, data_fim=None):
-    """Aplica filtro de data em um DataFrame"""
-    if df.empty:
-        return df
-
-    if coluna_data not in df.columns:
-        return df
-
-    df_filtrado = df.copy()
-
-    try:
-        # Converter coluna para datetime se necessário
-        if not pd.api.types.is_datetime64_any_dtype(df_filtrado[coluna_data]):
-            df_filtrado[coluna_data] = pd.to_datetime(df_filtrado[coluna_data], errors='coerce')
-
-        # Aplicar filtros
-        if data_inicio:
-            df_filtrado = df_filtrado[df_filtrado[coluna_data] >= pd.Timestamp(data_inicio)]
-
-        if data_fim:
-            df_filtrado = df_filtrado[df_filtrado[coluna_data] <= pd.Timestamp(data_fim)]
-
-        return df_filtrado
-    except Exception as e:
-        logger.error(f"Erro ao aplicar filtro de data: {e}")
-        return df
+# `aplicar_filtro_data` movida para `modules/pages/reports_page.py`
+# (Pedido 9 · Fase 2). Import feito no topo deste ficheiro.
 
 
 # As 3 funções de transferência (`transferir_palhetas_parcial`,

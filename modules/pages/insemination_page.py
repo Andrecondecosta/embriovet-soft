@@ -1,6 +1,18 @@
+import logging
+
 import pandas as pd
 import streamlit as st
+
+from modules.db import get_connection, to_py
 from modules.i18n import t
+from modules.repositories.insemination_repo import (
+    registrar_inseminacao_multiplas,
+)
+from modules.repositories.owner_repo import atualizar_status_proprietarios
+from modules.repositories.stock_repo import carregar_stock
+from modules.ui_kit import inject_stepper_css, render_zone_title
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -75,7 +87,11 @@ def _render_painel_confirmacao_insem(conf: dict) -> None:
 
 
 def run_insemination_page(ctx):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
+    # injetado — imports explícitos no topo cobrem tudo. `stock` é
+    # recarregado sempre (não é caro, aproveita `@st.cache_data`).
+    del ctx
+    stock = carregar_stock(apenas_ativos=True)
 
     st.header(t("insemination.title"))
     inject_stepper_css()

@@ -1,13 +1,25 @@
 # /app/modules/pages/import_page.py
 # Intelligent Import Wizard — Fase 4 da modularização
 import datetime
+import logging
 import unicodedata
 import importlib.util
 import html as _html_lib
 from io import BytesIO
+
 import pandas as pd
+import streamlit as st
+
+from modules.db import get_connection, invalidate_data_cache, to_py
 from modules.i18n import t
-from modules.db import invalidate_data_cache
+from modules.repositories.container_repo import adicionar_contentor
+from modules.repositories.owner_repo import adicionar_proprietario
+from modules.repositories.stock_repo import (
+    carregar_contentores, carregar_proprietarios,
+)
+from modules.ui_kit import render_kpi_strip, render_zone_title
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -72,7 +84,9 @@ REQUIRED_COLS = [
 # ---------------------------------------------------------------------------
 
 def run_import_page(ctx: dict):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido na assinatura por compat com o
+    # router; nada é injetado — imports explícitos no topo cobrem tudo.
+    del ctx
 
     st.header(t("import.title"))
     _inject_import_css()

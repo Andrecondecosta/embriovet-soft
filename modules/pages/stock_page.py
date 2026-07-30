@@ -1,8 +1,43 @@
 # Typed page module (Fase 3)
+import pandas as pd
+import streamlit as st
+
+from modules.components.modal_proprietario import modal_adicionar_proprietario
+from modules.db import get_connection, to_py
 from modules.i18n import t
+from modules.repositories.stock_repo import (
+    carregar_contentores,
+    carregar_proprietarios,
+    carregar_stock,
+    carregar_transferencias,
+    carregar_transferencias_externas,
+    editar_stock,
+)
+from modules.services.auth_service import verificar_permissao
+from modules.stock_reporting import (
+    filter_lot_transfer_history,
+    filter_stock_view,
+    filter_transfer_history,
+    stock_kpis,
+    summarize_stock_by_owner,
+)
+from modules.ui_kit import (
+    inject_reports_css,
+    inject_stepper_css,
+    inject_stock_css,
+    render_kpi_strip,
+    render_zone_title,
+    safe_pick,
+)
+
 
 def run_stock_page(ctx: dict):
-    globals().update(ctx)
+    # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
+    # injetado — imports explícitos no topo cobrem tudo.
+    del ctx
+    stock = carregar_stock(apenas_ativos=True)
+    proprietarios = carregar_proprietarios(apenas_ativos=True)
+
     st.header(t("stock.title"))
     inject_stock_css()
     inject_reports_css()
