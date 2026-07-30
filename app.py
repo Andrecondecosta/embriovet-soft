@@ -290,7 +290,7 @@ def registrar_inseminacao(registro):
 
             conn.commit()
             cur.close()
-            
+
             # Verificar e desativar proprietários com stock = 0
             atualizar_status_proprietarios()
             invalidate_data_cache()
