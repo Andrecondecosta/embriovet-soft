@@ -27,6 +27,8 @@ import pytest
 from modules.pages.stock_semen_page import _carregar_garanhoes_com_stock
 from modules.repositories.animal_repo import get_or_create_garanhao
 
+ROOT = Path(__file__).resolve().parent.parent
+
 
 # ────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -61,7 +63,7 @@ def test_menu_lateral_tem_seis_itens_sem_emoji():
     """`app.py` deve definir `menu_principal` com exactamente os 6
     labels novos (Dashboard/Estadias/.../Definições) e nenhum emoji.
     `menu_secundario` deve ser lista vazia."""
-    src = Path("/app/app.py").read_text()
+    src = (ROOT / "app.py").read_text()
 
     # Extrair menu_principal
     m = re.search(
@@ -114,7 +116,7 @@ def test_mapeamento_13_para_6_esta_completo():
     menu.add_stock, menu.import, menu.register_insemination, menu.owners,
     menu.users, menu.settings + literal 'Estadias e Visitas' e
     'Trabalho diário')."""
-    src = Path("/app/app.py").read_text()
+    src = (ROOT / "app.py").read_text()
     m = re.search(
         r"_LEGACY_NAV_MAP\s*=\s*\{(?P<body>.*?)\n\}",
         src,
@@ -218,7 +220,7 @@ def test_carregar_garanhoes_com_stock_exclui_lotes_zerados(db):
 # ────────────────────────────────────────────────────────────────────
 
 def test_estadias_page_seta_insem_flow_active():
-    src = Path("/app/modules/pages/estadias_page.py").read_text()
+    src = (ROOT / "modules/pages/estadias_page.py").read_text()
     # No botão "Registar inseminação" (fila de estadia activa) tem de
     # setar o flag.
     assert 'insem_flow_active' in src, (
@@ -231,14 +233,14 @@ def test_estadias_page_seta_insem_flow_active():
 
 
 def test_animal_page_seta_insem_flow_active():
-    src = Path("/app/modules/pages/animal_page.py").read_text()
+    src = (ROOT / "modules/pages/animal_page.py").read_text()
     assert 'insem_flow_active' in src
     # E o botão só aparece para éguas
     assert 'egua' in src.lower()
 
 
 def test_trabalho_diario_pivota_para_form_de_inseminacao_com_flag():
-    src = Path("/app/modules/pages/trabalho_diario_page.py").read_text()
+    src = (ROOT / "modules/pages/trabalho_diario_page.py").read_text()
     # O `run_trabalho_diario_page` deve delegar para `run_insemination_page`
     # quando `insem_flow_active` está setado.
     assert 'insem_flow_active' in src
@@ -248,7 +250,7 @@ def test_trabalho_diario_pivota_para_form_de_inseminacao_com_flag():
 def test_insemination_page_limpa_insem_flow_active_no_fim():
     """Nos redirects pós-sucesso (Trabalho Diário / Ficha da égua),
     o `insem_flow_active` deve ser limpo para não ficar preso no fluxo."""
-    src = Path("/app/modules/pages/insemination_page.py").read_text()
+    src = (ROOT / "modules/pages/insemination_page.py").read_text()
     assert src.count('pop("insem_flow_active", None)') >= 2, (
         "insemination_page.py deve limpar `insem_flow_active` em ambos "
         "os botões pós-sucesso (Trabalho Diário e Ficha da égua)"
@@ -260,7 +262,7 @@ def test_insemination_page_limpa_insem_flow_active_no_fim():
 # ────────────────────────────────────────────────────────────────────
 
 def test_definicoes_page_filtra_utilizadores_por_admin():
-    src = Path("/app/modules/pages/definicoes_page.py").read_text()
+    src = (ROOT / "modules/pages/definicoes_page.py").read_text()
     # Deve haver um check `is_admin` (ou `verificar_permissao('Administrador')`)
     # que controla a existência do separador "Utilizadores".
     assert '"Administrador"' in src or "verificar_permissao" in src, (
@@ -279,7 +281,7 @@ def test_definicoes_page_filtra_utilizadores_por_admin():
 # ────────────────────────────────────────────────────────────────────
 
 def test_stock_semen_tem_4_separadores_e_2_botoes_topo():
-    src = Path("/app/modules/pages/stock_semen_page.py").read_text()
+    src = (ROOT / "modules/pages/stock_semen_page.py").read_text()
     # Separadores
     for tab in ["Lotes", "Garanhões", "Mapa dos contentores", "Transferências"]:
         assert f'"{tab}"' in src, f"separador '{tab}' ausente"
@@ -293,7 +295,7 @@ def test_stock_semen_page_delegates_para_paginas_existentes():
     """O orquestrador não pode reimplementar lógica — tem de invocar
     as pages existentes (`run_stock_page`, `run_map_page`,
     `run_transfer_page`, `run_import_page`)."""
-    src = Path("/app/modules/pages/stock_semen_page.py").read_text()
+    src = (ROOT / "modules/pages/stock_semen_page.py").read_text()
     for fn in [
         "run_stock_page", "run_map_page",
         "run_transfer_page", "run_import_page",

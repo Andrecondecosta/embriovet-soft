@@ -34,6 +34,8 @@ from modules.repositories.dashboard_repo import (
 from modules.repositories.insemination_repo import registar_inseminacao_completa
 from modules.repositories.transfer_repo import reverter_operacao
 
+ROOT = Path(__file__).resolve().parent.parent
+
 
 # ────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -125,7 +127,7 @@ def _new_lote_stock(db, dono_id, palhetas=20) -> tuple[int, int]:
 def test_dashboard_page_e_read_only():
     """O ficheiro `dashboard_page.py` não pode conter UPDATE/DELETE/INSERT
     directos — validado por regex simples sobre o código-fonte."""
-    src = (Path("/app/modules/pages/dashboard_page.py")).read_text()
+    src = (ROOT / "modules/pages/dashboard_page.py").read_text()
     # Casos negativos aceitáveis: strings em comentários. Para simplificar
     # exigimos ausência total de tokens SQL de escrita no ficheiro.
     padroes_proibidos = [r"\bUPDATE\s+\w+\s+SET\b", r"\bDELETE\s+FROM\b",
@@ -138,7 +140,7 @@ def test_dashboard_page_e_read_only():
 
 def test_dashboard_repo_e_read_only():
     """O `dashboard_repo.py` também deve ser 100% leitura."""
-    src = (Path("/app/modules/repositories/dashboard_repo.py")).read_text()
+    src = (ROOT / "modules/repositories/dashboard_repo.py").read_text()
     padroes_proibidos = [r"\bUPDATE\s+\w+\s+SET\b", r"\bDELETE\s+FROM\b",
                          r"\bINSERT\s+INTO\b"]
     for p in padroes_proibidos:

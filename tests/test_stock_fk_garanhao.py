@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
 import pandas as pd
 import psycopg2
 import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def _connect():
@@ -401,7 +404,7 @@ def test_grep_final_no_leituras_da_coluna_texto():
 
     cmd = (
         r"grep -rn 'e\.garanhao\|ed\.garanhao\|LOWER(garanhao)' "
-        r"/app/modules /app/app.py "
+        f"{ROOT / 'modules'} {ROOT / 'app.py'} "
         r"| grep -v migrations | grep -v __pycache__ "
         r"| grep -v 'COALESCE' | grep -v '\-\-\|#'"
     )

@@ -31,6 +31,8 @@ from modules.repositories.colheita_repo import (
     listar_colheitas_futuras,
 )
 
+ROOT = Path(__file__).resolve().parent.parent
+
 
 # ────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -153,7 +155,7 @@ def test_dashboard_carregar_tarefas_hoje_inclui_colheita(db, garanhao_id):
 # ────────────────────────────────────────────────────────────────────
 
 def test_trabalho_diario_page_trata_tipo_colheita():
-    src = Path("/app/modules/pages/trabalho_diario_page.py").read_text()
+    src = (ROOT / "modules/pages/trabalho_diario_page.py").read_text()
     assert 'is_colheita = tipo_tarefa == "colheita"' in src
     assert "Colheita —" in src, (
         "cartão deve renderizar 'Colheita — [nome]'"
@@ -167,7 +169,7 @@ def test_add_stock_view_lida_com_prefill_colheita():
     # Após Pedido 9 · Fase 1, a view mudou de `app.py` para
     # `modules/pages/add_stock_view.py` (extração pura, zero
     # alteração de lógica).
-    src = Path("/app/modules/pages/add_stock_view.py").read_text()
+    src = (ROOT / "modules/pages/add_stock_view.py").read_text()
     # Prefill respeitado no default_idx da selectbox
     assert 'colheita_garanhao_prefill' in src
     # Após save, conclusão da tarefa
