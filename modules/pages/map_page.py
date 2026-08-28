@@ -21,1594 +21,1582 @@ logger = logging.getLogger(__name__)
 
 
 def run_map_page(ctx: dict):
-    # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
-    # injetado — imports explícitos no topo cobrem tudo.
-    del ctx
-    app_settings = get_app_settings() or {}
+    with st.container(key="mapa-page-scope"):
+        # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
+        # injetado — imports explícitos no topo cobrem tudo.
+        del ctx
+        app_settings = get_app_settings() or {}
 
-    # Carregar contentores
-    contentores_df = carregar_contentores()
+        # Carregar contentores
+        contentores_df = carregar_contentores()
 
-    # Cabeçalho da página
-    primary_color = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
-    st.markdown(
-        f"""
-        <style>
-            .map-page-header {{
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                padding: 12px 16px;
-                background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-                margin-bottom: 10px;
-                box-shadow: 0 2px 8px rgba(15,23,42,0.05);
-            }}
-            .map-page-title {{
-                font-size: 1rem;
-                font-weight: 700;
-                color: #0f172a;
-                margin: 0;
-            }}
-            .map-page-subtitle {{
-                font-size: .75rem;
-                color: #64748b;
-                margin-top: 2px;
-            }}
-            .map-empty-state {{
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding: 60px 40px;
-                border: 2px dashed #e2e8f0;
-                border-radius: 12px;
-                text-align: center;
-                color: #64748b;
-                margin-top: 20px;
-            }}
-            .map-empty-icon {{
-                font-size: 3rem;
-                margin-bottom: 16px;
-                opacity: 0.6;
-            }}
-            .map-empty-title {{
-                font-size: 1rem;
-                font-weight: 600;
-                color: #334155;
-                margin-bottom: 8px;
-            }}
-            .map-empty-text {{
-                font-size: .85rem;
-                color: #94a3b8;
-                max-width: 320px;
-            }}
-        </style>
-        <div class='map-page-header'>
-            <div>
-                <div class='map-page-title'>Mapa dos Contentores</div>
-                <div class='map-page-subtitle'>Gerir localizações físicas e stock por contentor</div>
+        # Cabeçalho da página
+        primary_color = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
+        st.markdown(
+            f"""
+            <style>
+                .map-page-header {{
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 10px;
+                    padding: 12px 16px;
+                    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+                    margin-bottom: 10px;
+                    box-shadow: 0 2px 8px rgba(15,23,42,0.05);
+                }}
+                .map-page-title {{
+                    font-size: 1rem;
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin: 0;
+                }}
+                .map-page-subtitle {{
+                    font-size: .75rem;
+                    color: #64748b;
+                    margin-top: 2px;
+                }}
+                .map-empty-state {{
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 60px 40px;
+                    border: 2px dashed #e2e8f0;
+                    border-radius: 12px;
+                    text-align: center;
+                    color: #64748b;
+                    margin-top: 20px;
+                }}
+                .map-empty-icon {{
+                    font-size: 3rem;
+                    margin-bottom: 16px;
+                    opacity: 0.6;
+                }}
+                .map-empty-title {{
+                    font-size: 1rem;
+                    font-weight: 600;
+                    color: #334155;
+                    margin-bottom: 8px;
+                }}
+                .map-empty-text {{
+                    font-size: .85rem;
+                    color: #94a3b8;
+                    max-width: 320px;
+                }}
+            </style>
+            <div class='map-page-header'>
+                <div>
+                    <div class='map-page-title'>Mapa dos Contentores</div>
+                    <div class='map-page-subtitle'>Gerir localizações físicas e stock por contentor</div>
+                </div>
             </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
 
-    if "mapa_modo_edicao" not in st.session_state:
-        st.session_state["mapa_modo_edicao"] = False
+        if "mapa_modo_edicao" not in st.session_state:
+            st.session_state["mapa_modo_edicao"] = False
 
-    if "mapa_layout_reader_tick" not in st.session_state:
-        st.session_state["mapa_layout_reader_tick"] = 0
+        if "mapa_layout_reader_tick" not in st.session_state:
+            st.session_state["mapa_layout_reader_tick"] = 0
 
-    if "mapa_salvar_layout_pendente" not in st.session_state:
-        st.session_state["mapa_salvar_layout_pendente"] = False
+        if "mapa_salvar_layout_pendente" not in st.session_state:
+            st.session_state["mapa_salvar_layout_pendente"] = False
 
-    if "mapa_salvar_layout_tentativas" not in st.session_state:
-        st.session_state["mapa_salvar_layout_tentativas"] = 0
+        if "mapa_salvar_layout_tentativas" not in st.session_state:
+            st.session_state["mapa_salvar_layout_tentativas"] = 0
 
-    if "map_bridge_v3_bootstrapped" not in st.session_state:
-        st.session_state["map_bridge_v3_bootstrapped"] = False
+        if "map_bridge_v3_bootstrapped" not in st.session_state:
+            st.session_state["map_bridge_v3_bootstrapped"] = False
 
-    try:
-        from streamlit_js_eval import streamlit_js_eval
-        js_eval_disponivel = True
-    except Exception:
-        streamlit_js_eval = None
-        js_eval_disponivel = False
+        try:
+            from streamlit_js_eval import streamlit_js_eval
+            js_eval_disponivel = True
+        except Exception:
+            streamlit_js_eval = None
+            js_eval_disponivel = False
 
-    if not js_eval_disponivel:
-        st.warning(t("map.missing_dependency"))
-    else:
-        bridge_boot = None
-        if not st.session_state.get("map_bridge_v3_bootstrapped", False):
-            bridge_boot = streamlit_js_eval(
-            js_expressions="""
-                (function(){
-                    try {
-                        var targetWin = (window.parent && window.parent !== window) ? window.parent : window;
-                        var targetDoc = targetWin.document;
+        if not js_eval_disponivel:
+            st.warning(t("map.missing_dependency"))
+        else:
+            bridge_boot = None
+            if not st.session_state.get("map_bridge_v3_bootstrapped", False):
+                bridge_boot = streamlit_js_eval(
+                js_expressions="""
+                    (function(){
+                        try {
+                            var targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                            var targetDoc = targetWin.document;
 
-                        // Bridge para layout drag-and-drop
-                        if (!targetWin.__contentorLayoutBridgeInstalled) {
-                            targetWin.__contentorLayoutBridgeInstalled = true;
-                            targetWin.addEventListener('message', function(event){
-                                var data = event && event.data ? event.data : null;
-                                if (!data || typeof data !== 'object') return;
-                                if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
-                                    try {
-                                        var atual = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
-                                        atual[String(data.id)] = {
-                                            x: parseInt(data.x, 10) || 0,
-                                            y: parseInt(data.y, 10) || 0
-                                        };
-                                        targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
-                                    } catch (e) {}
-                                }
-                                if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
-                                    try { targetWin.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
-                                }
-                            });
-                        }
-
-                        // Handler nomeado para cliques em células do heatmap
-                        function handleHmCellClick(ev) {
-                            ev.stopPropagation();
-                            var cell = ev.currentTarget;
-                            var cId = cell.getAttribute('data-cont');
-                            var c   = cell.getAttribute('data-c');
-                            var a   = cell.getAttribute('data-a');
-                            targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
-                            targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
-                            cell.classList.add('selected');
-                            var rows = targetDoc.querySelectorAll(
-                                '.lote-row[data-cont="'+cId+'"][data-c="'+c+'"][data-a="'+a+'"]'
-                            );
-                            rows.forEach(function(r){ r.classList.add('hl'); });
-                            if (rows.length > 0) {
-                                rows[0].scrollIntoView({behavior:'smooth', block:'center'});
-                            }
-                        }
-
-                        // Garante pointer-events auto em toda a cadeia até .hm-cell
-                        function ensureClickable(cell) {
-                            cell.style.pointerEvents = 'auto';
-                            cell.style.cursor = 'pointer';
-                            cell.style.position = 'relative';
-                            cell.style.zIndex = '5';
-                            var p = cell.parentElement;
-                            var depth = 0;
-                            while (p && depth < 12) {
-                                var cs = targetWin.getComputedStyle(p);
-                                if (cs && cs.pointerEvents === 'none') {
-                                    p.style.pointerEvents = 'auto';
-                                }
-                                if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
-                                    p.style.pointerEvents = 'auto';
-                                }
-                                p = p.parentElement;
-                                depth += 1;
-                            }
-                        }
-
-                        function bindCells(root) {
-                            try {
-                                var cells = (root || targetDoc).querySelectorAll('.hm-cell');
-                                cells.forEach(function(cell){
-                                    if (cell.__hmBound) return;
-                                    cell.__hmBound = true;
-                                    ensureClickable(cell);
-                                    cell.addEventListener('click', handleHmCellClick, false);
-                                    cell.addEventListener('touchend', function(e){
-                                        e.preventDefault();
-                                        handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
-                                    }, {passive: false});
+                            // Bridge para layout drag-and-drop
+                            if (!targetWin.__contentorLayoutBridgeInstalled) {
+                                targetWin.__contentorLayoutBridgeInstalled = true;
+                                targetWin.addEventListener('message', function(event){
+                                    var data = event && event.data ? event.data : null;
+                                    if (!data || typeof data !== 'object') return;
+                                    if (data.type === 'CONTENTOR_LAYOUT_UPDATE') {
+                                        try {
+                                            var atual = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                                            atual[String(data.id)] = {
+                                                x: parseInt(data.x, 10) || 0,
+                                                y: parseInt(data.y, 10) || 0
+                                            };
+                                            targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(atual));
+                                        } catch (e) {}
+                                    }
+                                    if (data.type === 'CONTENTOR_LAYOUT_CLEAR') {
+                                        try { targetWin.localStorage.removeItem('contentor_layout_pending'); } catch (e) {}
+                                    }
                                 });
-                            } catch (e) {}
-                        }
+                            }
 
-                        // Vincular já existentes e observar novos
-                        if (!targetDoc.__hmObserver) {
-                            bindCells(targetDoc);
-                            var obs = new targetWin.MutationObserver(function(mutations){
-                                for (var i = 0; i < mutations.length; i++) {
-                                    var m = mutations[i];
-                                    if (m.addedNodes && m.addedNodes.length) {
-                                        for (var j = 0; j < m.addedNodes.length; j++) {
-                                            var node = m.addedNodes[j];
-                                            if (node.nodeType !== 1) continue;
-                                            if (node.classList && node.classList.contains('hm-cell')) {
-                                                bindCells(node.parentElement || targetDoc);
-                                            } else if (node.querySelectorAll) {
-                                                bindCells(node);
+                            // Handler nomeado para cliques em células do heatmap
+                            function handleHmCellClick(ev) {
+                                ev.stopPropagation();
+                                var cell = ev.currentTarget;
+                                var cId = cell.getAttribute('data-cont');
+                                var c   = cell.getAttribute('data-c');
+                                var a   = cell.getAttribute('data-a');
+                                targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
+                                targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
+                                cell.classList.add('selected');
+                                var rows = targetDoc.querySelectorAll(
+                                    '.lote-row[data-cont="'+cId+'"][data-c="'+c+'"][data-a="'+a+'"]'
+                                );
+                                rows.forEach(function(r){ r.classList.add('hl'); });
+                                if (rows.length > 0) {
+                                    rows[0].scrollIntoView({behavior:'smooth', block:'center'});
+                                }
+                            }
+
+                            // Garante pointer-events auto em toda a cadeia até .hm-cell
+                            function ensureClickable(cell) {
+                                cell.style.pointerEvents = 'auto';
+                                cell.style.cursor = 'pointer';
+                                cell.style.position = 'relative';
+                                cell.style.zIndex = '5';
+                                var p = cell.parentElement;
+                                var depth = 0;
+                                while (p && depth < 12) {
+                                    var cs = targetWin.getComputedStyle(p);
+                                    if (cs && cs.pointerEvents === 'none') {
+                                        p.style.pointerEvents = 'auto';
+                                    }
+                                    if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
+                                        p.style.pointerEvents = 'auto';
+                                    }
+                                    p = p.parentElement;
+                                    depth += 1;
+                                }
+                            }
+
+                            function bindCells(root) {
+                                try {
+                                    var cells = (root || targetDoc).querySelectorAll('.hm-cell');
+                                    cells.forEach(function(cell){
+                                        if (cell.__hmBound) return;
+                                        cell.__hmBound = true;
+                                        ensureClickable(cell);
+                                        cell.addEventListener('click', handleHmCellClick, false);
+                                        cell.addEventListener('touchend', function(e){
+                                            e.preventDefault();
+                                            handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
+                                        }, {passive: false});
+                                    });
+                                } catch (e) {}
+                            }
+
+                            // Vincular já existentes e observar novos
+                            if (!targetDoc.__hmObserver) {
+                                bindCells(targetDoc);
+                                var obs = new targetWin.MutationObserver(function(mutations){
+                                    for (var i = 0; i < mutations.length; i++) {
+                                        var m = mutations[i];
+                                        if (m.addedNodes && m.addedNodes.length) {
+                                            for (var j = 0; j < m.addedNodes.length; j++) {
+                                                var node = m.addedNodes[j];
+                                                if (node.nodeType !== 1) continue;
+                                                if (node.classList && node.classList.contains('hm-cell')) {
+                                                    bindCells(node.parentElement || targetDoc);
+                                                } else if (node.querySelectorAll) {
+                                                    bindCells(node);
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            });
-                            obs.observe(targetDoc.body, {childList: true, subtree: true});
-                            targetDoc.__hmObserver = obs;
+                                });
+                                obs.observe(targetDoc.body, {childList: true, subtree: true});
+                                targetDoc.__hmObserver = obs;
 
-                            // Re-bind periódico de segurança (primeiros 6s após carregar)
-                            var ticks = 0;
-                            var iv = targetWin.setInterval(function(){
+                                // Re-bind periódico de segurança (primeiros 6s após carregar)
+                                var ticks = 0;
+                                var iv = targetWin.setInterval(function(){
+                                    bindCells(targetDoc);
+                                    ticks += 1;
+                                    if (ticks > 12) { targetWin.clearInterval(iv); }
+                                }, 500);
+                            } else {
                                 bindCells(targetDoc);
-                                ticks += 1;
-                                if (ticks > 12) { targetWin.clearInterval(iv); }
-                            }, 500);
-                        } else {
-                            bindCells(targetDoc);
-                        }
+                            }
 
-                    } catch (e) {}
-                    return true;
-                })()
-            """,
-            key="map_layout_bridge_v3",
-            want_output=True,
-            )
-        if bridge_boot is True:
-            st.session_state["map_bridge_v3_bootstrapped"] = True
-
-    if "map_largura_viewport" not in st.session_state:
-        st.session_state["map_largura_viewport"] = None
-
-    if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
-        largura_viewport_once = streamlit_js_eval(
-            js_expressions='window.innerWidth',
-            key='map_viewport_width_once',
-            want_output=True,
-        )
-        if largura_viewport_once is not None:
-            try:
-                st.session_state["map_largura_viewport"] = int(largura_viewport_once)
-            except Exception:
-                st.session_state["map_largura_viewport"] = 1200
-
-    largura_viewport = st.session_state.get("map_largura_viewport")
-    is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
-    modo_visualizacao = True
-
-    layout_pending_raw = None
-    if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
-        layout_pending_raw = streamlit_js_eval(
-            js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
-            key="map_layout_pending_reader",
-            want_output=True,
-        )
-
-    # Modal para adicionar contentor - design limpo
-    if st.session_state.get('modal_novo_contentor', False):
-        st.markdown("---")
-        st.markdown(f"### {t('map.add_container_title')}")
-
-        with st.form("form_novo_contentor"):
-            col_form1, col_form2 = st.columns([1, 1])
-
-            with col_form1:
-                codigo = st.text_input(
-                    t("map.container_code_required"), 
-                    placeholder=t("map.container_code_placeholder"),
-                    help=t("map.container_code_help")
+                        } catch (e) {}
+                        return true;
+                    })()
+                """,
+                key="map_layout_bridge_v3",
+                want_output=True,
                 )
+            if bridge_boot is True:
+                st.session_state["map_bridge_v3_bootstrapped"] = True
 
-            with col_form2:
-                descricao = st.text_input(t("map.container_description_optional"), placeholder=t("map.container_description_placeholder"))
+        if "map_largura_viewport" not in st.session_state:
+            st.session_state["map_largura_viewport"] = None
 
-            col_submit1, col_submit2 = st.columns([1, 1])
-            with col_submit1:
-                submitted = st.form_submit_button(t("btn.create_container"), width="stretch")
-            with col_submit2:
-                cancelar = st.form_submit_button(t("btn.cancel"), width="stretch")
+        if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
+            largura_viewport_once = streamlit_js_eval(
+                js_expressions='window.innerWidth',
+                key='map_viewport_width_once',
+                want_output=True,
+            )
+            if largura_viewport_once is not None:
+                try:
+                    st.session_state["map_largura_viewport"] = int(largura_viewport_once)
+                except Exception:
+                    st.session_state["map_largura_viewport"] = 1200
 
-            if cancelar:
-                st.session_state['modal_novo_contentor'] = False
-                st.rerun()
+        largura_viewport = st.session_state.get("map_largura_viewport")
+        is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
+        modo_visualizacao = True
 
-            if submitted:
-                if not codigo:
-                    st.error(t("map.container_code_required_error"))
-                else:
-                    if codigo in contentores_df['codigo'].values:
-                        st.error(t("map.container_code_exists", code=codigo))
+        layout_pending_raw = None
+        if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
+            layout_pending_raw = streamlit_js_eval(
+                js_expressions='(function(){try{return window.parent.localStorage.getItem("contentor_layout_pending")}catch(e){return window.localStorage.getItem("contentor_layout_pending")}})()',
+                key="map_layout_pending_reader",
+                want_output=True,
+            )
+
+        # Modal para adicionar contentor - design limpo
+        if st.session_state.get('modal_novo_contentor', False):
+            st.markdown("---")
+            st.markdown(f"### {t('map.add_container_title')}")
+
+            with st.form("form_novo_contentor"):
+                col_form1, col_form2 = st.columns([1, 1])
+
+                with col_form1:
+                    codigo = st.text_input(
+                        t("map.container_code_required"), 
+                        placeholder=t("map.container_code_placeholder"),
+                        help=t("map.container_code_help")
+                    )
+
+                with col_form2:
+                    descricao = st.text_input(t("map.container_description_optional"), placeholder=t("map.container_description_placeholder"))
+
+                col_submit1, col_submit2 = st.columns([1, 1])
+                with col_submit1:
+                    submitted = st.form_submit_button(t("btn.create_container"), width="stretch")
+                with col_submit2:
+                    cancelar = st.form_submit_button(t("btn.cancel"), width="stretch")
+
+                if cancelar:
+                    st.session_state['modal_novo_contentor'] = False
+                    st.rerun()
+
+                if submitted:
+                    if not codigo:
+                        st.error(t("map.container_code_required_error"))
                     else:
-                        import random
-                        contentor_id = adicionar_contentor({
-                            'codigo': codigo,
-                            'descricao': descricao,
-                            'x': random.randint(100, 600),
-                            'y': random.randint(100, 350),
-                            'w': 90,
-                            'h': 90
-                        })
-                        if contentor_id:
-                            st.success(t("map.container_created", code=codigo))
-                            st.session_state['modal_novo_contentor'] = False
-                            st.rerun()
+                        if codigo in contentores_df['codigo'].values:
+                            st.error(t("map.container_code_exists", code=codigo))
+                        else:
+                            import random
+                            contentor_id = adicionar_contentor({
+                                'codigo': codigo,
+                                'descricao': descricao,
+                                'x': random.randint(100, 600),
+                                'y': random.randint(100, 350),
+                                'w': 90,
+                                'h': 90
+                            })
+                            if contentor_id:
+                                st.success(t("map.container_created", code=codigo))
+                                st.session_state['modal_novo_contentor'] = False
+                                st.rerun()
 
-    # Área do mapa
-    if contentores_df.empty:
-        # Botão para adicionar mesmo sem contentores
-        col_empty1, col_empty2, col_empty3 = st.columns([1, 2, 1])
-        with col_empty2:
-            st.markdown(
-                """
-                <div class='map-empty-state'>
-                    <div class='map-empty-icon'>&#128230;</div>
-                    <div class='map-empty-title'>Nenhum contentor registado</div>
-                    <div class='map-empty-text'>Adicione o primeiro contentor para começar a gerir as localizações físicas do seu stock.</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.markdown("")
-            if st.button("+ Adicionar Primeiro Contentor", type="primary", width="stretch"):
-                st.session_state['modal_novo_contentor'] = True
-                st.rerun()
-    else:
-        if modo_visualizacao:
-            total_contentores = len(contentores_df)
-            total_palhetas_geral = 0
-            contentores_data = []
-
-            for _, row in contentores_df.iterrows():
-                stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                total_palhetas_geral += total_palhetas
-
-                lotes = []
-                if not stock_contentor.empty:
-                    for _, lote in stock_contentor.iterrows():
-                        observacao = ""
-                        if isinstance(lote.get('qualidade'), str) and lote.get('qualidade'):
-                            observacao = lote.get('qualidade')
-                        elif isinstance(lote.get('origem_externa'), str) and lote.get('origem_externa'):
-                            observacao = lote.get('origem_externa')
-
-                        lotes.append({
-                            "garanhao": lote.get('garanhao_nome') or lote.get('garanhao') or "—",
-                            "proprietario": lote.get('proprietario_nome') or "—",
-                            "quantidade": int(lote.get('existencia_atual') or 0),
-                            "canister": int(lote.get('canister') or 0),
-                            "andar": int(lote.get('andar') or 0),
-                            "observacoes": observacao,
-                        })
-
-                contentores_data.append({
-                    "id": int(row['id']),
-                    "codigo": row['codigo'],
-                    "descricao": row['descricao'] or "",
-                    "x": int(row['x']),
-                    "y": int(row['y']),
-                    "w": max(80, int(row['w'])),
-                    "h": max(80, int(row['h'])),
-                    "palhetas": total_palhetas,
-                    "lotes": lotes,
-                })
-
-            criar_novo = False
-            ativar_edicao = False
-            cancelar_edicao = False
-            salvar_layout = False
-            reorganizar = False
-
-            st.markdown(
-                """
-                <style>
-                    /* Reduzir padding global para dar mais espaço ao mapa */
-                    .main .block-container {
-                        padding-top: 0.5rem !important;
-                        max-width: 100% !important;
-                    }
-                    
-                    /* Botões modernos e elegantes */
-                    div[data-testid="stButton"] > button {
-                        border-radius: 8px !important;
-                        font-weight: 500 !important;
-                        font-size: 0.9rem !important;
-                        padding: 8px 20px !important;
-                        transition: all 0.2s ease !important;
-                        border: 1px solid #e2e8f0 !important;
-                    }
-                    
-                    div[data-testid="stButton"] > button:hover {
-                        transform: translateY(-1px) !important;
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-                    }
-                    /* Cor do botão "primary" (ex.: Salvar) vem do override
-                       global em `inject_shell_css` (cor da marca) — não
-                       hardcodar uma cor aqui. */
-
-                    /* Toolbar premium */
-                    .map-toolbar-shell {
-                        border: 1px solid #e2e8f0;
-                        border-radius: 10px;
-                        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                        padding: 12px 16px;
-                        margin-bottom: 12px;
-                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-                    }
-                    
-                    .map-toolbar-kpis {
-                        display: flex;
-                        gap: 16px;
-                        align-items: center;
-                        font-size: 0.85rem;
-                        color: #64748b;
-                    }
-                    
-                    .map-toolbar-kpis b {
-                        color: #0f172a;
-                        font-weight: 600;
-                    }
-                    
-                    /* Container do mapa - altura otimizada */
-                    .map-workspace {
-                        max-height: 65vh;
-                        overflow: hidden;
-                        border-radius: 12px;
-                        border: 1px solid #e2e8f0;
-                        background: #ffffff;
-                        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-                    }
-                    
-                    /* Mobile responsive */
-                    @media (max-width: 900px) {
-                        .main .block-container {
-                            padding-left: 8px !important;
-                            padding-right: 8px !important;
-                            padding-top: 0.3rem !important;
-                        }
-                        
-                        div[data-testid="stButton"] > button {
-                            min-height: 38px !important;
-                            font-size: 0.85rem !important;
-                            padding: 6px 12px !important;
-                        }
-                        
-                        .map-toolbar-shell {
-                            padding: 8px 12px;
-                            margin-bottom: 8px;
-                            border-radius: 8px;
-                        }
-                        
-                        .map-toolbar-kpis {
-                            font-size: 0.75rem;
-                            gap: 10px;
-                            flex-wrap: wrap;
-                        }
-                        
-                        .map-workspace {
-                            max-height: 55vh;
-                            border-radius: 8px;
-                        }
-                        
-                        div[data-testid="stAppViewContainer"] h1 {
-                            font-size: 1.5rem !important;
-                            margin-bottom: 0.5rem !important;
-                        }
-                    }
-                    
-                    /* Esconder elementos técnicos */
-                    div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_js_eval"]) {
-                        height: 0 !important;
-                        min-height: 0 !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        overflow: hidden !important;
-                        display: none !important;
-                    }
-                    
-                    iframe[title*="streamlit_js_eval"] {
-                        height: 0 !important;
-                        min-height: 0 !important;
-                        display: none !important;
-                    }
-
-                    /* Logos e header nativo do Streamlit não devem intercetar cliques
-                       sobre as células do heatmap (overlap posicional). */
-                    [data-testid="stSidebar"] img,
-                    [data-testid="stSidebarContent"] img,
-                    .app-topbar-title,
-                    [data-testid="stMarkdownContainer"] > div > img,
-                    [data-testid="stMarkdown"] img {
-                        pointer-events: none !important;
-                    }
-                    [data-testid="stHeader"] {
-                        pointer-events: none !important;
-                    }
-                    [data-testid="stHeader"] * {
-                        pointer-events: auto;
-                    }
-                    
-                    /* Painel de detalhes elegante */
-                    .contentor-detail-panel {
-                        background: white;
-                        border-radius: 10px;
-                        padding: 16px;
-                        border: 1px solid #e2e8f0;
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-                    }
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            with st.container():
-                # Toolbar com KPIs
+        # Área do mapa
+        if contentores_df.empty:
+            # Botão para adicionar mesmo sem contentores
+            col_empty1, col_empty2, col_empty3 = st.columns([1, 2, 1])
+            with col_empty2:
                 st.markdown(
-                    f"""
-                    <div class='map-toolbar-shell'>
-                        <div class='map-toolbar-kpis'>
-                            <span>📍 <b>{total_contentores}</b> Contentores</span>
-                            <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
-                            <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao'] else '👁️ Visualização'}</span>
-                        </div>
+                    """
+                    <div class='map-empty-state'>
+                        <div class='map-empty-icon'>&#128230;</div>
+                        <div class='map-empty-title'>Nenhum contentor registado</div>
+                        <div class='map-empty-text'>Adicione o primeiro contentor para começar a gerir as localizações físicas do seu stock.</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
+                st.markdown("")
+                if st.button("+ Adicionar Primeiro Contentor", type="primary", width="stretch"):
+                    st.session_state['modal_novo_contentor'] = True
+                    st.rerun()
+        else:
+            if modo_visualizacao:
+                total_contentores = len(contentores_df)
+                total_palhetas_geral = 0
+                contentores_data = []
+
+                for _, row in contentores_df.iterrows():
+                    stock_contentor = obter_stock_contentor(row['id'])
+                    total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                    total_palhetas_geral += total_palhetas
+
+                    lotes = []
+                    if not stock_contentor.empty:
+                        for _, lote in stock_contentor.iterrows():
+                            observacao = ""
+                            if isinstance(lote.get('qualidade'), str) and lote.get('qualidade'):
+                                observacao = lote.get('qualidade')
+                            elif isinstance(lote.get('origem_externa'), str) and lote.get('origem_externa'):
+                                observacao = lote.get('origem_externa')
+
+                            lotes.append({
+                                "garanhao": lote.get('garanhao_nome') or lote.get('garanhao') or "—",
+                                "proprietario": lote.get('proprietario_nome') or "—",
+                                "quantidade": int(lote.get('existencia_atual') or 0),
+                                "canister": int(lote.get('canister') or 0),
+                                "andar": int(lote.get('andar') or 0),
+                                "observacoes": observacao,
+                            })
+
+                    contentores_data.append({
+                        "id": int(row['id']),
+                        "codigo": row['codigo'],
+                        "descricao": row['descricao'] or "",
+                        "x": int(row['x']),
+                        "y": int(row['y']),
+                        "w": max(80, int(row['w'])),
+                        "h": max(80, int(row['h'])),
+                        "palhetas": total_palhetas,
+                        "lotes": lotes,
+                    })
+
+                criar_novo = False
+                ativar_edicao = False
+                cancelar_edicao = False
+                salvar_layout = False
+                reorganizar = False
+
+                st.markdown(
+                    """
+                    <style>
+                        /* Botões modernos e elegantes — âmbito restrito ao
+                           contentor próprio do mapa (.st-key-mapa-page-scope,
+                           gerado pelo st.container(key=...) que envolve toda
+                           a run_map_page) para nunca vazar para a sidebar
+                           nem para os outros separadores da Stock de sémen. */
+                        .st-key-mapa-page-scope div[data-testid="stButton"] > button {
+                            border-radius: 8px !important;
+                            font-weight: 500 !important;
+                            font-size: 0.9rem !important;
+                            padding: 8px 20px !important;
+                            transition: all 0.2s ease !important;
+                            border: 1px solid #e2e8f0 !important;
+                        }
+
+                        .st-key-mapa-page-scope div[data-testid="stButton"] > button:hover {
+                            transform: translateY(-1px) !important;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+                        }
+                        /* Cor do botão "primary" (ex.: Salvar) vem do override
+                           global em `inject_shell_css` (cor da marca) — não
+                           hardcodar uma cor aqui. */
+
+                        /* Toolbar premium */
+                        .map-toolbar-shell {
+                            border: 1px solid #e2e8f0;
+                            border-radius: 10px;
+                            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+                            padding: 12px 16px;
+                            margin-bottom: 12px;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+                        }
+                    
+                        .map-toolbar-kpis {
+                            display: flex;
+                            gap: 16px;
+                            align-items: center;
+                            font-size: 0.85rem;
+                            color: #64748b;
+                        }
+                    
+                        .map-toolbar-kpis b {
+                            color: #0f172a;
+                            font-weight: 600;
+                        }
+                    
+                        /* Container do mapa - altura otimizada */
+                        .map-workspace {
+                            max-height: 65vh;
+                            overflow: hidden;
+                            border-radius: 12px;
+                            border: 1px solid #e2e8f0;
+                            background: #ffffff;
+                            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+                        }
+                    
+                        /* Mobile responsive */
+                        @media (max-width: 900px) {
+                            .st-key-mapa-page-scope div[data-testid="stButton"] > button {
+                                min-height: 38px !important;
+                                font-size: 0.85rem !important;
+                                padding: 6px 12px !important;
+                            }
+
+                            .map-toolbar-shell {
+                                padding: 8px 12px;
+                                margin-bottom: 8px;
+                                border-radius: 8px;
+                            }
+                        
+                            .map-toolbar-kpis {
+                                font-size: 0.75rem;
+                                gap: 10px;
+                                flex-wrap: wrap;
+                            }
+                        
+                            .map-workspace {
+                                max-height: 55vh;
+                                border-radius: 8px;
+                            }
+                        }
+                    
+                        /* Esconder elementos técnicos */
+                        div[data-testid="stElementContainer"]:has(iframe[title*="streamlit_js_eval"]) {
+                            height: 0 !important;
+                            min-height: 0 !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            overflow: hidden !important;
+                            display: none !important;
+                        }
+                    
+                        iframe[title*="streamlit_js_eval"] {
+                            height: 0 !important;
+                            min-height: 0 !important;
+                            display: none !important;
+                        }
+
+                        /* Logos e header nativo do Streamlit não devem intercetar cliques
+                           sobre as células do heatmap (overlap posicional). */
+                        [data-testid="stSidebar"] img,
+                        [data-testid="stSidebarContent"] img,
+                        .app-topbar-title,
+                        [data-testid="stMarkdownContainer"] > div > img,
+                        [data-testid="stMarkdown"] img {
+                            pointer-events: none !important;
+                        }
+                        [data-testid="stHeader"] {
+                            pointer-events: none !important;
+                        }
+                        [data-testid="stHeader"] * {
+                            pointer-events: auto;
+                        }
+                    
+                        /* Painel de detalhes elegante */
+                        .contentor-detail-panel {
+                            background: white;
+                            border-radius: 10px;
+                            padding: 16px;
+                            border: 1px solid #e2e8f0;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+                        }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                with st.container():
+                    # Toolbar com KPIs
+                    st.markdown(
+                        f"""
+                        <div class='map-toolbar-shell'>
+                            <div class='map-toolbar-kpis'>
+                                <span>📍 <b>{total_contentores}</b> Contentores</span>
+                                <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
+                                <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao'] else '👁️ Visualização'}</span>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
                 
-                # Botões de ação
-                if is_mobile:
-                    btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
-                    with btn_m1:
-                        criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", width="stretch")
-                    with btn_m2:
-                        if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
-                        else:
-                            ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", width="stretch")
-                    with btn_m3:
-                        if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", width="stretch")
-                else:
-                    bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
-                    with bar_btn1:
-                        criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
-                    with bar_btn2:
-                        if st.session_state["mapa_modo_edicao"]:
-                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", width="stretch")
-                        else:
-                            ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", width="stretch")
-                    with bar_btn3:
-                        if st.session_state["mapa_modo_edicao"]:
-                            cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", width="stretch")
-                    with bar_btn4:
-                        if not st.session_state["mapa_modo_edicao"]:
-                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
+                    # Botões de ação
+                    if is_mobile:
+                        btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
+                        with btn_m1:
+                            criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", width="stretch")
+                        with btn_m2:
+                            if st.session_state["mapa_modo_edicao"]:
+                                salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
+                            else:
+                                ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", width="stretch")
+                        with btn_m3:
+                            if st.session_state["mapa_modo_edicao"]:
+                                cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", width="stretch")
+                    else:
+                        bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
+                        with bar_btn1:
+                            criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
+                        with bar_btn2:
+                            if st.session_state["mapa_modo_edicao"]:
+                                salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", width="stretch")
+                            else:
+                                ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", width="stretch")
+                        with bar_btn3:
+                            if st.session_state["mapa_modo_edicao"]:
+                                cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", width="stretch")
+                        with bar_btn4:
+                            if not st.session_state["mapa_modo_edicao"]:
+                                reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
 
-            if criar_novo:
-                st.session_state['modal_novo_contentor'] = True
-                st.rerun()
+                if criar_novo:
+                    st.session_state['modal_novo_contentor'] = True
+                    st.rerun()
 
-            if ativar_edicao:
-                st.session_state["mapa_modo_edicao"] = True
-                if js_eval_disponivel:
-                    streamlit_js_eval(
-                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                        key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
-                    )
-                st.session_state["mapa_salvar_layout_pendente"] = False
-                st.session_state["mapa_salvar_layout_tentativas"] = 0
-                st.rerun()
-
-            if cancelar_edicao:
-                st.session_state["mapa_modo_edicao"] = False
-                if js_eval_disponivel:
-                    streamlit_js_eval(
-                        js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                        key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
-                    )
-                st.session_state["mapa_salvar_layout_pendente"] = False
-                st.session_state["mapa_salvar_layout_tentativas"] = 0
-                st.rerun()
-
-            if reorganizar:
-                # Distribui contentores em grelha automática
-                BOX_W, BOX_H, MARGIN = 115, 110, 10
-                COLS = max(1, min(7, len(contentores_df)))
-                ok = 0
-                for i, (_, row) in enumerate(contentores_df.iterrows()):
-                    col_idx = i % COLS
-                    row_idx = i // COLS
-                    nx = MARGIN + col_idx * BOX_W
-                    ny = MARGIN + row_idx * BOX_H
-                    if atualizar_posicao_contentor(int(row['id']), nx, ny):
-                        ok += 1
-                st.success(t("map.reorganized", count=ok))
-                st.rerun()
-
-            if salvar_layout:
-                if not js_eval_disponivel:
-                    st.error(t("map.install_dependency"))
-                else:
-                    logger.info("Salvar layout acionado pelo utilizador")
-                    st.session_state["mapa_salvar_layout_pendente"] = True
+                if ativar_edicao:
+                    st.session_state["mapa_modo_edicao"] = True
+                    if js_eval_disponivel:
+                        streamlit_js_eval(
+                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
+                            key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
+                        )
+                    st.session_state["mapa_salvar_layout_pendente"] = False
                     st.session_state["mapa_salvar_layout_tentativas"] = 0
                     st.rerun()
 
-            if st.session_state.get("mapa_salvar_layout_pendente", False):
-                logger.info(f"Processando save pendente (tentativa={st.session_state.get('mapa_salvar_layout_tentativas', 0)})")
-                if layout_pending_raw and layout_pending_raw != "null":
-                    try:
-                        layout_data = layout_pending_raw if isinstance(layout_pending_raw, dict) else json.loads(str(layout_pending_raw))
-
-                        if isinstance(layout_data, dict) and "output" in layout_data:
-                            output_value = layout_data.get("output")
-                            if isinstance(output_value, dict):
-                                layout_data = output_value
-                            elif isinstance(output_value, str) and output_value.strip():
-                                layout_data = json.loads(output_value)
-
-                        if not isinstance(layout_data, dict) or len(layout_data) == 0:
-                            raise ValueError("Payload de layout vazio")
-
-                        atualizados = 0
-                        atualizados_ids = []
-
-                        for _, row in contentores_df.iterrows():
-                            cid = str(int(row['id']))
-                            pos = layout_data.get(cid)
-                            if pos is None:
-                                try:
-                                    pos = layout_data.get(int(cid))
-                                except Exception:
-                                    pos = None
-                            if not isinstance(pos, dict):
-                                continue
-
-                            novo_x = int(pos.get("x", int(row['x'])))
-                            novo_y = int(pos.get("y", int(row['y'])))
-                            largura = max(1, int(row['w']))
-                            altura = max(1, int(row['h']))
-                            novo_x = max(0, min(novo_x, 900 - largura))
-                            novo_y = max(0, min(novo_y, 550 - altura))
-
-                            if novo_x != int(row['x']) or novo_y != int(row['y']):
-                                if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
-                                    atualizados += 1
-                                    atualizados_ids.append(cid)
-
+                if cancelar_edicao:
+                    st.session_state["mapa_modo_edicao"] = False
+                    if js_eval_disponivel:
                         streamlit_js_eval(
                             js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                            key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
+                            key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
                         )
+                    st.session_state["mapa_salvar_layout_pendente"] = False
+                    st.session_state["mapa_salvar_layout_tentativas"] = 0
+                    st.rerun()
 
-                        st.session_state["mapa_salvar_layout_pendente"] = False
+                if reorganizar:
+                    # Distribui contentores em grelha automática
+                    BOX_W, BOX_H, MARGIN = 115, 110, 10
+                    COLS = max(1, min(7, len(contentores_df)))
+                    ok = 0
+                    for i, (_, row) in enumerate(contentores_df.iterrows()):
+                        col_idx = i % COLS
+                        row_idx = i // COLS
+                        nx = MARGIN + col_idx * BOX_W
+                        ny = MARGIN + row_idx * BOX_H
+                        if atualizar_posicao_contentor(int(row['id']), nx, ny):
+                            ok += 1
+                    st.success(t("map.reorganized", count=ok))
+                    st.rerun()
+
+                if salvar_layout:
+                    if not js_eval_disponivel:
+                        st.error(t("map.install_dependency"))
+                    else:
+                        logger.info("Salvar layout acionado pelo utilizador")
+                        st.session_state["mapa_salvar_layout_pendente"] = True
                         st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.session_state["mapa_modo_edicao"] = False
-
-                        if atualizados > 0:
-                            st.toast(t("map.layout_saved", count=atualizados), icon="✅")
-                        else:
-                            st.toast(t("map.no_changes_to_save"), icon="ℹ️")
                         st.rerun()
-                    except Exception as e:
-                        st.session_state["mapa_salvar_layout_pendente"] = False
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        logger.error(f"Erro ao salvar layout do mapa: {e}")
-                        st.toast(t("map.save_failed"), icon="❌")
-                else:
-                    st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
-                    if st.session_state["mapa_salvar_layout_tentativas"] > 4:
-                        st.session_state["mapa_salvar_layout_pendente"] = False
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.toast(t("map.read_positions_failed"), icon="⚠️")
 
-            if st.session_state["mapa_modo_edicao"] and is_mobile:
-                pass
+                if st.session_state.get("mapa_salvar_layout_pendente", False):
+                    logger.info(f"Processando save pendente (tentativa={st.session_state.get('mapa_salvar_layout_tentativas', 0)})")
+                    if layout_pending_raw and layout_pending_raw != "null":
+                        try:
+                            layout_data = layout_pending_raw if isinstance(layout_pending_raw, dict) else json.loads(str(layout_pending_raw))
 
-            if st.session_state.get("move_feedback"):
-                st.toast(st.session_state.pop("move_feedback"), icon="✅")
-            if st.session_state.get("move_feedback_erro"):
-                st.toast(st.session_state.pop("move_feedback_erro"), icon="⚠️")
+                            if isinstance(layout_data, dict) and "output" in layout_data:
+                                output_value = layout_data.get("output")
+                                if isinstance(output_value, dict):
+                                    layout_data = output_value
+                                elif isinstance(output_value, str) and output_value.strip():
+                                    layout_data = json.loads(output_value)
 
-            mapa_html = """
-            <style>
-                * {
-                    box-sizing: border-box;
-                    margin: 0;
-                    padding: 0;
-                }
-                
-                html, body {
-                    height: 100%;
-                    margin: 0;
-                    padding: 0;
-                    overflow: hidden;
-                }
-                
-                :root {
-                    --primary: """ + primary_color + """;
-                    --primary-dark: """ + primary_color + """;
-                    --bg-main: #ffffff;
-                    --bg-canvas: #f8fafc;
-                    --border: #e2e8f0;
-                    --border-dark: #cbd5e1;
-                    --text: #0f172a;
-                    --text-muted: #64748b;
-                    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-                    --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
-                }
+                            if not isinstance(layout_data, dict) or len(layout_data) == 0:
+                                raise ValueError("Payload de layout vazio")
 
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-                    background: var(--bg-main);
-                }
+                            atualizados = 0
+                            atualizados_ids = []
 
-                #mapa-wrapper {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    background: var(--bg-canvas);
-                }
+                            for _, row in contentores_df.iterrows():
+                                cid = str(int(row['id']))
+                                pos = layout_data.get(cid)
+                                if pos is None:
+                                    try:
+                                        pos = layout_data.get(int(cid))
+                                    except Exception:
+                                        pos = None
+                                if not isinstance(pos, dict):
+                                    continue
 
-                #mapa-area {
-                    position: relative;
-                    width: 100%;
-                    flex: 1;
-                    background: var(--bg-main);
-                    background-image:
-                        linear-gradient(var(--border) 1px, transparent 1px),
-                        linear-gradient(90deg, var(--border) 1px, transparent 1px);
-                    background-size: 40px 40px;
-                    overflow: hidden;
-                    touch-action: none;
-                }
+                                novo_x = int(pos.get("x", int(row['x'])))
+                                novo_y = int(pos.get("y", int(row['y'])))
+                                largura = max(1, int(row['w']))
+                                altura = max(1, int(row['h']))
+                                novo_x = max(0, min(novo_x, 900 - largura))
+                                novo_y = max(0, min(novo_y, 550 - altura))
 
-                .cont-box {
-                    position: absolute;
-                    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                    border: 2px solid var(--primary);
-                    border-radius: 12px;
-                    box-shadow: var(--shadow);
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 12px;
-                    user-select: none;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                    min-width: 100px;
-                    min-height: 100px;
-                }
+                                if novo_x != int(row['x']) or novo_y != int(row['y']):
+                                    if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
+                                        atualizados += 1
+                                        atualizados_ids.append(cid)
 
-                .cont-box.clickable {
-                    cursor: pointer;
-                }
+                            streamlit_js_eval(
+                                js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
+                                key=f"clear_layout_pending_save_{int(time.time() * 1000)}"
+                            )
 
-                .cont-box.draggable {
-                    cursor: grab;
-                }
+                            st.session_state["mapa_salvar_layout_pendente"] = False
+                            st.session_state["mapa_salvar_layout_tentativas"] = 0
+                            st.session_state["mapa_modo_edicao"] = False
 
-                .cont-box.dragging {
-                    cursor: grabbing !important;
-                    opacity: 0.85;
-                    z-index: 1000;
-                    box-shadow: var(--shadow-lg);
-                    transform: scale(1.05) rotate(2deg);
-                }
+                            if atualizados > 0:
+                                st.toast(t("map.layout_saved", count=atualizados), icon="✅")
+                            else:
+                                st.toast(t("map.no_changes_to_save"), icon="ℹ️")
+                            st.rerun()
+                        except Exception as e:
+                            st.session_state["mapa_salvar_layout_pendente"] = False
+                            st.session_state["mapa_salvar_layout_tentativas"] = 0
+                            logger.error(f"Erro ao salvar layout do mapa: {e}")
+                            st.toast(t("map.save_failed"), icon="❌")
+                    else:
+                        st.session_state["mapa_salvar_layout_tentativas"] = int(st.session_state.get("mapa_salvar_layout_tentativas", 0)) + 1
+                        if st.session_state["mapa_salvar_layout_tentativas"] > 4:
+                            st.session_state["mapa_salvar_layout_pendente"] = False
+                            st.session_state["mapa_salvar_layout_tentativas"] = 0
+                            st.toast(t("map.read_positions_failed"), icon="⚠️")
 
-                .cont-box:hover {
-                    transform: translateY(-4px) scale(1.02);
-                    box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.3);
-                    border-color: var(--primary-dark);
-                    z-index: 100;
-                }
+                if st.session_state["mapa_modo_edicao"] and is_mobile:
+                    pass
 
-                .cont-codigo {
-                    font-size: 0.875rem;
-                    font-weight: 700;
-                    color: var(--primary-dark);
-                    margin-bottom: 4px;
-                    letter-spacing: 0.5px;
-                    text-transform: uppercase;
-                }
+                if st.session_state.get("move_feedback"):
+                    st.toast(st.session_state.pop("move_feedback"), icon="✅")
+                if st.session_state.get("move_feedback_erro"):
+                    st.toast(st.session_state.pop("move_feedback_erro"), icon="⚠️")
 
-                .cont-qtd {
-                    font-size: 2rem;
-                    font-weight: 800;
-                    color: var(--text);
-                    line-height: 1;
-                    margin-bottom: 2px;
-                }
-
-                .cont-label {
-                    font-size: 0.65rem;
-                    color: var(--text-muted);
-                    text-transform: uppercase;
-                    letter-spacing: 0.8px;
-                    font-weight: 600;
-                }
-
-                #mapa-status {
-                    padding: 8px 16px;
-                    background: var(--bg-main);
-                    border-top: 1px solid var(--border);
-                    font-size: 0.75rem;
-                    color: var(--text-muted);
-                    text-align: center;
-                    font-weight: 500;
-                }
-
-                /* Modal Overlay */
-                #inv-overlay {
-                    position: fixed;
-                    inset: 0;
-                    background: rgba(0, 0, 0, 0.6);
-                    backdrop-filter: blur(4px);
-                    display: none;
-                    z-index: 2000;
-                    animation: fadeIn 0.2s ease;
-                }
-
-                #inv-overlay.visible {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 20px;
-                }
-
-                /* Modal Panel Premium */
-                #inv-panel {
-                    background: var(--bg-main);
-                    border-radius: 16px;
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-                    width: 100%;
-                    max-width: 600px;
-                    max-height: 85vh;
-                    overflow: hidden;
-                    display: flex;
-                    flex-direction: column;
-                    animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-
-                @keyframes slideUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(20px) scale(0.95);
+                mapa_html = """
+                <style>
+                    * {
+                        box-sizing: border-box;
+                        margin: 0;
+                        padding: 0;
                     }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0) scale(1);
+                
+                    html, body {
+                        height: 100%;
+                        margin: 0;
+                        padding: 0;
+                        overflow: hidden;
                     }
-                }
+                
+                    :root {
+                        --primary: """ + primary_color + """;
+                        --primary-dark: """ + primary_color + """;
+                        --bg-main: #ffffff;
+                        --bg-canvas: #f8fafc;
+                        --border: #e2e8f0;
+                        --border-dark: #cbd5e1;
+                        --text: #0f172a;
+                        --text-muted: #64748b;
+                        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                        --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+                    }
 
-                /* Modal Header */
-                .inv-header {
-                    padding: 20px 24px;
-                    border-bottom: 1px solid var(--border);
-                    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-                    color: white;
-                }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                        background: var(--bg-main);
+                    }
 
-                .inv-header h2 {
-                    font-size: 1.5rem;
-                    font-weight: 700;
-                    margin-bottom: 4px;
-                }
+                    #mapa-wrapper {
+                        width: 100%;
+                        height: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        background: var(--bg-canvas);
+                    }
 
-                .inv-header p {
-                    font-size: 0.875rem;
-                    opacity: 0.9;
-                }
+                    #mapa-area {
+                        position: relative;
+                        width: 100%;
+                        flex: 1;
+                        background: var(--bg-main);
+                        background-image:
+                            linear-gradient(var(--border) 1px, transparent 1px),
+                            linear-gradient(90deg, var(--border) 1px, transparent 1px);
+                        background-size: 40px 40px;
+                        overflow: hidden;
+                        touch-action: none;
+                    }
 
-                /* Modal Body */
-                .inv-body {
-                    padding: 24px;
-                    overflow-y: auto;
-                    flex: 1;
-                }
-
-                .inv-section {
-                    margin-bottom: 24px;
-                }
-
-                .inv-section-title {
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    color: var(--text-muted);
-                    margin-bottom: 12px;
-                }
-
-                .inv-lote {
-                    background: var(--bg-canvas);
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 12px 16px;
-                    margin-bottom: 8px;
-                    transition: all 0.2s ease;
-                }
-
-                .inv-lote:hover {
-                    border-color: var(--primary);
-                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-                    transform: translateX(4px);
-                }
-
-                .inv-lote-row {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    gap: 12px;
-                    font-size: 0.875rem;
-                }
-
-                .inv-lote-label {
-                    color: var(--text-muted);
-                    font-weight: 500;
-                }
-
-                .inv-lote-value {
-                    color: var(--text);
-                    font-weight: 600;
-                }
-
-                /* Modal Footer */
-                .inv-footer {
-                    padding: 16px 24px;
-                    border-top: 1px solid var(--border);
-                    background: var(--bg-canvas);
-                }
-
-                .btn-close {
-                    width: 100%;
-                    padding: 12px 24px;
-                    background: var(--primary);
-                    color: white;
-                    border: none;
-                    border-radius: 10px;
-                    font-size: 0.95rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-
-                .btn-close:hover {
-                    background: var(--primary-dark);
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
-                }
-
-                /* Mobile Optimizations */
-                @media (max-width: 640px) {
                     .cont-box {
-                        min-width: 80px;
-                        min-height: 80px;
-                        padding: 8px;
-                        border-radius: 8px;
+                        position: absolute;
+                        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+                        border: 2px solid var(--primary);
+                        border-radius: 12px;
+                        box-shadow: var(--shadow);
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 12px;
+                        user-select: none;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        min-width: 100px;
+                        min-height: 100px;
+                    }
+
+                    .cont-box.clickable {
+                        cursor: pointer;
+                    }
+
+                    .cont-box.draggable {
+                        cursor: grab;
+                    }
+
+                    .cont-box.dragging {
+                        cursor: grabbing !important;
+                        opacity: 0.85;
+                        z-index: 1000;
+                        box-shadow: var(--shadow-lg);
+                        transform: scale(1.05) rotate(2deg);
+                    }
+
+                    .cont-box:hover {
+                        transform: translateY(-4px) scale(1.02);
+                        box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.3);
+                        border-color: var(--primary-dark);
+                        z-index: 100;
                     }
 
                     .cont-codigo {
-                        font-size: 0.75rem;
+                        font-size: 0.875rem;
+                        font-weight: 700;
+                        color: var(--primary-dark);
+                        margin-bottom: 4px;
+                        letter-spacing: 0.5px;
+                        text-transform: uppercase;
                     }
 
                     .cont-qtd {
-                        font-size: 1.5rem;
+                        font-size: 2rem;
+                        font-weight: 800;
+                        color: var(--text);
+                        line-height: 1;
+                        margin-bottom: 2px;
                     }
 
                     .cont-label {
-                        font-size: 0.6rem;
+                        font-size: 0.65rem;
+                        color: var(--text-muted);
+                        text-transform: uppercase;
+                        letter-spacing: 0.8px;
+                        font-weight: 600;
                     }
 
+                    #mapa-status {
+                        padding: 8px 16px;
+                        background: var(--bg-main);
+                        border-top: 1px solid var(--border);
+                        font-size: 0.75rem;
+                        color: var(--text-muted);
+                        text-align: center;
+                        font-weight: 500;
+                    }
+
+                    /* Modal Overlay */
+                    #inv-overlay {
+                        position: fixed;
+                        inset: 0;
+                        background: rgba(0, 0, 0, 0.6);
+                        backdrop-filter: blur(4px);
+                        display: none;
+                        z-index: 2000;
+                        animation: fadeIn 0.2s ease;
+                    }
+
+                    #inv-overlay.visible {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }
+
+                    /* Modal Panel Premium */
                     #inv-panel {
-                        max-width: 100%;
-                        border-radius: 12px 12px 0 0;
+                        background: var(--bg-main);
+                        border-radius: 16px;
+                        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                        width: 100%;
+                        max-width: 600px;
+                        max-height: 85vh;
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: column;
+                        animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    }
+
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+
+                    @keyframes slideUp {
+                        from {
+                            opacity: 0;
+                            transform: translateY(20px) scale(0.95);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0) scale(1);
+                        }
+                    }
+
+                    /* Modal Header */
+                    .inv-header {
+                        padding: 20px 24px;
+                        border-bottom: 1px solid var(--border);
+                        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+                        color: white;
                     }
 
                     .inv-header h2 {
-                        font-size: 1.25rem;
+                        font-size: 1.5rem;
+                        font-weight: 700;
+                        margin-bottom: 4px;
                     }
 
+                    .inv-header p {
+                        font-size: 0.875rem;
+                        opacity: 0.9;
+                    }
+
+                    /* Modal Body */
                     .inv-body {
-                        padding: 16px;
+                        padding: 24px;
+                        overflow-y: auto;
+                        flex: 1;
+                    }
+
+                    .inv-section {
+                        margin-bottom: 24px;
+                    }
+
+                    .inv-section-title {
+                        font-size: 0.75rem;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                        color: var(--text-muted);
+                        margin-bottom: 12px;
+                    }
+
+                    .inv-lote {
+                        background: var(--bg-canvas);
+                        border: 1px solid var(--border);
+                        border-radius: 10px;
+                        padding: 12px 16px;
+                        margin-bottom: 8px;
+                        transition: all 0.2s ease;
+                    }
+
+                    .inv-lote:hover {
+                        border-color: var(--primary);
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+                        transform: translateX(4px);
                     }
 
                     .inv-lote-row {
-                        font-size: 0.8rem;
-                    }
-                }
-            </style>
-
-            <div id="mapa-wrapper" class="__MOBILE_CLASS__">
-                <div id="mapa-area">
-                </div>
-                <div id="mapa-status">__STATUS_TEXT__</div>
-            </div>
-
-            <!-- Modal de Inventário Premium -->
-            <div id="inv-overlay">
-                <div id="inv-panel">
-                    <div class="inv-header">
-                        <h2 id="inv-titulo">Contentor</h2>
-                        <p id="inv-subtitulo"></p>
-                    </div>
-                    <div class="inv-body" id="inv-body"></div>
-                    <div class="inv-footer">
-                        <button class="btn-close" onclick="fecharModal()">Fechar</button>
-                    </div>
-                </div>
-            </div>
-
-            <script>
-                const contentores = __CONTENTORES_DATA__;
-                const isEditMode = __EDIT_MODE__;
-                const isMobile = __IS_MOBILE__;
-                const mapaArea = document.getElementById('mapa-area');
-                const statusBar = document.getElementById('mapa-status');
-                const invOverlay = document.getElementById('inv-overlay');
-                const invPanel = document.getElementById('inv-panel');
-                const invBody = document.getElementById('inv-body');
-                const invTitulo = document.getElementById('inv-titulo');
-                const invSubtitulo = document.getElementById('inv-subtitulo');
-
-                let dragInfo = null;
-                let areaScale = 1;
-
-                function computeScale() {
-                    const rect = mapaArea.getBoundingClientRect();
-                    areaScale = rect.width / (isMobile ? 375 : 900);
-                }
-
-                function criarContentor(c) {
-                    const box = document.createElement('div');
-                    box.className = 'cont-box';
-                    box.dataset.contId = String(c.id);
-                    if (!isEditMode) box.classList.add('clickable');
-                    if (isEditMode) box.classList.add('draggable');
-
-                    box.innerHTML = `
-                        <div class="cont-codigo">${c.codigo}</div>
-                        <div class="cont-qtd">${c.palhetas}</div>
-                        <div class="cont-label">palhetas</div>
-                    `;
-
-                    const baseW = isMobile ? 80 : 100;
-                    const baseH = isMobile ? 80 : 100;
-                    box.style.left = (c.x * areaScale) + 'px';
-                    box.style.top = (c.y * areaScale) + 'px';
-                    box.style.width = baseW + 'px';
-                    box.style.height = baseH + 'px';
-
-                    if (isEditMode) {
-                        box.addEventListener('mousedown', startDrag);
-                        box.addEventListener('touchstart', startDrag, {passive: false});
-                    } else {
-                        box.addEventListener('click', () => mostrarInventario(c));
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 12px;
+                        font-size: 0.875rem;
                     }
 
-                    mapaArea.appendChild(box);
-                }
-
-                function startDrag(e) {
-                    e.preventDefault();
-                    const box = e.currentTarget;
-                    box.classList.add('dragging');
-                    const rect = box.getBoundingClientRect();
-                    const areaRect = mapaArea.getBoundingClientRect();
-                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-                    dragInfo = {
-                        box: box,
-                        offsetX: clientX - rect.left,
-                        offsetY: clientY - rect.top,
-                        areaLeft: areaRect.left,
-                        areaTop: areaRect.top,
-                        areaW: areaRect.width,
-                        areaH: areaRect.height
-                    };
-
-                    document.addEventListener('mousemove', onDrag);
-                    document.addEventListener('mouseup', endDrag);
-                    document.addEventListener('touchmove', onDrag, {passive: false});
-                    document.addEventListener('touchend', endDrag);
-                }
-
-                function onDrag(e) {
-                    if (!dragInfo) return;
-                    e.preventDefault();
-                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-                    let newX = clientX - dragInfo.areaLeft - dragInfo.offsetX;
-                    let newY = clientY - dragInfo.areaTop - dragInfo.offsetY;
-
-                    newX = Math.max(0, Math.min(newX, dragInfo.areaW - dragInfo.box.offsetWidth));
-                    newY = Math.max(0, Math.min(newY, dragInfo.areaH - dragInfo.box.offsetHeight));
-
-                    dragInfo.box.style.left = newX + 'px';
-                    dragInfo.box.style.top = newY + 'px';
-                }
-
-                function endDrag(e) {
-                    if (!dragInfo) return;
-                    dragInfo.box.classList.remove('dragging');
-                    
-                    const finalX = parseInt(dragInfo.box.style.left) / areaScale;
-                    const finalY = parseInt(dragInfo.box.style.top) / areaScale;
-                    const contId = dragInfo.box.dataset.contId;
-
-                    try {
-                        const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
-                        const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
-                        layoutData[contId] = {x: Math.round(finalX), y: Math.round(finalY)};
-                        targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
-                    } catch (err) {
-                        console.error('Erro ao salvar posição:', err);
+                    .inv-lote-label {
+                        color: var(--text-muted);
+                        font-weight: 500;
                     }
 
-                    document.removeEventListener('mousemove', onDrag);
-                    document.removeEventListener('mouseup', endDrag);
-                    document.removeEventListener('touchmove', onDrag);
-                    document.removeEventListener('touchend', endDrag);
-                    dragInfo = null;
-                }
-
-                function mostrarInventario(cont) {
-                    invTitulo.textContent = `Contentor ${cont.codigo}`;
-                    invSubtitulo.textContent = `${cont.palhetas} palhetas no total`;
-                    
-                    let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
-                    
-                    if (cont.lotes && cont.lotes.length > 0) {
-                        cont.lotes.forEach(lote => {
-                            html += `
-                                <div class="inv-lote">
-                                    <div class="inv-lote-row">
-                                        <span class="inv-lote-label">🐴 Garanhão:</span>
-                                        <span class="inv-lote-value">${lote.garanhao}</span>
-                                    </div>
-                                    <div class="inv-lote-row">
-                                        <span class="inv-lote-label">👤 Proprietário:</span>
-                                        <span class="inv-lote-value">${lote.proprietario}</span>
-                                    </div>
-                                    <div class="inv-lote-row">
-                                        <span class="inv-lote-label">📍 Localização:</span>
-                                        <span class="inv-lote-value">C${lote.canister} / A${lote.andar}</span>
-                                    </div>
-                                    <div class="inv-lote-row">
-                                        <span class="inv-lote-label">🧬 Palhetas:</span>
-                                        <span class="inv-lote-value">${lote.quantidade}</span>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                    } else {
-                        html += '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhum lote neste contentor</p>';
+                    .inv-lote-value {
+                        color: var(--text);
+                        font-weight: 600;
                     }
-                    
-                    html += '</div>';
-                    invBody.innerHTML = html;
-                    invOverlay.classList.add('visible');
-                }
 
-                function fecharModal() {
-                    invOverlay.classList.remove('visible');
-                }
+                    /* Modal Footer */
+                    .inv-footer {
+                        padding: 16px 24px;
+                        border-top: 1px solid var(--border);
+                        background: var(--bg-canvas);
+                    }
 
-                invOverlay.addEventListener('click', (e) => {
-                    if (e.target === invOverlay) fecharModal();
-                });
+                    .btn-close {
+                        width: 100%;
+                        padding: 12px 24px;
+                        background: var(--primary);
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-size: 0.95rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
 
-                window.addEventListener('resize', () => {
-                    computeScale();
-                    contentores.forEach((c, i) => {
-                        const box = mapaArea.children[i];
-                        if (box) {
-                            box.style.left = (c.x * areaScale) + 'px';
-                            box.style.top = (c.y * areaScale) + 'px';
+                    .btn-close:hover {
+                        background: var(--primary-dark);
+                        transform: translateY(-2px);
+                        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+                    }
+
+                    /* Mobile Optimizations */
+                    @media (max-width: 640px) {
+                        .cont-box {
+                            min-width: 80px;
+                            min-height: 80px;
+                            padding: 8px;
+                            border-radius: 8px;
                         }
-                    });
-                });
 
-                computeScale();
-                contentores.forEach(criarContentor);
+                        .cont-codigo {
+                            font-size: 0.75rem;
+                        }
 
-                if (!isEditMode) {
-                    statusBar.textContent = 'Clique num contentor para ver o inventário.';
-                }
-            </script>
-            """
-            import streamlit.components.v1 as components
-            mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
-            mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
-            mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
-            mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
-            status_text = (
-                t("map.status_edit")
-                if st.session_state["mapa_modo_edicao"]
-                else t("map.status_view")
-            )
-            mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
+                        .cont-qtd {
+                            font-size: 1.5rem;
+                        }
 
-            # Renderizar mapa com altura responsiva baseada no nº de contentores
-            n_cont = len(contentores_df)
-            if is_mobile:
-                map_height = max(260, min(380, n_cont * 60 + 160))
-            else:
-                map_height = max(340, min(520, n_cont * 55 + 200))
-            st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
-            components.html(mapa_render, height=map_height, scrolling=False)
-            st.markdown("</div>", unsafe_allow_html=True)
+                        .cont-label {
+                            font-size: 0.6rem;
+                        }
 
-            # ── Inventário de Contentores ──────────────────────────────────────
-            primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
+                        #inv-panel {
+                            max-width: 100%;
+                            border-radius: 12px 12px 0 0;
+                        }
 
-            # Converter hex → rgb para usar em rgba(). Resistente a cor
-            # vazia/inválida (ex.: `primary_color` por preencher numa
-            # instalação local nova) — cai para a cor primária por
-            # defeito do projeto em vez de rebentar.
-            _default_hex = DEFAULT_PRIMARY_COLOR.lstrip('#')
+                        .inv-header h2 {
+                            font-size: 1.25rem;
+                        }
 
-            def hex_to_rgb(h):
-                h = (h or "").lstrip('#').strip()
-                if len(h) == 3:
-                    h = ''.join(c * 2 for c in h)
-                if len(h) != 6:
-                    h = _default_hex
-                try:
-                    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-                except ValueError:
-                    return tuple(int(_default_hex[i:i+2], 16) for i in (0, 2, 4))
+                        .inv-body {
+                            padding: 16px;
+                        }
 
-            pr, pg, pb = hex_to_rgb(primary)
+                        .inv-lote-row {
+                            font-size: 0.8rem;
+                        }
+                    }
+                </style>
 
-            def build_heatmap_html(stock_df, primary_r, primary_g, primary_b):
-                """Gera o HTML de uma grelha Canisters × Andares para o stock de um contentor."""
-                if stock_df.empty:
-                    return ""
-                # Contagem por célula (canister, andar)
-                cell_map = {}
-                for _, r in stock_df.iterrows():
-                    c, a = int(r['canister'] or 0), int(r['andar'] or 0)
-                    if c and a:
-                        cell_map[(c, a)] = cell_map.get((c, a), 0) + int(r['existencia_atual'] or 0)
-
-                if not cell_map:
-                    return ""
-
-                canisters = sorted(set(k[0] for k in cell_map))
-                andares   = sorted(set(k[1] for k in cell_map), reverse=True)  # top → bottom
-                max_pal   = max(cell_map.values()) or 1
-
-                def cell_style(qty):
-                    if qty == 0:
-                        return "background:#f1f5f9;color:#cbd5e1;"
-                    ratio = qty / max_pal
-                    alpha = 0.18 + ratio * 0.78  # 0.18..0.96
-                    bg = f"rgba({primary_r},{primary_g},{primary_b},{alpha:.2f})"
-                    fg = "#fff" if alpha > 0.55 else f"rgb({primary_r},{primary_g},{primary_b})"
-                    return f"background:{bg};color:{fg};font-weight:700;"
-
-                # Header com nomes das colunas (canisters)
-                th_cells = "".join(
-                    f"<th style='text-align:center;font-size:.68rem;font-weight:700;"
-                    f"color:#64748b;padding:4px 2px;white-space:nowrap;'>C{c}</th>"
-                    for c in canisters
-                )
-                rows_html = ""
-                for a in andares:
-                    tds = ""
-                    for c in canisters:
-                        qty = cell_map.get((c, a), 0)
-                        sty = cell_style(qty)
-                        label = str(qty) if qty > 0 else "·"
-                        tds += (
-                            f"<td class='hm-cell' "
-                            f"data-cont='{cont_id}' data-c='{c}' data-a='{a}' "
-                            f"title='C{c} / A{a}: {qty} palhetas' "
-                            f"style='{sty}text-align:center;border-radius:6px;"
-                            f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
-                        )
-                    rows_html += (
-                        f"<tr><td style='font-size:.65rem;font-weight:700;color:#94a3b8;"
-                        f"padding-right:6px;white-space:nowrap;'>A{a}</td>{tds}</tr>"
-                    )
-
-                legend_items = ""
-                for pct, lbl in [(0, "Vazio"), (0.25, "Baixo"), (0.55, "Médio"), (0.85, "Alto")]:
-                    a = 0.18 + pct * 0.78
-                    bg = f"rgba({primary_r},{primary_g},{primary_b},{a:.2f})" if pct > 0 else "#f1f5f9"
-                    legend_items += (
-                        f"<span style='display:inline-flex;align-items:center;gap:4px;"
-                        f"font-size:.65rem;color:#64748b;margin-right:10px;'>"
-                        f"<span style='display:inline-block;width:12px;height:12px;"
-                        f"border-radius:3px;background:{bg};border:1px solid #e2e8f0;'></span>{lbl}</span>"
-                    )
-
-                return f"""
-                <div class="hm-grid-wrap" style="margin:12px 0 6px;">
-                  <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
-                               letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
-                    Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
-                  </div>
-                  <div style="overflow-x:auto;">
-                    <table style="border-collapse:separate;border-spacing:3px;width:100%;">
-                      <thead>
-                        <tr>
-                          <th style="min-width:28px;"></th>{th_cells}
-                        </tr>
-                      </thead>
-                      <tbody>{rows_html}</tbody>
-                    </table>
-                  </div>
-                  <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
-                </div>
-                """
-            st.markdown(f"""
-            <style>
-                .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
-                .cont-card {{
-                    background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
-                    overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.05);
-                    transition:box-shadow .2s;
-                }}
-                .cont-card-header {{
-                    background:linear-gradient(135deg,{primary}15,{primary}05);
-                    border-bottom:1.5px solid #e2e8f0;
-                    padding:14px 18px; display:flex; align-items:center; justify-content:space-between;
-                }}
-                .cont-card-code {{ font-size:1.1rem; font-weight:800; color:{primary}; letter-spacing:.5px; }}
-                .cont-card-desc {{ font-size:.75rem; color:#64748b; margin-top:2px; }}
-                .cont-card-badge {{
-                    background:{primary}; color:#fff; border-radius:20px;
-                    padding:4px 12px; font-size:.78rem; font-weight:700;
-                }}
-                .cont-card-body {{ padding:14px 18px; }}
-                .cant-section-title {{
-                    font-size:.7rem; font-weight:700; text-transform:uppercase;
-                    letter-spacing:1px; color:#94a3b8; margin:8px 0 6px;
-                }}
-                .lote-row {{
-                    display:flex; align-items:center; justify-content:space-between;
-                    background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
-                    padding:8px 12px; margin-bottom:6px; font-size:.82rem;
-                }}
-                .lote-row-left {{ display:flex; flex-direction:column; gap:2px; }}
-                .lote-garanhao {{ font-weight:700; color:#0f172a; }}
-                .lote-meta {{ color:#64748b; font-size:.75rem; }}
-                .lote-pos {{
-                    background:{primary}15; color:{primary}; border-radius:6px;
-                    padding:3px 8px; font-size:.72rem; font-weight:700;
-                    white-space:nowrap;
-                }}
-                @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
-
-                /* Heatmap styles (aplicados globalmente a todos os cards) */
-                .hm-grid-wrap {{
-                    position: relative;
-                    pointer-events: auto !important;
-                    isolation: isolate;
-                    background: #ffffff;
-                }}
-                .hm-grid-wrap table {{ pointer-events:auto !important; }}
-                .hm-cell {{
-                    cursor:pointer !important;
-                    border-radius:6px;
-                    transition: transform .15s, box-shadow .15s;
-                    position: relative;
-                    z-index: 2;
-                    pointer-events:auto !important;
-                    user-select:none;
-                    -webkit-tap-highlight-color: rgba({pr},{pg},{pb},.25);
-                }}
-                .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:3; }}
-                .hm-cell:active {{ transform:scale(0.97); }}
-                .hm-cell.selected {{ outline:2.5px solid rgb({pr},{pg},{pb});
-                    box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.22);
-                    transform:scale(1.08); z-index:4; }}
-                .lote-row.hl {{ border:2px solid rgb({pr},{pg},{pb}) !important;
-                    background:rgba({pr},{pg},{pb},.07) !important;
-                    box-shadow:0 2px 8px rgba({pr},{pg},{pb},.15); }}
-            </style>
-            """, unsafe_allow_html=True)
-
-            st.markdown(f"<div class='cant-section-title' style='font-size:.85rem;color:#0f172a;font-weight:700;margin-bottom:8px;'>Inventário por Contentor</div>", unsafe_allow_html=True)
-
-            for idx, row in contentores_df.iterrows():
-                stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                total_lotes = len(stock_contentor)
-                cod = row['codigo']
-                desc = row['descricao'] or ''
-                cont_id = int(row['id'])
-
-                # Card header
-                st.markdown(f"""
-                <div class="cont-card">
-                  <div class="cont-card-header">
-                    <div>
-                      <div class="cont-card-code">{cod}</div>
-                      <div class="cont-card-desc">{desc or 'Sem descrição'}</div>
+                <div id="mapa-wrapper" class="__MOBILE_CLASS__">
+                    <div id="mapa-area">
                     </div>
-                    <div class="cont-card-badge">{total_palhetas} palhetas</div>
-                  </div>
-                  <div class="cont-card-body">
+                    <div id="mapa-status">__STATUS_TEXT__</div>
+                </div>
+
+                <!-- Modal de Inventário Premium -->
+                <div id="inv-overlay">
+                    <div id="inv-panel">
+                        <div class="inv-header">
+                            <h2 id="inv-titulo">Contentor</h2>
+                            <p id="inv-subtitulo"></p>
+                        </div>
+                        <div class="inv-body" id="inv-body"></div>
+                        <div class="inv-footer">
+                            <button class="btn-close" onclick="fecharModal()">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    const contentores = __CONTENTORES_DATA__;
+                    const isEditMode = __EDIT_MODE__;
+                    const isMobile = __IS_MOBILE__;
+                    const mapaArea = document.getElementById('mapa-area');
+                    const statusBar = document.getElementById('mapa-status');
+                    const invOverlay = document.getElementById('inv-overlay');
+                    const invPanel = document.getElementById('inv-panel');
+                    const invBody = document.getElementById('inv-body');
+                    const invTitulo = document.getElementById('inv-titulo');
+                    const invSubtitulo = document.getElementById('inv-subtitulo');
+
+                    let dragInfo = null;
+                    let areaScale = 1;
+
+                    function computeScale() {
+                        const rect = mapaArea.getBoundingClientRect();
+                        areaScale = rect.width / (isMobile ? 375 : 900);
+                    }
+
+                    function criarContentor(c) {
+                        const box = document.createElement('div');
+                        box.className = 'cont-box';
+                        box.dataset.contId = String(c.id);
+                        if (!isEditMode) box.classList.add('clickable');
+                        if (isEditMode) box.classList.add('draggable');
+
+                        box.innerHTML = `
+                            <div class="cont-codigo">${c.codigo}</div>
+                            <div class="cont-qtd">${c.palhetas}</div>
+                            <div class="cont-label">palhetas</div>
+                        `;
+
+                        const baseW = isMobile ? 80 : 100;
+                        const baseH = isMobile ? 80 : 100;
+                        box.style.left = (c.x * areaScale) + 'px';
+                        box.style.top = (c.y * areaScale) + 'px';
+                        box.style.width = baseW + 'px';
+                        box.style.height = baseH + 'px';
+
+                        if (isEditMode) {
+                            box.addEventListener('mousedown', startDrag);
+                            box.addEventListener('touchstart', startDrag, {passive: false});
+                        } else {
+                            box.addEventListener('click', () => mostrarInventario(c));
+                        }
+
+                        mapaArea.appendChild(box);
+                    }
+
+                    function startDrag(e) {
+                        e.preventDefault();
+                        const box = e.currentTarget;
+                        box.classList.add('dragging');
+                        const rect = box.getBoundingClientRect();
+                        const areaRect = mapaArea.getBoundingClientRect();
+                        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                        dragInfo = {
+                            box: box,
+                            offsetX: clientX - rect.left,
+                            offsetY: clientY - rect.top,
+                            areaLeft: areaRect.left,
+                            areaTop: areaRect.top,
+                            areaW: areaRect.width,
+                            areaH: areaRect.height
+                        };
+
+                        document.addEventListener('mousemove', onDrag);
+                        document.addEventListener('mouseup', endDrag);
+                        document.addEventListener('touchmove', onDrag, {passive: false});
+                        document.addEventListener('touchend', endDrag);
+                    }
+
+                    function onDrag(e) {
+                        if (!dragInfo) return;
+                        e.preventDefault();
+                        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                        let newX = clientX - dragInfo.areaLeft - dragInfo.offsetX;
+                        let newY = clientY - dragInfo.areaTop - dragInfo.offsetY;
+
+                        newX = Math.max(0, Math.min(newX, dragInfo.areaW - dragInfo.box.offsetWidth));
+                        newY = Math.max(0, Math.min(newY, dragInfo.areaH - dragInfo.box.offsetHeight));
+
+                        dragInfo.box.style.left = newX + 'px';
+                        dragInfo.box.style.top = newY + 'px';
+                    }
+
+                    function endDrag(e) {
+                        if (!dragInfo) return;
+                        dragInfo.box.classList.remove('dragging');
+                    
+                        const finalX = parseInt(dragInfo.box.style.left) / areaScale;
+                        const finalY = parseInt(dragInfo.box.style.top) / areaScale;
+                        const contId = dragInfo.box.dataset.contId;
+
+                        try {
+                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                            const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                            layoutData[contId] = {x: Math.round(finalX), y: Math.round(finalY)};
+                            targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                        } catch (err) {
+                            console.error('Erro ao salvar posição:', err);
+                        }
+
+                        document.removeEventListener('mousemove', onDrag);
+                        document.removeEventListener('mouseup', endDrag);
+                        document.removeEventListener('touchmove', onDrag);
+                        document.removeEventListener('touchend', endDrag);
+                        dragInfo = null;
+                    }
+
+                    function mostrarInventario(cont) {
+                        invTitulo.textContent = `Contentor ${cont.codigo}`;
+                        invSubtitulo.textContent = `${cont.palhetas} palhetas no total`;
+                    
+                        let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
+                    
+                        if (cont.lotes && cont.lotes.length > 0) {
+                            cont.lotes.forEach(lote => {
+                                html += `
+                                    <div class="inv-lote">
+                                        <div class="inv-lote-row">
+                                            <span class="inv-lote-label">🐴 Garanhão:</span>
+                                            <span class="inv-lote-value">${lote.garanhao}</span>
+                                        </div>
+                                        <div class="inv-lote-row">
+                                            <span class="inv-lote-label">👤 Proprietário:</span>
+                                            <span class="inv-lote-value">${lote.proprietario}</span>
+                                        </div>
+                                        <div class="inv-lote-row">
+                                            <span class="inv-lote-label">📍 Localização:</span>
+                                            <span class="inv-lote-value">C${lote.canister} / A${lote.andar}</span>
+                                        </div>
+                                        <div class="inv-lote-row">
+                                            <span class="inv-lote-label">🧬 Palhetas:</span>
+                                            <span class="inv-lote-value">${lote.quantidade}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            html += '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhum lote neste contentor</p>';
+                        }
+                    
+                        html += '</div>';
+                        invBody.innerHTML = html;
+                        invOverlay.classList.add('visible');
+                    }
+
+                    function fecharModal() {
+                        invOverlay.classList.remove('visible');
+                    }
+
+                    invOverlay.addEventListener('click', (e) => {
+                        if (e.target === invOverlay) fecharModal();
+                    });
+
+                    window.addEventListener('resize', () => {
+                        computeScale();
+                        contentores.forEach((c, i) => {
+                            const box = mapaArea.children[i];
+                            if (box) {
+                                box.style.left = (c.x * areaScale) + 'px';
+                                box.style.top = (c.y * areaScale) + 'px';
+                            }
+                        });
+                    });
+
+                    computeScale();
+                    contentores.forEach(criarContentor);
+
+                    if (!isEditMode) {
+                        statusBar.textContent = 'Clique num contentor para ver o inventário.';
+                    }
+                </script>
+                """
+                import streamlit.components.v1 as components
+                mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
+                mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
+                mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
+                mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
+                status_text = (
+                    t("map.status_edit")
+                    if st.session_state["mapa_modo_edicao"]
+                    else t("map.status_view")
+                )
+                mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
+
+                # Renderizar mapa com altura responsiva baseada no nº de contentores
+                n_cont = len(contentores_df)
+                if is_mobile:
+                    map_height = max(260, min(380, n_cont * 60 + 160))
+                else:
+                    map_height = max(340, min(520, n_cont * 55 + 200))
+                st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
+                components.html(mapa_render, height=map_height, scrolling=False)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # ── Inventário de Contentores ──────────────────────────────────────
+                primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
+
+                # Converter hex → rgb para usar em rgba(). Resistente a cor
+                # vazia/inválida (ex.: `primary_color` por preencher numa
+                # instalação local nova) — cai para a cor primária por
+                # defeito do projeto em vez de rebentar.
+                _default_hex = DEFAULT_PRIMARY_COLOR.lstrip('#')
+
+                def hex_to_rgb(h):
+                    h = (h or "").lstrip('#').strip()
+                    if len(h) == 3:
+                        h = ''.join(c * 2 for c in h)
+                    if len(h) != 6:
+                        h = _default_hex
+                    try:
+                        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                    except ValueError:
+                        return tuple(int(_default_hex[i:i+2], 16) for i in (0, 2, 4))
+
+                pr, pg, pb = hex_to_rgb(primary)
+
+                def build_heatmap_html(stock_df, primary_r, primary_g, primary_b):
+                    """Gera o HTML de uma grelha Canisters × Andares para o stock de um contentor."""
+                    if stock_df.empty:
+                        return ""
+                    # Contagem por célula (canister, andar)
+                    cell_map = {}
+                    for _, r in stock_df.iterrows():
+                        c, a = int(r['canister'] or 0), int(r['andar'] or 0)
+                        if c and a:
+                            cell_map[(c, a)] = cell_map.get((c, a), 0) + int(r['existencia_atual'] or 0)
+
+                    if not cell_map:
+                        return ""
+
+                    canisters = sorted(set(k[0] for k in cell_map))
+                    andares   = sorted(set(k[1] for k in cell_map), reverse=True)  # top → bottom
+                    max_pal   = max(cell_map.values()) or 1
+
+                    def cell_style(qty):
+                        if qty == 0:
+                            return "background:#f1f5f9;color:#cbd5e1;"
+                        ratio = qty / max_pal
+                        alpha = 0.18 + ratio * 0.78  # 0.18..0.96
+                        bg = f"rgba({primary_r},{primary_g},{primary_b},{alpha:.2f})"
+                        fg = "#fff" if alpha > 0.55 else f"rgb({primary_r},{primary_g},{primary_b})"
+                        return f"background:{bg};color:{fg};font-weight:700;"
+
+                    # Header com nomes das colunas (canisters)
+                    th_cells = "".join(
+                        f"<th style='text-align:center;font-size:.68rem;font-weight:700;"
+                        f"color:#64748b;padding:4px 2px;white-space:nowrap;'>C{c}</th>"
+                        for c in canisters
+                    )
+                    rows_html = ""
+                    for a in andares:
+                        tds = ""
+                        for c in canisters:
+                            qty = cell_map.get((c, a), 0)
+                            sty = cell_style(qty)
+                            label = str(qty) if qty > 0 else "·"
+                            tds += (
+                                f"<td class='hm-cell' "
+                                f"data-cont='{cont_id}' data-c='{c}' data-a='{a}' "
+                                f"title='C{c} / A{a}: {qty} palhetas' "
+                                f"style='{sty}text-align:center;border-radius:6px;"
+                                f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
+                            )
+                        rows_html += (
+                            f"<tr><td style='font-size:.65rem;font-weight:700;color:#94a3b8;"
+                            f"padding-right:6px;white-space:nowrap;'>A{a}</td>{tds}</tr>"
+                        )
+
+                    legend_items = ""
+                    for pct, lbl in [(0, "Vazio"), (0.25, "Baixo"), (0.55, "Médio"), (0.85, "Alto")]:
+                        a = 0.18 + pct * 0.78
+                        bg = f"rgba({primary_r},{primary_g},{primary_b},{a:.2f})" if pct > 0 else "#f1f5f9"
+                        legend_items += (
+                            f"<span style='display:inline-flex;align-items:center;gap:4px;"
+                            f"font-size:.65rem;color:#64748b;margin-right:10px;'>"
+                            f"<span style='display:inline-block;width:12px;height:12px;"
+                            f"border-radius:3px;background:{bg};border:1px solid #e2e8f0;'></span>{lbl}</span>"
+                        )
+
+                    return f"""
+                    <div class="hm-grid-wrap" style="margin:12px 0 6px;">
+                      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
+                                   letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
+                        Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
+                      </div>
+                      <div style="overflow-x:auto;">
+                        <table style="border-collapse:separate;border-spacing:3px;width:100%;">
+                          <thead>
+                            <tr>
+                              <th style="min-width:28px;"></th>{th_cells}
+                            </tr>
+                          </thead>
+                          <tbody>{rows_html}</tbody>
+                        </table>
+                      </div>
+                      <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
+                    </div>
+                    """
+                st.markdown(f"""
+                <style>
+                    .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
+                    .cont-card {{
+                        background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
+                        overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.05);
+                        transition:box-shadow .2s;
+                    }}
+                    .cont-card-header {{
+                        background:linear-gradient(135deg,{primary}15,{primary}05);
+                        border-bottom:1.5px solid #e2e8f0;
+                        padding:14px 18px; display:flex; align-items:center; justify-content:space-between;
+                    }}
+                    .cont-card-code {{ font-size:1.1rem; font-weight:800; color:{primary}; letter-spacing:.5px; }}
+                    .cont-card-desc {{ font-size:.75rem; color:#64748b; margin-top:2px; }}
+                    .cont-card-badge {{
+                        background:{primary}; color:#fff; border-radius:20px;
+                        padding:4px 12px; font-size:.78rem; font-weight:700;
+                    }}
+                    .cont-card-body {{ padding:14px 18px; }}
+                    .cant-section-title {{
+                        font-size:.7rem; font-weight:700; text-transform:uppercase;
+                        letter-spacing:1px; color:#94a3b8; margin:8px 0 6px;
+                    }}
+                    .lote-row {{
+                        display:flex; align-items:center; justify-content:space-between;
+                        background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+                        padding:8px 12px; margin-bottom:6px; font-size:.82rem;
+                    }}
+                    .lote-row-left {{ display:flex; flex-direction:column; gap:2px; }}
+                    .lote-garanhao {{ font-weight:700; color:#0f172a; }}
+                    .lote-meta {{ color:#64748b; font-size:.75rem; }}
+                    .lote-pos {{
+                        background:{primary}15; color:{primary}; border-radius:6px;
+                        padding:3px 8px; font-size:.72rem; font-weight:700;
+                        white-space:nowrap;
+                    }}
+                    @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
+
+                    /* Heatmap styles (aplicados globalmente a todos os cards) */
+                    .hm-grid-wrap {{
+                        position: relative;
+                        pointer-events: auto !important;
+                        isolation: isolate;
+                        background: #ffffff;
+                    }}
+                    .hm-grid-wrap table {{ pointer-events:auto !important; }}
+                    .hm-cell {{
+                        cursor:pointer !important;
+                        border-radius:6px;
+                        transition: transform .15s, box-shadow .15s;
+                        position: relative;
+                        z-index: 2;
+                        pointer-events:auto !important;
+                        user-select:none;
+                        -webkit-tap-highlight-color: rgba({pr},{pg},{pb},.25);
+                    }}
+                    .hm-cell:hover {{ transform:scale(1.1); box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:3; }}
+                    .hm-cell:active {{ transform:scale(0.97); }}
+                    .hm-cell.selected {{ outline:2.5px solid rgb({pr},{pg},{pb});
+                        box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.22);
+                        transform:scale(1.08); z-index:4; }}
+                    .lote-row.hl {{ border:2px solid rgb({pr},{pg},{pb}) !important;
+                        background:rgba({pr},{pg},{pb},.07) !important;
+                        box-shadow:0 2px 8px rgba({pr},{pg},{pb},.15); }}
+                </style>
                 """, unsafe_allow_html=True)
 
-                if stock_contentor.empty:
-                    st.caption("Nenhum lote neste contentor.")
-                else:
-                    # ── Heatmap Canisters × Andares ──────────────────────────────
-                    heatmap_html = build_heatmap_html(stock_contentor, pr, pg, pb)
-                    if heatmap_html:
-                        st.markdown(heatmap_html, unsafe_allow_html=True)
-                        st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
+                st.markdown(f"<div class='cant-section-title' style='font-size:.85rem;color:#0f172a;font-weight:700;margin-bottom:8px;'>Inventário por Contentor</div>", unsafe_allow_html=True)
 
-                    # ── Detalhes por canister ─────────────────────────────────────
-                    for canister in sorted(stock_contentor['canister'].dropna().unique()):
-                        sc = stock_contentor[stock_contentor['canister'] == canister]
-                        can_int = int(canister)
-                        st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
+                for idx, row in contentores_df.iterrows():
+                    stock_contentor = obter_stock_contentor(row['id'])
+                    total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
+                    total_lotes = len(stock_contentor)
+                    cod = row['codigo']
+                    desc = row['descricao'] or ''
+                    cont_id = int(row['id'])
 
-                        # ── Mover todos os lotes deste canister de um andar para outro ──
-                        andares_no_canister = sorted([int(a) for a in sc['andar'].dropna().unique()])
-                        if len(andares_no_canister) > 0:
-                            batch_key = f"batch_{cont_id}_{can_int}"
-                            with st.expander(f"Mover todos os lotes — Canister {can_int}", expanded=False):
-                                with st.form(f"form_batch_{cont_id}_{can_int}"):
-                                    bc1, bc2, bc3 = st.columns([2, 2, 2])
-                                    with bc1:
-                                        andar_origem_opts = andares_no_canister
-                                        origem_sel = st.selectbox(
-                                            "De Andar",
-                                            options=andar_origem_opts,
-                                            format_func=lambda x: f"Andar {x} ({len(sc[sc['andar']==x])} lotes)",
-                                            key=f"orig_{cont_id}_{can_int}"
-                                        )
-                                    with bc2:
-                                        destino_sel = st.number_input(
-                                            "Para Andar", min_value=1, max_value=20,
-                                            value=int(origem_sel) + 1 if int(origem_sel) < 20 else int(origem_sel),
-                                            key=f"dest_{cont_id}_{can_int}"
-                                        )
-                                    with bc3:
-                                        st.markdown("<br>", unsafe_allow_html=True)
-                                        batch_submit = st.form_submit_button("Mover Todos", type="primary", width="stretch")
+                    # Card header
+                    st.markdown(f"""
+                    <div class="cont-card">
+                      <div class="cont-card-header">
+                        <div>
+                          <div class="cont-card-code">{cod}</div>
+                          <div class="cont-card-desc">{desc or 'Sem descrição'}</div>
+                        </div>
+                        <div class="cont-card-badge">{total_palhetas} palhetas</div>
+                      </div>
+                      <div class="cont-card-body">
+                    """, unsafe_allow_html=True)
 
-                                    if batch_submit:
-                                        if int(origem_sel) == int(destino_sel):
-                                            st.warning("Andar de origem igual ao destino.")
-                                        else:
-                                            movidos = mover_lotes_por_andar(cont_id, int(origem_sel), int(destino_sel), canister=can_int)
-                                            if movidos > 0:
-                                                st.toast(f"{movidos} lote(s) movidos do Andar {origem_sel} → Andar {int(destino_sel)}", icon="✅")
-                                                st.rerun()
+                    if stock_contentor.empty:
+                        st.caption("Nenhum lote neste contentor.")
+                    else:
+                        # ── Heatmap Canisters × Andares ──────────────────────────────
+                        heatmap_html = build_heatmap_html(stock_contentor, pr, pg, pb)
+                        if heatmap_html:
+                            st.markdown(heatmap_html, unsafe_allow_html=True)
+                            st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
+
+                        # ── Detalhes por canister ─────────────────────────────────────
+                        for canister in sorted(stock_contentor['canister'].dropna().unique()):
+                            sc = stock_contentor[stock_contentor['canister'] == canister]
+                            can_int = int(canister)
+                            st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
+
+                            # ── Mover todos os lotes deste canister de um andar para outro ──
+                            andares_no_canister = sorted([int(a) for a in sc['andar'].dropna().unique()])
+                            if len(andares_no_canister) > 0:
+                                batch_key = f"batch_{cont_id}_{can_int}"
+                                with st.expander(f"Mover todos os lotes — Canister {can_int}", expanded=False):
+                                    with st.form(f"form_batch_{cont_id}_{can_int}"):
+                                        bc1, bc2, bc3 = st.columns([2, 2, 2])
+                                        with bc1:
+                                            andar_origem_opts = andares_no_canister
+                                            origem_sel = st.selectbox(
+                                                "De Andar",
+                                                options=andar_origem_opts,
+                                                format_func=lambda x: f"Andar {x} ({len(sc[sc['andar']==x])} lotes)",
+                                                key=f"orig_{cont_id}_{can_int}"
+                                            )
+                                        with bc2:
+                                            destino_sel = st.number_input(
+                                                "Para Andar", min_value=1, max_value=20,
+                                                value=int(origem_sel) + 1 if int(origem_sel) < 20 else int(origem_sel),
+                                                key=f"dest_{cont_id}_{can_int}"
+                                            )
+                                        with bc3:
+                                            st.markdown("<br>", unsafe_allow_html=True)
+                                            batch_submit = st.form_submit_button("Mover Todos", type="primary", width="stretch")
+
+                                        if batch_submit:
+                                            if int(origem_sel) == int(destino_sel):
+                                                st.warning("Andar de origem igual ao destino.")
                                             else:
-                                                st.warning("Nenhum lote encontrado nesse andar.")
+                                                movidos = mover_lotes_por_andar(cont_id, int(origem_sel), int(destino_sel), canister=can_int)
+                                                if movidos > 0:
+                                                    st.toast(f"{movidos} lote(s) movidos do Andar {origem_sel} → Andar {int(destino_sel)}", icon="✅")
+                                                    st.rerun()
+                                                else:
+                                                    st.warning("Nenhum lote encontrado nesse andar.")
 
-                        # ── Lista individual de lotes ──
-                        for _, lote in sc.iterrows():
-                            eid = int(lote['id'])
-                            andar_atual = int(lote['andar'] or 0)
-                            can_atual = int(lote['canister'] or 0)
-                            qty = int(lote['existencia_atual'])
-                            gar = lote['garanhao'] or '—'
-                            prop = lote['proprietario_nome'] or '—'
-                            ref = str(lote['origem_externa'] or lote['data_embriovet'] or f"Lote #{eid}").split(' ')[0]
-                            edit_key = f"edit_andar_{cont_id}_{eid}"
-                            is_editing = st.session_state.get(edit_key, False)
+                            # ── Lista individual de lotes ──
+                            for _, lote in sc.iterrows():
+                                eid = int(lote['id'])
+                                andar_atual = int(lote['andar'] or 0)
+                                can_atual = int(lote['canister'] or 0)
+                                qty = int(lote['existencia_atual'])
+                                gar = lote['garanhao'] or '—'
+                                prop = lote['proprietario_nome'] or '—'
+                                ref = str(lote['origem_externa'] or lote['data_embriovet'] or f"Lote #{eid}").split(' ')[0]
+                                edit_key = f"edit_andar_{cont_id}_{eid}"
+                                is_editing = st.session_state.get(edit_key, False)
 
-                            col_info, col_action = st.columns([3, 2])
-                            with col_info:
-                                st.markdown(f"""
-                                <div class="lote-row" data-cont="{cont_id}" data-c="{can_atual}" data-a="{andar_atual}">
-                                  <div class="lote-row-left">
-                                    <span class="lote-garanhao">{gar}</span>
-                                    <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
-                                  </div>
-                                  <span class="lote-pos">C{can_atual} / A{andar_atual}</span>
-                                </div>""", unsafe_allow_html=True)
+                                col_info, col_action = st.columns([3, 2])
+                                with col_info:
+                                    st.markdown(f"""
+                                    <div class="lote-row" data-cont="{cont_id}" data-c="{can_atual}" data-a="{andar_atual}">
+                                      <div class="lote-row-left">
+                                        <span class="lote-garanhao">{gar}</span>
+                                        <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
+                                      </div>
+                                      <span class="lote-pos">C{can_atual} / A{andar_atual}</span>
+                                    </div>""", unsafe_allow_html=True)
 
-                            with col_action:
-                                if not is_editing:
-                                    if st.button("✏️ Mover", key=f"btn_edit_{cont_id}_{eid}", help="Alterar andar/canister", type="secondary"):
-                                        st.session_state[edit_key] = True
-                                        st.rerun()
-                                else:
-                                    # Formulário inline de edição
-                                    with st.form(f"form_mover_{cont_id}_{eid}"):
-                                        c1, c2 = st.columns(2)
-                                        with c1:
-                                            novo_can = st.number_input("Canister", min_value=1, max_value=20, value=can_atual, key=f"nc_{eid}")
-                                        with c2:
-                                            novo_and = st.number_input("Andar", min_value=1, max_value=20, value=andar_atual, key=f"na_{eid}")
-                                        cs1, cs2 = st.columns(2)
-                                        with cs1:
-                                            salvar_pos = st.form_submit_button("Guardar", type="primary", width="stretch")
-                                        with cs2:
-                                            cancelar_pos = st.form_submit_button("Cancelar", width="stretch")
-
-                                        if cancelar_pos:
-                                            st.session_state[edit_key] = False
+                                with col_action:
+                                    if not is_editing:
+                                        if st.button("✏️ Mover", key=f"btn_edit_{cont_id}_{eid}", help="Alterar andar/canister", type="secondary"):
+                                            st.session_state[edit_key] = True
                                             st.rerun()
-                                        if salvar_pos:
-                                            if atualizar_andar_lote(eid, int(novo_and), int(novo_can)):
+                                    else:
+                                        # Formulário inline de edição
+                                        with st.form(f"form_mover_{cont_id}_{eid}"):
+                                            c1, c2 = st.columns(2)
+                                            with c1:
+                                                novo_can = st.number_input("Canister", min_value=1, max_value=20, value=can_atual, key=f"nc_{eid}")
+                                            with c2:
+                                                novo_and = st.number_input("Andar", min_value=1, max_value=20, value=andar_atual, key=f"na_{eid}")
+                                            cs1, cs2 = st.columns(2)
+                                            with cs1:
+                                                salvar_pos = st.form_submit_button("Guardar", type="primary", width="stretch")
+                                            with cs2:
+                                                cancelar_pos = st.form_submit_button("Cancelar", width="stretch")
+
+                                            if cancelar_pos:
                                                 st.session_state[edit_key] = False
-                                                st.toast(f"Lote {gar} movido → C{int(novo_can)}/A{int(novo_and)}", icon="✅")
                                                 st.rerun()
-                                            else:
-                                                st.error("Erro ao atualizar posição")
+                                            if salvar_pos:
+                                                if atualizar_andar_lote(eid, int(novo_and), int(novo_can)):
+                                                    st.session_state[edit_key] = False
+                                                    st.toast(f"Lote {gar} movido → C{int(novo_can)}/A{int(novo_and)}", icon="✅")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("Erro ao atualizar posição")
 
-                st.markdown("</div></div>", unsafe_allow_html=True)
+                    st.markdown("</div></div>", unsafe_allow_html=True)
 
-                # Acções do contentor (editar código/descrição, apagar)
-                col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
-                with col_e2:
-                    pode_apagar = total_palhetas == 0
-                    if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
-                                 help="Só é possível apagar quando o contentor não tem stock", type="secondary"):
-                        if deletar_contentor(cont_id):
-                            st.success(f"Contentor '{cod}' apagado")
+                    # Acções do contentor (editar código/descrição, apagar)
+                    col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
+                    with col_e2:
+                        pode_apagar = total_palhetas == 0
+                        if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
+                                     help="Só é possível apagar quando o contentor não tem stock", type="secondary"):
+                            if deletar_contentor(cont_id):
+                                st.success(f"Contentor '{cod}' apagado")
+                                st.rerun()
+                        if not pode_apagar:
+                            st.caption(t("map.delete_blocked"))
+                    with col_e3:
+                        if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
+                            st.session_state[f'modal_editar_{cont_id}'] = True
                             st.rerun()
-                    if not pode_apagar:
-                        st.caption(t("map.delete_blocked"))
-                with col_e3:
-                    if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
-                        st.session_state[f'modal_editar_{cont_id}'] = True
-                        st.rerun()
 
-                # Modal edição de código/descrição
-                if st.session_state.get(f'modal_editar_{cont_id}', False):
-                    with st.form(f"form_editar2_{cont_id}"):
-                        st.markdown(f"#### {t('map.edit_container_title')}")
-                        col_edit1, col_edit2 = st.columns(2)
-                        with col_edit1:
-                            novo_codigo = st.text_input(t("label.code"), value=cod)
-                        with col_edit2:
-                            nova_descricao = st.text_input(t("label.description"), value=desc)
-                        cs1, cs2 = st.columns(2)
-                        with cs1:
-                            salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
-                        with cs2:
-                            cancelar_edit2 = st.form_submit_button(t("btn.cancel"), width="stretch")
+                    # Modal edição de código/descrição
+                    if st.session_state.get(f'modal_editar_{cont_id}', False):
+                        with st.form(f"form_editar2_{cont_id}"):
+                            st.markdown(f"#### {t('map.edit_container_title')}")
+                            col_edit1, col_edit2 = st.columns(2)
+                            with col_edit1:
+                                novo_codigo = st.text_input(t("label.code"), value=cod)
+                            with col_edit2:
+                                nova_descricao = st.text_input(t("label.description"), value=desc)
+                            cs1, cs2 = st.columns(2)
+                            with cs1:
+                                salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
+                            with cs2:
+                                cancelar_edit2 = st.form_submit_button(t("btn.cancel"), width="stretch")
 
-                        if cancelar_edit2:
-                            st.session_state[f'modal_editar_{cont_id}'] = False
-                            st.rerun()
-                        if salvar_edit:
-                            if editar_contentor(cont_id, {'codigo': novo_codigo, 'descricao': nova_descricao,
-                                                          'x': row['x'], 'y': row['y'], 'w': row['w'], 'h': row['h']}):
-                                st.success(t("map.container_updated"))
+                            if cancelar_edit2:
                                 st.session_state[f'modal_editar_{cont_id}'] = False
                                 st.rerun()
+                            if salvar_edit:
+                                if editar_contentor(cont_id, {'codigo': novo_codigo, 'descricao': nova_descricao,
+                                                              'x': row['x'], 'y': row['y'], 'w': row['w'], 'h': row['h']}):
+                                    st.success(t("map.container_updated"))
+                                    st.session_state[f'modal_editar_{cont_id}'] = False
+                                    st.rerun()
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
 
-        else:
-            # MODO LISTA (mantido para compatibilidade)
-            st.markdown(f"### {t('map.container_list')}")
+            else:
+                # MODO LISTA (mantido para compatibilidade)
+                st.markdown(f"### {t('map.container_list')}")
 
-            for idx, row in contentores_df.iterrows():
-                stock_contentor = obter_stock_contentor(row['id'])
-                total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
-                total_lotes = len(stock_contentor)
+                for idx, row in contentores_df.iterrows():
+                    stock_contentor = obter_stock_contentor(row['id'])
+                    total_palhetas = stock_contentor['existencia_atual'].sum() if not stock_contentor.empty else 0
+                    total_lotes = len(stock_contentor)
 
-                with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
-                    st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
-                    st.markdown(f"**Total de palhetas:** {int(total_palhetas)}")
-                    st.markdown(f"**Total de lotes:** {total_lotes}")
+                    with st.expander(f"**{row['codigo']}** — {int(total_palhetas)} palhetas, {total_lotes} lotes"):
+                        st.markdown(f"**Descrição:** {row['descricao'] or '—'}")
+                        st.markdown(f"**Total de palhetas:** {int(total_palhetas)}")
+                        st.markdown(f"**Total de lotes:** {total_lotes}")
 
-                    if not stock_contentor.empty:
-                        st.markdown("---")
-                        for canister in sorted(stock_contentor['canister'].unique()):
-                            st.markdown(f"**Canister {canister}:**")
-                            stock_canister = stock_contentor[stock_contentor['canister'] == canister]
+                        if not stock_contentor.empty:
+                            st.markdown("---")
+                            for canister in sorted(stock_contentor['canister'].unique()):
+                                st.markdown(f"**Canister {canister}:**")
+                                stock_canister = stock_contentor[stock_contentor['canister'] == canister]
 
-                            for andar in sorted(stock_canister['andar'].unique()):
-                                st.markdown(f"  *{andar}º Andar:*")
-                                stock_andar = stock_canister[stock_canister['andar'] == andar]
+                                for andar in sorted(stock_canister['andar'].unique()):
+                                    st.markdown(f"  *{andar}º Andar:*")
+                                    stock_andar = stock_canister[stock_canister['andar'] == andar]
 
-                                for _, lote in stock_andar.iterrows():
-                                    ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
-                                    st.markdown(f"  - {lote.get('garanhao_nome') or lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+                                    for _, lote in stock_andar.iterrows():
+                                        ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
+                                        st.markdown(f"  - {lote.get('garanhao_nome') or lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
