@@ -1252,11 +1252,20 @@ def run_map_page(ctx: dict):
             # ── Inventário de Contentores ──────────────────────────────────────
             primary = (app_settings or {}).get("primary_color") or "#E85D4A"
 
-            # Converter hex → rgb para usar em rgba()
+            # Converter hex → rgb para usar em rgba(). Resistente a cor
+            # vazia/inválida (ex.: `primary_color` por preencher numa
+            # instalação local nova) — cai para a cor primária por
+            # defeito do projeto em vez de rebentar.
             def hex_to_rgb(h):
-                h = h.lstrip('#')
-                if len(h) == 3: h = ''.join(c*2 for c in h)
-                return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                h = (h or "").lstrip('#').strip()
+                if len(h) == 3:
+                    h = ''.join(c * 2 for c in h)
+                if len(h) != 6:
+                    h = "E85D4A"
+                try:
+                    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                except ValueError:
+                    return tuple(int("E85D4A"[i:i+2], 16) for i in (0, 2, 4))
 
             pr, pg, pb = hex_to_rgb(primary)
 
