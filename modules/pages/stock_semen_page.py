@@ -24,6 +24,7 @@ from modules.i18n import t
 from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
 from modules.pages.transfer_page import run_transfer_page
+from modules.ui_kit import inject_reports_css, inject_stock_css, render_zone_title
 
 
 _TABS = ["Lotes", "Garanhões", "Mapa dos contentores", "Transferências"]
@@ -31,6 +32,12 @@ _TABS = ["Lotes", "Garanhões", "Mapa dos contentores", "Transferências"]
 
 def run_stock_semen_page(ctx: dict) -> None:
     """Entry-point da nova página 'Stock de sémen'."""
+    # CSS partilhado do design system — injetado aqui (nível da página),
+    # tal como `run_reports_page`/`run_stock_page` fazem, em vez de
+    # depender do separador "Lotes" o injetar de forma indireta.
+    inject_stock_css()
+    inject_reports_css()
+
     # Sub-views (add_stock / import) — activadas pelos botões topo ou
     # por redirects legacy (t("menu.add_stock") / t("menu.import")).
     sub_view = st.session_state.pop("stock_semen_view", None)
@@ -134,11 +141,7 @@ def _carregar_garanhoes_com_stock():
 
 
 def _render_tab_garanhoes(ctx: dict) -> None:
-    st.markdown(
-        "<div style='font-size:.8rem;color:#64748b;margin-bottom:8px;'>"
-        "Garanhões com stock disponível. Clique para abrir a ficha.</div>",
-        unsafe_allow_html=True,
-    )
+    st.caption("Garanhões com stock disponível. Clique para abrir a ficha.")
 
     try:
         rows = _carregar_garanhoes_com_stock()
@@ -165,15 +168,9 @@ def _render_tab_garanhoes(ctx: dict) -> None:
     # Cabeçalho
     head_cols = st.columns([3, 1.2, 1.2, 1.2, 1.4])
     for i, h in enumerate(["Garanhão", "Palhetas", "Lotes", "Donos", ""]):
-        head_cols[i].markdown(
-            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
-            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
-            unsafe_allow_html=True,
-        )
-    st.markdown(
-        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
-        unsafe_allow_html=True,
-    )
+        with head_cols[i]:
+            render_zone_title(h, "stock-zone-title")
+    st.divider()
 
     for row in rows:
         animal_id, nome, palhetas, lotes, donos = row
