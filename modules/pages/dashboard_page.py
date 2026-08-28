@@ -39,6 +39,7 @@ from modules.repositories.dashboard_repo import (
     carregar_tarefas_hoje,
 )
 from modules.repositories.settings_repo import get_app_settings
+from modules.ui_kit import DEFAULT_PRIMARY_COLOR
 
 # Labels curtas para o tipo de tarefa (mais legíveis que o valor bruto).
 _LABEL_TIPO_TAREFA = {
@@ -461,7 +462,7 @@ def run_dashboard_page(ctx: dict) -> None:
     del ctx
     app_settings = get_app_settings() or {}
     company_name = app_settings.get("company_name") or "Sistema"
-    primary_color = app_settings.get("primary_color") or "#1D4ED8"
+    primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR
 
     _inject_css(primary_color)
     _render_header(company_name)

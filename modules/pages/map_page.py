@@ -15,6 +15,7 @@ from modules.repositories.stock_repo import (
     carregar_contentores,
     obter_stock_contentor,
 )
+from modules.ui_kit import DEFAULT_PRIMARY_COLOR
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def run_map_page(ctx: dict):
     contentores_df = carregar_contentores()
 
     # Cabeçalho da página
-    primary_color = (app_settings or {}).get("primary_color") or "#1D4ED8"
+    primary_color = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
     st.markdown(
         f"""
         <style>
@@ -414,19 +415,10 @@ def run_map_page(ctx: dict):
                         transform: translateY(-1px) !important;
                         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
                     }
-                    
-                    /* Botão primário (Salvar) */
-                    div[data-testid="stButton"] > button[kind="primary"] {
-                        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-                        border: none !important;
-                        color: white !important;
-                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
-                    }
-                    
-                    div[data-testid="stButton"] > button[kind="primary"]:hover {
-                        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4) !important;
-                    }
-                    
+                    /* Cor do botão "primary" (ex.: Salvar) vem do override
+                       global em `inject_shell_css` (cor da marca) — não
+                       hardcodar uma cor aqui. */
+
                     /* Toolbar premium */
                     .map-toolbar-shell {
                         border: 1px solid #e2e8f0;
@@ -1250,22 +1242,24 @@ def run_map_page(ctx: dict):
             st.markdown("</div>", unsafe_allow_html=True)
 
             # ── Inventário de Contentores ──────────────────────────────────────
-            primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+            primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
 
             # Converter hex → rgb para usar em rgba(). Resistente a cor
             # vazia/inválida (ex.: `primary_color` por preencher numa
             # instalação local nova) — cai para a cor primária por
             # defeito do projeto em vez de rebentar.
+            _default_hex = DEFAULT_PRIMARY_COLOR.lstrip('#')
+
             def hex_to_rgb(h):
                 h = (h or "").lstrip('#').strip()
                 if len(h) == 3:
                     h = ''.join(c * 2 for c in h)
                 if len(h) != 6:
-                    h = "E85D4A"
+                    h = _default_hex
                 try:
                     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
                 except ValueError:
-                    return tuple(int("E85D4A"[i:i+2], 16) for i in (0, 2, 4))
+                    return tuple(int(_default_hex[i:i+2], 16) for i in (0, 2, 4))
 
             pr, pg, pb = hex_to_rgb(primary)
 

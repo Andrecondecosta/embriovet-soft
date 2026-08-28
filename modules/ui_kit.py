@@ -1,6 +1,12 @@
 import streamlit as st
 from modules.i18n import t
 
+# Cor primária por defeito do projeto (marca EmbrioVet). Única fonte de
+# verdade para qualquer fallback de `app_settings.primary_color` vazio
+# ou inválido — nenhum outro sítio do código deve hardcodar um hex à
+# parte desta constante.
+DEFAULT_PRIMARY_COLOR = "#E85D4A"
+
 
 def inject_all_css_consolidated():
     """Injetar TODO o CSS em um único bloco para evitar containers vazios"""
@@ -353,7 +359,7 @@ def inject_stepper_css():
     )
 
 
-def inject_add_stock_form_css(primary_color="#E85D4A"):
+def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
     st.markdown(
         f"""
         <style>
@@ -581,7 +587,7 @@ def render_stepper(cols, key, min_value=0, max_value=None, invalid_tooltip="", e
 
 
 def inject_shell_css(primary_color: str | None):
-    color = primary_color or "#1D4ED8"
+    color = primary_color or DEFAULT_PRIMARY_COLOR
     st.markdown(
         f"""
         <style>
@@ -693,9 +699,21 @@ def inject_shell_css(primary_color: str | None):
             a {{
                 color: var(--primary) !important;
             }}
-            .stButton > button[data-testid="baseButton-primary"] {{
+            /* Override único e global de botões/tabs "primary" — fonte
+               única de verdade para a cor da marca em toda a app.
+               `kind="primary"` é o atributo real gerado pelo Streamlit
+               nesta versão (não `data-testid="baseButton-primary"`,
+               que nunca correspondia a nada). */
+            div[data-testid="stButton"] > button[kind="primary"],
+            div[data-testid="stFormSubmitButton"] > button[kind="primary"] {{
                 background-color: var(--primary) !important;
                 border-color: var(--primary) !important;
+            }}
+            [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {{
+                color: var(--primary) !important;
+            }}
+            [data-testid="stTabs"] div[data-baseweb="tab-highlight"] {{
+                background-color: var(--primary) !important;
             }}
         </style>
         """,

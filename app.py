@@ -27,6 +27,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import warnings
 from modules.ui_kit import (
+    DEFAULT_PRIMARY_COLOR,
     inject_all_css_consolidated,
     inject_design_system,
     inject_reports_css,
@@ -659,7 +660,7 @@ def mostrar_tela_login(app_settings):
     """Exibe tela de login com design limpo e sem artefactos visuais"""
     nome_empresa = (app_settings or {}).get("company_name") or "Sistema"
     logo_base64  = (app_settings or {}).get("logo_base64")
-    cor          = (app_settings or {}).get("primary_color") or "#E85D4A"
+    cor          = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
 
     # Construir bloco do logo/título (HTML puro — sem widgets Streamlit)
     if logo_base64:

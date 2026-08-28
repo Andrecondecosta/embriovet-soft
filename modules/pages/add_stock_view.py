@@ -28,8 +28,8 @@ from modules.services.auth_service import (
     alterar_password, verificar_permissao,
 )
 from modules.ui_kit import (
-    inject_add_stock_form_css, inject_stock_css, inject_reports_css,
-    render_zone_title, render_kpi_strip,
+    DEFAULT_PRIMARY_COLOR, inject_add_stock_form_css, inject_stock_css,
+    inject_reports_css, render_zone_title, render_kpi_strip,
 )
 from modules.components.modal_proprietario import modal_adicionar_proprietario
 
@@ -50,7 +50,7 @@ def _render_add_stock_view():
     'Stock de sémen' (Pedido 7). Lógica inalterada.
     """
     st.header(t("add_stock.title"))
-    primary = (app_settings or {}).get("primary_color") or "#E85D4A"
+    primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
     inject_add_stock_form_css(primary_color=primary)
 
     # Banner de contexto quando a entrada vem duma colheita agendada

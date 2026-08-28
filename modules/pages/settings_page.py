@@ -9,6 +9,7 @@ from modules.repositories.settings_repo import (
     update_branding_settings,
 )
 from modules.ui_kit import (
+    DEFAULT_PRIMARY_COLOR,
     inject_reports_css,
     inject_stock_css,
     render_zone_title,
@@ -234,7 +235,7 @@ def _run_settings_geral():
     current_company = app_settings.get("company_name") if app_settings else t("common.system")
     current_lang = app_settings.get("language", "pt-PT") if app_settings else "pt-PT"
     current_logo = app_settings.get("logo_base64") if app_settings else None
-    current_primary = app_settings.get("primary_color") if app_settings else "#1D4ED8"
+    current_primary = app_settings.get("primary_color") if app_settings else DEFAULT_PRIMARY_COLOR
 
     if "settings_logo_preview" not in st.session_state:
         st.session_state["settings_logo_preview"] = current_logo
@@ -290,11 +291,11 @@ def _run_settings_geral():
                 st.rerun()
         with btn_col2:
             if st.button(t("btn.restore_defaults"), width="stretch"):
-                update_branding_settings(t("common.system"), None, "pt-PT", "#1D4ED8")
+                update_branding_settings(t("common.system"), None, "pt-PT", DEFAULT_PRIMARY_COLOR)
                 st.session_state["settings_logo_preview"] = None
                 st.session_state["company_name"] = t("common.system")
                 st.session_state["lang"] = "pt-PT"
-                st.session_state["primary_color"] = "#1D4ED8"
+                st.session_state["primary_color"] = DEFAULT_PRIMARY_COLOR
                 st.success(t("success.defaults_restored"))
                 st.rerun()
 
