@@ -1108,3 +1108,191 @@ def safe_pick(df, cols):
     if df.empty:
         return df
     return df[[c for c in cols if c in df.columns]].copy()
+
+
+# ============================================================
+# Design System v2 — proposta (tokens + componentes base)
+#
+# Aditivo: convive com o CSS antigo (inject_all_css_consolidated,
+# inject_reports_css, render_kpi_strip, etc.) sem os alterar nem
+# remover — nenhuma página deixa de funcionar. Uma página só passa a
+# usar isto quando for explicitamente migrada (por agora: só
+# reports_page.py, como exemplo).
+#
+# Direção: técnica/densa, não "amigável" — uma cor de marca (vermelho
+# #E85D4A) + neutros para tudo o resto. Sem gradientes, sem cards
+# decorativos, sem emoji como iconografia.
+# ============================================================
+
+def inject_design_tokens():
+    """Tokens do design system (cor, tipografia, espaçamento) +
+    classes utilitárias dos componentes base. Prefixo `--ds-`/`ds-`
+    para nunca colidir com as variáveis/classes antigas."""
+    st.markdown(
+        f"""
+        <style>
+            :root {{
+                --ds-primary: {DEFAULT_PRIMARY_COLOR};
+                --ds-primary-hover: #cf503f;
+                --ds-primary-tint: #fbeae7;
+                --ds-primary-tint-strong: #f3c9c1;
+
+                --ds-gray-50:  #f8fafc;
+                --ds-gray-100: #f1f5f9;
+                --ds-gray-200: #e2e8f0;
+                --ds-gray-300: #cbd5e1;
+                --ds-gray-400: #94a3b8;
+                --ds-gray-500: #64748b;
+                --ds-gray-600: #475569;
+                --ds-gray-700: #334155;
+                --ds-gray-800: #1e293b;
+                --ds-gray-900: #0f172a;
+
+                --ds-text-xs: .72rem;
+                --ds-text-sm: .82rem;
+                --ds-text-base: .9rem;
+                --ds-text-md: 1rem;
+                --ds-text-lg: 1.25rem;
+                --ds-text-xl: 1.75rem;
+
+                --ds-space-1: 4px;
+                --ds-space-2: 8px;
+                --ds-space-3: 12px;
+                --ds-space-4: 16px;
+                --ds-space-5: 24px;
+
+                --ds-radius-sm: 4px;
+                --ds-radius: 8px;
+            }}
+
+            /* Cabeçalho de página — denso, sem gradiente/card */
+            .ds-page-header {{
+                display: flex;
+                align-items: baseline;
+                gap: var(--ds-space-3);
+                padding-bottom: var(--ds-space-3);
+                margin-bottom: var(--ds-space-4);
+                border-bottom: 1px solid var(--ds-gray-200);
+            }}
+            .ds-page-header h1 {{
+                font-size: var(--ds-text-lg);
+                font-weight: 700;
+                color: var(--ds-gray-900);
+                margin: 0;
+                letter-spacing: -.01em;
+            }}
+            .ds-page-header .ds-subtitle {{
+                font-size: var(--ds-text-sm);
+                color: var(--ds-gray-500);
+            }}
+
+            /* Zona/secção — usar via render_zone_title(title, "ds-zone-title") */
+            .ds-zone-title {{
+                font-size: var(--ds-text-xs);
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: .06em;
+                color: var(--ds-gray-500);
+                margin: var(--ds-space-3) 0 var(--ds-space-2) 0;
+            }}
+
+            /* KPI denso — número + label, sem card/borda */
+            .ds-kpi-row {{
+                display: flex;
+                gap: var(--ds-space-5);
+                flex-wrap: wrap;
+                margin-bottom: var(--ds-space-3);
+            }}
+            .ds-kpi {{
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }}
+            .ds-kpi-value {{
+                font-size: var(--ds-text-xl);
+                font-weight: 700;
+                color: var(--ds-gray-900);
+                line-height: 1;
+                font-variant-numeric: tabular-nums;
+            }}
+            .ds-kpi-label {{
+                font-size: var(--ds-text-xs);
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                color: var(--ds-gray-500);
+            }}
+
+            /* Pill de estado — só 3 níveis, só marca + neutros */
+            .ds-pill {{
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: var(--ds-text-xs);
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: .03em;
+                border: 1px solid transparent;
+            }}
+            .ds-pill--ok {{
+                background: var(--ds-gray-100);
+                color: var(--ds-gray-600);
+                border-color: var(--ds-gray-200);
+            }}
+            .ds-pill--aviso {{
+                background: var(--ds-primary-tint);
+                color: var(--ds-gray-800);
+                border-color: var(--ds-primary-tint-strong);
+            }}
+            .ds-pill--critico {{
+                background: var(--ds-primary);
+                color: #ffffff;
+            }}
+
+            /* Tabela densa — aplica-se ao st.dataframe nativo */
+            [data-testid="stDataFrame"] {{
+                font-size: var(--ds-text-sm);
+            }}
+            [data-testid="stDataFrame"] [role="columnheader"] {{
+                font-size: var(--ds-text-xs) !important;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                color: var(--ds-gray-500) !important;
+                font-weight: 700 !important;
+                background: var(--ds-gray-50) !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_page_header(title: str, subtitle: str | None = None) -> None:
+    """Cabeçalho de página do design system v2 — título + subtítulo
+    opcional numa linha, sem decoração. Requer `inject_design_tokens()`
+    já ter corrido na página."""
+    sub_html = f"<span class='ds-subtitle'>{subtitle}</span>" if subtitle else ""
+    st.markdown(
+        f"<div class='ds-page-header'><h1>{title}</h1>{sub_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_kpi_row(items) -> None:
+    """Fila de KPIs densa — número + label, sem card/borda. Alternativa
+    a `render_kpi_strip` (que se mantém, ainda usada por quem não
+    migrou) para páginas já no design system v2."""
+    content = "".join(
+        f"<div class='ds-kpi'><div class='ds-kpi-value'>{valor}</div>"
+        f"<div class='ds-kpi-label'>{nome}</div></div>"
+        for nome, valor in items
+    )
+    st.markdown(f"<div class='ds-kpi-row'>{content}</div>", unsafe_allow_html=True)
+
+
+def render_status_pill(label: str, level: str = "ok") -> str:
+    """Devolve o HTML de uma pill de estado (`ok`/`aviso`/`critico`) —
+    compor dentro de `st.markdown(..., unsafe_allow_html=True)`, não
+    faz render direto (para poder ser embutida em linha/tabela)."""
+    assert level in ("ok", "aviso", "critico"), f"nível inválido: {level!r}"
+    return f"<span class='ds-pill ds-pill--{level}'>{label}</span>"
