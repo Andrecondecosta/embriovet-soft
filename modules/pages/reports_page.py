@@ -20,7 +20,8 @@ from modules.repositories.stock_repo import (
     carregar_stock, carregar_transferencias, carregar_transferencias_externas,
 )
 from modules.ui_kit import (
-    inject_reports_css, render_kpi_strip, render_zone_title, safe_pick,
+    inject_design_tokens, render_kpi_row, render_page_header,
+    render_zone_title, safe_pick,
 )
 
 logger = logging.getLogger(__name__)
@@ -258,8 +259,8 @@ def run_reports_page(ctx: dict):
     # topo do módulo. Nenhum `ctx["..."]`.
     del ctx
 
-    st.header(t("reports.title"))
-    inject_reports_css()
+    inject_design_tokens()
+    render_page_header(t("reports.title"))
 
     stock = carregar_stock()
     insem = carregar_inseminacoes()
@@ -268,7 +269,7 @@ def run_reports_page(ctx: dict):
     proprietarios = carregar_proprietarios()
     contentores = carregar_contentores()
 
-    render_zone_title(t("reports.zone.selection"))
+    render_zone_title(t("reports.zone.selection"), "ds-zone-title")
     modo = st.radio(
         t("reports.analysis_type"),
         [t("reports.mode.stallion"), t("reports.mode.owner"), t("reports.mode.container"), t("reports.mode.history")],
@@ -307,7 +308,7 @@ def run_reports_page(ctx: dict):
             key="rel_tipo_hist",
         )
 
-    render_zone_title(t("reports.zone.filters"))
+    render_zone_title(t("reports.zone.filters"), "ds-zone-title")
     filtros = {}
     with st.expander(t("reports.filters_title"), expanded=False):
         c1, c2, c3 = st.columns(3)
@@ -349,7 +350,7 @@ def run_reports_page(ctx: dict):
             transf_ext = aplicar_filtro_data(transf_ext, "data_transferencia", data_inicio, data_fim)
         stock = _filtrar_stock_por_periodo(stock, data_inicio, data_fim)
 
-    render_zone_title(t("reports.zone.results"))
+    render_zone_title(t("reports.zone.results"), "ds-zone-title")
 
     if modo == t("reports.mode.stallion") and garanhao_sel:
         s = stock[stock["garanhao_nome"] == garanhao_sel] if not stock.empty else pd.DataFrame()
@@ -377,7 +378,7 @@ def run_reports_page(ctx: dict):
             if pdf:
                 st.download_button(t("btn.pdf"), pdf, f"garanhao_{garanhao_sel}.pdf", "application/pdf", width="stretch", key="rel_pdf_g")
 
-        render_kpi_strip([
+        render_kpi_row([
             (t("reports.kpi.straws_stock"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
             (t("reports.kpi.inseminations"), _contar_operacoes(i)),
             (t("reports.kpi.transfers_in"), len(transf_sel)),
@@ -404,7 +405,7 @@ def run_reports_page(ctx: dict):
             csv = safe_pick(s, ["garanhao_nome", "existencia_atual", "qualidade", "data_embriovet"])
             st.download_button(t("btn.csv"), csv.to_csv(index=False).encode("utf-8"), f"proprietario_{nome}.csv", "text/csv", width="stretch", key="rel_csv_p")
 
-        render_kpi_strip([
+        render_kpi_row([
             (t("reports.kpi.straws_stock"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
             (t("reports.kpi.inseminations"), _contar_operacoes(i)),
             (t("reports.kpi.transfers_received"), len(t_in)),
@@ -426,7 +427,7 @@ def run_reports_page(ctx: dict):
 
         info = contentores[contentores["id"] == contentor_sel].iloc[0]
         st.markdown(f"<div class='reports-results-head'><strong>{t('label.container')}:</strong> {info['codigo']} | <strong>{t('label.description')}:</strong> {info.get('descricao') or '—'}</div>", unsafe_allow_html=True)
-        render_kpi_strip([
+        render_kpi_row([
             (t("reports.kpi.lots"), len(s)),
             (t("reports.kpi.straws"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
             (t("reports.kpi.canisters"), s["canister"].nunique() if (not s.empty and "canister" in s.columns) else 0),
