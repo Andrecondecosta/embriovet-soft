@@ -349,6 +349,136 @@ def test_registar_inseminacao_completa_fks_datas_stock(
 
 
 # ────────────────────────────────────────────────────────────────────
+# Regressão: editar uma inseminação não pode apagar as FKs
+# (registrar_inseminacao_multiplas, modo edição — bug da auditoria)
+# ────────────────────────────────────────────────────────────────────
+
+def test_editar_operacao_multi_lote_preserva_fks(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """Cria uma operação (via `registar_inseminacao_completa`), edita-a
+    via `registrar_inseminacao_multiplas(edit_operation_id=...)` (o
+    caminho que o formulário de edição usa) e confirma que
+    `animal_id_egua`/`animal_id_garanhao`/`estadia_id` continuam
+    preenchidas — antes da correcção, ficavam a NULL após qualquer
+    edição."""
+    from modules.repositories.insemination_repo import (
+        registrar_inseminacao_multiplas,
+    )
+
+    data_ins = date(2026, 4, 1)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[
+            {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 5},
+        ],
+        observacoes="original",
+        utilizador="pytest",
+    )
+    operation_id = resultado["operation_id"]
+
+    ok = registrar_inseminacao_multiplas(
+        registros=[{
+            "garanhao": stock_garanhao["nome"],
+            "dono_id": egua_com_estadia["dono_id"],
+            "protocolo": "protocolo editado",
+            "palhetas": 7,
+            "stock_id": stock_garanhao["lote_ids"][0],
+        }],
+        data_inseminacao=data_ins,
+        egua=egua_com_estadia["nome"],
+        insemination_id=None,
+        observacoes="editado via pytest",
+        edit_operation_id=operation_id,
+        animal_id_egua=egua_com_estadia["animal_id"],
+    )
+    assert ok is True, "edição da operação devia ter tido sucesso"
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT animal_id_egua, animal_id_garanhao, estadia_id, "
+        "       palhetas_gastas, protocolo "
+        "FROM inseminacoes WHERE operation_id = %s",
+        (operation_id,),
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    assert linhas, "as linhas da operação editada devem continuar a existir"
+    for a_egua, a_gar, es_id, palhetas, protocolo in linhas:
+        assert a_egua == egua_com_estadia["animal_id"], (
+            "animal_id_egua não pode ficar NULL depois de editar"
+        )
+        assert a_gar == stock_garanhao["garanhao_id"], (
+            "animal_id_garanhao não pode ficar NULL depois de editar"
+        )
+        assert es_id == egua_com_estadia["estadia_id"], (
+            "estadia_id não pode ficar NULL depois de editar"
+        )
+        assert palhetas == 7 and protocolo == "protocolo editado", (
+            "a edição em si (palhetas/protocolo) tem que ter sido aplicada"
+        )
+
+
+def test_editar_linha_unica_preserva_fks(db, egua_com_estadia, stock_garanhao):
+    """Mesma regressão que o teste anterior, mas para o caminho de
+    edição de uma linha única (`insemination_id`, sem `operation_id`)."""
+    from modules.repositories.insemination_repo import (
+        registrar_inseminacao_multiplas,
+    )
+
+    data_ins = date(2026, 4, 2)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[
+            {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 4},
+        ],
+        observacoes="original",
+        utilizador="pytest",
+    )
+    insemination_id = resultado["inseminacao_ids"][0]
+
+    ok = registrar_inseminacao_multiplas(
+        registros=[{
+            "garanhao": stock_garanhao["nome"],
+            "dono_id": egua_com_estadia["dono_id"],
+            "protocolo": None,
+            "palhetas": 6,
+            "stock_id": stock_garanhao["lote_ids"][1],
+        }],
+        data_inseminacao=data_ins,
+        egua=egua_com_estadia["nome"],
+        insemination_id=insemination_id,
+        observacoes="editado via pytest (linha única)",
+        edit_operation_id=None,
+        animal_id_egua=egua_com_estadia["animal_id"],
+    )
+    assert ok is True, "edição da linha única devia ter tido sucesso"
+
+    cur = db.cursor()
+    cur.execute(
+        "SELECT animal_id_egua, animal_id_garanhao, estadia_id, palhetas_gastas "
+        "FROM inseminacoes WHERE id = %s",
+        (insemination_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    assert row is not None
+    a_egua, a_gar, es_id, palhetas = row
+    assert a_egua == egua_com_estadia["animal_id"]
+    assert a_gar == stock_garanhao["garanhao_id"]
+    assert es_id == egua_com_estadia["estadia_id"]
+    assert palhetas == 6
+
+
+# ────────────────────────────────────────────────────────────────────
 # Menu vs Ficha — critério (c)
 # ────────────────────────────────────────────────────────────────────
 

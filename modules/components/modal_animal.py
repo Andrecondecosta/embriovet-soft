@@ -17,7 +17,7 @@ from typing import Callable, Optional
 import pandas as pd
 import streamlit as st
 
-from modules.db import get_connection
+from modules.db import get_connection, invalidate_data_cache
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -171,6 +171,7 @@ def _criar_animal_e_estadia(animal: dict, estadia: dict) -> tuple[int, int]:
             estadia_id = int(cur.fetchone()[0])
 
             conn.commit()
+            invalidate_data_cache()
             return animal_id, estadia_id
         except Exception:
             conn.rollback()

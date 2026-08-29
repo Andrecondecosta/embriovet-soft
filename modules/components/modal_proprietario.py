@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 import streamlit as st
 
-from modules.db import get_connection
+from modules.db import get_connection, invalidate_data_cache
 from modules.i18n import t
 from modules.repositories.owner_repo import adicionar_proprietario
 
@@ -93,7 +93,8 @@ def _inserir_dono(payload: dict) -> int:
         new_id = int(cur.fetchone()[0])
         conn.commit()
         cur.close()
-        return new_id
+    invalidate_data_cache()
+    return new_id
 
 
 def render_modal_proprietario(
