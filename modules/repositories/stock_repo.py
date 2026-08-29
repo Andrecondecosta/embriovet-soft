@@ -91,13 +91,24 @@ def carregar_stock(apenas_ativos=True):
 
 
 def carregar_inseminacoes():
-    """Carrega histórico de inseminações"""
+    """Carrega histórico de inseminações com nomes canónicos de égua e
+    garanhão via FK (`animal_id_egua`/`animal_id_garanhao` → `animais.nome`).
+
+    Adiciona as colunas `egua_nome`/`garanhao_nome` — usadas pela UI em
+    vez de `egua`/`garanhao` (texto legado). `COALESCE(a.nome, i.egua)`
+    mantém retro-compat para linhas cujas FKs ainda não foram
+    sincronizadas. Mesmo padrão de `carregar_stock`.
+    """
     try:
         with get_connection() as conn:
             query = """
-                SELECT i.*, d.nome as proprietario_nome
+                SELECT i.*, d.nome as proprietario_nome,
+                       COALESCE(ae.nome, i.egua) as egua_nome,
+                       COALESCE(ag.nome, i.garanhao) as garanhao_nome
                 FROM inseminacoes i
                 LEFT JOIN dono d ON i.dono_id = d.id
+                LEFT JOIN animais ae ON ae.id = i.animal_id_egua
+                LEFT JOIN animais ag ON ag.id = i.animal_id_garanhao
                 ORDER BY i.data_inseminacao DESC
             """
             df = pd.read_sql_query(query, conn)
