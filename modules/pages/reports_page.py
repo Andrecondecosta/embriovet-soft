@@ -26,6 +26,24 @@ from modules.ui_kit import (
 logger = logging.getLogger(__name__)
 
 
+def _contar_operacoes(df: pd.DataFrame) -> int:
+    """Conta operações de inseminação DISTINTAS num DataFrame já
+    carregado, não linhas — uma operação multi-lote (várias linhas em
+    `inseminacoes` com o mesmo `operation_id`) conta como 1.
+
+    Mesmo padrão de `dashboard_repo.carregar_kpis_clinicos`
+    (`insem_mes_operacoes`) e `animal_page` (histórico reprodutivo):
+    `COALESCE(operation_id, 'solo_'||id)` para agrupar também as linhas
+    legadas sem `operation_id`, cada uma a sua própria operação.
+    """
+    if df.empty:
+        return 0
+    op_key = df["operation_id"].astype(str).where(
+        df["operation_id"].notna(), "solo_" + df["id"].astype(str)
+    )
+    return int(op_key.nunique())
+
+
 def _filtrar_stock_por_periodo(df, data_inicio, data_fim):
     if df.empty:
         return df
@@ -143,7 +161,7 @@ def gerar_pdf_garanhao(
             for _, row in dados_insem.iterrows():
                 insem_data.append([
                     str(row.get('data_inseminacao', 'N/A'))[:10],
-                    str(row.get('egua', 'N/A'))[:25],
+                    str(row.get('egua_nome') or row.get('egua', 'N/A'))[:25],
                     str(row.get('proprietario_nome', 'N/A'))[:25],
                     str(int(row.get('palhetas_gastas', 0))),
                 ])
@@ -337,7 +355,7 @@ def run_reports_page(ctx: dict):
         s = stock[stock["garanhao_nome"] == garanhao_sel] if not stock.empty else pd.DataFrame()
         if filtros.get("prop"):
             s = s[s["proprietario_nome"].isin(filtros["prop"])]
-        i = insem[insem["garanhao"] == garanhao_sel] if not insem.empty else pd.DataFrame()
+        i = insem[insem["garanhao_nome"] == garanhao_sel] if not insem.empty else pd.DataFrame()
         transf_sel = transf[transf["garanhao"] == garanhao_sel] if not transf.empty else pd.DataFrame()
         te = transf_ext[transf_ext["garanhao"] == garanhao_sel] if not transf_ext.empty else pd.DataFrame()
 
@@ -348,7 +366,7 @@ def run_reports_page(ctx: dict):
             csv = f"=== {t('label.garanhao').upper()}: {garanhao_sel} ===\n\n"
             for nome, df in {
                 t("reports.section.stock"): safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]),
-                t("reports.section.inseminations"): safe_pick(i, ["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]),
+                t("reports.section.inseminations"): safe_pick(i, ["data_inseminacao", "egua_nome", "proprietario_nome", "palhetas_gastas"]),
                 t("reports.section.transfers_in"): safe_pick(transf_sel, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]),
                 t("reports.section.transfers_out"): safe_pick(te, ["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"]),
             }.items():
@@ -361,14 +379,14 @@ def run_reports_page(ctx: dict):
 
         render_kpi_strip([
             (t("reports.kpi.straws_stock"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
-            (t("reports.kpi.inseminations"), len(i)),
+            (t("reports.kpi.inseminations"), _contar_operacoes(i)),
             (t("reports.kpi.transfers_in"), len(transf_sel)),
             (t("reports.kpi.transfers_out"), len(te)),
         ])
         if not s.empty:
             st.dataframe(safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
         if not i.empty:
-            st.dataframe(safe_pick(i, ["data_inseminacao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False), width="stretch", hide_index=True, height=300)
+            st.dataframe(safe_pick(i, ["data_inseminacao", "egua_nome", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False), width="stretch", hide_index=True, height=300)
 
     elif modo == t("reports.mode.owner") and prop_sel:
         nome = proprietarios[proprietarios["id"] == prop_sel]["nome"].values[0]
@@ -388,7 +406,7 @@ def run_reports_page(ctx: dict):
 
         render_kpi_strip([
             (t("reports.kpi.straws_stock"), int(to_py(s["existencia_atual"].sum()) or 0) if not s.empty else 0),
-            (t("reports.kpi.inseminations"), len(i)),
+            (t("reports.kpi.inseminations"), _contar_operacoes(i)),
             (t("reports.kpi.transfers_received"), len(t_in)),
             (t("reports.kpi.transfers_sent"), len(t_out)),
         ])
@@ -421,7 +439,7 @@ def run_reports_page(ctx: dict):
     elif modo == t("reports.mode.history") and tipo_hist:
         if tipo_hist == t("reports.history.inseminations"):
             d = insem.copy()
-            st.dataframe(safe_pick(d, ["data_inseminacao", "garanhao", "egua", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["data_inseminacao", "garanhao_nome", "egua_nome", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
         elif tipo_hist == t("reports.history.transfer_internal"):
             d = transf.copy()
             st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)

@@ -20,6 +20,7 @@ from __future__ import annotations
 import time
 from datetime import date, timedelta
 
+import pandas as pd
 import psycopg2
 import pytest
 
@@ -930,6 +931,108 @@ def test_registo_falha_se_egua_nao_tem_estadia_ativa(db, dono_id, stock_garanhao
         cur.execute("DELETE FROM animais WHERE id = %s", (animal_id,))
         db.commit()
         cur.close()
+
+
+# ────────────────────────────────────────────────────────────────────
+# Auditoria — Relatórios: nomes via FK e contagem por operação
+# ────────────────────────────────────────────────────────────────────
+
+def test_carregar_inseminacoes_resolve_nomes_via_fk(
+    db, egua_com_estadia, stock_garanhao,
+):
+    """`carregar_inseminacoes` (stock_repo) devolve `egua_nome`/
+    `garanhao_nome` resolvidos via FK — não o texto legado gravado na
+    criação. Renomear o animal depois de criar a inseminação tem que
+    reflectir-se em `egua_nome`, provando que a resolução é ao vivo
+    (via JOIN), não uma cópia estática."""
+    from modules.repositories.stock_repo import carregar_inseminacoes
+
+    data_ins = date(2026, 5, 1)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[
+            {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 2},
+        ],
+        observacoes="teste fk relatorios",
+        utilizador="pytest",
+    )
+    insemination_id = resultado["inseminacao_ids"][0]
+
+    # Renomear a égua DEPOIS de criada a inseminação — o texto legado
+    # `egua` fica com o nome antigo; `egua_nome` (via FK) tem que
+    # acompanhar o nome actual.
+    novo_nome = egua_com_estadia["nome"] + "_RENOMEADA"
+    cur = db.cursor()
+    cur.execute(
+        "UPDATE animais SET nome = %s WHERE id = %s",
+        (novo_nome, egua_com_estadia["animal_id"]),
+    )
+    db.commit()
+    cur.close()
+
+    try:
+        df = carregar_inseminacoes()
+        row = df[df["id"] == insemination_id].iloc[0]
+
+        assert row["egua_nome"] == novo_nome, (
+            "egua_nome tem que reflectir o nome actual do animal (via FK), "
+            f"obtido {row['egua_nome']!r}"
+        )
+        assert row["egua"] == egua_com_estadia["nome"], (
+            "a coluna de texto legado `egua` mantém-se como estava "
+            "(prova de que a resolução é via FK, não uma reescrita)"
+        )
+        assert row["garanhao_nome"] == stock_garanhao["nome"]
+    finally:
+        # Repor o nome original para não interferir na fixture de cleanup.
+        cur = db.cursor()
+        cur.execute(
+            "UPDATE animais SET nome = %s WHERE id = %s",
+            (egua_com_estadia["nome"], egua_com_estadia["animal_id"]),
+        )
+        db.commit()
+        cur.close()
+
+
+def test_reports_contar_operacoes_multi_lote_conta_uma_operacao(
+    egua_com_estadia, stock_garanhao,
+):
+    """Uma operação multi-lote (2 linhas em `inseminacoes`, mesmo
+    `operation_id`) tem que contar como 1 no KPI "Inseminações" dos
+    Relatórios — não 2. Cobre a regressão de `len(i)` a contar linhas."""
+    from modules.pages.reports_page import _contar_operacoes
+    from modules.repositories.stock_repo import carregar_inseminacoes
+
+    data_ins = date(2026, 5, 2)
+    resultado = registar_inseminacao_completa(
+        animal_id_egua=egua_com_estadia["animal_id"],
+        estadia_id=egua_com_estadia["estadia_id"],
+        dono_id=egua_com_estadia["dono_id"],
+        garanhao_nome=stock_garanhao["nome"],
+        data_inseminacao=data_ins,
+        registros=[
+            {"stock_id": stock_garanhao["lote_ids"][0], "palhetas": 2},
+            {"stock_id": stock_garanhao["lote_ids"][1], "palhetas": 3},
+        ],
+        observacoes="teste contagem operacoes",
+        utilizador="pytest",
+    )
+    assert len(resultado["inseminacao_ids"]) == 2, (
+        "setup: a operação tem que ter mesmo 2 linhas (multi-lote)"
+    )
+
+    df = carregar_inseminacoes()
+    i = df[df["operation_id"] == resultado["operation_id"]]
+    assert len(i) == 2, "setup: carregar_inseminacoes tem que devolver as 2 linhas"
+
+    assert _contar_operacoes(i) == 1, (
+        "uma operação multi-lote (2 linhas) tem que contar como 1 operação"
+    )
+    assert _contar_operacoes(pd.DataFrame()) == 0
 
 
 if __name__ == "__main__":
