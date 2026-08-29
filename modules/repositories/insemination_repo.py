@@ -60,6 +60,29 @@ def _fetch_nome_canonico(cur, animal_id: int) -> Optional[str]:
     return str(row[0]) if row and row[0] else None
 
 
+def _resolver_estadia_ativa(cur, animal_id_egua: int) -> Optional[int]:
+    """Devolve o id da estadia aberta mais antiga da égua, ou `None` se
+    não existir nenhuma.
+
+    Reutilizada por `registar_inseminacao_completa` e por
+    `registrar_inseminacao_multiplas` (modo edição) para que ambas
+    resolvam a estadia da mesma forma — nunca confiam num `estadia_id`
+    antigo/passado pelo chamador, sempre re-resolvem a partir da égua.
+    """
+    cur.execute(
+        """
+        SELECT id
+        FROM estadias
+        WHERE animal_id = %s AND data_saida IS NULL
+        ORDER BY id ASC
+        LIMIT 1
+        """,
+        (int(animal_id_egua),),
+    )
+    row = cur.fetchone()
+    return int(row[0]) if row else None
+
+
 def upsert_acompanhamento_datas(
     *,
     estadia_id: int,
@@ -219,23 +242,12 @@ def registar_inseminacao_completa(
             #    inseminação e as tarefas ficarem numa estadia
             #    diferente da que já tinha, por exemplo, a tarefa
             #    `primeira_observacao`.
-            cur.execute(
-                """
-                SELECT id
-                FROM estadias
-                WHERE animal_id = %s AND data_saida IS NULL
-                ORDER BY id ASC
-                LIMIT 1
-                """,
-                (int(animal_id_egua),),
-            )
-            row_est = cur.fetchone()
-            if not row_est:
+            estadia_id = _resolver_estadia_ativa(cur, animal_id_egua)
+            if estadia_id is None:
                 raise InseminacaoError(
                     f"Égua id={animal_id_egua} não tem estadia activa. "
                     f"Crie primeiro uma estadia."
                 )
-            estadia_id = int(row_est[0])
             # Nomes canónicos (a partir de `animais`) para os campos texto.
             egua_nome = _fetch_nome_canonico(cur, animal_id_egua)
             gar_nome = _fetch_nome_canonico(cur, animal_id_garanhao)
@@ -785,12 +797,18 @@ def registar_resultado(
 # `modules.repositories.audit_repo`.
 def registrar_inseminacao_multiplas(
     registros, data_inseminacao, egua, insemination_id=None,
-    observacoes=None, edit_operation_id=None,
+    observacoes=None, edit_operation_id=None, animal_id_egua=None,
 ):
     """Registra múltiplas linhas de inseminação ou atualiza uma operação existente.
 
     - edit_operation_id: UUID da operação a editar (apaga todos os lotes e re-insere)
     - insemination_id: ID da linha individual a editar (backward compat)
+    - animal_id_egua: FK obrigatória nos dois modos de edição — usada para
+      re-resolver `estadia_id` (via `_resolver_estadia_ativa`, a mesma
+      lógica de `registar_inseminacao_completa`) e para preencher
+      `animal_id_egua`/`animal_id_garanhao` nas linhas reescritas, para
+      que editar uma operação não apague a ligação FK que a criação
+      unificada já tinha estabelecido.
     """
     import logging
     import streamlit as st
@@ -833,6 +851,29 @@ def registrar_inseminacao_multiplas(
                 else:
                     old_for_audit = old_rows[0]
 
+                    # Re-resolve as FKs (mesma lógica de
+                    # `registar_inseminacao_completa`) para que editar
+                    # esta operação não apague a ligação a `animais`/
+                    # `estadias` que a criação já tinha estabelecido.
+                    if not animal_id_egua:
+                        st.error("animal_id_egua obrigatório para editar.")
+                        return False
+                    estadia_id_resolvida = _resolver_estadia_ativa(cur, animal_id_egua)
+                    if estadia_id_resolvida is None:
+                        st.error(
+                            f"Égua id={animal_id_egua} não tem estadia activa."
+                        )
+                        return False
+                    animal_id_garanhao_resolvido = get_or_create_garanhao(
+                        registros[0].get("garanhao")
+                    )
+                    if animal_id_garanhao_resolvido is None:
+                        st.error(
+                            f"Não foi possível resolver garanhão "
+                            f"'{registros[0].get('garanhao')}'."
+                        )
+                        return False
+
                     for row in old_rows:
                         if row[1]:
                             cur.execute(
@@ -859,8 +900,9 @@ def registrar_inseminacao_multiplas(
                             return False
                         cur.execute("""
                             INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
-                                protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE)
+                                protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado,
+                                animal_id_egua, animal_id_garanhao, estadia_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE, %s, %s, %s)
                             RETURNING id
                         """, (
                             to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
@@ -868,6 +910,7 @@ def registrar_inseminacao_multiplas(
                             to_py(reg.get("protocolo")), palhetas,
                             to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
                             stock_id, edit_operation_id,
+                            int(animal_id_egua), int(animal_id_garanhao_resolvido), int(estadia_id_resolvida),
                         ))
                         new_row = cur.fetchone()
                         if first_new_id is None and new_row:
@@ -912,6 +955,26 @@ def registrar_inseminacao_multiplas(
                 """, (insemination_id,))
                 old_data = cur.fetchone()
 
+                # Re-resolve as FKs (mesma lógica de
+                # `registar_inseminacao_completa`) para que editar esta
+                # linha não apague a ligação a `animais`/`estadias`.
+                if not animal_id_egua:
+                    st.error("animal_id_egua obrigatório para editar.")
+                    return False
+                estadia_id_resolvida = _resolver_estadia_ativa(cur, animal_id_egua)
+                if estadia_id_resolvida is None:
+                    st.error(f"Égua id={animal_id_egua} não tem estadia activa.")
+                    return False
+                animal_id_garanhao_resolvido = get_or_create_garanhao(
+                    registros[0].get("garanhao")
+                )
+                if animal_id_garanhao_resolvido is None:
+                    st.error(
+                        f"Não foi possível resolver garanhão "
+                        f"'{registros[0].get('garanhao')}'."
+                    )
+                    return False
+
                 if old_data:
                     old_garanhao, old_dono_id, old_palhetas, old_egua, old_data_insem, old_protocolo, old_dono_nome, old_observacoes, old_estoque_id = old_data
                     if old_estoque_id:
@@ -925,13 +988,16 @@ def registrar_inseminacao_multiplas(
                     UPDATE inseminacoes
                     SET garanhao = %s, dono_id = %s, data_inseminacao = %s,
                         egua = %s, palhetas_gastas = %s, observacoes = %s,
-                        atualizado = TRUE, utilizador = %s, estoque_id = %s
+                        atualizado = TRUE, utilizador = %s, estoque_id = %s,
+                        animal_id_egua = %s, animal_id_garanhao = %s, estadia_id = %s
                     WHERE id = %s
                 """, (
                     to_py(primeiro_registro.get("garanhao")), to_py(primeiro_registro.get("dono_id")),
                     to_py(data_inseminacao), to_py(egua), total_pal,
                     to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
-                    to_py(primeiro_registro.get("stock_id")), insemination_id
+                    to_py(primeiro_registro.get("stock_id")),
+                    int(animal_id_egua), int(animal_id_garanhao_resolvido), int(estadia_id_resolvida),
+                    insemination_id
                 ))
 
                 for reg in registros:

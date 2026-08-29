@@ -748,6 +748,7 @@ def run_insemination_page(ctx):
                     insemination_data['id'] if insemination_data and not st.session_state.get('edit_insemination_op_id') else None,
                     observacoes=observacoes or None,
                     edit_operation_id=st.session_state.get('edit_insemination_op_id'),
+                    animal_id_egua=int(egua_sel["animal_id"]),
                 )
                 if ok:
                     st.session_state.pop('edit_insemination_id', None)
