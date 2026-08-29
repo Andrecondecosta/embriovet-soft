@@ -5,7 +5,7 @@ from datetime import date, datetime
 import pandas as pd
 import streamlit as st
 
-from modules.db import get_connection
+from modules.db import get_connection, invalidate_data_cache
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ def _atualizar_animal(animal_id: int, dados: dict) -> bool:
         cur.execute(sql, dados)
         conn.commit()
         cur.close()
+    invalidate_data_cache()
     return True
 
 
