@@ -8,6 +8,7 @@ from modules.repositories.dashboard_repo import carregar_atividade_recente_agrup
 from modules.repositories.stock_repo import (
     carregar_contentores,
     carregar_proprietarios,
+    carregar_stock,
     transferir_stock_externo,
     transferir_stock_interno,
     transferir_stock_interno_com_localizacao,
@@ -23,6 +24,7 @@ def run_transfer_page(ctx):
     del ctx
     contentores = carregar_contentores(apenas_ativos=True)
     proprietarios = carregar_proprietarios(apenas_ativos=True)
+    stock = carregar_stock(apenas_ativos=True)
 
     st.header(t("transfer.title"))
     

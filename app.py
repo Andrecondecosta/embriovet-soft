@@ -851,6 +851,14 @@ def render_change_credentials(user, app_settings):
 
 
 def render_welcome_page():
+    # Nota: o wrapper "welcome-card" tem de ser um st.container(key=...)
+    # nativo (não HTML aberto/fechado entre chamadas st.markdown() —
+    # cada chamada renderiza para o seu próprio contentor isolado no
+    # DOM, por isso um <div> aberto numa chamada nunca chega a envolver
+    # o conteúdo de chamadas seguintes, nem o botão nativo do Streamlit
+    # a meio). Um st.container(key=...) garante que título, subtítulo,
+    # descrição, botão e rodapé são todos descendentes reais do mesmo
+    # elemento.
     st.markdown(
         """
         <style>
@@ -858,17 +866,31 @@ def render_welcome_page():
             div[data-testid="stToolbar"] { display: none !important; }
             section[data-testid="stSidebar"] { display: none !important; }
             div[data-testid="stAppViewContainer"] { padding-top: 0 !important; }
-            section.main > div.block-container { padding-top: 0 !important; padding-bottom: 0 !important; }
-
-            .welcome-wrapper {
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+            div[data-testid="stMainBlockContainer"] {
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                min-height: 100vh !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
                 background: #f8fafc;
             }
-            .welcome-card {
+            /* Os wrappers internos do Streamlit (stLayoutWrapper/stVerticalBlock)
+               esticam-se a 100% da largura/altura disponível, o que anula o
+               align-items/justify-content do bloco acima (não sobra espaço para
+               centrar). Centramos com margens automáticas no filho direto do
+               block-container, que respeitam a caixa flex independentemente
+               desse esticamento. */
+            div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"] {
+                flex-grow: 0 !important;
+                margin: auto 0 !important;
+            }
+
+            .st-key-welcome-card {
                 max-width: 680px;
+                width: 100%;
+                margin: 0 auto;
                 text-align: center;
                 padding: 40px 24px;
             }
@@ -895,7 +917,7 @@ def render_welcome_page():
                 color: #94a3b8;
                 margin-top: 24px;
             }
-            .welcome-card .stButton > button {
+            .st-key-welcome-card .stButton > button {
                 width: 100%;
                 height: 52px;
                 border-radius: 12px;
@@ -907,22 +929,22 @@ def render_welcome_page():
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='welcome-wrapper'><div class='welcome-card'>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="welcome-title">{t("welcome.title")}</div>
-        <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
-        <div class="welcome-description">{t("welcome.text")}</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    if st.button(t("welcome.start"), type="primary", width="stretch"):
-        if update_welcome_completed(True):
-            st.rerun()
-    st.markdown(
-        f"<div class='welcome-footer'>{t('welcome.powered')}</div></div></div>",
-        unsafe_allow_html=True,
-    )
+    with st.container(key="welcome-card"):
+        st.markdown(
+            f"""
+            <div class="welcome-title">{t("welcome.title")}</div>
+            <div class="welcome-subtitle">{t("welcome.subtitle")}</div>
+            <div class="welcome-description">{t("welcome.text")}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(t("welcome.start"), type="primary", width="stretch"):
+            if update_welcome_completed(True):
+                st.rerun()
+        st.markdown(
+            f"<div class='welcome-footer'>{t('welcome.powered')}</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_onboarding(app_settings):
