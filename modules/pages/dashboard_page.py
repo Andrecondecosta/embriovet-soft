@@ -22,6 +22,7 @@ Estrutura:
 from __future__ import annotations
 
 from datetime import date, datetime
+from html import escape
 
 import altair as alt
 import pandas as pd
@@ -39,7 +40,14 @@ from modules.repositories.dashboard_repo import (
     carregar_tarefas_hoje,
 )
 from modules.repositories.settings_repo import get_app_settings
-from modules.ui_kit import DEFAULT_PRIMARY_COLOR
+from modules.ui_kit import (
+    DEFAULT_PRIMARY_COLOR,
+    inject_design_tokens,
+    render_kpi_row,
+    render_page_header,
+    render_status_pill,
+    render_zone_title,
+)
 
 # Labels curtas para o tipo de tarefa (mais legíveis que o valor bruto).
 _LABEL_TIPO_TAREFA = {
@@ -67,206 +75,97 @@ def _fmt_ts(val) -> str:
     return str(val)
 
 
-def _inject_css(primary_color: str) -> None:
+def _inject_local_css() -> None:
+    """CSS específico do Dashboard não coberto pelos componentes base do
+    design system (`inject_design_tokens`) — lista de tarefas de "Hoje
+    na clínica" (linhas com pill de urgência) e o ajuste do pill quando
+    embutido dentro de um valor de KPI."""
     st.markdown(
-        f"""
+        """
         <style>
-            .dash-header {{
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                padding: 14px 16px;
-                background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-                margin-bottom: 12px;
-                box-shadow: 0 2px 8px rgba(15,23,42,0.05);
-            }}
-            .dash-title {{
-                font-size: 1.05rem;
-                font-weight: 700;
-                color: #0f172a;
-                margin: 0;
-            }}
-            .dash-subtitle {{
-                font-size: .78rem;
-                color: #64748b;
-                margin-top: 3px;
-            }}
-            .dash-kpi-grid {{
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 10px;
-                margin-bottom: 14px;
-            }}
-            .dash-kpi-card {{
-                background: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                padding: 14px 16px;
-                box-shadow: 0 2px 8px rgba(15,23,42,0.05);
-                text-align: center;
-            }}
-            .dash-kpi-card--clinical {{
-                background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 60%);
-                border-color: #a7f3d0;
-            }}
-            .dash-kpi-value {{
-                font-size: 1.8rem;
-                font-weight: 800;
-                color: {primary_color};
-                line-height: 1;
-                margin-bottom: 4px;
-            }}
-            .dash-kpi-card--clinical .dash-kpi-value {{
-                color: #047857;
-            }}
-            .dash-kpi-label {{
-                font-size: .72rem;
+            .dash-task-list {
+                display: flex;
+                flex-direction: column;
+            }
+            .dash-task-row {
+                display: flex;
+                align-items: center;
+                gap: var(--ds-space-3);
+                padding: var(--ds-space-2) 0;
+                border-bottom: 1px solid var(--ds-gray-200);
+                font-size: var(--ds-text-sm);
+            }
+            .dash-task-row:last-child {
+                border-bottom: none;
+            }
+            .dash-task-animal {
                 font-weight: 600;
-                color: #64748b;
-                text-transform: uppercase;
-                letter-spacing: .05em;
-            }}
-            .dash-kpi-sub {{
-                font-size: .68rem;
-                color: #94a3b8;
-                margin-top: 2px;
-            }}
-            .dash-kpi-sub--warn {{
-                color: #dc2626;
-                font-weight: 700;
-            }}
-            .dash-section-title {{
-                font-size: .78rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: .05em;
-                color: #64748b;
-                margin: 14px 0 8px 0;
-            }}
-            .dash-urgency {{
-                display:inline-block;
-                padding:2px 8px;
-                border-radius:999px;
-                font-size:.68rem;
-                font-weight:700;
-                text-transform:uppercase;
-                letter-spacing:.03em;
-            }}
-            .dash-urgency--urgente {{ background:#fee2e2; color:#b91c1c; }}
-            .dash-urgency--hoje    {{ background:#fef3c7; color:#92400e; }}
-            .dash-urgency--amanha  {{ background:#dbeafe; color:#1d4ed8; }}
-            @media (max-width: 768px) {{
-                .dash-kpi-grid {{
-                    grid-template-columns: repeat(2, 1fr);
-                }}
-            }}
+                color: var(--ds-gray-900);
+                min-width: 160px;
+            }
+            .dash-task-detail {
+                color: var(--ds-gray-600);
+                flex: 1;
+            }
+            .ds-kpi-value .ds-pill {
+                margin-left: 6px;
+                vertical-align: middle;
+            }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def _render_header(company_name: str) -> None:
-    today_str = date.today().strftime("%d/%m/%Y")
-    st.markdown(
-        f"""
-        <div class='dash-header' data-testid='dashboard-header'>
-            <div class='dash-title'>{t("dashboard.title")}</div>
-            <div class='dash-subtitle'>{company_name} · {today_str}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _render_kpis_stock(kpis: dict) -> None:
-    st.markdown(
-        "<div class='dash-section-title'>Stock</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"""
-        <div class='dash-kpi-grid' data-testid='dashboard-kpis-stock'>
-            <div class='dash-kpi-card'>
-                <div class='dash-kpi-value'>{kpis["total_palhetas"]}</div>
-                <div class='dash-kpi-label'>{t("dashboard.kpi.total")}</div>
-            </div>
-            <div class='dash-kpi-card'>
-                <div class='dash-kpi-value'>{kpis["lotes_ativos"]}</div>
-                <div class='dash-kpi-label'>{t("dashboard.kpi.active")}</div>
-            </div>
-            <div class='dash-kpi-card'>
-                <div class='dash-kpi-value'>{kpis["stock_critico"]}</div>
-                <div class='dash-kpi-label'>{t("dashboard.kpi.critical")}</div>
-            </div>
-            <div class='dash-kpi-card'>
-                <div class='dash-kpi-value'>—</div>
-                <div class='dash-kpi-label'>&nbsp;</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    render_zone_title("Stock", "ds-zone-title")
+    render_kpi_row([
+        (t("dashboard.kpi.total"), kpis["total_palhetas"]),
+        (t("dashboard.kpi.active"), kpis["lotes_ativos"]),
+        (t("dashboard.kpi.critical"), kpis["stock_critico"]),
+    ])
 
 
 def _render_kpis_clinicos(kpis: dict) -> None:
-    st.markdown(
-        "<div class='dash-section-title'>Clínica</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title("Clínica", "ds-zone-title")
     urgentes = kpis["tarefas_urgentes"]
-    sub_urgentes = (
-        f"<div class='dash-kpi-sub dash-kpi-sub--warn'>{urgentes} urgente(s)</div>"
-        if urgentes else
-        "<div class='dash-kpi-sub'>&nbsp;</div>"
-    )
-    st.markdown(
-        f"""
-        <div class='dash-kpi-grid' data-testid='dashboard-kpis-clinical'>
-            <div class='dash-kpi-card dash-kpi-card--clinical'>
-                <div class='dash-kpi-value'>{kpis["estadias_ativas"]}</div>
-                <div class='dash-kpi-label'>Estadias ativas</div>
-                <div class='dash-kpi-sub'>&nbsp;</div>
-            </div>
-            <div class='dash-kpi-card dash-kpi-card--clinical'>
-                <div class='dash-kpi-value'>{kpis["tarefas_hoje"]}</div>
-                <div class='dash-kpi-label'>Tarefas de hoje</div>
-                {sub_urgentes}
-            </div>
-            <div class='dash-kpi-card dash-kpi-card--clinical'>
-                <div class='dash-kpi-value'>{kpis["gestacoes_confirmadas"]}</div>
-                <div class='dash-kpi-label'>Gestações confirmadas</div>
-                <div class='dash-kpi-sub'>&nbsp;</div>
-            </div>
-            <div class='dash-kpi-card dash-kpi-card--clinical'>
-                <div class='dash-kpi-value'>{kpis["insem_mes_operacoes"]}</div>
-                <div class='dash-kpi-label'>Inseminações do mês</div>
-                <div class='dash-kpi-sub'>por operação</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    tarefas_valor = str(kpis["tarefas_hoje"])
+    if urgentes:
+        tarefas_valor += " " + render_status_pill(f"{urgentes} urgente(s)", "critico")
+    render_kpi_row([
+        ("Estadias ativas", kpis["estadias_ativas"]),
+        ("Tarefas de hoje", tarefas_valor),
+        ("Gestações confirmadas", kpis["gestacoes_confirmadas"]),
+        ("Inseminações do mês · por operação", kpis["insem_mes_operacoes"]),
+    ])
+
+
+_PILL_LEVEL_URGENCIA = {"urgente": "critico", "hoje": "aviso"}
 
 
 def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
-    st.markdown(
-        "<div class='dash-section-title'>Hoje na clínica</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title("Hoje na clínica", "ds-zone-title")
     if df.empty:
-        st.info("Sem tarefas para hoje. 🎉")
-        return
-
-    display = pd.DataFrame({
-        "Égua": df["animal"].fillna("—"),
-        "Motivo": df["tipo"].map(_label_tipo),
-        "Detalhe": df["motivo"].fillna("—"),
-        "Urgência": df["urgencia"].str.capitalize().fillna("—"),
-    })
-    st.dataframe(display, use_container_width=True, hide_index=True, height=220)
+        st.caption("Sem tarefas para hoje.")
+    else:
+        rows_html = "".join(
+            "<div class='dash-task-row'>"
+            f"<span class='dash-task-animal'>{escape(str(row['animal'] or '—'))}</span>"
+            "<span class='dash-task-detail'>"
+            f"{escape(_label_tipo(row['tipo']))}"
+            + (f" · {escape(str(row['motivo']))}" if row["motivo"] else "")
+            + "</span>"
+            + render_status_pill(
+                str(row["urgencia"]).capitalize(),
+                _PILL_LEVEL_URGENCIA.get(row["urgencia"], "ok"),
+            )
+            + "</div>"
+            for _, row in df.iterrows()
+        )
+        st.markdown(f"<div class='dash-task-list'>{rows_html}</div>", unsafe_allow_html=True)
 
     if st.button(
-        "📋 Abrir Trabalho Diário",
+        "Abrir Trabalho Diário",
         key="dashboard-open-trabalho-diario",
         width="stretch",
     ):
@@ -280,13 +179,9 @@ def _render_partos_previstos(df: pd.DataFrame, dias: int) -> None:
     Só mostra operações com `resultado = 'gestacao_confirmada'` — nunca
     gestações falhadas. Ordenado do mais próximo para o mais distante.
     """
-    st.markdown(
-        f"<div class='dash-section-title'>Partos previstos — próximos "
-        f"{dias} dias</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title(f"Partos previstos — próximos {dias} dias", "ds-zone-title")
     if df.empty:
-        st.info("Sem partos previstos neste horizonte.")
+        st.caption("Sem partos previstos neste horizonte.")
         return
 
     def _fmt_dias(n: int) -> str:
@@ -313,13 +208,9 @@ def _render_partos_previstos(df: pd.DataFrame, dias: int) -> None:
 
 
 def _render_stock_atencao(df: pd.DataFrame, limite: int) -> None:
-    st.markdown(
-        f"<div class='dash-section-title'>Stock a precisar de atenção "
-        f"(≤ {limite})</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title(f"Stock a precisar de atenção (≤ {limite})", "ds-zone-title")
     if df.empty:
-        st.info("Todos os lotes acima do limite. 👍")
+        st.caption("Todos os lotes acima do limite.")
         return
 
     display = pd.DataFrame({
@@ -343,10 +234,7 @@ def _render_graficos(primary_color: str) -> None:
     if df_cont.empty and df_prop.empty:
         return
 
-    st.markdown(
-        "<div class='dash-section-title'>Distribuição de Stock</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title("Distribuição de Stock", "ds-zone-title")
     col_g1, col_g2 = st.columns([1, 1])
 
     with col_g1:
@@ -369,9 +257,9 @@ def _render_graficos(primary_color: str) -> None:
                 )
                 st.altair_chart(chart, use_container_width=True)
             else:
-                st.info("Sem stock em contentores")
+                st.caption("Sem stock em contentores")
         else:
-            st.info("Sem dados de contentores")
+            st.caption("Sem dados de contentores")
 
     with col_g2:
         if not df_prop.empty:
@@ -386,25 +274,22 @@ def _render_graficos(primary_color: str) -> None:
                         y=alt.Y("Palhetas:Q",
                                 axis=alt.Axis(title="Palhetas"),
                                 scale=alt.Scale(zero=True)),
-                        color=alt.value("#10b981"),
+                        color=alt.value(primary_color),
                         tooltip=["Proprietário:N", "Palhetas:Q"],
                     )
                     .properties(title="Palhetas por Proprietário", height=220)
                 )
                 st.altair_chart(chart, use_container_width=True)
             else:
-                st.info("Sem stock por proprietário")
+                st.caption("Sem stock por proprietário")
         else:
-            st.info("Sem dados de proprietários")
+            st.caption("Sem dados de proprietários")
 
 
 def _render_atividade_recente(ops: list[dict]) -> None:
-    st.markdown(
-        f"<div class='dash-section-title'>{t('dashboard.activity')}</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title(t("dashboard.activity"), "ds-zone-title")
     if not ops:
-        st.info("Sem atividade recente registada.")
+        st.caption("Sem atividade recente registada.")
         return
 
     df = pd.DataFrame([
@@ -426,10 +311,7 @@ def _render_atividade_recente(ops: list[dict]) -> None:
 
 
 def _render_acoes_rapidas() -> None:
-    st.markdown(
-        f"<div class='dash-section-title'>{t('dashboard.actions')}</div>",
-        unsafe_allow_html=True,
-    )
+    render_zone_title(t("dashboard.actions"), "ds-zone-title")
     a1, a2, a3, a4 = st.columns(4)
     with a1:
         if st.button(t("dashboard.action.new_insem"), width="stretch",
@@ -464,8 +346,10 @@ def run_dashboard_page(ctx: dict) -> None:
     company_name = app_settings.get("company_name") or "Sistema"
     primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR
 
-    _inject_css(primary_color)
-    _render_header(company_name)
+    inject_design_tokens()
+    _inject_local_css()
+    today_str = date.today().strftime("%d/%m/%Y")
+    render_page_header(t("dashboard.title"), f"{company_name} · {today_str}")
 
     # KPIs
     try:
