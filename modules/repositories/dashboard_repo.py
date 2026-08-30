@@ -142,17 +142,20 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
     """Tarefas do trabalho diário para hoje (não concluídas).
 
     Cada linha traz `animal_id`, `estadia_id`, `animal` (via FK),
-    `tipo`, `motivo` e `urgencia` — para o card da secção "Hoje na
-    clínica" do dashboard.
+    `dono` (via `animais.dono_id`), `tipo`, `motivo`, `urgencia` e
+    `utilizador` — usada pela secção "Hoje na clínica" do dashboard e
+    pela lista densa do Trabalho Diário.
     """
     sql = """
         SELECT td.id AS tarefa_id,
                td.animal_id, td.estadia_id,
                a.nome AS animal,
-               td.tipo, td.motivo, td.urgencia,
+               d.nome AS dono,
+               td.tipo, td.motivo, td.urgencia, td.utilizador,
                td.data_tarefa
         FROM trabalho_diario td
         JOIN animais a ON a.id = td.animal_id
+        LEFT JOIN dono d ON d.id = a.dono_id
         WHERE td.data_tarefa = CURRENT_DATE
           AND td.concluida = FALSE
         ORDER BY
@@ -162,10 +165,35 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
                 WHEN 'amanha'  THEN 2
                 ELSE 3
             END,
-            td.id ASC
+            a.nome ASC
     """
     with get_connection() as conn:
         return pd.read_sql_query(sql, conn)
+
+
+def carregar_resumo_tarefas_hoje() -> dict:
+    """Contagem de tarefas de hoje — total, feitas e por fazer.
+
+    Usada pela barra de cobertura do Trabalho Diário. Ao contrário de
+    `carregar_tarefas_hoje()` (só pendentes), aqui contam-se TODAS as
+    tarefas de `data_tarefa = CURRENT_DATE`, concluídas ou não — os
+    totais não devem mudar quando a lista é filtrada.
+    """
+    sql = """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE concluida = TRUE) AS feitas
+        FROM trabalho_diario
+        WHERE data_tarefa = CURRENT_DATE
+    """
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql)
+        row = cur.fetchone()
+        cur.close()
+    total = int(row[0] or 0)
+    feitas = int(row[1] or 0)
+    return {"total": total, "feitas": feitas, "por_fazer": total - feitas}
 
 
 # ─── Partos previstos ─────────────────────────────────────────────────
