@@ -1226,7 +1226,9 @@ def inject_design_tokens():
                 color: var(--ds-gray-500);
             }}
 
-            /* Zona/secção — usar via render_zone_title(title, "ds-zone-title") */
+            /* Zona/secção — usar via render_zone_title(title, "ds-zone-title").
+               Linha divisória subtil por cima, para separar secções
+               visualmente em qualquer página que use este título. */
             .ds-zone-title {{
                 font-size: var(--ds-text-xs);
                 font-weight: 700;
@@ -1234,6 +1236,15 @@ def inject_design_tokens():
                 letter-spacing: .06em;
                 color: var(--ds-gray-500);
                 margin: var(--ds-space-3) 0 var(--ds-space-2) 0;
+                padding-top: var(--ds-space-3);
+                border-top: 1px solid var(--ds-gray-200);
+            }}
+            /* A primeira secção logo a seguir ao cabeçalho (render_page_header)
+               não repete a linha — já há o border-bottom do próprio cabeçalho
+               a separar, duas linhas tão próximas ficavam redundantes. */
+            div:has(> .ds-page-header) + div .ds-zone-title {{
+                border-top: none;
+                padding-top: 0;
             }}
 
             /* KPI denso — número + label, sem card/borda */
