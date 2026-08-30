@@ -670,7 +670,47 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--primary);
             }}
             #topbar-anchor {{ height: 0; }}
-            #topbar-anchor + div [data-testid="stHorizontalBlock"] {{
+            /* Injetores de JS invisíveis (padding-top forçado; scroll+
+               colapso da sidebar ao navegar) — têm de sair do fluxo do
+               stVerticalBlock (display:flex; gap:14px), que conta os
+               seus filhos para o gap mesmo com altura 0. O hack antigo
+               (`.stElementContainer:has(iframe[height="0"])`, acima)
+               não apanha isto: o Streamlit já não põe o atributo
+               `height` no HTML do iframe. Isto NÃO deve apanhar o
+               componente do mapa (`components.html(mapa_render,...)`,
+               em map_page.py) — esse é visível e tem altura real,
+               não usa `st.container(key=...)`, por isso fica de fora.
+
+               `st.container(key=...)` gera DOIS níveis: um
+               `stLayoutWrapper` exterior (o filho real do flex — este
+               é que precisa do position:absolute) e o `stVerticalBlock`
+               com a classe `st-key-*` lá dentro. Esconder só o interior
+               não chega — o exterior continua a contar para o gap. */
+            .st-key-js-padding-top-forcer,
+            .st-key-js-nav-scroll-collapse,
+            [data-testid="stLayoutWrapper"]:has(> .st-key-js-padding-top-forcer),
+            [data-testid="stLayoutWrapper"]:has(> .st-key-js-nav-scroll-collapse) {{
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                pointer-events: none !important;
+                visibility: hidden !important;
+            }}
+            /* Seletor antigo (`#topbar-anchor + div [data-testid=
+               "stHorizontalBlock"]`) nunca correspondia a nada: o
+               anchor não tem irmão ao seu próprio nível (está sozinho
+               dentro do seu markdown). A fila real é irmã do
+               stElementContainer que envolve o anchor, um nível acima,
+               e vem hoje envolvida num stLayoutWrapper extra que não
+               existia quando este seletor foi escrito — confirmado em
+               runtime com o DOM real. */
+            [data-testid="stElementContainer"]:has(#topbar-anchor)
+                + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"] {{
                 display: flex;
                 align-items: center;
                 justify-content: space-between;

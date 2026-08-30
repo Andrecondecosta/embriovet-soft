@@ -1030,45 +1030,53 @@ inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
 # Forçar padding-top via JS (CSS é sobreposto pelo Streamlit interno)
+#
+# Envolvido num st.container(key=...) para o tirar do fluxo do
+# stVerticalBlock via CSS (.st-key-js-padding-top-forcer, em
+# inject_shell_css) — sem isto, mesmo com height=0, este iframe conta
+# para o `gap` flex entre os filhos do bloco e empurra tudo ~19px para
+# baixo. O hack antigo (`iframe[height="0"]`) não apanhava este caso:
+# o Streamlit já não põe o atributo `height` no HTML do iframe.
 import streamlit.components.v1 as _css_comp
-_css_comp.html(
-    """
-    <script>
-    (function applyPadding() {
-        var el = window.parent.document.querySelector('[data-testid="stMainBlockContainer"]')
-              || window.parent.document.querySelector('.block-container');
-        if (el) {
-            el.style.setProperty('padding-top', '60px', 'important');
-        } else {
-            setTimeout(applyPadding, 50);
-        }
-    })();
-
-    // Restaurar zoom após sair de inputs (fix iOS Safari)
-    (function setupZoomFix() {
-        var doc = window.parent.document;
-        if (doc._equicore_zoom_fix) return;
-        doc._equicore_zoom_fix = true;
-        doc.addEventListener('focusout', function(e) {
-            var tag = e.target.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-                // Forçar reset do zoom no viewport
-                var meta = doc.querySelector('meta[name="viewport"]');
-                if (meta) {
-                    var orig = meta.getAttribute('content') || '';
-                    meta.setAttribute('content', orig + ',maximum-scale=1');
-                    setTimeout(function() { meta.setAttribute('content', orig); }, 50);
-                }
-                // Scroll para evitar deslocamento residual
-                setTimeout(function() { window.parent.scrollTo(0, window.parent.scrollY); }, 60);
+with st.container(key="js-padding-top-forcer"):
+    _css_comp.html(
+        """
+        <script>
+        (function applyPadding() {
+            var el = window.parent.document.querySelector('[data-testid="stMainBlockContainer"]')
+                  || window.parent.document.querySelector('.block-container');
+            if (el) {
+                el.style.setProperty('padding-top', '60px', 'important');
+            } else {
+                setTimeout(applyPadding, 50);
             }
-        }, true);
-    })();
-    </script>
-    """,
-    height=0,
-    scrolling=False,
-)
+        })();
+
+        // Restaurar zoom após sair de inputs (fix iOS Safari)
+        (function setupZoomFix() {
+            var doc = window.parent.document;
+            if (doc._equicore_zoom_fix) return;
+            doc._equicore_zoom_fix = true;
+            doc.addEventListener('focusout', function(e) {
+                var tag = e.target.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                    // Forçar reset do zoom no viewport
+                    var meta = doc.querySelector('meta[name="viewport"]');
+                    if (meta) {
+                        var orig = meta.getAttribute('content') || '';
+                        meta.setAttribute('content', orig + ',maximum-scale=1');
+                        setTimeout(function() { meta.setAttribute('content', orig); }, 50);
+                    }
+                    // Scroll para evitar deslocamento residual
+                    setTimeout(function() { window.parent.scrollTo(0, window.parent.scrollY); }, 60);
+                }
+            }, true);
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 if not app_settings.get("welcome_completed", False):
     render_welcome_page()
@@ -1186,35 +1194,36 @@ if sidebar_logout:
 # Scroll ao topo + fechar sidebar (mobile) ao navegar
 if st.session_state.pop("_just_navigated", False):
     import streamlit.components.v1 as _stcomp
-    _stcomp.html(
-        """
-        <script>
-        (function() {
-            // 1. Scroll ao topo da área de conteúdo principal
-            var main = window.parent.document.querySelector('[data-testid="stMain"]')
-                    || window.parent.document.querySelector('.main')
-                    || window.parent.document.body;
-            if (main) main.scrollTo({top: 0, behavior: 'instant'});
+    with st.container(key="js-nav-scroll-collapse"):
+        _stcomp.html(
+            """
+            <script>
+            (function() {
+                // 1. Scroll ao topo da área de conteúdo principal
+                var main = window.parent.document.querySelector('[data-testid="stMain"]')
+                        || window.parent.document.querySelector('.main')
+                        || window.parent.document.body;
+                if (main) main.scrollTo({top: 0, behavior: 'instant'});
 
-            // 2. Fechar sidebar em dispositivos móveis/tablets (< 992px)
-            if (window.parent.innerWidth < 992) {
-                setTimeout(function() {
-                    // Tentar vários seletores possíveis do botão de colapso
-                    var collapseBtn =
-                        window.parent.document.querySelector('[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]') ||
-                        window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]') ||
-                        window.parent.document.querySelector('[data-testid="stSidebar"] button');
-                    if (collapseBtn) {
-                        collapseBtn.click();
-                    }
-                }, 150);
-            }
-        })();
-        </script>
-        """,
-        height=0,
-        scrolling=False,
-    )
+                // 2. Fechar sidebar em dispositivos móveis/tablets (< 992px)
+                if (window.parent.innerWidth < 992) {
+                    setTimeout(function() {
+                        // Tentar vários seletores possíveis do botão de colapso
+                        var collapseBtn =
+                            window.parent.document.querySelector('[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]') ||
+                            window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]') ||
+                            window.parent.document.querySelector('[data-testid="stSidebar"] button');
+                        if (collapseBtn) {
+                            collapseBtn.click();
+                        }
+                    }, 150);
+                }
+            })();
+            </script>
+            """,
+            height=0,
+            scrolling=False,
+        )
 
 # ------------------------------------------------------------
 # 💬 Modal "adicionar proprietário" — extraído para
