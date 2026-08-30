@@ -701,7 +701,16 @@ def inject_shell_css(primary_color: str | None):
                 pointer-events: none !important;
                 visibility: hidden !important;
             }}
-            #topbar-anchor + div [data-testid="stHorizontalBlock"] {{
+            /* Seletor antigo (`#topbar-anchor + div [data-testid=
+               "stHorizontalBlock"]`) nunca correspondia a nada: o
+               anchor não tem irmão ao seu próprio nível (está sozinho
+               dentro do seu markdown). A fila real é irmã do
+               stElementContainer que envolve o anchor, um nível acima,
+               e vem hoje envolvida num stLayoutWrapper extra que não
+               existia quando este seletor foi escrito — confirmado em
+               runtime com o DOM real. */
+            [data-testid="stElementContainer"]:has(#topbar-anchor)
+                + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"] {{
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
