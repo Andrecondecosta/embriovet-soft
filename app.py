@@ -682,7 +682,7 @@ def mostrar_tela_login(app_settings):
     st.markdown(
         f"""
         <style>
-            #MainMenu, footer, [data-testid="stHeader"],
+            [data-testid="stHeader"],
             [data-testid="stToolbar"] {{ display: none !important; }}
 
             .stApp {{
@@ -699,16 +699,27 @@ def mostrar_tela_login(app_settings):
                 margin-top: 0 !important;
             }}
 
-            /* Inputs */
-            [data-testid="stForm"] input {{
+            /* Inputs — a caixa visível (fundo + cantos arredondados) é o
+               wrapper stTextInputRootElement, não o <input> em si: o
+               <input> fica 1px mais pequeno em cada lado e tem overflow
+               diferente, por isso a borda/halo tinham de estar aqui para
+               coincidir com o que o utilizador vê, sem duplicar o
+               realce nativo do Streamlit (que já muda a borda deste
+               wrapper ao focar, herdando a cor do tema). */
+            [data-testid="stForm"] [data-testid="stTextInputRootElement"] {{
                 border-radius: 9px !important;
                 border: 1.5px solid #e2e8f0 !important;
-                font-size: 0.95rem !important;
                 transition: border-color 0.15s, box-shadow 0.15s !important;
             }}
-            [data-testid="stForm"] input:focus {{
+            [data-testid="stForm"] [data-testid="stTextInputRootElement"]:focus-within {{
                 border-color: {cor} !important;
                 box-shadow: 0 0 0 3px {cor}22 !important;
+            }}
+            [data-testid="stForm"] input {{
+                font-size: 0.95rem !important;
+            }}
+            [data-testid="stForm"] input:focus {{
+                outline: none !important;
             }}
 
             /* Botão de submeter — cor da app */
