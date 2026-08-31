@@ -3,15 +3,19 @@
 Toda a lógica de escrita (anulação de transferências / inseminações) foi
 movida para `modules/repositories/transfer_repo.py` e é usada a partir
 do histórico da Transfer Page. Este módulo não faz nenhum
-UPDATE/DELETE/INSERT — validado por
+UPDATE/DELETE/INSERT directamente — validado por
 `tests/test_dashboard_page_readonly.py::test_dashboard_nao_contem_writes`.
+(O drill-down para a ficha do animal, abaixo, delega para
+`animal_page.run_animal_page` — essa página pode escrever; o próprio
+`dashboard_page.py` continua sem SQL de escrita.)
 
 Estrutura:
 1. Cabeçalho.
 2. KPIs de stock (4 cards).
 3. KPIs clínicos (4 cards) — estadias, tarefas de hoje (+ urgentes),
    gestações confirmadas, inseminações do mês (DISTINCT operation_id).
-4. "Hoje na clínica": tarefas do dia do Trabalho Diário + atalho.
+4. "Hoje na clínica": tarefas do dia do Trabalho Diário — linha
+   inteira clicável, leva à ficha do animal (a lista só tria/navega).
 5. "Stock a precisar de atenção": lotes com existência <= 5.
 6. Gráficos de distribuição (contentor / proprietário).
 7. Atividade recente — agrupada por `operation_id` (1 linha por
@@ -22,7 +26,6 @@ Estrutura:
 from __future__ import annotations
 
 from datetime import date, datetime
-from html import escape
 
 import altair as alt
 import pandas as pd
@@ -77,36 +80,12 @@ def _fmt_ts(val) -> str:
 
 def _inject_local_css() -> None:
     """CSS específico do Dashboard não coberto pelos componentes base do
-    design system (`inject_design_tokens`) — lista de tarefas de "Hoje
-    na clínica" (linhas com pill de urgência) e o ajuste do pill quando
-    embutido dentro de um valor de KPI."""
+    design system (`inject_design_tokens`) — ajuste do pill quando
+    embutido dentro de um valor de KPI. O CSS da lista "Hoje na
+    clínica" (linha clicável) vive em `_inject_hoje_na_clinica_css`."""
     st.markdown(
         """
         <style>
-            .dash-task-list {
-                display: flex;
-                flex-direction: column;
-            }
-            .dash-task-row {
-                display: flex;
-                align-items: center;
-                gap: var(--ds-space-3);
-                padding: var(--ds-space-2) 0;
-                border-bottom: 1px solid var(--ds-gray-200);
-                font-size: var(--ds-text-sm);
-            }
-            .dash-task-row:last-child {
-                border-bottom: none;
-            }
-            .dash-task-animal {
-                font-weight: 600;
-                color: var(--ds-gray-900);
-                min-width: 160px;
-            }
-            .dash-task-detail {
-                color: var(--ds-gray-600);
-                flex: 1;
-            }
             .ds-kpi-value .ds-pill {
                 margin-left: 6px;
                 vertical-align: middle;
@@ -140,7 +119,65 @@ def _render_kpis_clinicos(kpis: dict) -> None:
     ])
 
 
-_PILL_LEVEL_URGENCIA = {"urgente": "critico", "hoje": "aviso"}
+_URGENCIA_COR = {
+    "urgente": "#dc2626",
+    "hoje": "#b45309",
+    "amanha": "#94a3b8",
+    "observacao": "#cbd5e1",
+}
+
+
+def _inject_hoje_na_clinica_css() -> None:
+    """Linha inteira clicável, sem chrome de botão — mesmo padrão do
+    Trabalho Diário: risco de urgência à esquerda do container, hover
+    subtil no botão que ocupa a linha toda."""
+    regras_urgencia = "\n".join(
+        f'div[class*="st-key-dashtask-{urgencia}-"] {{ border-left-color: {cor}; }}'
+        for urgencia, cor in _URGENCIA_COR.items()
+    )
+    st.markdown(
+        f"""
+        <style>
+            div[class*="st-key-dashtask-"] {{
+                border-left: 3px solid transparent;
+                border-bottom: 1px solid var(--ds-gray-200);
+            }}
+            div[class*="st-key-dashtask-"]:last-child {{
+                border-bottom: none;
+            }}
+            {regras_urgencia}
+            div[class*="st-key-dashtask-"] button {{
+                width: 100% !important;
+                background: transparent !important;
+                border: none !important;
+                border-radius: 4px !important;
+                box-shadow: none !important;
+                padding: 6px 8px !important;
+                min-height: 34px !important;
+                height: auto !important;
+                font-weight: 400 !important;
+                font-size: .84rem !important;
+                color: var(--ds-gray-900) !important;
+                justify-content: flex-start !important;
+                cursor: pointer !important;
+            }}
+            div[class*="st-key-dashtask-"] button:hover {{
+                background: var(--ds-gray-50) !important;
+                border: none !important;
+                color: var(--ds-gray-900) !important;
+            }}
+            div[class*="st-key-dashtask-"] button:focus-visible {{
+                outline: 2px solid var(--ds-gray-300) !important;
+                outline-offset: -2px !important;
+            }}
+            div[class*="st-key-dashtask-"] button p {{
+                text-align: left !important;
+                margin: 0 !important;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
@@ -148,21 +185,24 @@ def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
     if df.empty:
         st.caption("Sem tarefas para hoje.")
     else:
-        rows_html = "".join(
-            "<div class='dash-task-row'>"
-            f"<span class='dash-task-animal'>{escape(str(row['animal'] or '—'))}</span>"
-            "<span class='dash-task-detail'>"
-            f"{escape(_label_tipo(row['tipo']))}"
-            + (f" · {escape(str(row['motivo']))}" if row["motivo"] else "")
-            + "</span>"
-            + render_status_pill(
-                str(row["urgencia"]).capitalize(),
-                _PILL_LEVEL_URGENCIA.get(row["urgencia"], "ok"),
+        _inject_hoje_na_clinica_css()
+        for _, row in df.iterrows():
+            tid = int(row["tarefa_id"])
+            urgencia = row["urgencia"] or "observacao"
+            detalhe = _label_tipo(row["tipo"])
+            if row["motivo"]:
+                detalhe += f" · {row['motivo']}"
+            label = (
+                f"**{row['animal'] or '—'}**  ·  {detalhe}  ·  "
+                f":gray[{str(urgencia).capitalize()}]"
             )
-            + "</div>"
-            for _, row in df.iterrows()
-        )
-        st.markdown(f"<div class='dash-task-list'>{rows_html}</div>", unsafe_allow_html=True)
+            with st.container(key=f"dashtask-{urgencia}-{tid}"):
+                # Linha inteira clicável → ficha do animal (a lista só
+                # tria/navega; a ação real é sempre na ficha).
+                if st.button(label, key=f"dashbtn-{tid}", width="stretch"):
+                    st.session_state["ver_animal_id"] = int(row["animal_id"])
+                    st.session_state["ver_animal_tab"] = 0
+                    st.rerun()
 
     if st.button(
         "Abrir Trabalho Diário",
@@ -342,6 +382,24 @@ def run_dashboard_page(ctx: dict) -> None:
     `get_app_settings()` (cacheado em `settings_repo`).
     """
     del ctx
+
+    # Drill-down para a ficha do animal — activado pelo clique numa
+    # linha de "Hoje na clínica" (a lista serve só para triar/navegar,
+    # a ação real é sempre na ficha). `run_animal_page` não usa o seu
+    # parâmetro `context` (mantido só por compat de assinatura), por
+    # isso passar {} aqui é seguro.
+    if st.session_state.get("ver_animal_id") is not None:
+        if st.button("← Voltar ao dashboard", key="btn_voltar_dashboard"):
+            st.session_state.pop("ver_animal_id", None)
+            st.session_state.pop("ver_animal_tab", None)
+            st.rerun()
+        from modules.pages.animal_page import run_animal_page
+        run_animal_page(
+            st.session_state["ver_animal_id"], {},
+            st.session_state.get("ver_animal_tab", 0),
+        )
+        return
+
     app_settings = get_app_settings() or {}
     company_name = app_settings.get("company_name") or "Sistema"
     primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR

@@ -3,10 +3,14 @@
 Critérios de aceitação cobertos:
 (a) `agendar_colheita` cria tarefa em `trabalho_diario` com tipo=`colheita`,
     `animal_id` do garanhão e `estadia_id=NULL`.
-(b) A tarefa aparece nas queries de agenda (`dashboard_repo.carregar_tarefas_hoje`
-    e `_carregar_tarefas_semana`) identificada pelo nome do garanhão.
-(c) O trabalho_diario_page renderiza o cartão como "Colheita — [nome]"
-    e activa o prefill `colheita_garanhao_prefill` (teste por inspecção).
+(b) A tarefa aparece na query de agenda (`dashboard_repo.carregar_tarefas_hoje`)
+    identificada pelo nome do garanhão.
+(c) O trabalho_diario_page renderiza a linha como "Colheita — [nome]"
+    (teste por inspecção). Desde o redesign da linha inteira clicável,
+    o clique já não activa `colheita_garanhao_prefill` a partir da
+    lista — o prefill continua a existir, mas só é activado a partir
+    da ficha do animal (garanhão); esse caminho é coberto por
+    `test_add_stock_view_lida_com_prefill_colheita`.
 (d) `concluir_colheita` marca `concluida=TRUE`; cache invalidado.
 (e) `cancelar_colheita` remove só se ainda não estava concluída.
 (f) A migração 030 adicionou o tipo ao CHECK e tornou `estadia_id` NULL.
@@ -151,18 +155,20 @@ def test_dashboard_carregar_tarefas_hoje_inclui_colheita(db, garanhao_id):
 
 
 # ────────────────────────────────────────────────────────────────────
-# (c) Trabalho diário renderiza "Colheita — [nome]" e prefill correcto
+# (c) Trabalho diário renderiza "Colheita — [nome]"
 # ────────────────────────────────────────────────────────────────────
 
 def test_trabalho_diario_page_trata_tipo_colheita():
     src = (ROOT / "modules/pages/trabalho_diario_page.py").read_text()
     assert 'is_colheita = tipo_tarefa == "colheita"' in src
     assert "Colheita —" in src, (
-        "cartão deve renderizar 'Colheita — [nome]'"
+        "linha deve renderizar 'Colheita — [nome]'"
     )
-    assert 'colheita_garanhao_prefill' in src, (
-        "clique deve activar o prefill"
-    )
+    # Desde o redesign da linha inteira clicável (lista só tria/navega,
+    # não age), o clique na lista leva sempre à ficha do animal —
+    # `colheita_garanhao_prefill` já não é activado a partir daqui.
+    # Continua a existir e a ser testado a partir da ficha do animal
+    # em `test_add_stock_view_lida_com_prefill_colheita`.
 
 
 def test_add_stock_view_lida_com_prefill_colheita():

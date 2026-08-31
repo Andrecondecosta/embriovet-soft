@@ -67,14 +67,6 @@ _LABEL_TIPO_TAREFA = {
     "colheita": "Colheita",
 }
 
-_TAREFAS_DIAGNOSTICO = {
-    "diagnostico_gestacao",
-    "confirmacao_gestacao",
-    "segunda_confirmacao",
-}
-_TAREFAS_PARA_INSEMINAR = {"verificar_ovulacao"}
-
-
 def _label_tipo(tipo: str) -> str:
     return _LABEL_TIPO_TAREFA.get(tipo, tipo or "—")
 
@@ -306,27 +298,37 @@ def _inject_lista_css() -> None:
                 border-bottom: none;
             }}
             {regras_urgencia}
+            /* A linha inteira é o botão — sem chrome de botão, só texto.
+               A ação real fica na ficha do animal (a lista serve para
+               triar e navegar, não para agir); hover subtil é o único
+               indício de que é clicável. */
             div[class*="st-key-tdrow-"] button {{
-                padding: 2px 10px !important;
-                min-height: 30px !important;
-                height: 30px !important;
-                font-size: .78rem !important;
-                border-radius: 6px !important;
+                width: 100% !important;
+                background: transparent !important;
+                border: none !important;
+                border-radius: 4px !important;
+                box-shadow: none !important;
+                padding: 6px 8px !important;
+                min-height: 34px !important;
+                height: auto !important;
+                font-weight: 400 !important;
+                font-size: .84rem !important;
+                color: var(--ds-gray-900) !important;
+                justify-content: flex-start !important;
+                cursor: pointer !important;
             }}
-            .td-cell-nome {{
-                font-size: .86rem;
-                font-weight: 600;
-                color: var(--ds-gray-900);
+            div[class*="st-key-tdrow-"] button:hover {{
+                background: var(--ds-gray-50) !important;
+                border: none !important;
+                color: var(--ds-gray-900) !important;
             }}
-            .td-cell-dono, .td-cell-tipo {{
-                font-size: .82rem;
-                color: var(--ds-gray-600);
+            div[class*="st-key-tdrow-"] button:focus-visible {{
+                outline: 2px solid var(--ds-gray-300) !important;
+                outline-offset: -2px !important;
             }}
-            .td-cell-urgencia {{
-                font-size: .68rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: .04em;
+            div[class*="st-key-tdrow-"] button p {{
+                text-align: left !important;
+                margin: 0 !important;
             }}
         </style>
         """,
@@ -340,12 +342,9 @@ def _inject_lista_css() -> None:
 def _render_linha_tarefa(row: dict) -> None:
     tid = int(row["tarefa_id"])
     urgencia = row.get("urgencia") or "observacao"
-    cor = URGENCIA_COR.get(urgencia, URGENCIA_COR["observacao"])
     urgencia_label = URGENCIA_LABEL.get(urgencia, urgencia)
     tipo_tarefa = row.get("tipo") or ""
 
-    is_diagnostico = tipo_tarefa in _TAREFAS_DIAGNOSTICO
-    is_inseminar = tipo_tarefa in _TAREFAS_PARA_INSEMINAR
     is_colheita = tipo_tarefa == "colheita"
 
     # Colheitas não têm "égua" — o animal referenciado é o garanhão.
@@ -353,67 +352,17 @@ def _render_linha_tarefa(row: dict) -> None:
     dono_exibido = row.get("dono") or "—"
     tipo_label = _label_tipo(tipo_tarefa)
 
+    label = f"**{nome_exibido}**  ·  {dono_exibido}  ·  {tipo_label}  ·  :gray[{urgencia_label}]"
+
     with st.container(key=f"tdrow-{urgencia}-{tid}"):
-        c_nome, c_dono, c_tipo, c_urg, c_acao = st.columns(
-            [0.26, 0.20, 0.24, 0.10, 0.20],
-            gap="small",
-            vertical_alignment="center",
-        )
-        with c_nome:
-            st.markdown(f"<div class='td-cell-nome'>{nome_exibido}</div>", unsafe_allow_html=True)
-        with c_dono:
-            st.markdown(f"<div class='td-cell-dono'>{dono_exibido}</div>", unsafe_allow_html=True)
-        with c_tipo:
-            st.markdown(f"<div class='td-cell-tipo'>{tipo_label}</div>", unsafe_allow_html=True)
-        with c_urg:
-            st.markdown(
-                f"<div class='td-cell-urgencia' style='color:{cor};'>{urgencia_label}</div>",
-                unsafe_allow_html=True,
-            )
-        with c_acao:
-            if is_diagnostico:
-                acao_label = "Registar resultado"
-            elif is_colheita:
-                acao_label = "Colheita"
-            else:
-                acao_label = "Ver"
-
-            if st.button(acao_label, key=f"tdaction-{tid}", width="stretch"):
-                if is_diagnostico:
-                    # Abre o painel de registo de resultado por baixo da lista.
-                    st.session_state["resultado_task_id"] = tid
-                    st.session_state["resultado_task_tipo"] = tipo_tarefa
-                elif is_colheita:
-                    # Colheita → activa o prefill do form Adicionar Lote
-                    # (Stock de sémen · Adicionar lote) com o garanhão
-                    # pré-preenchido. A conclusão da tarefa acontece dentro
-                    # do `inserir_stock` quando o prefill está setado.
-                    st.session_state["colheita_garanhao_prefill"] = {
-                        "animal_id": int(row["animal_id"]),
-                        "garanhao_nome": row.get("animal") or "",
-                        "tarefa_id": tid,
-                    }
-                    st.session_state["aba_selecionada"] = "Stock de sémen"
-                    st.session_state["stock_semen_view"] = "add_stock"
-                else:
-                    # Restantes tipos → drill-down para a ficha do animal.
-                    st.session_state["ver_animal_id"] = int(row["animal_id"])
-                    st.session_state["ver_animal_tab"] = 0
-                st.rerun()
-
-            # Atalho "Registar inseminação" para tarefas onde inseminar é a
-            # acção natural (ex.: `verificar_ovulacao`) — reutiliza o
-            # prefill `insem_egua_prefill` do fluxo "Repetir".
-            if is_inseminar and row.get("estadia_id"):
-                if st.button("+ Inseminação", key=f"tdinsem-{tid}", width="stretch"):
-                    st.session_state["insem_egua_prefill"] = {
-                        "animal_id": int(row["animal_id"]),
-                        "estadia_id": int(row["estadia_id"]),
-                        "dono_id": None,  # resolvido no menu
-                        "nome": row.get("animal") or "",
-                    }
-                    st.session_state["insem_flow_active"] = True
-                    st.rerun()
+        # Linha inteira clicável → ficha do animal (mesmo destino que o
+        # antigo botão "Ver"). A lista serve só para triar e navegar;
+        # registar resultados, colheitas e inseminações já têm os seus
+        # próprios atalhos na ficha do animal (animal_page.py).
+        if st.button(label, key=f"tdbtn-{tid}", width="stretch"):
+            st.session_state["ver_animal_id"] = int(row["animal_id"])
+            st.session_state["ver_animal_tab"] = 0
+            st.rerun()
 
 
 # ────────────────────────────────────────────────────────────────────────────
