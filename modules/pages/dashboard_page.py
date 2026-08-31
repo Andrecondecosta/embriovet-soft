@@ -3,19 +3,17 @@
 Toda a lógica de escrita (anulação de transferências / inseminações) foi
 movida para `modules/repositories/transfer_repo.py` e é usada a partir
 do histórico da Transfer Page. Este módulo não faz nenhum
-UPDATE/DELETE/INSERT directamente — validado por
+UPDATE/DELETE/INSERT — validado por
 `tests/test_dashboard_page_readonly.py::test_dashboard_nao_contem_writes`.
-(O drill-down para a ficha do animal, abaixo, delega para
-`animal_page.run_animal_page` — essa página pode escrever; o próprio
-`dashboard_page.py` continua sem SQL de escrita.)
 
 Estrutura:
 1. Cabeçalho.
 2. KPIs de stock (4 cards).
 3. KPIs clínicos (4 cards) — estadias, tarefas de hoje (+ urgentes),
    gestações confirmadas, inseminações do mês (DISTINCT operation_id).
-4. "Hoje na clínica": tarefas do dia do Trabalho Diário — linha
-   inteira clicável, leva à ficha do animal (a lista só tria/navega).
+4. "Hoje na clínica": quadro de leitura (st.dataframe, mesmo estilo de
+   "Partos previstos") — resumo, sem navegação; agir é no Trabalho
+   Diário.
 5. "Stock a precisar de atenção": lotes com existência <= 5.
 6. Gráficos de distribuição (contentor / proprietário).
 7. Atividade recente — agrupada por `operation_id` (1 linha por
@@ -119,121 +117,40 @@ def _render_kpis_clinicos(kpis: dict) -> None:
     ])
 
 
-_URGENCIA_COR = {
-    "urgente": "#dc2626",
-    "hoje": "#b45309",
-    "amanha": "#94a3b8",
-    "observacao": "#cbd5e1",
+_URGENCIA_LABEL = {
+    "urgente": "Urgente",
+    "hoje": "Hoje",
+    "amanha": "Amanhã",
+    "observacao": "Observação",
 }
-
-
-_DASH_LISTA_MAX_HEIGHT_CSS = "410px"  # ≈ 10 linhas de ~41px
-
-
-def _inject_hoje_na_clinica_css() -> None:
-    """Linha densa de folha de cálculo (~36px), zebra cinza/branco, sem
-    chrome de botão — mesma linguagem do Trabalho Diário: risco de
-    urgência fino à esquerda do container, hover subtil no botão que
-    ocupa a linha toda, sem bordas pesadas (a zebra basta). Ao
-    contrário do Trabalho Diário (altura = ecrã disponível), aqui é
-    uma secção a meio de uma página mais longa — a lista tem altura
-    fixa de ~10 linhas e faz scroll interno a partir daí."""
-    regras_urgencia = "\n".join(
-        f'div[class*="st-key-dashtask-{urgencia}-"] {{ border-left-color: {cor}; }}'
-        for urgencia, cor in _URGENCIA_COR.items()
-    )
-    st.markdown(
-        f"""
-        <style>
-            div.st-key-dash-task-list {{
-                max-height: {_DASH_LISTA_MAX_HEIGHT_CSS};
-                overflow-y: auto;
-                gap: 0 !important;
-                padding-right: 4px;
-            }}
-            div.st-key-dash-task-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
-                > div[class*="st-key-dashtask-"] {{
-                background: var(--ds-gray-50);
-            }}
-            div[class*="st-key-dashtask-"] {{
-                border-left: 3px solid transparent;
-                padding: 3px 10px 3px 12px;
-            }}
-            {regras_urgencia}
-            div[class*="st-key-dashtask-"] button {{
-                width: 100% !important;
-                background: transparent !important;
-                border: none !important;
-                border-radius: 3px !important;
-                box-shadow: none !important;
-                padding: 0 8px !important;
-                min-height: 30px !important;
-                height: 30px !important;
-                font-weight: 400 !important;
-                font-size: .8rem !important;
-                color: var(--ds-gray-900) !important;
-                justify-content: flex-start !important;
-                cursor: pointer !important;
-            }}
-            div[class*="st-key-dashtask-"] button:hover {{
-                background: var(--ds-gray-100) !important;
-                border: none !important;
-                color: var(--ds-gray-900) !important;
-            }}
-            div[class*="st-key-dashtask-"] button:focus-visible {{
-                outline: 2px solid var(--ds-gray-300) !important;
-                outline-offset: -2px !important;
-            }}
-            /* Ver nota em trabalho_diario_page._inject_lista_css: o
-               rótulo do botão não usa <p> nesta versão do Streamlit —
-               força alinhamento à esquerda por tipo de elemento, não
-               por classe com hash. */
-            div[class*="st-key-dashtask-"] button div,
-            div[class*="st-key-dashtask-"] button span {{
-                justify-content: flex-start !important;
-                width: auto !important;
-            }}
-            div[class*="st-key-dashtask-"] button * {{
-                text-align: left !important;
-            }}
-            div[class*="st-key-dashtask-"] button p,
-            div[class*="st-key-dashtask-"] button span {{
-                margin: 0 !important;
-                white-space: nowrap !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                font-variant-numeric: tabular-nums;
-            }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+_URGENCIA_ORDEM = {"urgente": 0, "hoje": 1, "amanha": 2, "observacao": 3}
 
 
 def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
+    """Quadro de leitura — mesmo estilo de `_render_partos_previstos`
+    (st.dataframe, sem navegação). O Dashboard é um resumo; agir é no
+    Trabalho Diário (lista densa, clicável)."""
     render_zone_title("Hoje na clínica", "ds-zone-title")
     if df.empty:
         st.caption("Sem tarefas para hoje.")
-    else:
-        _inject_hoje_na_clinica_css()
-        with st.container(key="dash-task-list"):
-            for numero, (_, row) in enumerate(df.iterrows(), start=1):
-                tid = int(row["tarefa_id"])
-                urgencia = row["urgencia"] or "observacao"
-                detalhe = _label_tipo(row["tipo"])
-                if row["motivo"]:
-                    detalhe += f" · {row['motivo']}"
-                label = (
-                    f":gray[{numero:>4}]  **{row['animal'] or '—'}**  ·  {detalhe}  ·  "
-                    f":gray[{str(urgencia).capitalize()}]"
-                )
-                with st.container(key=f"dashtask-{urgencia}-{tid}"):
-                    # Linha inteira clicável → ficha do animal (a lista
-                    # só tria/navega; a ação real é sempre na ficha).
-                    if st.button(label, key=f"dashbtn-{tid}", width="stretch"):
-                        st.session_state["ver_animal_id"] = int(row["animal_id"])
-                        st.session_state["ver_animal_tab"] = 0
-                        st.rerun()
+        return
+
+    df_ordenado = df.assign(
+        _ordem=df["urgencia"].map(_URGENCIA_ORDEM).fillna(9),
+    ).sort_values(["_ordem", "animal"])
+
+    display = pd.DataFrame({
+        "Égua": df_ordenado["animal"].fillna("—"),
+        "Dono": df_ordenado["dono"].fillna("—"),
+        "Tipo": df_ordenado["tipo"].apply(_label_tipo),
+        "Urgência": df_ordenado["urgencia"].map(_URGENCIA_LABEL).fillna("—"),
+    })
+    st.dataframe(
+        display,
+        use_container_width=True,
+        hide_index=True,
+        height=min(220, 40 + 35 * len(display)),
+    )
 
     if st.button(
         "Abrir Trabalho Diário",
@@ -413,24 +330,6 @@ def run_dashboard_page(ctx: dict) -> None:
     `get_app_settings()` (cacheado em `settings_repo`).
     """
     del ctx
-
-    # Drill-down para a ficha do animal — activado pelo clique numa
-    # linha de "Hoje na clínica" (a lista serve só para triar/navegar,
-    # a ação real é sempre na ficha). `run_animal_page` não usa o seu
-    # parâmetro `context` (mantido só por compat de assinatura), por
-    # isso passar {} aqui é seguro.
-    if st.session_state.get("ver_animal_id") is not None:
-        if st.button("← Voltar ao dashboard", key="btn_voltar_dashboard"):
-            st.session_state.pop("ver_animal_id", None)
-            st.session_state.pop("ver_animal_tab", None)
-            st.rerun()
-        from modules.pages.animal_page import run_animal_page
-        run_animal_page(
-            st.session_state["ver_animal_id"], {},
-            st.session_state.get("ver_animal_tab", 0),
-        )
-        return
-
     app_settings = get_app_settings() or {}
     company_name = app_settings.get("company_name") or "Sistema"
     primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR
