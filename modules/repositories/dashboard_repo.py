@@ -260,13 +260,69 @@ def carregar_stock_atencao(limite: int = 5, top: int = 10) -> pd.DataFrame:
         return pd.read_sql_query(sql, conn, params=(int(limite), int(top)))
 
 
-# ─── Atividade recente (agrupada por operation_id) ────────────────────
-def carregar_atividade_recente_agrupada(limit: int = 10) -> list[dict]:
-    """Devolve as últimas `limit` operações (transferências internas,
-    externas e inseminações) já **agrupadas por `operation_id`** — cada
-    dict representa UMA operação, mesmo que envolva vários lotes.
+# ─── Atividade (agrupada por operation_id) ─────────────────────────────
+# União das 3 fontes de operação (transferências internas, externas e
+# inseminações) — partilhada entre `carregar_atividade_recente_agrupada`
+# (últimas N, para o Dashboard/Histórico de Transferências) e
+# `carregar_atividade_do_dia` (todas as de um dia, para a página
+# Atividade). Sem emoji nos labels — "(editada)" identifica operações
+# alteradas.
+_SQL_ATIVIDADE_UNIAO = """
+    SELECT t.data_transferencia AS ts,
+           COALESCE(t.utilizador, '—') AS usuario,
+           CASE WHEN COALESCE(t.atualizado, FALSE)
+                THEN 'Transferência interna (editada)'
+                ELSE 'Transferência interna' END AS acao,
+           'transfer_internal' AS tipo,
+           t.id AS action_id,
+           t.quantidade AS qty,
+           t.operation_id::text AS op_id,
+           COALESCE(d1.nome, 'ID ' || t.proprietario_origem_id) AS origem,
+           COALESCE(d2.nome, 'ID ' || t.proprietario_destino_id) AS destino,
+           NULL AS egua, NULL AS garanhao
+    FROM transferencias t
+    LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
+    LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
+    UNION ALL
+    SELECT te.data_transferencia AS ts,
+           COALESCE(te.utilizador, '—') AS usuario,
+           CASE WHEN COALESCE(te.atualizado, FALSE)
+                THEN 'Transferência externa (editada)'
+                ELSE 'Transferência externa' END AS acao,
+           'transfer_external' AS tipo,
+           te.id AS action_id,
+           te.quantidade AS qty,
+           te.operation_id::text AS op_id,
+           COALESCE(d.nome, 'Origem?') AS origem,
+           te.destinatario_externo AS destino,
+           NULL AS egua, NULL AS garanhao
+    FROM transferencias_externas te
+    LEFT JOIN dono d ON te.proprietario_origem_id = d.id
+    UNION ALL
+    SELECT COALESCE(i.created_at, i.data_inseminacao::timestamp + interval '12 hours') AS ts,
+           COALESCE(i.utilizador, '—') AS usuario,
+           CASE WHEN COALESCE(i.atualizado, FALSE)
+                THEN 'Inseminação (editada)'
+                ELSE 'Inseminação' END AS acao,
+           'insemination' AS tipo,
+           i.id AS action_id,
+           i.palhetas_gastas AS qty,
+           i.operation_id::text AS op_id,
+           NULL AS origem, NULL AS destino,
+           COALESCE(ae.nome, i.egua)      AS egua,
+           COALESCE(ag.nome, i.garanhao)  AS garanhao
+    FROM inseminacoes i
+    LEFT JOIN animais ae ON ae.id = i.animal_id_egua
+    LEFT JOIN animais ag ON ag.id = i.animal_id_garanhao
+"""
 
-    Campos por dict:
+
+def _agrupar_operacoes(rows: list[tuple], limit: int | None = None) -> list[dict]:
+    """Agrupa linhas cruas da união de operações por `operation_id`
+    (ou `action_id` quando não há operação associada) — partilhado
+    pelas duas funções públicas abaixo.
+
+    Campos por dict resultante:
     - `ts`: timestamp da operação
     - `usuario`: utilizador que registou
     - `acao`: label ("Inseminação" / "Transferência interna" / ...)
@@ -276,67 +332,6 @@ def carregar_atividade_recente_agrupada(limit: int = 10) -> list[dict]:
     - `num_lotes`: int
     - `quantidade`: soma total (palhetas)
     """
-    sql = """
-        SELECT * FROM (
-            SELECT t.data_transferencia AS ts,
-                   COALESCE(t.utilizador, '—') AS usuario,
-                   CASE WHEN COALESCE(t.atualizado, FALSE)
-                        THEN '✏️ Transferência interna'
-                        ELSE 'Transferência interna' END AS acao,
-                   'transfer_internal' AS tipo,
-                   t.id AS action_id,
-                   t.quantidade AS qty,
-                   t.operation_id::text AS op_id,
-                   COALESCE(d1.nome, 'ID ' || t.proprietario_origem_id) AS origem,
-                   COALESCE(d2.nome, 'ID ' || t.proprietario_destino_id) AS destino,
-                   NULL AS egua, NULL AS garanhao
-            FROM transferencias t
-            LEFT JOIN dono d1 ON t.proprietario_origem_id = d1.id
-            LEFT JOIN dono d2 ON t.proprietario_destino_id = d2.id
-            UNION ALL
-            SELECT te.data_transferencia AS ts,
-                   COALESCE(te.utilizador, '—') AS usuario,
-                   CASE WHEN COALESCE(te.atualizado, FALSE)
-                        THEN '✏️ Transferência externa'
-                        ELSE 'Transferência externa' END AS acao,
-                   'transfer_external' AS tipo,
-                   te.id AS action_id,
-                   te.quantidade AS qty,
-                   te.operation_id::text AS op_id,
-                   COALESCE(d.nome, 'Origem?') AS origem,
-                   te.destinatario_externo AS destino,
-                   NULL AS egua, NULL AS garanhao
-            FROM transferencias_externas te
-            LEFT JOIN dono d ON te.proprietario_origem_id = d.id
-            UNION ALL
-            SELECT COALESCE(i.created_at, i.data_inseminacao::timestamp + interval '12 hours') AS ts,
-                   COALESCE(i.utilizador, '—') AS usuario,
-                   CASE WHEN COALESCE(i.atualizado, FALSE)
-                        THEN '✏️ Inseminação'
-                        ELSE 'Inseminação' END AS acao,
-                   'insemination' AS tipo,
-                   i.id AS action_id,
-                   i.palhetas_gastas AS qty,
-                   i.operation_id::text AS op_id,
-                   NULL AS origem, NULL AS destino,
-                   COALESCE(ae.nome, i.egua)      AS egua,
-                   COALESCE(ag.nome, i.garanhao)  AS garanhao
-            FROM inseminacoes i
-            LEFT JOIN animais ae ON ae.id = i.animal_id_egua
-            LEFT JOIN animais ag ON ag.id = i.animal_id_garanhao
-        ) AS x
-        ORDER BY ts DESC
-        LIMIT %s
-    """
-    # Pedimos até 4x o limite antes de agrupar, para termos margem quando
-    # várias linhas partilham operation_id.
-    fetch_limit = int(limit) * 4
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, (fetch_limit,))
-        rows = cur.fetchall()
-        cur.close()
-
     grupos: dict[tuple, dict] = {}
     ordem: list[tuple] = []
     for row in rows:
@@ -365,8 +360,11 @@ def carregar_atividade_recente_agrupada(limit: int = 10) -> list[dict]:
             grupos[key]["quantidade"] += qty_i
             grupos[key]["num_lotes"] += 1
 
+    if limit is not None:
+        ordem = ordem[:limit]
+
     result: list[dict] = []
-    for k in ordem[:limit]:
+    for k in ordem:
         g = grupos[k]
         suffix = f"{g['quantidade']} palhetas"
         if g["num_lotes"] > 1:
@@ -374,3 +372,37 @@ def carregar_atividade_recente_agrupada(limit: int = 10) -> list[dict]:
         g["detalhe"] = f"{g['detalhe_base']} · {suffix}"
         result.append(g)
     return result
+
+
+def carregar_atividade_recente_agrupada(limit: int = 10) -> list[dict]:
+    """Devolve as últimas `limit` operações (transferências internas,
+    externas e inseminações) já **agrupadas por `operation_id`** — cada
+    dict representa UMA operação, mesmo que envolva vários lotes. Ver
+    `_agrupar_operacoes` para os campos de cada dict.
+    """
+    sql = f"SELECT * FROM ( {_SQL_ATIVIDADE_UNIAO} ) AS x ORDER BY ts DESC LIMIT %s"
+    # Pedimos até 4x o limite antes de agrupar, para termos margem quando
+    # várias linhas partilham operation_id.
+    fetch_limit = int(limit) * 4
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (fetch_limit,))
+        rows = cur.fetchall()
+        cur.close()
+    return _agrupar_operacoes(rows, limit=limit)
+
+
+def carregar_atividade_do_dia(dia) -> list[dict]:
+    """Devolve TODAS as operações (transferências internas, externas e
+    inseminações) de `dia` (um `datetime.date`), já agrupadas por
+    `operation_id` — mesma estrutura de `carregar_atividade_recente_agrupada`,
+    mas filtrando por `ts::date = dia` em vez de LIMIT. Usada pela
+    página Atividade (navegação por dia).
+    """
+    sql = f"SELECT * FROM ( {_SQL_ATIVIDADE_UNIAO} ) AS x WHERE ts::date = %s ORDER BY ts DESC"
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (dia,))
+        rows = cur.fetchall()
+        cur.close()
+    return _agrupar_operacoes(rows)

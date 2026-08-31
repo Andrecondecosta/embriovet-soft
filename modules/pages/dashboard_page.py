@@ -289,10 +289,9 @@ def _render_atividade_recente(ops: list[dict]) -> None:
     ])
     st.dataframe(df, use_container_width=True, hide_index=True, height=220)
 
-    st.caption(
-        "Para editar ou anular uma operação, use o histórico em "
-        "**Transferências → Histórico**."
-    )
+    if st.button("Editar", key="dashboard-atividade-editar"):
+        st.session_state["aba_selecionada"] = "Atividade"
+        st.rerun()
 
 
 def _render_acoes_rapidas() -> None:
