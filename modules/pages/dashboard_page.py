@@ -365,6 +365,14 @@ def run_dashboard_page(ctx: dict) -> None:
         df_hoje = pd.DataFrame()
     _render_hoje_na_clinica(df_hoje)
 
+    # Atividade recente
+    try:
+        ops = carregar_atividade_recente_agrupada(limit=10)
+    except Exception as e:
+        st.error(f"Erro ao carregar atividade recente: {e}")
+        ops = []
+    _render_atividade_recente(ops)
+
     # Widget partos previstos (secção "Hoje na clínica")
     DIAS_PARTOS = 30
     try:
@@ -383,14 +391,7 @@ def run_dashboard_page(ctx: dict) -> None:
         df_atencao = pd.DataFrame()
     _render_stock_atencao(df_atencao, LIMITE_STOCK_ATENCAO)
 
-    # Gráficos + atividade + ações
+    # Gráficos + ações
     _render_graficos(primary_color)
-
-    try:
-        ops = carregar_atividade_recente_agrupada(limit=10)
-    except Exception as e:
-        st.error(f"Erro ao carregar atividade recente: {e}")
-        ops = []
-    _render_atividade_recente(ops)
 
     _render_acoes_rapidas()
