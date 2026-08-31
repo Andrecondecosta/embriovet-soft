@@ -127,11 +127,17 @@ _URGENCIA_COR = {
 }
 
 
+_DASH_LISTA_MAX_HEIGHT_CSS = "410px"  # ≈ 10 linhas de ~41px
+
+
 def _inject_hoje_na_clinica_css() -> None:
     """Linha densa de folha de cálculo (~36px), zebra cinza/branco, sem
     chrome de botão — mesma linguagem do Trabalho Diário: risco de
     urgência fino à esquerda do container, hover subtil no botão que
-    ocupa a linha toda. Sem bordas pesadas — a zebra basta."""
+    ocupa a linha toda, sem bordas pesadas (a zebra basta). Ao
+    contrário do Trabalho Diário (altura = ecrã disponível), aqui é
+    uma secção a meio de uma página mais longa — a lista tem altura
+    fixa de ~10 linhas e faz scroll interno a partir daí."""
     regras_urgencia = "\n".join(
         f'div[class*="st-key-dashtask-{urgencia}-"] {{ border-left-color: {cor}; }}'
         for urgencia, cor in _URGENCIA_COR.items()
@@ -140,7 +146,10 @@ def _inject_hoje_na_clinica_css() -> None:
         f"""
         <style>
             div.st-key-dash-task-list {{
+                max-height: {_DASH_LISTA_MAX_HEIGHT_CSS};
+                overflow-y: auto;
                 gap: 0 !important;
+                padding-right: 4px;
             }}
             div.st-key-dash-task-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-dashtask-"] {{
@@ -175,12 +184,25 @@ def _inject_hoje_na_clinica_css() -> None:
                 outline: 2px solid var(--ds-gray-300) !important;
                 outline-offset: -2px !important;
             }}
-            div[class*="st-key-dashtask-"] button p {{
+            /* Ver nota em trabalho_diario_page._inject_lista_css: o
+               rótulo do botão não usa <p> nesta versão do Streamlit —
+               força alinhamento à esquerda por tipo de elemento, não
+               por classe com hash. */
+            div[class*="st-key-dashtask-"] button div,
+            div[class*="st-key-dashtask-"] button span {{
+                justify-content: flex-start !important;
+                width: auto !important;
+            }}
+            div[class*="st-key-dashtask-"] button * {{
                 text-align: left !important;
+            }}
+            div[class*="st-key-dashtask-"] button p,
+            div[class*="st-key-dashtask-"] button span {{
                 margin: 0 !important;
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
+                font-variant-numeric: tabular-nums;
             }}
         </style>
         """,
@@ -195,14 +217,14 @@ def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
     else:
         _inject_hoje_na_clinica_css()
         with st.container(key="dash-task-list"):
-            for _, row in df.iterrows():
+            for numero, (_, row) in enumerate(df.iterrows(), start=1):
                 tid = int(row["tarefa_id"])
                 urgencia = row["urgencia"] or "observacao"
                 detalhe = _label_tipo(row["tipo"])
                 if row["motivo"]:
                     detalhe += f" · {row['motivo']}"
                 label = (
-                    f"**{row['animal'] or '—'}**  ·  {detalhe}  ·  "
+                    f":gray[{numero:>4}]  **{row['animal'] or '—'}**  ·  {detalhe}  ·  "
                     f":gray[{str(urgencia).capitalize()}]"
                 )
                 with st.container(key=f"dashtask-{urgencia}-{tid}"):

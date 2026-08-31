@@ -344,12 +344,27 @@ def _inject_lista_css() -> None:
                 outline: 2px solid var(--ds-gray-300) !important;
                 outline-offset: -2px !important;
             }}
-            div[class*="st-key-tdrow-"] button p {{
+            /* O rótulo do botão não usa <p> nesta versão do Streamlit —
+               é uma cadeia de div/span internos, cada um com o seu
+               próprio justify-content:center/text-align:center. Em vez
+               de perseguir classes com hash (mudam de versão para
+               versão), força alinhamento à esquerda em qualquer
+               descendente por tipo de elemento — robusto e idempotente. */
+            div[class*="st-key-tdrow-"] button div,
+            div[class*="st-key-tdrow-"] button span {{
+                justify-content: flex-start !important;
+                width: auto !important;
+            }}
+            div[class*="st-key-tdrow-"] button * {{
                 text-align: left !important;
+            }}
+            div[class*="st-key-tdrow-"] button p,
+            div[class*="st-key-tdrow-"] button span {{
                 margin: 0 !important;
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
+                font-variant-numeric: tabular-nums;
             }}
         </style>
         """,
@@ -360,7 +375,7 @@ def _inject_lista_css() -> None:
 # ────────────────────────────────────────────────────────────────────────────
 # Lista densa — linha de tarefa
 # ────────────────────────────────────────────────────────────────────────────
-def _render_linha_tarefa(row: dict) -> None:
+def _render_linha_tarefa(row: dict, numero: int) -> None:
     tid = int(row["tarefa_id"])
     urgencia = row.get("urgencia") or "observacao"
     urgencia_label = URGENCIA_LABEL.get(urgencia, urgencia)
@@ -373,7 +388,10 @@ def _render_linha_tarefa(row: dict) -> None:
     dono_exibido = row.get("dono") or "—"
     tipo_label = _label_tipo(tipo_tarefa)
 
-    label = f"**{nome_exibido}**  ·  {dono_exibido}  ·  {tipo_label}  ·  :gray[{urgencia_label}]"
+    label = (
+        f":gray[{numero:>4}]  **{nome_exibido}**  ·  {dono_exibido}  ·  "
+        f"{tipo_label}  ·  :gray[{urgencia_label}]"
+    )
 
     with st.container(key=f"tdrow-{urgencia}-{tid}"):
         # Linha inteira clicável → ficha do animal (mesmo destino que o
@@ -502,5 +520,5 @@ def run_trabalho_diario_page(context: dict):
             _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
         ).sort_values(["_ordem", "animal"])
         with st.container(key="td-list"):
-            for _, row in df_ordenado.iterrows():
-                _render_linha_tarefa(row.to_dict())
+            for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
+                _render_linha_tarefa(row.to_dict(), numero)
