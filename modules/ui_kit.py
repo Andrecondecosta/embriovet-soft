@@ -1241,8 +1241,13 @@ def inject_design_tokens():
             }}
             /* A primeira secção logo a seguir ao cabeçalho (render_page_header)
                não repete a linha — já há o border-bottom do próprio cabeçalho
-               a separar, duas linhas tão próximas ficavam redundantes. */
-            div:has(> .ds-page-header) + div .ds-zone-title {{
+               a separar, duas linhas tão próximas ficavam redundantes.
+               Marcada explicitamente pela página que chama
+               render_zone_title(title, "ds-zone-title ds-zone-title--first")
+               na primeira secção — um seletor estrutural (ex.: "+ div"
+               contando wrappers do Streamlit) já se mostrou frágil demais
+               entre versões/layouts (colunas, etc.) para confiar nele. */
+            .ds-zone-title--first {{
                 border-top: none;
                 padding-top: 0;
             }}

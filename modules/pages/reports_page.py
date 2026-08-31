@@ -269,7 +269,7 @@ def run_reports_page(ctx: dict):
     proprietarios = carregar_proprietarios()
     contentores = carregar_contentores()
 
-    render_zone_title(t("reports.zone.selection"), "ds-zone-title")
+    render_zone_title(t("reports.zone.selection"), "ds-zone-title ds-zone-title--first")
     modo = st.radio(
         t("reports.analysis_type"),
         [t("reports.mode.stallion"), t("reports.mode.owner"), t("reports.mode.container"), t("reports.mode.history")],

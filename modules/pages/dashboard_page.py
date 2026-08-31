@@ -95,16 +95,15 @@ def _inject_local_css() -> None:
 
 
 def _render_kpis_stock(kpis: dict) -> None:
-    render_zone_title("Stock", "ds-zone-title")
+    render_zone_title("Stock", "ds-zone-title ds-zone-title--first")
     render_kpi_row([
         (t("dashboard.kpi.total"), kpis["total_palhetas"]),
         (t("dashboard.kpi.active"), kpis["lotes_ativos"]),
-        (t("dashboard.kpi.critical"), kpis["stock_critico"]),
     ])
 
 
 def _render_kpis_clinicos(kpis: dict) -> None:
-    render_zone_title("Clínica", "ds-zone-title")
+    render_zone_title("Clínica", "ds-zone-title ds-zone-title--first")
     urgentes = kpis["tarefas_urgentes"]
     tarefas_valor = str(kpis["tarefas_hoje"])
     if urgentes:
@@ -112,8 +111,6 @@ def _render_kpis_clinicos(kpis: dict) -> None:
     render_kpi_row([
         ("Estadias ativas", kpis["estadias_ativas"]),
         ("Tarefas de hoje", tarefas_valor),
-        ("Gestações confirmadas", kpis["gestacoes_confirmadas"]),
-        ("Inseminações do mês · por operação", kpis["insem_mes_operacoes"]),
     ])
 
 
@@ -354,8 +351,11 @@ def run_dashboard_page(ctx: dict) -> None:
             "gestacoes_confirmadas": 0, "insem_mes_operacoes": 0,
         }
 
-    _render_kpis_stock(kpis_stock)
-    _render_kpis_clinicos(kpis_clin)
+    col_stock, col_clinica = st.columns([1, 1])
+    with col_stock:
+        _render_kpis_stock(kpis_stock)
+    with col_clinica:
+        _render_kpis_clinicos(kpis_clin)
 
     # Hoje na clínica
     try:
