@@ -249,7 +249,7 @@ def _render_painel_pos_negativo() -> bool:
 
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("🔁 Repetir inseminação", key="btn_repetir_insem",
+        if st.button("Repetir inseminação", key="btn_repetir_insem",
                      type="primary", width="stretch"):
             # Pré-preencher o formulário do menu de registo
             st.session_state["insem_egua_prefill"] = {
@@ -265,7 +265,7 @@ def _render_painel_pos_negativo() -> bool:
             st.session_state["insem_flow_active"] = True
             st.rerun()
     with c2:
-        if st.button("🗑 Encerrar ciclo", key="btn_encerrar_ciclo",
+        if st.button("Encerrar ciclo", key="btn_encerrar_ciclo",
                      width="stretch"):
             st.session_state.pop("resultado_pos_neg", None)
             st.success("Ciclo encerrado — operação marcada como falhada.")
@@ -277,11 +277,16 @@ def _render_painel_pos_negativo() -> bool:
 # ────────────────────────────────────────────────────────────────────────────
 # Lista densa — CSS
 # ────────────────────────────────────────────────────────────────────────────
+_LISTA_MAX_HEIGHT_CSS = "calc(100vh - 410px)"
+
+
 def _inject_lista_css() -> None:
-    """CSS da lista densa: linha fina por tarefa, risco de urgência à
-    esquerda (não caixa colorida), botões compactos. Cada linha vive
-    num `st.container(key=f"tdrow-{urgencia}-{id}")` — o mesmo padrão
-    de wildcard-class já usado nesta página para os cartões antigos."""
+    """CSS da lista densa — linhas de folha de cálculo (~36px), zebra
+    cinza/branco, risco de urgência fino à esquerda, sem bordas
+    pesadas. A lista inteira vive num `st.container(key="td-list")`
+    com scroll interno (max-height + overflow-y:auto) — a barra de
+    cobertura e os filtros, fora deste container, ficam sempre fixos.
+    Cada linha é um `st.container(key=f"tdrow-{urgencia}-{id}")`."""
     regras_urgencia = "\n".join(
         f'div[class*="st-key-tdrow-{urgencia}-"] {{ border-left-color: {cor}; }}'
         for urgencia, cor in URGENCIA_COR.items()
@@ -289,36 +294,49 @@ def _inject_lista_css() -> None:
     st.markdown(
         f"""
         <style>
+            /* Lista com scroll interno — só isto rola, cabeçalho/KPIs/
+               filtros (fora deste container) ficam sempre visíveis. */
+            div.st-key-td-list {{
+                max-height: {_LISTA_MAX_HEIGHT_CSS};
+                overflow-y: auto;
+                gap: 0 !important;
+                padding-right: 4px;
+            }}
+
+            /* Zebra — alternância de fundo entre linhas, sem bordas.
+               :nth-child conta os wrappers directos (stLayoutWrapper)
+               de cada `st.container(key=...)` dentro da lista. */
+            div.st-key-td-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-tdrow-"] {{
+                background: var(--ds-gray-50);
+            }}
+
             div[class*="st-key-tdrow-"] {{
                 border-left: 3px solid transparent;
-                border-bottom: 1px solid var(--ds-gray-200);
-                padding: 6px 10px 6px 12px;
-            }}
-            div[class*="st-key-tdrow-"]:last-child {{
-                border-bottom: none;
+                padding: 3px 10px 3px 12px;
             }}
             {regras_urgencia}
-            /* A linha inteira é o botão — sem chrome de botão, só texto.
-               A ação real fica na ficha do animal (a lista serve para
-               triar e navegar, não para agir); hover subtil é o único
-               indício de que é clicável. */
+            /* A linha inteira é o botão — sem chrome de botão, só texto,
+               numa única linha (sem quebra). A ação real fica na ficha
+               do animal (a lista serve para triar e navegar, não para
+               agir); hover subtil é o único indício de que é clicável. */
             div[class*="st-key-tdrow-"] button {{
                 width: 100% !important;
                 background: transparent !important;
                 border: none !important;
-                border-radius: 4px !important;
+                border-radius: 3px !important;
                 box-shadow: none !important;
-                padding: 6px 8px !important;
-                min-height: 34px !important;
-                height: auto !important;
+                padding: 0 8px !important;
+                min-height: 30px !important;
+                height: 30px !important;
                 font-weight: 400 !important;
-                font-size: .84rem !important;
+                font-size: .8rem !important;
                 color: var(--ds-gray-900) !important;
                 justify-content: flex-start !important;
                 cursor: pointer !important;
             }}
             div[class*="st-key-tdrow-"] button:hover {{
-                background: var(--ds-gray-50) !important;
+                background: var(--ds-gray-100) !important;
                 border: none !important;
                 color: var(--ds-gray-900) !important;
             }}
@@ -329,6 +347,9 @@ def _inject_lista_css() -> None:
             div[class*="st-key-tdrow-"] button p {{
                 text-align: left !important;
                 margin: 0 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
             }}
         </style>
         """,
@@ -480,5 +501,6 @@ def run_trabalho_diario_page(context: dict):
         df_ordenado = df_filtrado.assign(
             _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
         ).sort_values(["_ordem", "animal"])
-        for _, row in df_ordenado.iterrows():
-            _render_linha_tarefa(row.to_dict())
+        with st.container(key="td-list"):
+            for _, row in df_ordenado.iterrows():
+                _render_linha_tarefa(row.to_dict())

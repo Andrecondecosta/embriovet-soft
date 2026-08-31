@@ -128,9 +128,10 @@ _URGENCIA_COR = {
 
 
 def _inject_hoje_na_clinica_css() -> None:
-    """Linha inteira clicável, sem chrome de botão — mesmo padrão do
-    Trabalho Diário: risco de urgência à esquerda do container, hover
-    subtil no botão que ocupa a linha toda."""
+    """Linha densa de folha de cálculo (~36px), zebra cinza/branco, sem
+    chrome de botão — mesma linguagem do Trabalho Diário: risco de
+    urgência fino à esquerda do container, hover subtil no botão que
+    ocupa a linha toda. Sem bordas pesadas — a zebra basta."""
     regras_urgencia = "\n".join(
         f'div[class*="st-key-dashtask-{urgencia}-"] {{ border-left-color: {cor}; }}'
         for urgencia, cor in _URGENCIA_COR.items()
@@ -138,31 +139,35 @@ def _inject_hoje_na_clinica_css() -> None:
     st.markdown(
         f"""
         <style>
+            div.st-key-dash-task-list {{
+                gap: 0 !important;
+            }}
+            div.st-key-dash-task-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-dashtask-"] {{
+                background: var(--ds-gray-50);
+            }}
             div[class*="st-key-dashtask-"] {{
                 border-left: 3px solid transparent;
-                border-bottom: 1px solid var(--ds-gray-200);
-            }}
-            div[class*="st-key-dashtask-"]:last-child {{
-                border-bottom: none;
+                padding: 3px 10px 3px 12px;
             }}
             {regras_urgencia}
             div[class*="st-key-dashtask-"] button {{
                 width: 100% !important;
                 background: transparent !important;
                 border: none !important;
-                border-radius: 4px !important;
+                border-radius: 3px !important;
                 box-shadow: none !important;
-                padding: 6px 8px !important;
-                min-height: 34px !important;
-                height: auto !important;
+                padding: 0 8px !important;
+                min-height: 30px !important;
+                height: 30px !important;
                 font-weight: 400 !important;
-                font-size: .84rem !important;
+                font-size: .8rem !important;
                 color: var(--ds-gray-900) !important;
                 justify-content: flex-start !important;
                 cursor: pointer !important;
             }}
             div[class*="st-key-dashtask-"] button:hover {{
-                background: var(--ds-gray-50) !important;
+                background: var(--ds-gray-100) !important;
                 border: none !important;
                 color: var(--ds-gray-900) !important;
             }}
@@ -173,6 +178,9 @@ def _inject_hoje_na_clinica_css() -> None:
             div[class*="st-key-dashtask-"] button p {{
                 text-align: left !important;
                 margin: 0 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
             }}
         </style>
         """,
@@ -186,23 +194,24 @@ def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
         st.caption("Sem tarefas para hoje.")
     else:
         _inject_hoje_na_clinica_css()
-        for _, row in df.iterrows():
-            tid = int(row["tarefa_id"])
-            urgencia = row["urgencia"] or "observacao"
-            detalhe = _label_tipo(row["tipo"])
-            if row["motivo"]:
-                detalhe += f" · {row['motivo']}"
-            label = (
-                f"**{row['animal'] or '—'}**  ·  {detalhe}  ·  "
-                f":gray[{str(urgencia).capitalize()}]"
-            )
-            with st.container(key=f"dashtask-{urgencia}-{tid}"):
-                # Linha inteira clicável → ficha do animal (a lista só
-                # tria/navega; a ação real é sempre na ficha).
-                if st.button(label, key=f"dashbtn-{tid}", width="stretch"):
-                    st.session_state["ver_animal_id"] = int(row["animal_id"])
-                    st.session_state["ver_animal_tab"] = 0
-                    st.rerun()
+        with st.container(key="dash-task-list"):
+            for _, row in df.iterrows():
+                tid = int(row["tarefa_id"])
+                urgencia = row["urgencia"] or "observacao"
+                detalhe = _label_tipo(row["tipo"])
+                if row["motivo"]:
+                    detalhe += f" · {row['motivo']}"
+                label = (
+                    f"**{row['animal'] or '—'}**  ·  {detalhe}  ·  "
+                    f":gray[{str(urgencia).capitalize()}]"
+                )
+                with st.container(key=f"dashtask-{urgencia}-{tid}"):
+                    # Linha inteira clicável → ficha do animal (a lista
+                    # só tria/navega; a ação real é sempre na ficha).
+                    if st.button(label, key=f"dashbtn-{tid}", width="stretch"):
+                        st.session_state["ver_animal_id"] = int(row["animal_id"])
+                        st.session_state["ver_animal_tab"] = 0
+                        st.rerun()
 
     if st.button(
         "Abrir Trabalho Diário",
