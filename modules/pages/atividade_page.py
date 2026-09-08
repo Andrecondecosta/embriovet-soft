@@ -29,7 +29,7 @@ def run_atividade_page(context: dict) -> None:
     del context
 
     inject_design_tokens()
-    render_page_header("Atividade", "Histórico de inseminações e transferências")
+    render_page_header("Atividade")
 
     dia = render_day_navigator("atividade")
 

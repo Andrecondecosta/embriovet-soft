@@ -79,14 +79,33 @@ def _fmt_ts(val) -> str:
 def _inject_local_css() -> None:
     """CSS específico do Dashboard não coberto pelos componentes base do
     design system (`inject_design_tokens`) — ajuste do pill quando
-    embutido dentro de um valor de KPI. O CSS da lista "Hoje na
-    clínica" (linha clicável) vive em `_inject_hoje_na_clinica_css`."""
+    embutido dentro de um valor de KPI, e o link discreto para a
+    página de Atividade (texto clicável, não um botão com caixa). O
+    CSS da lista "Hoje na clínica" (linha clicável) vive em
+    `_inject_hoje_na_clinica_css`."""
     st.markdown(
         """
         <style>
             .ds-kpi-value .ds-pill {
                 margin-left: 6px;
                 vertical-align: middle;
+            }
+            div[class*="st-key-dashboard-atividade-link"] button {
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                height: auto !important;
+                min-height: 0 !important;
+                color: var(--ds-gray-500) !important;
+                font-size: .82rem !important;
+                font-weight: 400 !important;
+            }
+            div[class*="st-key-dashboard-atividade-link"] button:hover {
+                background: transparent !important;
+                border: none !important;
+                color: var(--ds-primary) !important;
+                text-decoration: underline !important;
             }
         </style>
         """,
@@ -289,7 +308,7 @@ def _render_atividade_recente(ops: list[dict]) -> None:
     ])
     st.dataframe(df, use_container_width=True, hide_index=True, height=220)
 
-    if st.button("Editar", key="dashboard-atividade-editar"):
+    if st.button("Ver e editar todas as atividades →", key="dashboard-atividade-link"):
         st.session_state["aba_selecionada"] = "Atividade"
         st.rerun()
 
