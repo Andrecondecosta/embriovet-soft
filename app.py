@@ -60,6 +60,7 @@ from modules.pages.settings_page import run_settings_page
 from modules.pages.import_page import run_import_page
 from modules.pages.estadias_page import run_estadias_page
 from modules.pages.trabalho_diario_page import run_trabalho_diario_page
+from modules.pages.atividade_page import run_atividade_page
 from modules.i18n import t, get_i18n_diagnostics
 from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection, invalidate_data_cache
 from modules.repositories.stock_repo import (
@@ -1149,6 +1150,7 @@ NAV_DASHBOARD       = "Dashboard"
 NAV_ESTADIAS        = "Estadias"
 NAV_TRABALHO_DIARIO = "Trabalho diário"
 NAV_STOCK_SEMEN     = "Stock de sémen"
+NAV_ATIVIDADE       = "Atividade"
 NAV_RELATORIOS      = "Relatórios"
 NAV_DEFINICOES      = "Definições"
 
@@ -1157,6 +1159,7 @@ menu_principal = [
     NAV_ESTADIAS,
     NAV_TRABALHO_DIARIO,
     NAV_STOCK_SEMEN,
+    NAV_ATIVIDADE,
     NAV_RELATORIOS,
     NAV_DEFINICOES,
 ]
@@ -1304,6 +1307,10 @@ if aba == NAV_ESTADIAS:
 
 if aba == NAV_TRABALHO_DIARIO:
     run_trabalho_diario_page({**globals(), **locals()})
+    st.stop()
+
+if aba == NAV_ATIVIDADE:
+    run_atividade_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_RELATORIOS:

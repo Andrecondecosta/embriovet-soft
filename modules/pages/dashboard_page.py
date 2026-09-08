@@ -11,7 +11,9 @@ Estrutura:
 2. KPIs de stock (4 cards).
 3. KPIs clínicos (4 cards) — estadias, tarefas de hoje (+ urgentes),
    gestações confirmadas, inseminações do mês (DISTINCT operation_id).
-4. "Hoje na clínica": tarefas do dia do Trabalho Diário + atalho.
+4. "Hoje na clínica": quadro de leitura (st.dataframe, mesmo estilo de
+   "Partos previstos") — resumo, sem navegação; agir é no Trabalho
+   Diário.
 5. "Stock a precisar de atenção": lotes com existência <= 5.
 6. Gráficos de distribuição (contentor / proprietário).
 7. Atividade recente — agrupada por `operation_id` (1 linha por
@@ -22,7 +24,6 @@ Estrutura:
 from __future__ import annotations
 
 from datetime import date, datetime
-from html import escape
 
 import altair as alt
 import pandas as pd
@@ -77,39 +78,34 @@ def _fmt_ts(val) -> str:
 
 def _inject_local_css() -> None:
     """CSS específico do Dashboard não coberto pelos componentes base do
-    design system (`inject_design_tokens`) — lista de tarefas de "Hoje
-    na clínica" (linhas com pill de urgência) e o ajuste do pill quando
-    embutido dentro de um valor de KPI."""
+    design system (`inject_design_tokens`) — ajuste do pill quando
+    embutido dentro de um valor de KPI, e o link discreto para a
+    página de Atividade (texto clicável, não um botão com caixa). O
+    CSS da lista "Hoje na clínica" (linha clicável) vive em
+    `_inject_hoje_na_clinica_css`."""
     st.markdown(
         """
         <style>
-            .dash-task-list {
-                display: flex;
-                flex-direction: column;
-            }
-            .dash-task-row {
-                display: flex;
-                align-items: center;
-                gap: var(--ds-space-3);
-                padding: var(--ds-space-2) 0;
-                border-bottom: 1px solid var(--ds-gray-200);
-                font-size: var(--ds-text-sm);
-            }
-            .dash-task-row:last-child {
-                border-bottom: none;
-            }
-            .dash-task-animal {
-                font-weight: 600;
-                color: var(--ds-gray-900);
-                min-width: 160px;
-            }
-            .dash-task-detail {
-                color: var(--ds-gray-600);
-                flex: 1;
-            }
             .ds-kpi-value .ds-pill {
                 margin-left: 6px;
                 vertical-align: middle;
+            }
+            div[class*="st-key-dashboard-atividade-link"] button {
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                height: auto !important;
+                min-height: 0 !important;
+                color: var(--ds-gray-500) !important;
+                font-size: .82rem !important;
+                font-weight: 400 !important;
+            }
+            div[class*="st-key-dashboard-atividade-link"] button:hover {
+                background: transparent !important;
+                border: none !important;
+                color: var(--ds-primary) !important;
+                text-decoration: underline !important;
             }
         </style>
         """,
@@ -118,16 +114,15 @@ def _inject_local_css() -> None:
 
 
 def _render_kpis_stock(kpis: dict) -> None:
-    render_zone_title("Stock", "ds-zone-title")
+    render_zone_title("Stock", "ds-zone-title ds-zone-title--first")
     render_kpi_row([
         (t("dashboard.kpi.total"), kpis["total_palhetas"]),
         (t("dashboard.kpi.active"), kpis["lotes_ativos"]),
-        (t("dashboard.kpi.critical"), kpis["stock_critico"]),
     ])
 
 
 def _render_kpis_clinicos(kpis: dict) -> None:
-    render_zone_title("Clínica", "ds-zone-title")
+    render_zone_title("Clínica", "ds-zone-title ds-zone-title--first")
     urgentes = kpis["tarefas_urgentes"]
     tarefas_valor = str(kpis["tarefas_hoje"])
     if urgentes:
@@ -135,34 +130,43 @@ def _render_kpis_clinicos(kpis: dict) -> None:
     render_kpi_row([
         ("Estadias ativas", kpis["estadias_ativas"]),
         ("Tarefas de hoje", tarefas_valor),
-        ("Gestações confirmadas", kpis["gestacoes_confirmadas"]),
-        ("Inseminações do mês · por operação", kpis["insem_mes_operacoes"]),
     ])
 
 
-_PILL_LEVEL_URGENCIA = {"urgente": "critico", "hoje": "aviso"}
+_URGENCIA_LABEL = {
+    "urgente": "Urgente",
+    "hoje": "Hoje",
+    "amanha": "Amanhã",
+    "observacao": "Observação",
+}
+_URGENCIA_ORDEM = {"urgente": 0, "hoje": 1, "amanha": 2, "observacao": 3}
 
 
 def _render_hoje_na_clinica(df: pd.DataFrame) -> None:
+    """Quadro de leitura — mesmo estilo de `_render_partos_previstos`
+    (st.dataframe, sem navegação). O Dashboard é um resumo; agir é no
+    Trabalho Diário (lista densa, clicável)."""
     render_zone_title("Hoje na clínica", "ds-zone-title")
     if df.empty:
         st.caption("Sem tarefas para hoje.")
-    else:
-        rows_html = "".join(
-            "<div class='dash-task-row'>"
-            f"<span class='dash-task-animal'>{escape(str(row['animal'] or '—'))}</span>"
-            "<span class='dash-task-detail'>"
-            f"{escape(_label_tipo(row['tipo']))}"
-            + (f" · {escape(str(row['motivo']))}" if row["motivo"] else "")
-            + "</span>"
-            + render_status_pill(
-                str(row["urgencia"]).capitalize(),
-                _PILL_LEVEL_URGENCIA.get(row["urgencia"], "ok"),
-            )
-            + "</div>"
-            for _, row in df.iterrows()
-        )
-        st.markdown(f"<div class='dash-task-list'>{rows_html}</div>", unsafe_allow_html=True)
+        return
+
+    df_ordenado = df.assign(
+        _ordem=df["urgencia"].map(_URGENCIA_ORDEM).fillna(9),
+    ).sort_values(["_ordem", "animal"])
+
+    display = pd.DataFrame({
+        "Égua": df_ordenado["animal"].fillna("—"),
+        "Dono": df_ordenado["dono"].fillna("—"),
+        "Tipo": df_ordenado["tipo"].apply(_label_tipo),
+        "Urgência": df_ordenado["urgencia"].map(_URGENCIA_LABEL).fillna("—"),
+    })
+    st.dataframe(
+        display,
+        use_container_width=True,
+        hide_index=True,
+        height=min(220, 40 + 35 * len(display)),
+    )
 
     if st.button(
         "Abrir Trabalho Diário",
@@ -304,10 +308,9 @@ def _render_atividade_recente(ops: list[dict]) -> None:
     ])
     st.dataframe(df, use_container_width=True, hide_index=True, height=220)
 
-    st.caption(
-        "Para editar ou anular uma operação, use o histórico em "
-        "**Transferências → Histórico**."
-    )
+    if st.button("Ver e editar todas as atividades →", key="dashboard-atividade-link"):
+        st.session_state["aba_selecionada"] = "Atividade"
+        st.rerun()
 
 
 def _render_acoes_rapidas() -> None:
@@ -366,8 +369,11 @@ def run_dashboard_page(ctx: dict) -> None:
             "gestacoes_confirmadas": 0, "insem_mes_operacoes": 0,
         }
 
-    _render_kpis_stock(kpis_stock)
-    _render_kpis_clinicos(kpis_clin)
+    col_stock, col_clinica = st.columns([1, 1])
+    with col_stock:
+        _render_kpis_stock(kpis_stock)
+    with col_clinica:
+        _render_kpis_clinicos(kpis_clin)
 
     # Hoje na clínica
     try:
@@ -376,6 +382,14 @@ def run_dashboard_page(ctx: dict) -> None:
         st.error(f"Erro ao carregar tarefas de hoje: {e}")
         df_hoje = pd.DataFrame()
     _render_hoje_na_clinica(df_hoje)
+
+    # Atividade recente
+    try:
+        ops = carregar_atividade_recente_agrupada(limit=10)
+    except Exception as e:
+        st.error(f"Erro ao carregar atividade recente: {e}")
+        ops = []
+    _render_atividade_recente(ops)
 
     # Widget partos previstos (secção "Hoje na clínica")
     DIAS_PARTOS = 30
@@ -395,14 +409,7 @@ def run_dashboard_page(ctx: dict) -> None:
         df_atencao = pd.DataFrame()
     _render_stock_atencao(df_atencao, LIMITE_STOCK_ATENCAO)
 
-    # Gráficos + atividade + ações
+    # Gráficos + ações
     _render_graficos(primary_color)
-
-    try:
-        ops = carregar_atividade_recente_agrupada(limit=10)
-    except Exception as e:
-        st.error(f"Erro ao carregar atividade recente: {e}")
-        ops = []
-    _render_atividade_recente(ops)
 
     _render_acoes_rapidas()
