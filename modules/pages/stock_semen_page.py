@@ -88,29 +88,91 @@ def _render_import_topbar() -> None:
 
 
 # ─── Tabs ────────────────────────────────────────────────────────────
+# `st.tabs` nativo não deixa escolher o separador activo por código
+# (sem `default_index`) — por isso qualquer redirect para um separador
+# específico (ex.: "Editar" numa transferência a partir da Atividade,
+# ou "Nova Transferência" no Dashboard) ficava sempre a aterrar em
+# "Lotes". Substituído por um `st.radio` controlado por nós — o valor
+# vive em `session_state` e respeita `stock_semen_tab` de entrada.
+# Reestilizado como separadores (esconde o círculo do rádio, sublinha
+# a opção activa); scoped ao container "stock-semen-tabs" para não
+# afectar os outros `st.radio` desta página (stock_page.py/
+# transfer_page.py usam-nos para outras coisas, ex.: tipo de
+# transferência).
+
+_TAB_STATE_KEY = "stock_semen_active_tab"
+
+
+def _inject_tabs_css() -> None:
+    st.markdown(
+        """
+        <style>
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                border-bottom: 1px solid #e2e8f0;
+                margin-bottom: 12px;
+            }
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] > label {
+                margin: 0 !important;
+                padding: 8px 14px !important;
+                border-bottom: 2px solid transparent;
+                cursor: pointer;
+            }
+            /* 1º filho do <label> é o círculo visual do rádio (o
+               <input type="radio"> em si fica no DOM, só o círculo
+               desenhado é escondido — clicar no texto continua a
+               accionar o input nativo, sem tocar em acessibilidade). */
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] > label > div:first-child {
+                display: none !important;
+            }
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] > label p {
+                font-size: .92rem !important;
+                color: #64748b !important;
+                margin: 0 !important;
+            }
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] > label:has(input:checked) {
+                border-bottom-color: #E85D4A;
+            }
+            div[class*="st-key-stock-semen-tabs"] [role="radiogroup"] > label:has(input:checked) p {
+                color: #0f172a !important;
+                font-weight: 600 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def _render_tabs(ctx: dict) -> None:
-    # Consumir eventual redirect que aponte para uma tab específica.
-    default_idx = 0
-    if st.session_state.get("stock_semen_tab") in _TABS:
-        default_idx = _TABS.index(st.session_state["stock_semen_tab"])
-        # Streamlit `st.tabs` não aceita `default_index` — deixamos o
-        # valor consumido em `session_state` para próxima navegação;
-        # a UX degrada elegantemente (o utilizador clica a tab).
-        st.session_state.pop("stock_semen_tab", None)
+    # Consumir eventual redirect que aponte para um separador
+    # específico — ao contrário do antigo st.tabs, este valor é
+    # respeitado de facto.
+    incoming = st.session_state.pop("stock_semen_tab", None)
+    if incoming in _TABS:
+        st.session_state[_TAB_STATE_KEY] = incoming
+    elif _TAB_STATE_KEY not in st.session_state:
+        st.session_state[_TAB_STATE_KEY] = _TABS[0]
 
-    tab_lotes, tab_gar, tab_mapa, tab_trans = st.tabs(_TABS)
+    _inject_tabs_css()
+    with st.container(key="stock-semen-tabs"):
+        aba_ativa = st.radio(
+            "Separador", _TABS, key=_TAB_STATE_KEY,
+            horizontal=True, label_visibility="collapsed",
+        )
 
-    with tab_lotes:
+    # Só o separador activo é renderizado (ao contrário do st.tabs
+    # nativo, que corria o corpo dos 4 sempre) — é o que nos permite
+    # abrir directamente no separador certo sem depender de os outros
+    # 3 já terem corrido "em fundo".
+    if aba_ativa == "Lotes":
         run_stock_page(ctx)
-
-    with tab_gar:
+    elif aba_ativa == "Garanhões":
         _render_tab_garanhoes(ctx)
-
-    with tab_mapa:
+    elif aba_ativa == "Mapa dos contentores":
         run_map_page(ctx)
-
-    with tab_trans:
+    elif aba_ativa == "Transferências":
         run_transfer_page(ctx)
 
 
