@@ -314,7 +314,7 @@ def run_transfer_page(ctx):
     stock_disponivel = stock[stock["existencia_atual"] > 0].copy() if not stock.empty else pd.DataFrame()
     if stock_disponivel.empty:
         st.warning(t("transfer.no_stock_available"))
-        _render_historico_operacoes()
+        _render_historico_se_fora_de_edicao()
         return
 
     # Inicializar garanhao padrão se necessário
@@ -948,7 +948,17 @@ def run_transfer_page(ctx):
                         st.rerun()
 
     # ── Histórico de operações (movido do dashboard) ────────────────────
-    _render_historico_operacoes()
+    # Escondido durante a edição — só o formulário fica visível, sem o
+    # histórico a distrair por baixo.
+    _render_historico_se_fora_de_edicao()
+
+
+def _render_historico_se_fora_de_edicao() -> None:
+    """Mostra o histórico de operações, excepto durante a edição de
+    uma transferência (`edit_transfer_id` activo) — nesse caso, só o
+    formulário de edição fica visível."""
+    if not st.session_state.get('edit_transfer_id'):
+        _render_historico_operacoes()
 
 
 def _render_historico_operacoes():
