@@ -14,7 +14,8 @@ from modules.repositories.stock_repo import (
     transferir_stock_interno_com_localizacao,
 )
 from modules.repositories.transfer_repo import reverter_operacao
-from modules.ui_kit import render_zone_title
+from modules.ui_kit import inject_design_tokens, render_zone_title
+from html import escape
 
 
 def run_transfer_page(ctx):
@@ -969,12 +970,14 @@ def _render_historico_operacoes():
     Toda a leitura vem de `dashboard_repo.carregar_atividade_recente_agrupada`
     (já agrupada por `operation_id`), e a anulação usa
     `transfer_repo.reverter_operacao` (FK-based).
+
+    Visual alinhado ao sistema de design v2 (mesma linguagem de
+    Atividade/Dashboard/Relatórios) — `inject_design_tokens()` garante
+    que os tokens `--ds-*` usados aqui e por `render_zone_title` estão
+    definidos, já que esta página nunca os injeta noutro sítio.
     """
-    st.markdown("---")
-    st.markdown(
-        "<div class='transfer-zone-title'>Histórico de operações</div>",
-        unsafe_allow_html=True,
-    )
+    inject_design_tokens()
+    render_zone_title("Histórico de operações", "ds-zone-title")
 
     try:
         ops = carregar_atividade_recente_agrupada(limit=20)
@@ -983,7 +986,7 @@ def _render_historico_operacoes():
         return
 
     if not ops:
-        st.info("Ainda não há operações registadas.")
+        st.caption("Ainda não há operações registadas.")
         return
 
     # Pedido de confirmação de anulação — chave única por op.
@@ -998,8 +1001,10 @@ def _render_historico_operacoes():
         _render_confirmacao_anulacao(pending)
         return
 
-    for idx, op in enumerate(ops):
-        _render_linha_historico(op, idx)
+    _inject_historico_css()
+    with st.container(key="hist-list"):
+        for idx, op in enumerate(ops):
+            _render_linha_historico(op, idx)
 
 
 def _confirm_key(op: dict) -> str:
@@ -1016,63 +1021,121 @@ def _fmt_hist_ts(val) -> str:
         return str(val)
 
 
+def _inject_historico_css() -> None:
+    """Lista densa do histórico — mesmo padrão visual da página
+    Atividade (zebra cinza/branco, sem bordas pesadas, linhas
+    compactas). Implementação própria em vez de reutilizar a função de
+    `atividade_page.py`: aqui o "Editar" fica na mesma página (edição
+    inline) em vez de navegar para outra, pelo que a lógica por linha
+    não é partilhável — só o aspeto visual é replicado."""
+    st.markdown(
+        """
+        <style>
+            div.st-key-hist-list {
+                gap: 0 !important;
+            }
+            div.st-key-hist-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-hist-row-"] {
+                background: var(--ds-gray-50);
+            }
+            div[class*="st-key-hist-row-"] {
+                padding: 4px 10px;
+            }
+            div[class*="st-key-hist-row-"] button {
+                width: 100% !important;
+                min-height: 30px !important;
+                height: 30px !important;
+                font-size: .78rem !important;
+                font-weight: 400 !important;
+                padding: 0 8px !important;
+            }
+            .hist-info {
+                display: block;
+                font-size: .84rem;
+                color: var(--ds-gray-900);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .hist-info .hist-muted {
+                color: var(--ds-gray-500);
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_linha_historico(op: dict, idx: int) -> None:
     op_id = op.get("operation_id") or f"solo-{op['action_id']}"
     key_edit = f"transfer-history-edit-{op['tipo']}-{op_id}-{idx}"
     key_del = f"transfer-history-delete-{op['tipo']}-{op_id}-{idx}"
 
-    col_info, col_edit, col_del = st.columns([9, 1, 1])
-    with col_info:
-        st.markdown(f"**{op['acao']}** · {_fmt_hist_ts(op['ts'])}")
-        st.caption(op["detalhe"])
+    ts = escape(_fmt_hist_ts(op["ts"]))
+    acao = escape(str(op["acao"] or "—"))
+    detalhe = escape(str(op["detalhe"]))
 
-    with col_edit:
-        # Apenas transferências podem ser editadas via este botão — as
-        # inseminações são editadas via `insemination_page` (mantém a
-        # regra antiga).
-        if op["tipo"] in ("transfer_internal", "transfer_external"):
-            if st.button("✏️", key=key_edit, help="Editar", type="secondary"):
-                st.session_state["edit_transfer_id"] = op["action_id"]
-                st.session_state["edit_transfer_type"] = op["tipo"]
-                st.session_state["edit_transfer_op_id"] = op.get("operation_id")
-                for k in [
-                    "transfer_tipo", "transfer_linhas", "transfer_garanhao",
-                    "transfer_proprietario", "transfer_dest_interno",
-                    "transfer_dest_externo", "transfer_destinatario_externo",
-                    "transfer_motivo", "transfer_observacoes",
-                ]:
-                    st.session_state.pop(k, None)
+    with st.container(key=f"hist-row-{idx}"):
+        col_info, col_edit, col_del = st.columns(
+            [0.72, 0.14, 0.14], gap="small", vertical_alignment="center",
+        )
+        with col_info:
+            st.markdown(
+                f"<span class='hist-info'><b>{ts}</b> · "
+                f"<span class='hist-muted'>{acao}</span> — {detalhe}</span>",
+                unsafe_allow_html=True,
+            )
+
+        with col_edit:
+            # Apenas transferências podem ser editadas via este botão — as
+            # inseminações são editadas via `insemination_page` (mantém a
+            # regra antiga).
+            if op["tipo"] in ("transfer_internal", "transfer_external"):
+                if st.button("Editar", key=key_edit, width="stretch"):
+                    st.session_state["edit_transfer_id"] = op["action_id"]
+                    st.session_state["edit_transfer_type"] = op["tipo"]
+                    st.session_state["edit_transfer_op_id"] = op.get("operation_id")
+                    for k in [
+                        "transfer_tipo", "transfer_linhas", "transfer_garanhao",
+                        "transfer_proprietario", "transfer_dest_interno",
+                        "transfer_dest_externo", "transfer_destinatario_externo",
+                        "transfer_motivo", "transfer_observacoes",
+                    ]:
+                        st.session_state.pop(k, None)
+                    st.rerun()
+            elif op["tipo"] == "insemination":
+                if st.button("Editar", key=key_edit, width="stretch"):
+                    st.session_state["edit_insemination_id"] = op["action_id"]
+                    st.session_state["edit_insemination_op_id"] = op.get("operation_id")
+                    st.session_state["aba_selecionada"] = t("menu.register_insemination")
+                    st.rerun()
+
+        with col_del:
+            if st.button("Anular", key=key_del, width="stretch"):
+                st.session_state[_confirm_key(op)] = True
                 st.rerun()
-        elif op["tipo"] == "insemination":
-            if st.button("✏️", key=key_edit, help="Editar inseminação",
-                         type="secondary"):
-                st.session_state["edit_insemination_id"] = op["action_id"]
-                st.session_state["edit_insemination_op_id"] = op.get("operation_id")
-                st.session_state["aba_selecionada"] = t("menu.register_insemination")
-                st.rerun()
-
-    with col_del:
-        if st.button("🗑️", key=key_del, help="Anular", type="secondary"):
-            st.session_state[_confirm_key(op)] = True
-            st.rerun()
-
-    st.markdown("---")
 
 
 def _render_confirmacao_anulacao(op: dict) -> None:
-    st.warning("⚠️ **Esta ação é irreversível!**")
-    st.markdown(
-        f"""
-        **O que vai acontecer:**
-        - ❌ Registo de **{op['acao']}** será eliminado
-        - ↩️ **{op['quantidade']} palhetas** ({op['num_lotes']} lote(s))
-          serão revertidas ao estado anterior
-        """
+    multi_lote = op["num_lotes"] > 1
+    aviso = (
+        f"Anular esta operação? Isto vai devolver **{op['quantidade']} palhetas** "
+        f"ao stock e apagar o registo"
     )
-    col_ok, col_cancel, _ = st.columns([1, 1, 2])
+    if multi_lote:
+        aviso += (
+            f" — a operação **inteira**, incluindo todos os "
+            f"**{op['num_lotes']} lotes**."
+        )
+    else:
+        aviso += "."
+    aviso += " **Esta ação não pode ser desfeita.**"
+    st.warning(aviso)
+
+    col_ok, col_cancel = st.columns([1, 1])
     with col_ok:
         if st.button(
-            "✅ Sim, anular",
+            "Confirmar anulação",
             key="transfer-history-confirm-ok",
             type="primary",
             width="stretch",
@@ -1084,10 +1147,13 @@ def _render_confirmacao_anulacao(op: dict) -> None:
             )
             st.session_state.pop(_confirm_key(op), None)
             if sucesso:
-                st.success("✅ Operação anulada.")
+                st.toast("Operação anulada.", icon="✅")
                 st.rerun()
             else:
-                st.error("❌ Erro ao anular operação. Ver logs.")
+                st.error(
+                    "Erro ao anular a operação — nada foi alterado. "
+                    "Tenta novamente ou contacta o suporte."
+                )
     with col_cancel:
         if st.button(
             "Cancelar",
