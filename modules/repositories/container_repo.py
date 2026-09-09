@@ -134,6 +134,33 @@ def mover_lotes_por_andar(contentor_id: int, andar_origem: int, andar_destino: i
         return 0
 
 
+def inverter_andares(contentor_id: int):
+    """Troca os andares 1↔2 de todos os lotes de um contentor, numa só
+    transação. Um `CASE` num único UPDATE evita a colisão de uma troca
+    directa (não dá para pôr o andar 1 a 2 enquanto o 2 ainda é 2).
+    Retorna o nº de lotes afectados, ou False em erro."""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE estoque_dono
+                SET andar = CASE WHEN andar = 1 THEN 2 WHEN andar = 2 THEN 1 ELSE andar END
+                WHERE contentor_id = %s AND andar IN (1, 2)
+                """,
+                (to_py(contentor_id),),
+            )
+            count = cur.rowcount
+            conn.commit()
+            cur.close()
+        invalidate_data_cache()
+        logger.info(f"Andares invertidos no contentor {contentor_id}: {count} lote(s)")
+        return count
+    except Exception as e:
+        logger.error(f"Erro ao inverter andares do contentor {contentor_id}: {e}")
+        return False
+
+
 def deletar_contentor(contentor_id):
     """Deleta um contentor apenas se não tiver stock associado"""
     try:

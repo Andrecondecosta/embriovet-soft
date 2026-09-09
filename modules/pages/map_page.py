@@ -8,7 +8,12 @@ import streamlit as st
 from modules.i18n import t
 from modules.repositories.container_repo import (
     adicionar_contentor,
+    atualizar_andar_lote,
     atualizar_posicao_contentor,
+    deletar_contentor,
+    editar_contentor,
+    inverter_andares,
+    mover_lotes_por_andar,
 )
 from modules.repositories.settings_repo import get_app_settings
 from modules.repositories.stock_repo import (
@@ -1532,6 +1537,13 @@ def run_map_page(ctx: dict):
 
                     # Acções do contentor (editar código/descrição, apagar)
                     col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
+                    with col_e1:
+                        tem_stock = not stock_contentor.empty
+                        if st.button("Inverter andares", key=f"inverter_andares_{cont_id}",
+                                     disabled=not tem_stock,
+                                     help="Troca os lotes do 1º andar para o 2º e vice-versa"):
+                            st.session_state[f'confirmar_inverter_{cont_id}'] = True
+                            st.rerun()
                     with col_e2:
                         pode_apagar = total_palhetas == 0
                         if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
@@ -1545,6 +1557,29 @@ def run_map_page(ctx: dict):
                         if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
                             st.session_state[f'modal_editar_{cont_id}'] = True
                             st.rerun()
+
+                    # Confirmação de inversão de andares
+                    if st.session_state.get(f'confirmar_inverter_{cont_id}', False):
+                        st.warning(
+                            f"Inverter os andares do contentor {cod}? Todos os lotes do "
+                            "1º andar passam ao 2º e vice-versa. As localizações dos "
+                            "lotes serão atualizadas."
+                        )
+                        col_conf1, col_conf2 = st.columns([1, 1])
+                        with col_conf1:
+                            if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id}",
+                                         type="primary", width="stretch"):
+                                resultado = inverter_andares(cont_id)
+                                st.session_state[f'confirmar_inverter_{cont_id}'] = False
+                                if resultado is not False:
+                                    st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
+                                    st.rerun()
+                                else:
+                                    st.error("Erro ao inverter andares. Ver logs.")
+                        with col_conf2:
+                            if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id}", width="stretch"):
+                                st.session_state[f'confirmar_inverter_{cont_id}'] = False
+                                st.rerun()
 
                     # Modal edição de código/descrição
                     if st.session_state.get(f'modal_editar_{cont_id}', False):
