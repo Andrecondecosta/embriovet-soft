@@ -1,10 +1,11 @@
 from modules.i18n import t
 import streamlit as st
 import pandas as pd
+from modules.components.day_navigator import render_day_navigator
 from modules.components.modal_proprietario import modal_adicionar_proprietario
 from modules.db import get_connection, invalidate_data_cache
 from modules.repositories.audit_repo import registar_historico_edicao
-from modules.repositories.dashboard_repo import carregar_atividade_recente_agrupada
+from modules.repositories.dashboard_repo import carregar_atividade_do_dia
 from modules.repositories.stock_repo import (
     carregar_contentores,
     carregar_proprietarios,
@@ -967,9 +968,10 @@ def _render_historico_operacoes():
     de editar / anular. Movido do antigo modal do dashboard — a acção
     pertence à página onde as operações vivem.
 
-    Toda a leitura vem de `dashboard_repo.carregar_atividade_recente_agrupada`
-    (já agrupada por `operation_id`), e a anulação usa
-    `transfer_repo.reverter_operacao` (FK-based).
+    Navegável por dia (mesmo `render_day_navigator` da Atividade, com
+    `key_prefix` próprio para os dois navegadores não colidirem) — a
+    leitura usa `dashboard_repo.carregar_atividade_do_dia`, e a
+    anulação usa `transfer_repo.reverter_operacao` (FK-based).
 
     Visual alinhado ao sistema de design v2 (mesma linguagem de
     Atividade/Dashboard/Relatórios) — `inject_design_tokens()` garante
@@ -979,14 +981,16 @@ def _render_historico_operacoes():
     inject_design_tokens()
     render_zone_title("Histórico de operações", "ds-zone-title")
 
+    dia = render_day_navigator("transfer_hist")
+
     try:
-        ops = carregar_atividade_recente_agrupada(limit=20)
+        ops = carregar_atividade_do_dia(dia)
     except Exception as e:
         st.error(f"Erro ao carregar histórico: {e}")
         return
 
     if not ops:
-        st.caption("Ainda não há operações registadas.")
+        st.caption("Sem operações registadas neste dia.")
         return
 
     # Pedido de confirmação de anulação — chave única por op.
@@ -1027,12 +1031,19 @@ def _inject_historico_css() -> None:
     compactas). Implementação própria em vez de reutilizar a função de
     `atividade_page.py`: aqui o "Editar" fica na mesma página (edição
     inline) em vez de navegar para outra, pelo que a lógica por linha
-    não é partilhável — só o aspeto visual é replicado."""
+    não é partilhável — só o aspeto visual é replicado.
+
+    Altura limitada a ~10 linhas com scroll interno (max-height +
+    overflow-y:auto) — o mesmo mecanismo do Trabalho Diário — para a
+    lista não crescer indefinidamente pela página abaixo."""
     st.markdown(
         """
         <style>
             div.st-key-hist-list {
                 gap: 0 !important;
+                max-height: 430px;
+                overflow-y: auto;
+                padding-right: 4px;
             }
             div.st-key-hist-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-hist-row-"] {
