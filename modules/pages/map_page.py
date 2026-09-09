@@ -8,8 +8,12 @@ import streamlit as st
 from modules.i18n import t
 from modules.repositories.container_repo import (
     adicionar_contentor,
+    atualizar_andar_lote,
     atualizar_posicao_contentor,
+    deletar_contentor,
+    editar_contentor,
     inverter_andares,
+    mover_lotes_por_andar,
 )
 from modules.repositories.settings_repo import get_app_settings
 from modules.repositories.stock_repo import (
