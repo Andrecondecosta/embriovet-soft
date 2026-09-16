@@ -131,7 +131,7 @@ def _render_users_view():
                 elif " " in novo_username:
                     st.error(t("users.username_no_spaces"))
                 else:
-                    if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, user['id']):
+                    if adicionar_usuario(novo_username, novo_nome, nova_password, novo_nivel, st.session_state["user"]["id"]):
                         st.success(t("users.created", username=novo_username))
                         st.info(t("users.credentials", username=novo_username, password=nova_password))
                         # Redirecionar para a lista de utilizadores

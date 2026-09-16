@@ -9,6 +9,8 @@ contexto.
 from __future__ import annotations
 
 import logging
+import time
+
 import streamlit as st
 
 from modules.i18n import t

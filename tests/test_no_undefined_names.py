@@ -1,14 +1,14 @@
 """Guarda-costas barato contra "nome usado mas nunca importado" — a
 classe de bug encontrada em `map_page.py` (chamava `editar_contentor`,
 `deletar_contentor`, `mover_lotes_por_andar` e `atualizar_andar_lote`
-sem os importar; só rebentava em runtime, ao clicar no botão certo).
+sem os importar; só rebentava em runtime, ao clicar no botão certo) e
+depois também em `owners_view.py` (`time`) e `users_view.py` (`user`).
 
 Usa `pyflakes` (análise estática, sem precisar de importar o módulo —
 o que evitaria efeitos secundários de módulos Streamlit a nível de
 página) e falha se aparecer um `UndefinedName` num dos ficheiros
-verificados. Não cobre o resto do código (nem o pretende fazer aqui);
-serve para os ficheiros mais interligados com repositórios, onde este
-tipo de import em falta já aconteceu.
+verificados. Cobre todo o `modules/pages/` (onde os 3 casos até agora
+apareceram) mais `container_repo.py`.
 """
 
 from __future__ import annotations
@@ -25,8 +25,9 @@ UndefinedName = pyflakes_messages.UndefinedName
 
 ROOT = Path(__file__).resolve().parent.parent
 
-FICHEIROS_VERIFICADOS = [
-    ROOT / "modules" / "pages" / "map_page.py",
+FICHEIROS_VERIFICADOS = sorted(
+    (ROOT / "modules" / "pages").glob("*.py")
+) + [
     ROOT / "modules" / "repositories" / "container_repo.py",
 ]
 
