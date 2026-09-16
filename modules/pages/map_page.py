@@ -1,7 +1,9 @@
 # Typed page module (Fase 3)
 import json
 import logging
+import math
 import time
+from html import escape
 
 import streamlit as st
 
@@ -157,93 +159,113 @@ def run_map_page(ctx: dict):
                                 });
                             }
 
-                            // Handler nomeado para cliques em células do heatmap
-                            function handleHmCellClick(ev) {
-                                ev.stopPropagation();
-                                var cell = ev.currentTarget;
-                                var cId = cell.getAttribute('data-cont');
-                                var c   = cell.getAttribute('data-c');
-                                var a   = cell.getAttribute('data-a');
-                                targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
-                                targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
-                                cell.classList.add('selected');
-                                var rows = targetDoc.querySelectorAll(
-                                    '.lote-row[data-cont="'+cId+'"][data-c="'+c+'"][data-a="'+a+'"]'
-                                );
-                                rows.forEach(function(r){ r.classList.add('hl'); });
-                                if (rows.length > 0) {
-                                    rows[0].scrollIntoView({behavior:'smooth', block:'center'});
-                                }
-                            }
+                            // A lógica de clique (handler + bind + observer + intervalo)
+                            // tem de ficar a viver no realm da JANELA PRINCIPAL, não no
+                            // realm deste iframe efémero do streamlit_js_eval. Descoberta
+                            // ao implementar o tanque redondo (Passo 2/3): o Streamlit
+                            // desmonta este iframe no rerun seguinte (ex.: ao trocar de
+                            // andar), e a partir daí qualquer addEventListener/
+                            // setInterval/MutationObserver registado a partir DAQUI
+                            // morre silenciosamente (o browser cancela a execução de
+                            // callbacks cujo código pertence a um realm destruído,
+                            // mesmo que o alvo/"this" continue a ser a janela
+                            // principal — confirmado empiricamente: um contador de
+                            // "ticks" do intervalo parava sempre exactamente no rerun
+                            // seguinte ao boot). `targetWin.eval(...)` corre este bloco
+                            // DENTRO do realm da própria janela principal, que só
+                            // morre se o separador fechar.
+                            if (!targetWin.__hmBridgeCoreInstalled) {
+                                targetWin.__hmBridgeCoreInstalled = true;
+                                targetWin.eval(`
+                                    (function(){
+                                        var targetDoc = document;
 
-                            // Garante pointer-events auto em toda a cadeia até .hm-cell
-                            function ensureClickable(cell) {
-                                cell.style.pointerEvents = 'auto';
-                                cell.style.cursor = 'pointer';
-                                cell.style.position = 'relative';
-                                cell.style.zIndex = '5';
-                                var p = cell.parentElement;
-                                var depth = 0;
-                                while (p && depth < 12) {
-                                    var cs = targetWin.getComputedStyle(p);
-                                    if (cs && cs.pointerEvents === 'none') {
-                                        p.style.pointerEvents = 'auto';
-                                    }
-                                    if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
-                                        p.style.pointerEvents = 'auto';
-                                    }
-                                    p = p.parentElement;
-                                    depth += 1;
-                                }
-                            }
-
-                            function bindCells(root) {
-                                try {
-                                    var cells = (root || targetDoc).querySelectorAll('.hm-cell');
-                                    cells.forEach(function(cell){
-                                        if (cell.__hmBound) return;
-                                        cell.__hmBound = true;
-                                        ensureClickable(cell);
-                                        cell.addEventListener('click', handleHmCellClick, false);
-                                        cell.addEventListener('touchend', function(e){
-                                            e.preventDefault();
-                                            handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
-                                        }, {passive: false});
-                                    });
-                                } catch (e) {}
-                            }
-
-                            // Vincular já existentes e observar novos
-                            if (!targetDoc.__hmObserver) {
-                                bindCells(targetDoc);
-                                var obs = new targetWin.MutationObserver(function(mutations){
-                                    for (var i = 0; i < mutations.length; i++) {
-                                        var m = mutations[i];
-                                        if (m.addedNodes && m.addedNodes.length) {
-                                            for (var j = 0; j < m.addedNodes.length; j++) {
-                                                var node = m.addedNodes[j];
-                                                if (node.nodeType !== 1) continue;
-                                                if (node.classList && node.classList.contains('hm-cell')) {
-                                                    bindCells(node.parentElement || targetDoc);
-                                                } else if (node.querySelectorAll) {
-                                                    bindCells(node);
-                                                }
+                                        function handleHmCellClick(ev) {
+                                            ev.stopPropagation();
+                                            var cell = ev.currentTarget;
+                                            var cId = cell.getAttribute('data-cont');
+                                            var c   = cell.getAttribute('data-c');
+                                            var a   = cell.getAttribute('data-a');
+                                            targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
+                                            targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
+                                            cell.classList.add('selected');
+                                            var rows = targetDoc.querySelectorAll(
+                                                '.lote-row[data-cont="' + cId + '"][data-c="' + c + '"][data-a="' + a + '"]'
+                                            );
+                                            rows.forEach(function(r){ r.classList.add('hl'); });
+                                            if (rows.length > 0) {
+                                                rows[0].scrollIntoView({behavior:'smooth', block:'center'});
                                             }
                                         }
-                                    }
-                                });
-                                obs.observe(targetDoc.body, {childList: true, subtree: true});
-                                targetDoc.__hmObserver = obs;
 
-                                // Re-bind periódico de segurança (primeiros 6s após carregar)
-                                var ticks = 0;
-                                var iv = targetWin.setInterval(function(){
-                                    bindCells(targetDoc);
-                                    ticks += 1;
-                                    if (ticks > 12) { targetWin.clearInterval(iv); }
-                                }, 500);
-                            } else {
-                                bindCells(targetDoc);
+                                        // Garante pointer-events auto em toda a cadeia até .hm-cell
+                                        function ensureClickable(cell) {
+                                            try {
+                                                cell.style.pointerEvents = 'auto';
+                                                cell.style.cursor = 'pointer';
+                                                cell.style.position = 'relative';
+                                                cell.style.zIndex = '5';
+                                                var p = cell.parentElement;
+                                                var depth = 0;
+                                                while (p && depth < 12) {
+                                                    var cs = window.getComputedStyle(p);
+                                                    if (cs && cs.pointerEvents === 'none') {
+                                                        p.style.pointerEvents = 'auto';
+                                                    }
+                                                    if (p.matches && p.matches('[data-testid="stMarkdownContainer"], [data-testid="stMarkdown"], [data-testid="stElementContainer"], [data-testid="stVerticalBlock"], [data-testid="stHorizontalBlock"]')) {
+                                                        p.style.pointerEvents = 'auto';
+                                                    }
+                                                    p = p.parentElement;
+                                                    depth += 1;
+                                                }
+                                            } catch (e) {}
+                                        }
+
+                                        function bindCells(root) {
+                                            try {
+                                                var cells = (root || targetDoc).querySelectorAll('.hm-cell');
+                                                cells.forEach(function(cell){
+                                                    if (cell.__hmBound) return;
+                                                    cell.__hmBound = true;
+                                                    ensureClickable(cell);
+                                                    try {
+                                                        cell.addEventListener('click', handleHmCellClick, false);
+                                                        cell.addEventListener('touchend', function(e){
+                                                            e.preventDefault();
+                                                            handleHmCellClick({currentTarget: cell, stopPropagation: function(){}});
+                                                        }, {passive: false});
+                                                    } catch (e) {}
+                                                });
+                                            } catch (e) {}
+                                        }
+
+                                        bindCells(targetDoc);
+                                        var obs = new MutationObserver(function(mutations){
+                                            for (var i = 0; i < mutations.length; i++) {
+                                                var m = mutations[i];
+                                                if (m.addedNodes && m.addedNodes.length) {
+                                                    for (var j = 0; j < m.addedNodes.length; j++) {
+                                                        var node = m.addedNodes[j];
+                                                        if (node.nodeType !== 1) continue;
+                                                        if (node.classList && node.classList.contains('hm-cell')) {
+                                                            bindCells(node.parentElement || targetDoc);
+                                                        } else if (node.querySelectorAll) {
+                                                            bindCells(node);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+                                        obs.observe(targetDoc.body, {childList: true, subtree: true});
+
+                                        // Re-bind periódico de segurança, para sempre (não só
+                                        // nos primeiros segundos) — o MutationObserver nem
+                                        // sempre reage a tempo quando um rerun substitui o
+                                        // innerHTML de um bloco inteiro (ex.: trocar de andar
+                                        // no tanque redondo, Passo 2/3).
+                                        setInterval(function(){ bindCells(targetDoc); }, 500);
+                                    })();
+                                `);
                             }
 
                         } catch (e) {}
@@ -1256,86 +1278,95 @@ def run_map_page(ctx: dict):
 
                 pr, pg, pb = hex_to_rgb(primary)
 
-                def build_heatmap_html(stock_df, primary_r, primary_g, primary_b):
-                    """Gera o HTML de uma grelha Canisters × Andares para o stock de um contentor."""
+                def build_tank_circle_html(stock_df, andar_sel, primary_r, primary_g, primary_b):
+                    """Gera o HTML do 'tanque redondo' — os canisters dispostos
+                    em anel, mostrando o conteúdo do andar seleccionado.
+                    Substitui a grelha Canisters × Andares (Passo 2/3 do
+                    redesign dos contentores) — mesma leitura/agrupamento de
+                    dados de sempre, só muda o desenho.
+
+                    Reaproveita a classe `hm-cell` (e os atributos data-cont/
+                    data-c/data-a) da grelha anterior: o bridge de clique já
+                    existente (streamlit_js_eval, ligado via MutationObserver)
+                    continua a realçar e a fazer scroll até à linha do lote
+                    correspondente, sem qualquer alteração de JavaScript.
+                    """
                     if stock_df.empty:
                         return ""
-                    # Contagem por célula (canister, andar)
-                    cell_map = {}
+
+                    # Mesmo agrupamento (canister, andar) → qty de sempre, mas
+                    # guardando também os garanhões para mostrar dentro do slot.
+                    cell_qty = {}
+                    cell_garanhoes = {}
                     for _, r in stock_df.iterrows():
                         c, a = int(r['canister'] or 0), int(r['andar'] or 0)
-                        if c and a:
-                            cell_map[(c, a)] = cell_map.get((c, a), 0) + int(r['existencia_atual'] or 0)
+                        if not c or not a:
+                            continue
+                        cell_qty[(c, a)] = cell_qty.get((c, a), 0) + int(r['existencia_atual'] or 0)
+                        cell_garanhoes.setdefault((c, a), []).append(str(r['garanhao'] or '—'))
 
-                    if not cell_map:
+                    if not cell_qty:
                         return ""
 
-                    canisters = sorted(set(k[0] for k in cell_map))
-                    andares   = sorted(set(k[1] for k in cell_map), reverse=True)  # top → bottom
-                    max_pal   = max(cell_map.values()) or 1
+                    # Canisters conhecidos do contentor — união dos dois
+                    # andares, para o círculo manter sempre a mesma forma ao
+                    # trocar de andar (só o conteúdo de cada slot muda).
+                    canisters = sorted(set(k[0] for k in cell_qty))
+                    n = len(canisters)
+                    diametro = 272
+                    centro = diametro / 2
+                    raio = 100
 
-                    def cell_style(qty):
-                        if qty == 0:
-                            return "background:#f1f5f9;color:#cbd5e1;"
-                        ratio = qty / max_pal
-                        alpha = 0.18 + ratio * 0.78  # 0.18..0.96
-                        bg = f"rgba({primary_r},{primary_g},{primary_b},{alpha:.2f})"
-                        fg = "#fff" if alpha > 0.55 else f"rgb({primary_r},{primary_g},{primary_b})"
-                        return f"background:{bg};color:{fg};font-weight:700;"
+                    slots_html = ""
+                    for i, c in enumerate(canisters):
+                        angulo = math.radians(i * (360 / n) - 90)
+                        x = centro + raio * math.cos(angulo)
+                        y = centro + raio * math.sin(angulo)
+                        qty = cell_qty.get((c, andar_sel), 0)
+                        garanhoes = cell_garanhoes.get((c, andar_sel), [])
 
-                    # Header com nomes das colunas (canisters)
-                    th_cells = "".join(
-                        f"<th style='text-align:center;font-size:.68rem;font-weight:700;"
-                        f"color:#64748b;padding:4px 2px;white-space:nowrap;'>C{c}</th>"
-                        for c in canisters
-                    )
-                    rows_html = ""
-                    for a in andares:
-                        tds = ""
-                        for c in canisters:
-                            qty = cell_map.get((c, a), 0)
-                            sty = cell_style(qty)
-                            label = str(qty) if qty > 0 else "·"
-                            tds += (
-                                f"<td class='hm-cell' "
-                                f"data-cont='{cont_id}' data-c='{c}' data-a='{a}' "
-                                f"title='C{c} / A{a}: {qty} palhetas' "
-                                f"style='{sty}text-align:center;border-radius:6px;"
-                                f"font-size:.72rem;padding:5px 4px;min-width:32px;'>{label}</td>"
+                        if qty > 0:
+                            label = escape(garanhoes[0]) if len(garanhoes) == 1 else f"{len(garanhoes)} lotes"
+                            bg = f"rgba({primary_r},{primary_g},{primary_b},.16)"
+                            border_cor = f"rgba({primary_r},{primary_g},{primary_b},.55)"
+                            conteudo = (
+                                f"<span class='tank-qty' style='color:rgb({primary_r},{primary_g},{primary_b});'>{qty}</span>"
+                                f"<span class='tank-gar'>{label}</span>"
                             )
-                        rows_html += (
-                            f"<tr><td style='font-size:.65rem;font-weight:700;color:#94a3b8;"
-                            f"padding-right:6px;white-space:nowrap;'>A{a}</td>{tds}</tr>"
+                            classe = "filled"
+                        else:
+                            bg = "#f1f5f9"
+                            border_cor = "#e2e8f0"
+                            conteudo = "<span class='tank-dot'></span>"
+                            classe = "empty"
+
+                        slots_html += (
+                            f"<div class='hm-cell tank-slot {classe}' "
+                            f"data-cont='{cont_id}' data-c='{c}' data-a='{andar_sel}' "
+                            f"title='C{c} / A{andar_sel}: {qty} palhetas' "
+                            f"style='left:{x:.1f}px;top:{y:.1f}px;background:{bg};border-color:{border_cor};'>"
+                            f"<span class='tank-cnum'>C{c}</span>{conteudo}"
+                            f"</div>"
                         )
 
-                    legend_items = ""
-                    for pct, lbl in [(0, "Vazio"), (0.25, "Baixo"), (0.55, "Médio"), (0.85, "Alto")]:
-                        a = 0.18 + pct * 0.78
-                        bg = f"rgba({primary_r},{primary_g},{primary_b},{a:.2f})" if pct > 0 else "#f1f5f9"
-                        legend_items += (
-                            f"<span style='display:inline-flex;align-items:center;gap:4px;"
-                            f"font-size:.65rem;color:#64748b;margin-right:10px;'>"
-                            f"<span style='display:inline-block;width:12px;height:12px;"
-                            f"border-radius:3px;background:{bg};border:1px solid #e2e8f0;'></span>{lbl}</span>"
-                        )
+                    n_lotes_andar = int((stock_df['andar'] == andar_sel).sum())
 
                     return f"""
-                    <div class="hm-grid-wrap" style="margin:12px 0 6px;">
-                      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;
-                                   letter-spacing:.8px;color:#94a3b8;margin-bottom:6px;">
-                        Mapa de Ocupação — <span style="font-weight:400;text-transform:none;font-size:.66rem;">clique numa célula para ver os lotes</span>
+                    <div class="tank-wrap">
+                      <div class="tank" style="width:{diametro}px;height:{diametro}px;">
+                        <div class="tank-center">
+                          <div class="tank-center-n">{n_lotes_andar}</div>
+                          <div class="tank-center-lbl">{'lote' if n_lotes_andar == 1 else 'lotes'}</div>
+                        </div>
+                        {slots_html}
                       </div>
-                      <div style="overflow-x:auto;">
-                        <table style="border-collapse:separate;border-spacing:3px;width:100%;">
-                          <thead>
-                            <tr>
-                              <th style="min-width:28px;"></th>{th_cells}
-                            </tr>
-                          </thead>
-                          <tbody>{rows_html}</tbody>
-                        </table>
-                      </div>
-                      <div style="margin-top:6px;display:flex;flex-wrap:wrap;">{legend_items}</div>
+                    </div>
+                    <div style="text-align:center;font-size:.68rem;color:#94a3b8;margin:4px 0 8px;">
+                      Clique num canister para ver o(s) lote(s) na lista abaixo
+                    </div>
+                    <div class="tank-legend">
+                      <span><i class="f"></i> Com sémen</span>
+                      <span><i class="e"></i> Vazio neste andar</span>
                     </div>
                     """
                 st.markdown(f"""
@@ -1403,6 +1434,91 @@ def run_map_page(ctx: dict):
                     .lote-row.hl {{ border:2px solid rgb({pr},{pg},{pb}) !important;
                         background:rgba({pr},{pg},{pb},.07) !important;
                         box-shadow:0 2px 8px rgba({pr},{pg},{pb},.15); }}
+
+                    /* Tanque redondo (Passo 2/3) — os slots herdam .hm-cell
+                       (cursor, transition, pointer-events, bridge de clique)
+                       e ficam aqui só as regras que a mudam de grelha→anel:
+                       posicionamento absoluto e o hover/selected com
+                       translate(-50%,-50%) para não perder a centragem.
+                       Como estas regras vêm DEPOIS de .hm-cell no mesmo
+                       <style>, ganham em empate de especificidade. */
+                    .tank-wrap {{ display:flex; justify-content:center; padding:8px 0 2px; }}
+                    .tank {{
+                        position:relative; margin:0 auto; border-radius:50%;
+                        border:2px solid #e2e8f0;
+                        background:radial-gradient(circle at 50% 50%, #f8fafc 0%, #f8fafc 62%, transparent 63%);
+                    }}
+                    .tank-center {{
+                        position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+                        text-align:center; pointer-events:none;
+                    }}
+                    .tank-center-n {{ font-size:1.2rem; font-weight:800; color:#0f172a; }}
+                    .tank-center-lbl {{
+                        font-size:.6rem; font-weight:700; text-transform:uppercase;
+                        letter-spacing:.6px; color:#94a3b8;
+                    }}
+                    .tank-slot {{
+                        position:absolute !important;
+                        transform:translate(-50%,-50%);
+                        width:64px; height:64px; border-radius:50%;
+                        border:2px solid #e2e8f0;
+                        display:flex; flex-direction:column; align-items:center; justify-content:center;
+                        text-align:center; line-height:1.1; font-size:.6rem; padding:3px;
+                        background:#f1f5f9; color:#cbd5e1;
+                    }}
+                    .tank-slot:hover {{
+                        transform:translate(-50%,-50%) scale(1.1);
+                        box-shadow:0 3px 10px rgba(0,0,0,.18); z-index:3;
+                    }}
+                    .tank-slot.selected {{
+                        outline:2.5px solid rgb({pr},{pg},{pb});
+                        box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.22);
+                        transform:translate(-50%,-50%) scale(1.08); z-index:4;
+                    }}
+                    .tank-cnum {{
+                        position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+                        background:#0f172a; color:#fff; font-size:.58rem; font-weight:700;
+                        border-radius:8px; padding:1px 5px; white-space:nowrap;
+                    }}
+                    .tank-qty {{ font-weight:800; font-size:.8rem; }}
+                    .tank-gar {{
+                        font-weight:700; font-size:.6rem; white-space:nowrap;
+                        overflow:hidden; text-overflow:ellipsis; max-width:52px;
+                    }}
+                    .tank-dot {{ width:6px; height:6px; border-radius:50%; background:#cbd5e1; }}
+                    .tank-legend {{ margin-top:2px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }}
+                    .tank-legend span {{ display:inline-flex; align-items:center; gap:5px; font-size:.65rem; color:#64748b; }}
+                    .tank-legend i {{ width:11px; height:11px; border-radius:50%; display:inline-block; border:1.5px solid #e2e8f0; }}
+                    .tank-legend i.f {{ background:rgba({pr},{pg},{pb},.16); border-color:rgba({pr},{pg},{pb},.55); }}
+                    .tank-legend i.e {{ background:#f1f5f9; }}
+                    @media(max-width:480px) {{
+                        .tank {{ width:220px !important; height:220px !important; }}
+                        .tank-slot {{ width:54px; height:54px; }}
+                    }}
+
+                    /* Seletor de andar — pill-tabs (mesmo padrão do
+                       separador Stock de sémen: esconde o círculo do rádio
+                       nativo, sublinha/realça a opção activa). */
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] {{
+                        display:inline-flex; background:#f8fafc; border:1px solid #e2e8f0;
+                        border-radius:10px; padding:3px; gap:2px;
+                    }}
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] > label {{
+                        margin:0 !important; padding:5px 12px !important; border-radius:8px !important;
+                        cursor:pointer;
+                    }}
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] > label > div:first-child {{
+                        display:none !important;
+                    }}
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] > label p {{
+                        font-size:.8rem !important; font-weight:600 !important; color:#64748b !important; margin:0 !important;
+                    }}
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] > label:has(input:checked) {{
+                        background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08);
+                    }}
+                    div[class*="st-key-andar-toggle-"] [role="radiogroup"] > label:has(input:checked) p {{
+                        color:#0f172a !important;
+                    }}
                 </style>
                 """, unsafe_allow_html=True)
 
@@ -1432,15 +1548,53 @@ def run_map_page(ctx: dict):
                     if stock_contentor.empty:
                         st.caption("Nenhum lote neste contentor.")
                     else:
-                        # ── Heatmap Canisters × Andares ──────────────────────────────
-                        heatmap_html = build_heatmap_html(stock_contentor, pr, pg, pb)
-                        if heatmap_html:
-                            st.markdown(heatmap_html, unsafe_allow_html=True)
+                        # ── Seletor de andar + Inverter andares (Passo 2/3) ──────────
+                        andar_key = f"andar_sel_{cont_id}"
+                        col_andar, col_inverter = st.columns([2, 1], vertical_alignment="center")
+                        with col_andar:
+                            with st.container(key=f"andar-toggle-{cont_id}"):
+                                andar_sel = st.radio(
+                                    "Andar", [1, 2], format_func=lambda x: f"Andar {x}",
+                                    key=andar_key, horizontal=True, label_visibility="collapsed",
+                                )
+                        with col_inverter:
+                            if st.button("Inverter andares", key=f"inverter_andares_{cont_id}",
+                                         help="Troca os lotes do 1º andar para o 2º e vice-versa"):
+                                st.session_state[f'confirmar_inverter_{cont_id}'] = True
+                                st.rerun()
+
+                        if st.session_state.get(f'confirmar_inverter_{cont_id}', False):
+                            st.warning(
+                                f"Inverter os andares do contentor {cod}? Todos os lotes do "
+                                "1º andar passam ao 2º e vice-versa. As localizações dos "
+                                "lotes serão atualizadas."
+                            )
+                            col_conf1, col_conf2 = st.columns([1, 1])
+                            with col_conf1:
+                                if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id}",
+                                             type="primary", width="stretch"):
+                                    resultado = inverter_andares(cont_id)
+                                    st.session_state[f'confirmar_inverter_{cont_id}'] = False
+                                    if resultado is not False:
+                                        st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao inverter andares. Ver logs.")
+                            with col_conf2:
+                                if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id}", width="stretch"):
+                                    st.session_state[f'confirmar_inverter_{cont_id}'] = False
+                                    st.rerun()
+
+                        # ── Tanque redondo — canisters dispostos em anel ─────────────
+                        circle_html = build_tank_circle_html(stock_contentor, andar_sel, pr, pg, pb)
+                        if circle_html:
+                            st.markdown(circle_html, unsafe_allow_html=True)
                             st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
 
                         # ── Detalhes por canister ─────────────────────────────────────
                         for canister in sorted(stock_contentor['canister'].dropna().unique()):
                             sc = stock_contentor[stock_contentor['canister'] == canister]
+                            sc_andar = sc[sc['andar'] == andar_sel]
                             can_int = int(canister)
                             st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
 
@@ -1480,8 +1634,12 @@ def run_map_page(ctx: dict):
                                                 else:
                                                     st.warning("Nenhum lote encontrado nesse andar.")
 
-                            # ── Lista individual de lotes ──
-                            for _, lote in sc.iterrows():
+                            # ── Lista individual de lotes (filtrada pelo andar
+                            # seleccionado no seletor acima — coerente com o
+                            # que o tanque redondo está a mostrar) ──
+                            if sc_andar.empty:
+                                st.caption(f"Sem lotes neste andar (Canister {can_int}).")
+                            for _, lote in sc_andar.iterrows():
                                 eid = int(lote['id'])
                                 andar_atual = int(lote['andar'] or 0)
                                 can_atual = int(lote['canister'] or 0)
@@ -1535,15 +1693,10 @@ def run_map_page(ctx: dict):
 
                     st.markdown("</div></div>", unsafe_allow_html=True)
 
-                    # Acções do contentor (editar código/descrição, apagar)
+                    # Acções do contentor (editar código/descrição, apagar) —
+                    # "Inverter andares" mudou-se para a vista redonda, junto
+                    # ao seletor de andar (Passo 2/3).
                     col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
-                    with col_e1:
-                        tem_stock = not stock_contentor.empty
-                        if st.button("Inverter andares", key=f"inverter_andares_{cont_id}",
-                                     disabled=not tem_stock,
-                                     help="Troca os lotes do 1º andar para o 2º e vice-versa"):
-                            st.session_state[f'confirmar_inverter_{cont_id}'] = True
-                            st.rerun()
                     with col_e2:
                         pode_apagar = total_palhetas == 0
                         if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
@@ -1557,29 +1710,6 @@ def run_map_page(ctx: dict):
                         if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
                             st.session_state[f'modal_editar_{cont_id}'] = True
                             st.rerun()
-
-                    # Confirmação de inversão de andares
-                    if st.session_state.get(f'confirmar_inverter_{cont_id}', False):
-                        st.warning(
-                            f"Inverter os andares do contentor {cod}? Todos os lotes do "
-                            "1º andar passam ao 2º e vice-versa. As localizações dos "
-                            "lotes serão atualizadas."
-                        )
-                        col_conf1, col_conf2 = st.columns([1, 1])
-                        with col_conf1:
-                            if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id}",
-                                         type="primary", width="stretch"):
-                                resultado = inverter_andares(cont_id)
-                                st.session_state[f'confirmar_inverter_{cont_id}'] = False
-                                if resultado is not False:
-                                    st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
-                                    st.rerun()
-                                else:
-                                    st.error("Erro ao inverter andares. Ver logs.")
-                        with col_conf2:
-                            if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id}", width="stretch"):
-                                st.session_state[f'confirmar_inverter_{cont_id}'] = False
-                                st.rerun()
 
                     # Modal edição de código/descrição
                     if st.session_state.get(f'modal_editar_{cont_id}', False):
