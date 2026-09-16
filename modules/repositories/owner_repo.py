@@ -1,22 +1,12 @@
 """Repository de Proprietários (donos) — extração pura de `app.py` (Pedido 9).
 
 6 funções copiadas bit-for-bit. Zero alteração de lógica.
-
-Anomalia registada (para relatório final, NÃO corrigida):
-- `alternar_status_proprietario` NÃO usa `get_connection()` — abre conexão
-  psycopg2 directa com env vars e autocommit=True. Comportamento
-  intencional documentado no código original (força commit imediato).
-  Ficaria mais coerente migrar para `get_connection()` num refactor
-  posterior de "design"; aqui só copiamos.
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import traceback
 
-import psycopg2
 import streamlit as st
 
 from modules.db import get_connection, invalidate_data_cache, to_py
@@ -61,100 +51,37 @@ def atualizar_status_proprietarios():
 
 
 def alternar_status_proprietario(proprietario_id):
-    """Alterna o status ativo/inativo de um proprietário"""
-    conn = None
-    cur = None
+    """Alterna o status ativo/inativo de um proprietário. Devolve o novo
+    valor de `ativo`, ou None se o proprietário não existir ou em caso
+    de erro."""
     try:
-        # Pegar credenciais
-        db_name = os.getenv("DB_NAME", "embriovet")
-        db_user = os.getenv("DB_USER", "postgres")
-        db_pass = os.getenv("DB_PASSWORD", "123")
-        db_host = os.getenv("DB_HOST", "localhost")
-        db_port = os.getenv("DB_PORT", "5432")
-        
-        logger.info(f"🔌 Conectando com AUTOCOMMIT em: {db_user}@{db_host}:{db_port}/{db_name}")
-        logger.info(f"🆔 Proprietário ID recebido: {proprietario_id} (tipo: {type(proprietario_id)})")
-        
-        # Converter ID para int
         prop_id_int = int(proprietario_id)
-        logger.info(f"🆔 Proprietário ID convertido: {prop_id_int} (tipo: {type(prop_id_int)})")
-        
-        # CRIAR CONEXÃO COM AUTOCOMMIT = TRUE
-        conn = psycopg2.connect(
-            dbname=db_name,
-            user=db_user,
-            password=db_pass,
-            host=db_host,
-            port=db_port
-        )
-        
-        # FORÇAR AUTOCOMMIT - COMMIT IMEDIATO APÓS CADA COMANDO
-        conn.set_session(autocommit=True)
-        cur = conn.cursor()
-        
-        logger.info(f"✅ AUTOCOMMIT ativado")
-        
-        # Verificar o valor atual
-        sql_select = "SELECT ativo FROM dono WHERE id = %s"
-        logger.info(f"📋 SQL SELECT: {sql_select} com id={prop_id_int}")
-        cur.execute(sql_select, (prop_id_int,))
-        status_antes = cur.fetchone()
-        logger.info(f"📋 Status ANTES: {status_antes}")
-        
-        if not status_antes:
-            logger.error(f"❌ Proprietário com ID {prop_id_int} não encontrado!")
-            cur.close()
-            conn.close()
-            return None
-        
-        # Calcular novo valor
-        novo_valor = not status_antes[0]
-        logger.info(f"🔄 Novo valor calculado: {novo_valor} (tipo: {type(novo_valor)})")
-        
-        # UPDATE direto (SEM to_py)
-        sql_update = "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo"
-        logger.info(f"📝 SQL UPDATE: {sql_update}")
-        logger.info(f"📝 Parâmetros: ativo={novo_valor}, id={prop_id_int}")
-        
-        cur.execute(sql_update, (novo_valor, prop_id_int))
-        
-        resultado = cur.fetchone()
-        logger.info(f"📝 Resultado do UPDATE (AUTO-COMMITADO): {resultado}")
-        
-        if resultado:
-            novo_status = resultado[0]
-            logger.info(f"✅ UPDATE executado com sucesso. Novo status: {novo_status}")
-            
-            # Verificar com SELECT
+        with get_connection() as conn:
+            cur = conn.cursor()
             cur.execute("SELECT ativo FROM dono WHERE id = %s", (prop_id_int,))
-            status_verificacao = cur.fetchone()
-            logger.info(f"🔍 Verificação final: {status_verificacao}")
-            
-            # Verificar FORA da conexão Python
-            logger.info(f"⚠️ Execute no terminal: psql -U postgres -d embriovet -c \"SELECT id, nome, ativo FROM dono WHERE id={prop_id_int};\"")
-            
-            cur.close()
-            conn.close()
-            logger.info(f"🔒 Conexão fechada")
-            invalidate_data_cache()
-            
-            return novo_status
-        else:
-            if cur:
+            status_antes = cur.fetchone()
+            if not status_antes:
                 cur.close()
-            if conn:
-                conn.close()
-            logger.error(f"❌ UPDATE não retornou resultado")
+                logger.error(f"Proprietário com ID {prop_id_int} não encontrado")
+                return None
+
+            novo_valor = not status_antes[0]
+            cur.execute(
+                "UPDATE dono SET ativo = %s WHERE id = %s RETURNING ativo",
+                (novo_valor, prop_id_int),
+            )
+            resultado = cur.fetchone()
+            conn.commit()
+            cur.close()
+
+        if not resultado:
+            logger.error(f"UPDATE não retornou resultado para proprietário {prop_id_int}")
             return None
-            
+
+        invalidate_data_cache()
+        return resultado[0]
     except Exception as e:
-        logger.error(f"💥 ERRO: {e}")
-        logger.error(traceback.format_exc())
-        if conn:
-            try:
-                conn.close()
-            except:
-                pass
+        logger.error(f"Erro ao alternar status do proprietário {proprietario_id}: {e}")
         st.error(f"Erro: {e}")
         return None
 
