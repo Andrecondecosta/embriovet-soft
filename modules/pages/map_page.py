@@ -235,9 +235,24 @@ def run_map_page(ctx: dict):
                                             } catch (e) {}
                                         }
 
+                                        // Passo 3: clicar no resumo do canister (dentro do
+                                        // modal) expande/recolhe o detalhe de cada lote —
+                                        // também sem round-trip ao Python, mesmo espírito
+                                        // do handleHmCellClick.
+                                        function handleResumoClick(ev) {
+                                            var el = ev.currentTarget;
+                                            var c = el.getAttribute('data-canister-resumo');
+                                            var scope = el.closest('[data-testid="stDialog"]') || targetDoc;
+                                            var detalhe = scope.querySelector('.tank-info-detalhe[data-canister-detalhe="' + c + '"]');
+                                            if (detalhe) {
+                                                detalhe.style.display = (detalhe.style.display === 'block') ? 'none' : 'block';
+                                            }
+                                        }
+
                                         function bindCells(root) {
                                             try {
-                                                var cells = (root || targetDoc).querySelectorAll('.hm-cell');
+                                                var scope = root || targetDoc;
+                                                var cells = scope.querySelectorAll('.hm-cell');
                                                 cells.forEach(function(cell){
                                                     if (cell.__hmBound) return;
                                                     cell.__hmBound = true;
@@ -250,8 +265,32 @@ def run_map_page(ctx: dict):
                                                         }, {passive: false});
                                                     } catch (e) {}
                                                 });
+                                                var resumos = scope.querySelectorAll('.tank-info-resumo');
+                                                resumos.forEach(function(el){
+                                                    if (el.__hmBound) return;
+                                                    el.__hmBound = true;
+                                                    try { el.addEventListener('click', handleResumoClick, false); } catch (e) {}
+                                                });
                                             } catch (e) {}
                                         }
+
+                                        // Passo 3: clicar numa caixa do mapa livre (fora
+                                        // deste modal, no components.html do topo da
+                                        // página) faz scroll + realce até ao cartão do
+                                        // contentor em "Inventário por Contentor" — em vez
+                                        // de abrir o modal directamente (testado à parte:
+                                        // uma Promise assíncrona à espera do clique, através
+                                        // da fronteira do iframe, mostrou-se pouco fiável).
+                                        window.addEventListener('message', function(event){
+                                            var data = event && event.data ? event.data : null;
+                                            if (!data || data.type !== 'CONTENTOR_MOSTRAR_CARTAO') return;
+                                            var card = targetDoc.querySelector('.cont-card[data-cont-id="' + data.contId + '"]');
+                                            if (card) {
+                                                card.classList.add('cont-card-highlight');
+                                                card.scrollIntoView({behavior: 'smooth', block: 'center'});
+                                                window.setTimeout(function(){ card.classList.remove('cont-card-highlight'); }, 1800);
+                                            }
+                                        });
 
                                         bindCells(targetDoc);
                                         var obs = new MutationObserver(function(mutations){
@@ -1112,7 +1151,16 @@ def run_map_page(ctx: dict):
                             box.addEventListener('mousedown', startDrag);
                             box.addEventListener('touchstart', startDrag, {passive: false});
                         } else {
-                            box.addEventListener('click', () => mostrarInventario(c));
+                            // Passo 3: clicar no contentor faz scroll + realce
+                            // até ao cartão dele em "Inventário por Contentor"
+                            // (onde vive o botão "Ver interior") — em vez de
+                            // abrir o modal directamente daqui. Quem trata
+                            // esta mensagem 'CONTENTOR_MOSTRAR_CARTAO' vive no
+                            // bridge principal, fora deste iframe.
+                            box.addEventListener('click', () => {
+                                const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                                targetWin.postMessage({ type: 'CONTENTOR_MOSTRAR_CARTAO', contId: c.id }, '*');
+                            });
                         }
 
                         mapaArea.appendChild(box);
@@ -1391,10 +1439,13 @@ def run_map_page(ctx: dict):
                     return html, canisters
 
                 def build_canister_info_html(stock_df, andar_sel, canisters):
-                    """Um bloco de info por canister (Passo 3) — escondido por
-                    defeito; o clique no slot correspondente do tanque redondo
-                    troca a visibilidade via JS (ver handleHmCellClick), sem
-                    round-trip ao Python. Só leitura — sem botões de mover,
+                    """Dois blocos de info por canister (Passo 3) — escondidos
+                    por defeito. O clique no slot correspondente do tanque
+                    redondo mostra o RESUMO (ver handleHmCellClick); clicar no
+                    resumo expande o DETALHE — cada lote individual com as
+                    medidas (colheita, qualidade, motilidade, concentração).
+                    Ambos os níveis são client-side, sem round-trip ao Python
+                    (ver handleResumoClick). Só leitura — sem botões de mover,
                     como pedido (as ações continuam na página, fora do modal).
                     Reaproveita os estilos `.lote-row*` já existentes.
                     """
@@ -1404,7 +1455,8 @@ def run_map_page(ctx: dict):
                         if lotes.empty:
                             corpo = "<p class='tank-info-empty'>Vazio neste andar.</p>"
                         else:
-                            corpo = ""
+                            resumo_rows = ""
+                            detalhe_rows = ""
                             for _, lote in lotes.iterrows():
                                 gar = escape(str(lote['garanhao'] or '—'))
                                 prop = escape(str(lote['proprietario_nome'] or '—'))
@@ -1413,7 +1465,7 @@ def run_map_page(ctx: dict):
                                     lote['origem_externa'] or lote['data_embriovet']
                                     or f"Lote #{int(lote['id'])}"
                                 ).split(' ')[0])
-                                corpo += (
+                                resumo_rows += (
                                     "<div class='lote-row'>"
                                     "<div class='lote-row-left'>"
                                     f"<span class='lote-garanhao'>{gar}</span>"
@@ -1421,6 +1473,31 @@ def run_map_page(ctx: dict):
                                     "</div>"
                                     "</div>"
                                 )
+                                colheita = escape(str(lote['data_embriovet'] or '—'))
+                                qualidade = escape(str(lote['qualidade'] or '—'))
+                                motilidade = int(lote['motilidade'] or 0)
+                                concentracao = int(lote['concentracao'] or 0)
+                                detalhe_rows += (
+                                    "<div class='lote-row lote-row-detalhe'>"
+                                    "<div class='lote-row-left'>"
+                                    f"<span class='lote-garanhao'>{gar}</span>"
+                                    f"<span class='lote-meta'>{prop} · {qty} palhetas</span>"
+                                    "<span class='lote-medidas'>"
+                                    f"Colheita: {colheita} · Qualidade: {qualidade} · "
+                                    f"Motilidade: {motilidade}% · Concentração: {concentracao}M/ml"
+                                    "</span>"
+                                    "</div>"
+                                    "</div>"
+                                )
+                            corpo = (
+                                f"<div class='tank-info-resumo' data-canister-resumo='{c}'>"
+                                f"{resumo_rows}"
+                                "<span class='tank-info-expand-hint'>Clique para ver o detalhe de cada lote</span>"
+                                "</div>"
+                                f"<div class='tank-info-detalhe' data-canister-detalhe='{c}' style='display:none;'>"
+                                f"{detalhe_rows}"
+                                "</div>"
+                            )
                         blocks += (
                             f"<div class='tank-info-block' data-canister-info='{c}' style='display:none;'>"
                             f"<div class='tank-info-title'>Canister {c}</div>{corpo}"
@@ -1641,6 +1718,28 @@ def run_map_page(ctx: dict):
                         letter-spacing:1px; color:#94a3b8; margin-bottom:8px;
                     }}
                     .tank-info-empty {{ font-size:.82rem; color:#94a3b8; margin:0; }}
+                    .tank-info-resumo {{
+                        cursor:pointer; border-radius:8px; padding:2px;
+                        transition:background .15s;
+                    }}
+                    .tank-info-resumo:hover {{ background:#f8fafc; }}
+                    .tank-info-expand-hint {{
+                        display:block; font-size:.68rem; color:#94a3b8; margin:4px 2px 0;
+                    }}
+                    .tank-info-detalhe {{
+                        margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0;
+                    }}
+                    .lote-row-detalhe {{ flex-direction:column; align-items:flex-start; }}
+                    .lote-row-detalhe .lote-row-left {{ width:100%; }}
+                    .lote-medidas {{ color:#94a3b8; font-size:.7rem; margin-top:2px; }}
+
+                    /* Realce temporário do cartão do contentor ao clicar na
+                       caixa correspondente no mapa livre (Passo 3). */
+                    .cont-card-highlight {{ animation:cont-card-pulse 1.8s ease-out; }}
+                    @keyframes cont-card-pulse {{
+                        0% {{ box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.35); }}
+                        100% {{ box-shadow:0 2px 8px rgba(0,0,0,.05); }}
+                    }}
 
                     /* Seletor de andar — pill-tabs (mesmo padrão do
                        separador Stock de sémen: esconde o círculo do rádio
@@ -1680,7 +1779,7 @@ def run_map_page(ctx: dict):
 
                     # Card header
                     st.markdown(f"""
-                    <div class="cont-card">
+                    <div class="cont-card" data-cont-id="{cont_id}">
                       <div class="cont-card-header">
                         <div>
                           <div class="cont-card-code">{cod}</div>
