@@ -10,12 +10,10 @@ import streamlit as st
 from modules.i18n import t
 from modules.repositories.container_repo import (
     adicionar_contentor,
-    atualizar_andar_lote,
     atualizar_posicao_contentor,
     deletar_contentor,
     editar_contentor,
     inverter_andares,
-    mover_lotes_por_andar,
 )
 from modules.repositories.settings_repo import get_app_settings
 from modules.repositories.stock_repo import (
@@ -39,6 +37,26 @@ def run_map_page(ctx: dict):
 
         # Cabeçalho da página
         primary_color = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
+
+        # RGB da cor primária — usado em rgba() (ex.: sombras do mapa e do
+        # tanque redondo). Resistente a cor vazia/inválida (ex.:
+        # `primary_color` por preencher numa instalação local nova) — cai
+        # para a cor primária por defeito do projeto em vez de rebentar.
+        _default_hex = DEFAULT_PRIMARY_COLOR.lstrip('#')
+
+        def hex_to_rgb(h):
+            h = (h or "").lstrip('#').strip()
+            if len(h) == 3:
+                h = ''.join(c * 2 for c in h)
+            if len(h) != 6:
+                h = _default_hex
+            try:
+                return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+            except ValueError:
+                return tuple(int(_default_hex[i:i+2], 16) for i in (0, 2, 4))
+
+        pr, pg, pb = hex_to_rgb(primary_color)
+
         st.markdown(
             f"""
             <style>
@@ -277,10 +295,10 @@ def run_map_page(ctx: dict):
                                         // Passo 3: clicar numa caixa do mapa livre (fora
                                         // deste modal, no components.html do topo da
                                         // página) faz scroll + realce até ao cartão do
-                                        // contentor em "Inventário por Contentor" — em vez
-                                        // de abrir o modal directamente (testado à parte:
-                                        // uma Promise assíncrona à espera do clique, através
-                                        // da fronteira do iframe, mostrou-se pouco fiável).
+                                        // contentor — em vez de abrir o modal
+                                        // directamente (testado à parte: uma Promise
+                                        // assíncrona à espera do clique, através da
+                                        // fronteira do iframe, mostrou-se pouco fiável).
                                         window.addEventListener('message', function(event){
                                             var data = event && event.data ? event.data : null;
                                             if (!data || data.type !== 'CONTENTOR_MOSTRAR_CARTAO') return;
@@ -790,6 +808,7 @@ def run_map_page(ctx: dict):
                     :root {
                         --primary: """ + primary_color + """;
                         --primary-dark: """ + primary_color + """;
+                        --primary-rgb: """ + f"{pr},{pg},{pb}" + """;
                         --bg-main: #ffffff;
                         --bg-canvas: #f8fafc;
                         --border: #e2e8f0;
@@ -861,7 +880,7 @@ def run_map_page(ctx: dict):
 
                     .cont-box:hover {
                         transform: translateY(-4px) scale(1.02);
-                        box-shadow: 0 12px 24px -4px rgba(59, 130, 246, 0.3);
+                        box-shadow: 0 12px 24px -4px rgba(var(--primary-rgb), 0.3);
                         border-color: var(--primary-dark);
                         z-index: 100;
                     }
@@ -901,152 +920,6 @@ def run_map_page(ctx: dict):
                         font-weight: 500;
                     }
 
-                    /* Modal Overlay */
-                    #inv-overlay {
-                        position: fixed;
-                        inset: 0;
-                        background: rgba(0, 0, 0, 0.6);
-                        backdrop-filter: blur(4px);
-                        display: none;
-                        z-index: 2000;
-                        animation: fadeIn 0.2s ease;
-                    }
-
-                    #inv-overlay.visible {
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 20px;
-                    }
-
-                    /* Modal Panel Premium */
-                    #inv-panel {
-                        background: var(--bg-main);
-                        border-radius: 16px;
-                        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-                        width: 100%;
-                        max-width: 600px;
-                        max-height: 85vh;
-                        overflow: hidden;
-                        display: flex;
-                        flex-direction: column;
-                        animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    }
-
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-
-                    @keyframes slideUp {
-                        from {
-                            opacity: 0;
-                            transform: translateY(20px) scale(0.95);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: translateY(0) scale(1);
-                        }
-                    }
-
-                    /* Modal Header */
-                    .inv-header {
-                        padding: 20px 24px;
-                        border-bottom: 1px solid var(--border);
-                        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-                        color: white;
-                    }
-
-                    .inv-header h2 {
-                        font-size: 1.5rem;
-                        font-weight: 700;
-                        margin-bottom: 4px;
-                    }
-
-                    .inv-header p {
-                        font-size: 0.875rem;
-                        opacity: 0.9;
-                    }
-
-                    /* Modal Body */
-                    .inv-body {
-                        padding: 24px;
-                        overflow-y: auto;
-                        flex: 1;
-                    }
-
-                    .inv-section {
-                        margin-bottom: 24px;
-                    }
-
-                    .inv-section-title {
-                        font-size: 0.75rem;
-                        font-weight: 700;
-                        text-transform: uppercase;
-                        letter-spacing: 1px;
-                        color: var(--text-muted);
-                        margin-bottom: 12px;
-                    }
-
-                    .inv-lote {
-                        background: var(--bg-canvas);
-                        border: 1px solid var(--border);
-                        border-radius: 10px;
-                        padding: 12px 16px;
-                        margin-bottom: 8px;
-                        transition: all 0.2s ease;
-                    }
-
-                    .inv-lote:hover {
-                        border-color: var(--primary);
-                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-                        transform: translateX(4px);
-                    }
-
-                    .inv-lote-row {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        gap: 12px;
-                        font-size: 0.875rem;
-                    }
-
-                    .inv-lote-label {
-                        color: var(--text-muted);
-                        font-weight: 500;
-                    }
-
-                    .inv-lote-value {
-                        color: var(--text);
-                        font-weight: 600;
-                    }
-
-                    /* Modal Footer */
-                    .inv-footer {
-                        padding: 16px 24px;
-                        border-top: 1px solid var(--border);
-                        background: var(--bg-canvas);
-                    }
-
-                    .btn-close {
-                        width: 100%;
-                        padding: 12px 24px;
-                        background: var(--primary);
-                        color: white;
-                        border: none;
-                        border-radius: 10px;
-                        font-size: 0.95rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                    }
-
-                    .btn-close:hover {
-                        background: var(--primary-dark);
-                        transform: translateY(-2px);
-                        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
-                    }
-
                     /* Mobile Optimizations */
                     @media (max-width: 640px) {
                         .cont-box {
@@ -1067,23 +940,6 @@ def run_map_page(ctx: dict):
                         .cont-label {
                             font-size: 0.6rem;
                         }
-
-                        #inv-panel {
-                            max-width: 100%;
-                            border-radius: 12px 12px 0 0;
-                        }
-
-                        .inv-header h2 {
-                            font-size: 1.25rem;
-                        }
-
-                        .inv-body {
-                            padding: 16px;
-                        }
-
-                        .inv-lote-row {
-                            font-size: 0.8rem;
-                        }
                     }
                 </style>
 
@@ -1093,31 +949,12 @@ def run_map_page(ctx: dict):
                     <div id="mapa-status">__STATUS_TEXT__</div>
                 </div>
 
-                <!-- Modal de Inventário Premium -->
-                <div id="inv-overlay">
-                    <div id="inv-panel">
-                        <div class="inv-header">
-                            <h2 id="inv-titulo">Contentor</h2>
-                            <p id="inv-subtitulo"></p>
-                        </div>
-                        <div class="inv-body" id="inv-body"></div>
-                        <div class="inv-footer">
-                            <button class="btn-close" onclick="fecharModal()">Fechar</button>
-                        </div>
-                    </div>
-                </div>
-
                 <script>
                     const contentores = __CONTENTORES_DATA__;
                     const isEditMode = __EDIT_MODE__;
                     const isMobile = __IS_MOBILE__;
                     const mapaArea = document.getElementById('mapa-area');
                     const statusBar = document.getElementById('mapa-status');
-                    const invOverlay = document.getElementById('inv-overlay');
-                    const invPanel = document.getElementById('inv-panel');
-                    const invBody = document.getElementById('inv-body');
-                    const invTitulo = document.getElementById('inv-titulo');
-                    const invSubtitulo = document.getElementById('inv-subtitulo');
 
                     let dragInfo = null;
                     let areaScale = 1;
@@ -1152,11 +989,11 @@ def run_map_page(ctx: dict):
                             box.addEventListener('touchstart', startDrag, {passive: false});
                         } else {
                             // Passo 3: clicar no contentor faz scroll + realce
-                            // até ao cartão dele em "Inventário por Contentor"
-                            // (onde vive o botão "Ver interior") — em vez de
-                            // abrir o modal directamente daqui. Quem trata
-                            // esta mensagem 'CONTENTOR_MOSTRAR_CARTAO' vive no
-                            // bridge principal, fora deste iframe.
+                            // até ao cartão dele (onde vivem "Ver interior",
+                            // Editar e Apagar) — em vez de abrir o modal
+                            // directamente daqui. Quem trata esta mensagem
+                            // 'CONTENTOR_MOSTRAR_CARTAO' vive no bridge
+                            // principal, fora deste iframe.
                             box.addEventListener('click', () => {
                                 const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
                                 targetWin.postMessage({ type: 'CONTENTOR_MOSTRAR_CARTAO', contId: c.id }, '*');
@@ -1231,52 +1068,6 @@ def run_map_page(ctx: dict):
                         dragInfo = null;
                     }
 
-                    function mostrarInventario(cont) {
-                        invTitulo.textContent = `Contentor ${cont.codigo}`;
-                        invSubtitulo.textContent = `${cont.palhetas} palhetas no total`;
-                    
-                        let html = '<div class="inv-section"><div class="inv-section-title">📦 Lotes de Sémen</div>';
-                    
-                        if (cont.lotes && cont.lotes.length > 0) {
-                            cont.lotes.forEach(lote => {
-                                html += `
-                                    <div class="inv-lote">
-                                        <div class="inv-lote-row">
-                                            <span class="inv-lote-label">🐴 Garanhão:</span>
-                                            <span class="inv-lote-value">${lote.garanhao}</span>
-                                        </div>
-                                        <div class="inv-lote-row">
-                                            <span class="inv-lote-label">👤 Proprietário:</span>
-                                            <span class="inv-lote-value">${lote.proprietario}</span>
-                                        </div>
-                                        <div class="inv-lote-row">
-                                            <span class="inv-lote-label">📍 Localização:</span>
-                                            <span class="inv-lote-value">C${lote.canister} / A${lote.andar}</span>
-                                        </div>
-                                        <div class="inv-lote-row">
-                                            <span class="inv-lote-label">🧬 Palhetas:</span>
-                                            <span class="inv-lote-value">${lote.quantidade}</span>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                        } else {
-                            html += '<p style="color: var(--text-muted); text-align: center; padding: 20px;">Nenhum lote neste contentor</p>';
-                        }
-                    
-                        html += '</div>';
-                        invBody.innerHTML = html;
-                        invOverlay.classList.add('visible');
-                    }
-
-                    function fecharModal() {
-                        invOverlay.classList.remove('visible');
-                    }
-
-                    invOverlay.addEventListener('click', (e) => {
-                        if (e.target === invOverlay) fecharModal();
-                    });
-
                     window.addEventListener('resize', () => {
                         computeScale();
                         contentores.forEach((c, i) => {
@@ -1292,7 +1083,7 @@ def run_map_page(ctx: dict):
                     contentores.forEach(criarContentor);
 
                     if (!isEditMode) {
-                        statusBar.textContent = 'Clique num contentor para ver o inventário.';
+                        statusBar.textContent = 'Clique num contentor para ver o cartão correspondente.';
                     }
                 </script>
                 """
@@ -1318,27 +1109,10 @@ def run_map_page(ctx: dict):
                 components.html(mapa_render, height=map_height, scrolling=False)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # ── Inventário de Contentores ──────────────────────────────────────
-                primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
-
-                # Converter hex → rgb para usar em rgba(). Resistente a cor
-                # vazia/inválida (ex.: `primary_color` por preencher numa
-                # instalação local nova) — cai para a cor primária por
-                # defeito do projeto em vez de rebentar.
-                _default_hex = DEFAULT_PRIMARY_COLOR.lstrip('#')
-
-                def hex_to_rgb(h):
-                    h = (h or "").lstrip('#').strip()
-                    if len(h) == 3:
-                        h = ''.join(c * 2 for c in h)
-                    if len(h) != 6:
-                        h = _default_hex
-                    try:
-                        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-                    except ValueError:
-                        return tuple(int(_default_hex[i:i+2], 16) for i in (0, 2, 4))
-
-                pr, pg, pb = hex_to_rgb(primary)
+                # ── Cartões de Contentores ──────────────────────────────────────
+                # `primary`, `pr`/`pg`/`pb` já vêm calculados do topo da
+                # função (reaproveitados pelo mapa e por aqui).
+                primary = primary_color
 
                 def build_tank_circle_html(stock_df, andar_sel, cont_id, primary_r, primary_g, primary_b):
                     """Gera o HTML do 'tanque redondo' — os canisters dispostos
@@ -1600,10 +1374,6 @@ def run_map_page(ctx: dict):
                         padding:4px 12px; font-size:.78rem; font-weight:700;
                     }}
                     .cont-card-body {{ padding:14px 18px; }}
-                    .cant-section-title {{
-                        font-size:.7rem; font-weight:700; text-transform:uppercase;
-                        letter-spacing:1px; color:#94a3b8; margin:8px 0 6px;
-                    }}
                     .lote-row {{
                         display:flex; align-items:center; justify-content:space-between;
                         background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
@@ -1612,11 +1382,6 @@ def run_map_page(ctx: dict):
                     .lote-row-left {{ display:flex; flex-direction:column; gap:2px; }}
                     .lote-garanhao {{ font-weight:700; color:#0f172a; }}
                     .lote-meta {{ color:#64748b; font-size:.75rem; }}
-                    .lote-pos {{
-                        background:{primary}15; color:{primary}; border-radius:6px;
-                        padding:3px 8px; font-size:.72rem; font-weight:700;
-                        white-space:nowrap;
-                    }}
                     @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
 
                     /* Heatmap styles (aplicados globalmente a todos os cards) */
@@ -1767,12 +1532,9 @@ def run_map_page(ctx: dict):
                 </style>
                 """, unsafe_allow_html=True)
 
-                st.markdown(f"<div class='cant-section-title' style='font-size:.85rem;color:#0f172a;font-weight:700;margin-bottom:8px;'>Inventário por Contentor</div>", unsafe_allow_html=True)
-
                 for idx, row in contentores_df.iterrows():
                     stock_contentor = obter_stock_contentor(row['id'])
                     total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                    total_lotes = len(stock_contentor)
                     cod = row['codigo']
                     desc = row['descricao'] or ''
                     cont_id = int(row['id'])
@@ -1794,114 +1556,21 @@ def run_map_page(ctx: dict):
                         st.caption("Nenhum lote neste contentor.")
                     else:
                         # ── Ver interior (Passo 3) — abre o tanque redondo num
-                        # modal; o seletor de andar e "Inverter andares" vivem
-                        # lá dentro agora, não na página. ──
+                        # modal; toda a leitura (canisters, lotes, medidas),
+                        # o seletor de andar e "Inverter andares" vivem lá
+                        # dentro. O cartão aqui fica só com as ações do
+                        # contentor em si (ver, editar, apagar) — arrumação
+                        # que tirou daqui a listagem duplicada por canister/
+                        # lote e os botões de mover (ver container_repo). ──
                         if st.button("Ver interior", key=f"ver_interior_{cont_id}"):
                             st.session_state["abrir_modal_tanque_id"] = cont_id
                             st.rerun()
 
-                        # ── Detalhes por canister — fica na página, com todos
-                        # os lotes do canister (já não filtra por andar; esse
-                        # filtro agora só existe dentro do modal). ──
-                        for canister in sorted(stock_contentor['canister'].dropna().unique()):
-                            sc = stock_contentor[stock_contentor['canister'] == canister]
-                            can_int = int(canister)
-                            st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
-
-                            # ── Mover todos os lotes deste canister de um andar para outro ──
-                            andares_no_canister = sorted([int(a) for a in sc['andar'].dropna().unique()])
-                            if len(andares_no_canister) > 0:
-                                batch_key = f"batch_{cont_id}_{can_int}"
-                                with st.expander(f"Mover todos os lotes — Canister {can_int}", expanded=False):
-                                    with st.form(f"form_batch_{cont_id}_{can_int}"):
-                                        bc1, bc2, bc3 = st.columns([2, 2, 2])
-                                        with bc1:
-                                            andar_origem_opts = andares_no_canister
-                                            origem_sel = st.selectbox(
-                                                "De Andar",
-                                                options=andar_origem_opts,
-                                                format_func=lambda x: f"Andar {x} ({len(sc[sc['andar']==x])} lotes)",
-                                                key=f"orig_{cont_id}_{can_int}"
-                                            )
-                                        with bc2:
-                                            destino_sel = st.number_input(
-                                                "Para Andar", min_value=1, max_value=20,
-                                                value=int(origem_sel) + 1 if int(origem_sel) < 20 else int(origem_sel),
-                                                key=f"dest_{cont_id}_{can_int}"
-                                            )
-                                        with bc3:
-                                            st.markdown("<br>", unsafe_allow_html=True)
-                                            batch_submit = st.form_submit_button("Mover Todos", type="primary", width="stretch")
-
-                                        if batch_submit:
-                                            if int(origem_sel) == int(destino_sel):
-                                                st.warning("Andar de origem igual ao destino.")
-                                            else:
-                                                movidos = mover_lotes_por_andar(cont_id, int(origem_sel), int(destino_sel), canister=can_int)
-                                                if movidos > 0:
-                                                    st.toast(f"{movidos} lote(s) movidos do Andar {origem_sel} → Andar {int(destino_sel)}", icon="✅")
-                                                    st.rerun()
-                                                else:
-                                                    st.warning("Nenhum lote encontrado nesse andar.")
-
-                            # ── Lista individual de lotes ──
-                            for _, lote in sc.iterrows():
-                                eid = int(lote['id'])
-                                andar_atual = int(lote['andar'] or 0)
-                                can_atual = int(lote['canister'] or 0)
-                                qty = int(lote['existencia_atual'])
-                                gar = lote['garanhao'] or '—'
-                                prop = lote['proprietario_nome'] or '—'
-                                ref = str(lote['origem_externa'] or lote['data_embriovet'] or f"Lote #{eid}").split(' ')[0]
-                                edit_key = f"edit_andar_{cont_id}_{eid}"
-                                is_editing = st.session_state.get(edit_key, False)
-
-                                col_info, col_action = st.columns([3, 2])
-                                with col_info:
-                                    st.markdown(f"""
-                                    <div class="lote-row" data-cont="{cont_id}" data-c="{can_atual}" data-a="{andar_atual}">
-                                      <div class="lote-row-left">
-                                        <span class="lote-garanhao">{gar}</span>
-                                        <span class="lote-meta">{prop} · {ref} · {qty} palhetas</span>
-                                      </div>
-                                      <span class="lote-pos">C{can_atual} / A{andar_atual}</span>
-                                    </div>""", unsafe_allow_html=True)
-
-                                with col_action:
-                                    if not is_editing:
-                                        if st.button("✏️ Mover", key=f"btn_edit_{cont_id}_{eid}", help="Alterar andar/canister", type="secondary"):
-                                            st.session_state[edit_key] = True
-                                            st.rerun()
-                                    else:
-                                        # Formulário inline de edição
-                                        with st.form(f"form_mover_{cont_id}_{eid}"):
-                                            c1, c2 = st.columns(2)
-                                            with c1:
-                                                novo_can = st.number_input("Canister", min_value=1, max_value=20, value=can_atual, key=f"nc_{eid}")
-                                            with c2:
-                                                novo_and = st.number_input("Andar", min_value=1, max_value=20, value=andar_atual, key=f"na_{eid}")
-                                            cs1, cs2 = st.columns(2)
-                                            with cs1:
-                                                salvar_pos = st.form_submit_button("Guardar", type="primary", width="stretch")
-                                            with cs2:
-                                                cancelar_pos = st.form_submit_button("Cancelar", width="stretch")
-
-                                            if cancelar_pos:
-                                                st.session_state[edit_key] = False
-                                                st.rerun()
-                                            if salvar_pos:
-                                                if atualizar_andar_lote(eid, int(novo_and), int(novo_can)):
-                                                    st.session_state[edit_key] = False
-                                                    st.toast(f"Lote {gar} movido → C{int(novo_can)}/A{int(novo_and)}", icon="✅")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("Erro ao atualizar posição")
-
                     st.markdown("</div></div>", unsafe_allow_html=True)
 
-                    # Acções do contentor (editar código/descrição, apagar) —
-                    # "Inverter andares" mudou-se para a vista redonda, junto
-                    # ao seletor de andar (Passo 2/3).
+                    # Ações do contentor em si (editar código/descrição,
+                    # apagar) — pertencem ao contentor, não ao interior, por
+                    # isso ficam aqui no cartão, não dentro do modal.
                     col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
                     with col_e2:
                         pode_apagar = total_palhetas == 0
