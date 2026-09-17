@@ -231,11 +231,14 @@ def carregar_contentores(apenas_ativos=True):
 
 def obter_stock_contentor(contentor_id):
     """Obtém informações de stock de um contentor específico
-    (nome do garanhão via FK `animais`, fallback ao texto legado)."""
+    (nome do garanhão via FK `animais`, fallback ao texto legado).
+
+    Inclui motilidade/concentração (Passo 3: detalhe do lote na vista
+    redonda) — antes só qualidade e data_embriovet eram lidas."""
     try:
         with get_connection() as conn:
             query = """
-                SELECT 
+                SELECT
                     e.id,
                     COALESCE(a.nome, e.garanhao) AS garanhao,
                     d.nome as proprietario_nome,
@@ -244,7 +247,9 @@ def obter_stock_contentor(contentor_id):
                     e.existencia_atual,
                     e.qualidade,
                     e.data_embriovet,
-                    e.origem_externa
+                    e.origem_externa,
+                    e.motilidade,
+                    e.concentracao
                 FROM estoque_dono e
                 LEFT JOIN dono d ON e.dono_id = d.id
                 LEFT JOIN animais a ON a.id = e.animal_id
