@@ -377,6 +377,38 @@ def run_map_page(ctx: dict):
         is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
         modo_visualizacao = True
 
+        # Botão escondido — o bridge de clique chama-lhe .click() quando um
+        # arrasto termina (ver endPress/JS mais abaixo), para gravar a
+        # posição sem precisar de um "Salvar Layout" manual. Tem de ser
+        # detetado AQUI, antes da leitura de `layout_pending_raw` abaixo:
+        # é o que faz `mapa_salvar_layout_pendente` já estar True *na
+        # mesma rerun* em que o botão é clicado, para essa leitura (e por
+        # tabela o mapa) já verem a posição pendente desde o primeiro
+        # instante — sem isto, essa primeira rerun ainda mostrava a
+        # posição antiga (o "ressalto").
+        auto_commit_layout = False
+        if not contentores_df.empty:
+            auto_commit_layout = st.button("Gravar posição", key="map_autosave_trigger")
+
+        if auto_commit_layout:
+            if not js_eval_disponivel:
+                st.error(t("map.install_dependency"))
+            else:
+                logger.info("Auto-save de posição acionado pelo arrasto")
+                st.session_state["mapa_salvar_layout_pendente"] = True
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.rerun()
+
+        # Gated por `mapa_salvar_layout_pendente` (e não sempre ativa): uma
+        # tentativa de a ler incondicionalmente em todos os renders
+        # revelou-se pior — com uma key estática, o streamlit_js_eval fica
+        # preso no primeiro valor que alguma vez leu (None, antes de haver
+        # qualquer arrasto) e nunca mais reavalia, porque o componente
+        # nunca é "desmontado" da árvore para forçar nova leitura. O que
+        # resolve o ressalto é `auto_commit_layout` (logo acima) já ter
+        # sido detetado e `mapa_salvar_layout_pendente` já estar True
+        # *antes* desta leitura, na mesma rerun em que o botão escondido é
+        # clicado.
         layout_pending_raw = None
         if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
             layout_pending_raw = streamlit_js_eval(
@@ -384,6 +416,21 @@ def run_map_page(ctx: dict):
                 key="map_layout_pending_reader",
                 want_output=True,
             )
+
+        posicoes_pendentes = {}
+        if layout_pending_raw and layout_pending_raw != "null":
+            try:
+                _pend = layout_pending_raw if isinstance(layout_pending_raw, dict) else json.loads(str(layout_pending_raw))
+                if isinstance(_pend, dict) and "output" in _pend:
+                    _output = _pend.get("output")
+                    if isinstance(_output, dict):
+                        _pend = _output
+                    elif isinstance(_output, str) and _output.strip():
+                        _pend = json.loads(_output)
+                if isinstance(_pend, dict):
+                    posicoes_pendentes = _pend
+            except Exception:
+                posicoes_pendentes = {}
 
         # Modal para adicionar contentor - design limpo
         if st.session_state.get('modal_novo_contentor', False):
@@ -482,12 +529,30 @@ def run_map_page(ctx: dict):
                                 "observacoes": observacao,
                             })
 
+                    # Posição a mostrar: se há uma posição pendente (largada
+                    # há pouco, ainda por confirmar na BD), usa-a — evita o
+                    # ressalto de mostrar a posição antiga enquanto o
+                    # auto-save ainda está a decorrer (ver leitura de
+                    # `posicoes_pendentes` mais acima).
+                    pos_pendente = posicoes_pendentes.get(str(int(row['id'])))
+                    if pos_pendente is None:
+                        try:
+                            pos_pendente = posicoes_pendentes.get(int(row['id']))
+                        except Exception:
+                            pos_pendente = None
+                    if isinstance(pos_pendente, dict) and "x" in pos_pendente and "y" in pos_pendente:
+                        x_mostrar = int(pos_pendente["x"])
+                        y_mostrar = int(pos_pendente["y"])
+                    else:
+                        x_mostrar = int(row['x'])
+                        y_mostrar = int(row['y'])
+
                     contentores_data.append({
                         "id": int(row['id']),
                         "codigo": row['codigo'],
                         "descricao": row['descricao'] or "",
-                        "x": int(row['x']),
-                        "y": int(row['y']),
+                        "x": x_mostrar,
+                        "y": y_mostrar,
                         "w": max(80, int(row['w'])),
                         "h": max(80, int(row['h'])),
                         "palhetas": total_palhetas,
@@ -496,7 +561,6 @@ def run_map_page(ctx: dict):
 
                 criar_novo = False
                 reorganizar = False
-                auto_commit_layout = False
 
                 st.markdown(
                     """
@@ -663,9 +727,10 @@ def run_map_page(ctx: dict):
 
                     # Botões de ação — arrumação final: tudo sobre um
                     # contentor faz-se ao clicar nele (ver+editar+apagar no
-                    # modal) e arrastar grava sozinho a posição (ver
-                    # `auto_commit_layout` mais abaixo); a toolbar fica só
-                    # com Adicionar e Reorganizar.
+                    # modal) e arrastar grava sozinho a posição (botão
+                    # escondido "Gravar posição", tratado bem no início da
+                    # função — ver comentário lá); a toolbar fica só com
+                    # Adicionar e Reorganizar.
                     if is_mobile:
                         btn_m1, btn_m2 = st.columns([1, 1])
                         with btn_m1:
@@ -678,12 +743,6 @@ def run_map_page(ctx: dict):
                             criar_novo = st.button("+ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
                         with bar_btn2:
                             reorganizar = st.button("Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
-
-                    # Botão escondido — o bridge de clique chama-lhe .click()
-                    # quando um arrasto termina (ver endPress/JS mais
-                    # abaixo), para gravar a posição sem precisar de um
-                    # "Salvar Layout" manual.
-                    auto_commit_layout = st.button("Gravar posição", key="map_autosave_trigger")
 
                 if criar_novo:
                     st.session_state['modal_novo_contentor'] = True
@@ -703,15 +762,6 @@ def run_map_page(ctx: dict):
                             ok += 1
                     st.success(t("map.reorganized", count=ok))
                     st.rerun()
-
-                if auto_commit_layout:
-                    if not js_eval_disponivel:
-                        st.error(t("map.install_dependency"))
-                    else:
-                        logger.info("Auto-save de posição acionado pelo arrasto")
-                        st.session_state["mapa_salvar_layout_pendente"] = True
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.rerun()
 
                 if st.session_state.get("mapa_salvar_layout_pendente", False):
                     logger.info(f"Processando save pendente (tentativa={st.session_state.get('mapa_salvar_layout_tentativas', 0)})")
@@ -835,25 +885,25 @@ def run_map_page(ctx: dict):
                         background-image:
                             linear-gradient(var(--border) 1px, transparent 1px),
                             linear-gradient(90deg, var(--border) 1px, transparent 1px);
-                        background-size: 40px 40px;
+                        background-size: 32px 32px;
                         overflow: hidden;
                     }
 
                     .cont-box {
                         position: absolute;
                         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                        border: 2px solid var(--primary);
-                        border-radius: 12px;
+                        border: 1.5px solid var(--primary);
+                        border-radius: 10px;
                         box-shadow: var(--shadow);
                         display: flex;
                         flex-direction: column;
                         align-items: center;
                         justify-content: center;
-                        padding: 12px;
+                        padding: 6px;
                         user-select: none;
-                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                        min-width: 100px;
-                        min-height: 100px;
+                        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+                        min-width: 68px;
+                        min-height: 68px;
                         cursor: grab;
                         /* Arrastar está sempre ativo (não só em modo edição);
                            touch-action só aqui (não em #mapa-area inteiro),
@@ -864,41 +914,46 @@ def run_map_page(ctx: dict):
 
                     .cont-box.dragging {
                         cursor: grabbing !important;
-                        opacity: 0.85;
+                        opacity: 0.88;
                         z-index: 1000;
                         box-shadow: var(--shadow-lg);
-                        transform: scale(1.05) rotate(2deg);
+                        transform: scale(1.06) rotate(1.5deg);
+                        transition: none;
                     }
 
                     .cont-box:hover {
-                        transform: translateY(-4px) scale(1.02);
-                        box-shadow: 0 12px 24px -4px rgba(var(--primary-rgb), 0.3);
+                        transform: translateY(-3px) scale(1.03);
+                        box-shadow: 0 8px 16px -4px rgba(var(--primary-rgb), 0.28);
                         border-color: var(--primary-dark);
                         z-index: 100;
                     }
 
                     .cont-codigo {
-                        font-size: 0.875rem;
+                        font-size: 0.62rem;
                         font-weight: 700;
                         color: var(--primary-dark);
-                        margin-bottom: 4px;
-                        letter-spacing: 0.5px;
+                        margin-bottom: 2px;
+                        letter-spacing: 0.3px;
                         text-transform: uppercase;
+                        max-width: 100%;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                     }
 
                     .cont-qtd {
-                        font-size: 2rem;
+                        font-size: 1.3rem;
                         font-weight: 800;
                         color: var(--text);
                         line-height: 1;
-                        margin-bottom: 2px;
+                        margin-bottom: 1px;
                     }
 
                     .cont-label {
-                        font-size: 0.65rem;
+                        font-size: 0.5rem;
                         color: var(--text-muted);
                         text-transform: uppercase;
-                        letter-spacing: 0.8px;
+                        letter-spacing: 0.6px;
                         font-weight: 600;
                     }
 
@@ -912,25 +967,26 @@ def run_map_page(ctx: dict):
                         font-weight: 500;
                     }
 
-                    /* Mobile Optimizations */
+                    /* Mobile Optimizations — a caixa encolhe menos do que no
+                       desktop, para o alvo de toque continuar confortável. */
                     @media (max-width: 640px) {
                         .cont-box {
-                            min-width: 80px;
-                            min-height: 80px;
-                            padding: 8px;
-                            border-radius: 8px;
+                            min-width: 60px;
+                            min-height: 60px;
+                            padding: 5px;
+                            border-radius: 9px;
                         }
 
                         .cont-codigo {
-                            font-size: 0.75rem;
+                            font-size: 0.58rem;
                         }
 
                         .cont-qtd {
-                            font-size: 1.5rem;
+                            font-size: 1.1rem;
                         }
 
                         .cont-label {
-                            font-size: 0.6rem;
+                            font-size: 0.46rem;
                         }
                     }
                 </style>
@@ -976,8 +1032,8 @@ def run_map_page(ctx: dict):
                             <div class="cont-label">palhetas</div>
                         `;
 
-                        const baseW = isMobile ? 80 : 100;
-                        const baseH = isMobile ? 80 : 100;
+                        const baseW = isMobile ? 60 : 68;
+                        const baseH = isMobile ? 60 : 68;
                         box.style.left = (c.x * areaScale) + 'px';
                         box.style.top = (c.y * areaScale) + 'px';
                         box.style.width = baseW + 'px';
