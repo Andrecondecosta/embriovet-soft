@@ -187,14 +187,28 @@ def run_map_page(ctx: dict):
                                             var c   = cell.getAttribute('data-c');
                                             var a   = cell.getAttribute('data-a');
                                             targetDoc.querySelectorAll('.hm-cell.selected').forEach(function(x){ x.classList.remove('selected'); });
-                                            targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
                                             cell.classList.add('selected');
-                                            var rows = targetDoc.querySelectorAll(
-                                                '.lote-row[data-cont="' + cId + '"][data-c="' + c + '"][data-a="' + a + '"]'
-                                            );
-                                            rows.forEach(function(r){ r.classList.add('hl'); });
-                                            if (rows.length > 0) {
-                                                rows[0].scrollIntoView({behavior:'smooth', block:'center'});
+
+                                            // Passo 3: dentro do modal do tanque redondo, o
+                                            // clique troca a visibilidade da info do canister
+                                            // (pré-carregada, escondida) — sem round-trip ao
+                                            // Python. Fora do modal (uso antigo da grelha),
+                                            // mantém-se o comportamento de sempre: realçar +
+                                            // scroll até à linha do lote na página.
+                                            var dialogScope = cell.closest('[data-testid="stDialog"]');
+                                            if (dialogScope) {
+                                                dialogScope.querySelectorAll('.tank-info-block').forEach(function(b){ b.style.display = 'none'; });
+                                                var alvo = dialogScope.querySelector('.tank-info-block[data-canister-info="' + c + '"]');
+                                                if (alvo) { alvo.style.display = 'block'; }
+                                            } else {
+                                                targetDoc.querySelectorAll('.lote-row.hl').forEach(function(x){ x.classList.remove('hl'); });
+                                                var rows = targetDoc.querySelectorAll(
+                                                    '.lote-row[data-cont="' + cId + '"][data-c="' + c + '"][data-a="' + a + '"]'
+                                                );
+                                                rows.forEach(function(r){ r.classList.add('hl'); });
+                                                if (rows.length > 0) {
+                                                    rows[0].scrollIntoView({behavior:'smooth', block:'center'});
+                                                }
                                             }
                                         }
 
@@ -1278,7 +1292,7 @@ def run_map_page(ctx: dict):
 
                 pr, pg, pb = hex_to_rgb(primary)
 
-                def build_tank_circle_html(stock_df, andar_sel, primary_r, primary_g, primary_b):
+                def build_tank_circle_html(stock_df, andar_sel, cont_id, primary_r, primary_g, primary_b):
                     """Gera o HTML do 'tanque redondo' — os canisters dispostos
                     em anel, mostrando o conteúdo do andar seleccionado.
                     Substitui a grelha Canisters × Andares (Passo 2/3 do
@@ -1288,11 +1302,16 @@ def run_map_page(ctx: dict):
                     Reaproveita a classe `hm-cell` (e os atributos data-cont/
                     data-c/data-a) da grelha anterior: o bridge de clique já
                     existente (streamlit_js_eval, ligado via MutationObserver)
-                    continua a realçar e a fazer scroll até à linha do lote
-                    correspondente, sem qualquer alteração de JavaScript.
+                    continua a realçar o slot; dentro do modal (Passo 3), o
+                    mesmo clique também troca a info do canister mostrada por
+                    baixo — ver `build_canister_info_html`.
+
+                    Devolve (html, canisters) — a lista de canisters é
+                    reaproveitada por `build_canister_info_html` para gerar
+                    exactamente um bloco de info por slot desenhado.
                     """
                     if stock_df.empty:
-                        return ""
+                        return "", []
 
                     # Mesmo agrupamento (canister, andar) → qty de sempre, mas
                     # guardando também os garanhões para mostrar dentro do slot.
@@ -1306,7 +1325,7 @@ def run_map_page(ctx: dict):
                         cell_garanhoes.setdefault((c, a), []).append(str(r['garanhao'] or '—'))
 
                     if not cell_qty:
-                        return ""
+                        return "", []
 
                     # Canisters conhecidos do contentor — união dos dois
                     # andares, para o círculo manter sempre a mesma forma ao
@@ -1351,7 +1370,7 @@ def run_map_page(ctx: dict):
 
                     n_lotes_andar = int((stock_df['andar'] == andar_sel).sum())
 
-                    return f"""
+                    html = f"""
                     <div class="tank-wrap">
                       <div class="tank" style="width:{diametro}px;height:{diametro}px;">
                         <div class="tank-center">
@@ -1362,13 +1381,128 @@ def run_map_page(ctx: dict):
                       </div>
                     </div>
                     <div style="text-align:center;font-size:.68rem;color:#94a3b8;margin:4px 0 8px;">
-                      Clique num canister para ver o(s) lote(s) na lista abaixo
+                      Clique num canister para ver os lotes
                     </div>
                     <div class="tank-legend">
                       <span><i class="f"></i> Com sémen</span>
                       <span><i class="e"></i> Vazio neste andar</span>
                     </div>
                     """
+                    return html, canisters
+
+                def build_canister_info_html(stock_df, andar_sel, canisters):
+                    """Um bloco de info por canister (Passo 3) — escondido por
+                    defeito; o clique no slot correspondente do tanque redondo
+                    troca a visibilidade via JS (ver handleHmCellClick), sem
+                    round-trip ao Python. Só leitura — sem botões de mover,
+                    como pedido (as ações continuam na página, fora do modal).
+                    Reaproveita os estilos `.lote-row*` já existentes.
+                    """
+                    blocks = ""
+                    for c in canisters:
+                        lotes = stock_df[(stock_df['canister'] == c) & (stock_df['andar'] == andar_sel)]
+                        if lotes.empty:
+                            corpo = "<p class='tank-info-empty'>Vazio neste andar.</p>"
+                        else:
+                            corpo = ""
+                            for _, lote in lotes.iterrows():
+                                gar = escape(str(lote['garanhao'] or '—'))
+                                prop = escape(str(lote['proprietario_nome'] or '—'))
+                                qty = int(lote['existencia_atual'])
+                                ref = escape(str(
+                                    lote['origem_externa'] or lote['data_embriovet']
+                                    or f"Lote #{int(lote['id'])}"
+                                ).split(' ')[0])
+                                corpo += (
+                                    "<div class='lote-row'>"
+                                    "<div class='lote-row-left'>"
+                                    f"<span class='lote-garanhao'>{gar}</span>"
+                                    f"<span class='lote-meta'>{prop} · {ref} · {qty} palhetas</span>"
+                                    "</div>"
+                                    "</div>"
+                                )
+                        blocks += (
+                            f"<div class='tank-info-block' data-canister-info='{c}' style='display:none;'>"
+                            f"<div class='tank-info-title'>Canister {c}</div>{corpo}"
+                            "</div>"
+                        )
+                    return blocks
+
+                def _abrir_modal_tanque(cont_id_modal, cod_modal, primary_r, primary_g, primary_b):
+                    """Modal do tanque redondo (Passo 3) — seletor de andar,
+                    "Inverter andares" e o círculo com a info por canister.
+                    Só leitura + inverter; mover/editar lotes fica na página,
+                    fora do modal, como pedido.
+
+                    Chamada depois do loop de contentores (não dentro dele)
+                    para seguir o mesmo padrão já usado nos outros diálogos
+                    por item desta app (ex.: `_render_modal_saida` em
+                    estadias_page.py) — abrir directo dentro do loop, a meio
+                    de um clique, arriscava misturar o `cont_id` de outra
+                    iteração. Por isso o botão só marca a intenção em
+                    session_state; isto relê o stock fresco.
+                    """
+                    stock_modal = obter_stock_contentor(cont_id_modal)
+
+                    @st.dialog(cod_modal, width="large")
+                    def _modal():
+                        # Sem st.rerun() explícito em nenhum ponto deste corpo:
+                        # confirmado empiricamente que chamar st.rerun() de
+                        # dentro de uma função @st.dialog fecha o modal (o
+                        # clique do próprio widget já desencadeia o rerun
+                        # implícito de que precisamos — chamar outro por cima
+                        # é isso que o fecha). Onde é preciso reflectir dados
+                        # frescos na mesma passagem (depois de inverter),
+                        # relê-se a variável local em vez de rerunnar.
+                        nonlocal stock_modal
+                        if stock_modal.empty:
+                            st.caption("Nenhum lote neste contentor.")
+                            return
+
+                        andar_key = f"andar_sel_{cont_id_modal}"
+                        col_andar, col_inverter = st.columns([2, 1], vertical_alignment="center")
+                        with col_andar:
+                            with st.container(key=f"andar-toggle-{cont_id_modal}"):
+                                andar_sel = st.radio(
+                                    "Andar", [1, 2], format_func=lambda x: f"Andar {x}",
+                                    key=andar_key, horizontal=True, label_visibility="collapsed",
+                                )
+                        with col_inverter:
+                            if st.button("Inverter andares", key=f"inverter_andares_{cont_id_modal}",
+                                         help="Troca os lotes do 1º andar para o 2º e vice-versa"):
+                                st.session_state[f'confirmar_inverter_{cont_id_modal}'] = True
+
+                        if st.session_state.get(f'confirmar_inverter_{cont_id_modal}', False):
+                            st.warning(
+                                f"Inverter os andares do contentor {cod_modal}? Todos os lotes "
+                                "do 1º andar passam ao 2º e vice-versa. As localizações dos "
+                                "lotes serão atualizadas."
+                            )
+                            col_conf1, col_conf2 = st.columns([1, 1])
+                            with col_conf1:
+                                if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id_modal}",
+                                             type="primary", width="stretch"):
+                                    resultado = inverter_andares(cont_id_modal)
+                                    st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
+                                    if resultado is not False:
+                                        st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
+                                        stock_modal = obter_stock_contentor(cont_id_modal)
+                                    else:
+                                        st.error("Erro ao inverter andares. Ver logs.")
+                            with col_conf2:
+                                if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id_modal}", width="stretch"):
+                                    st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
+
+                        circle_html, canisters = build_tank_circle_html(
+                            stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
+                        )
+                        if circle_html:
+                            st.markdown(circle_html, unsafe_allow_html=True)
+                            info_html = build_canister_info_html(stock_modal, andar_sel, canisters)
+                            st.markdown(info_html, unsafe_allow_html=True)
+
+                    _modal()
+
                 st.markdown(f"""
                 <style>
                     .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
@@ -1496,6 +1630,18 @@ def run_map_page(ctx: dict):
                         .tank-slot {{ width:54px; height:54px; }}
                     }}
 
+                    /* Info do canister dentro do modal (Passo 3) — escondida
+                       por defeito, o clique no slot troca-lhe a visibilidade
+                       via JS. Reaproveita .lote-row* já existentes. */
+                    .tank-info-block {{
+                        margin-top:14px; padding-top:12px; border-top:1px solid #e2e8f0;
+                    }}
+                    .tank-info-title {{
+                        font-size:.7rem; font-weight:700; text-transform:uppercase;
+                        letter-spacing:1px; color:#94a3b8; margin-bottom:8px;
+                    }}
+                    .tank-info-empty {{ font-size:.82rem; color:#94a3b8; margin:0; }}
+
                     /* Seletor de andar — pill-tabs (mesmo padrão do
                        separador Stock de sémen: esconde o círculo do rádio
                        nativo, sublinha/realça a opção activa). */
@@ -1548,53 +1694,18 @@ def run_map_page(ctx: dict):
                     if stock_contentor.empty:
                         st.caption("Nenhum lote neste contentor.")
                     else:
-                        # ── Seletor de andar + Inverter andares (Passo 2/3) ──────────
-                        andar_key = f"andar_sel_{cont_id}"
-                        col_andar, col_inverter = st.columns([2, 1], vertical_alignment="center")
-                        with col_andar:
-                            with st.container(key=f"andar-toggle-{cont_id}"):
-                                andar_sel = st.radio(
-                                    "Andar", [1, 2], format_func=lambda x: f"Andar {x}",
-                                    key=andar_key, horizontal=True, label_visibility="collapsed",
-                                )
-                        with col_inverter:
-                            if st.button("Inverter andares", key=f"inverter_andares_{cont_id}",
-                                         help="Troca os lotes do 1º andar para o 2º e vice-versa"):
-                                st.session_state[f'confirmar_inverter_{cont_id}'] = True
-                                st.rerun()
+                        # ── Ver interior (Passo 3) — abre o tanque redondo num
+                        # modal; o seletor de andar e "Inverter andares" vivem
+                        # lá dentro agora, não na página. ──
+                        if st.button("Ver interior", key=f"ver_interior_{cont_id}"):
+                            st.session_state["abrir_modal_tanque_id"] = cont_id
+                            st.rerun()
 
-                        if st.session_state.get(f'confirmar_inverter_{cont_id}', False):
-                            st.warning(
-                                f"Inverter os andares do contentor {cod}? Todos os lotes do "
-                                "1º andar passam ao 2º e vice-versa. As localizações dos "
-                                "lotes serão atualizadas."
-                            )
-                            col_conf1, col_conf2 = st.columns([1, 1])
-                            with col_conf1:
-                                if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id}",
-                                             type="primary", width="stretch"):
-                                    resultado = inverter_andares(cont_id)
-                                    st.session_state[f'confirmar_inverter_{cont_id}'] = False
-                                    if resultado is not False:
-                                        st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
-                                        st.rerun()
-                                    else:
-                                        st.error("Erro ao inverter andares. Ver logs.")
-                            with col_conf2:
-                                if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id}", width="stretch"):
-                                    st.session_state[f'confirmar_inverter_{cont_id}'] = False
-                                    st.rerun()
-
-                        # ── Tanque redondo — canisters dispostos em anel ─────────────
-                        circle_html = build_tank_circle_html(stock_contentor, andar_sel, pr, pg, pb)
-                        if circle_html:
-                            st.markdown(circle_html, unsafe_allow_html=True)
-                            st.markdown("<hr style='border:none;border-top:1px solid #e2e8f0;margin:10px 0;'>", unsafe_allow_html=True)
-
-                        # ── Detalhes por canister ─────────────────────────────────────
+                        # ── Detalhes por canister — fica na página, com todos
+                        # os lotes do canister (já não filtra por andar; esse
+                        # filtro agora só existe dentro do modal). ──
                         for canister in sorted(stock_contentor['canister'].dropna().unique()):
                             sc = stock_contentor[stock_contentor['canister'] == canister]
-                            sc_andar = sc[sc['andar'] == andar_sel]
                             can_int = int(canister)
                             st.markdown(f"<div class='cant-section-title'>Canister {can_int}</div>", unsafe_allow_html=True)
 
@@ -1634,12 +1745,8 @@ def run_map_page(ctx: dict):
                                                 else:
                                                     st.warning("Nenhum lote encontrado nesse andar.")
 
-                            # ── Lista individual de lotes (filtrada pelo andar
-                            # seleccionado no seletor acima — coerente com o
-                            # que o tanque redondo está a mostrar) ──
-                            if sc_andar.empty:
-                                st.caption(f"Sem lotes neste andar (Canister {can_int}).")
-                            for _, lote in sc_andar.iterrows():
+                            # ── Lista individual de lotes ──
+                            for _, lote in sc.iterrows():
                                 eid = int(lote['id'])
                                 andar_atual = int(lote['andar'] or 0)
                                 can_atual = int(lote['canister'] or 0)
@@ -1737,6 +1844,17 @@ def run_map_page(ctx: dict):
                                     st.rerun()
 
                     st.markdown("<br>", unsafe_allow_html=True)
+
+                # Abrir o modal do tanque redondo (Passo 3) — feito depois do
+                # loop, não dentro dele: dentro do loop, `cont_id` já teria
+                # avançado para outra iteração por altura do clique ser
+                # processado. O botão "Ver interior" só marca a intenção.
+                if st.session_state.get("abrir_modal_tanque_id"):
+                    cont_id_modal = int(st.session_state.pop("abrir_modal_tanque_id"))
+                    linha_modal = contentores_df[contentores_df['id'] == cont_id_modal]
+                    if not linha_modal.empty:
+                        cod_modal = linha_modal.iloc[0]['codigo']
+                        _abrir_modal_tanque(cont_id_modal, cod_modal, pr, pg, pb)
 
             else:
                 # MODO LISTA (mantido para compatibilidade)
