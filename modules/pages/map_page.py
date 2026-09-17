@@ -1393,37 +1393,39 @@ def run_map_page(ctx: dict):
                         # Editar nome/descrição + Apagar — vivem aqui dentro
                         # (arrumação final), reaproveitando editar_contentor/
                         # deletar_contentor tal como já eram usados na página.
+                        # Recolhido por defeito: o modal abre com o círculo à
+                        # vista, o editar só aparece se for pedido.
                         st.divider()
-                        st.markdown(f"##### {t('map.edit_container_title')}")
-                        with st.form(f"form_editar_modal_{cont_id_modal}"):
-                            col_ed1, col_ed2 = st.columns(2)
-                            with col_ed1:
-                                novo_codigo = st.text_input(t("label.code"), value=row_modal['codigo'])
-                            with col_ed2:
-                                nova_descricao = st.text_input(t("label.description"), value=row_modal['descricao'] or '')
+                        with st.expander(t('map.edit_container_title'), expanded=False):
+                            with st.form(f"form_editar_modal_{cont_id_modal}"):
+                                col_ed1, col_ed2 = st.columns(2)
+                                with col_ed1:
+                                    novo_codigo = st.text_input(t("label.code"), value=row_modal['codigo'])
+                                with col_ed2:
+                                    nova_descricao = st.text_input(t("label.description"), value=row_modal['descricao'] or '')
 
-                            pode_apagar = total_palhetas_modal == 0
-                            cs1, cs2 = st.columns(2)
-                            with cs1:
-                                salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
-                            with cs2:
-                                apagar_edit = st.form_submit_button(
-                                    "Apagar", width="stretch", disabled=not pode_apagar,
-                                    help=None if pode_apagar else t("map.delete_blocked"),
-                                )
+                                pode_apagar = total_palhetas_modal == 0
+                                cs1, cs2 = st.columns(2)
+                                with cs1:
+                                    salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
+                                with cs2:
+                                    apagar_edit = st.form_submit_button(
+                                        "Apagar", width="stretch", disabled=not pode_apagar,
+                                        help=None if pode_apagar else t("map.delete_blocked"),
+                                    )
 
-                            if apagar_edit:
-                                if deletar_contentor(cont_id_modal):
-                                    # Intencional: ação destrutiva, queremos
-                                    # mesmo fechar o modal e atualizar o mapa.
-                                    st.rerun()
-                            if salvar_edit:
-                                if editar_contentor(cont_id_modal, {
-                                    'codigo': novo_codigo, 'descricao': nova_descricao,
-                                    'x': row_modal['x'], 'y': row_modal['y'],
-                                    'w': row_modal['w'], 'h': row_modal['h'],
-                                }):
-                                    st.success(t("map.container_updated"))
+                                if apagar_edit:
+                                    if deletar_contentor(cont_id_modal):
+                                        # Intencional: ação destrutiva, queremos
+                                        # mesmo fechar o modal e atualizar o mapa.
+                                        st.rerun()
+                                if salvar_edit:
+                                    if editar_contentor(cont_id_modal, {
+                                        'codigo': novo_codigo, 'descricao': nova_descricao,
+                                        'x': row_modal['x'], 'y': row_modal['y'],
+                                        'w': row_modal['w'], 'h': row_modal['h'],
+                                    }):
+                                        st.success(t("map.container_updated"))
 
                     _modal()
 
