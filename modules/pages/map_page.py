@@ -121,8 +121,13 @@ def run_map_page(ctx: dict):
             unsafe_allow_html=True,
         )
 
-        if "mapa_modo_edicao" not in st.session_state:
-            st.session_state["mapa_modo_edicao"] = False
+        # Modo "Editar" — puramente de conteúdo (cor dos contentores +
+        # clique abre a edição de nome/descrição/apagar). O arrastar para
+        # reposicionar deixou de depender deste modo: está sempre ativo no
+        # mapa, independentemente disto (ver `criarContentor`/`startPress`
+        # no JS mais abaixo).
+        if "mapa_modo_edicao_conteudo" not in st.session_state:
+            st.session_state["mapa_modo_edicao_conteudo"] = False
 
         if "mapa_layout_reader_tick" not in st.session_state:
             st.session_state["mapa_layout_reader_tick"] = 0
@@ -292,22 +297,32 @@ def run_map_page(ctx: dict):
                                             } catch (e) {}
                                         }
 
-                                        // Passo 3: clicar numa caixa do mapa livre (fora
-                                        // deste modal, no components.html do topo da
-                                        // página) faz scroll + realce até ao cartão do
-                                        // contentor — em vez de abrir o modal
-                                        // directamente (testado à parte: uma Promise
-                                        // assíncrona à espera do clique, através da
-                                        // fronteira do iframe, mostrou-se pouco fiável).
+                                        // Clicar (sem arrastar) numa caixa do mapa livre
+                                        // (fora deste modal, no components.html do topo
+                                        // da página) faz scroll + realce até ao cartão
+                                        // do contentor, e depois clica sozinho no botão
+                                        // Streamlit real desse cartão — "Ver interior"
+                                        // fora do modo Editar, "Editar" dentro dele. Uma
+                                        // Promise assíncrona à espera do clique, através
+                                        // da fronteira do iframe, foi testada à parte e
+                                        // mostrou-se pouco fiável; este auto-clique foi
+                                        // validado num spike isolado (20/20 cliques) por
+                                        // ser síncrono, sem nada "à espera" entre reruns.
                                         window.addEventListener('message', function(event){
                                             var data = event && event.data ? event.data : null;
-                                            if (!data || data.type !== 'CONTENTOR_MOSTRAR_CARTAO') return;
+                                            if (!data) return;
+                                            if (data.type !== 'CONTENTOR_MOSTRAR_CARTAO' && data.type !== 'CONTENTOR_ABRIR_EDICAO') return;
                                             var card = targetDoc.querySelector('.cont-card[data-cont-id="' + data.contId + '"]');
                                             if (card) {
                                                 card.classList.add('cont-card-highlight');
                                                 card.scrollIntoView({behavior: 'smooth', block: 'center'});
                                                 window.setTimeout(function(){ card.classList.remove('cont-card-highlight'); }, 1800);
                                             }
+                                            var seletor = data.type === 'CONTENTOR_ABRIR_EDICAO'
+                                                ? '.st-key-edit2_' + data.contId + ' button'
+                                                : '.st-key-ver_interior_' + data.contId + ' button';
+                                            var botao = targetDoc.querySelector(seletor);
+                                            if (botao) { botao.click(); }
                                         });
 
                                         bindCells(targetDoc);
@@ -487,8 +502,9 @@ def run_map_page(ctx: dict):
 
                 criar_novo = False
                 ativar_edicao = False
-                cancelar_edicao = False
+                sair_edicao = False
                 salvar_layout = False
+                descartar_layout = False
                 reorganizar = False
 
                 st.markdown(
@@ -628,66 +644,72 @@ def run_map_page(ctx: dict):
                             <div class='map-toolbar-kpis'>
                                 <span>📍 <b>{total_contentores}</b> Contentores</span>
                                 <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
-                                <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao'] else '👁️ Visualização'}</span>
+                                <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao_conteudo'] else '👁️ Visualização'}</span>
                             </div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
                 
-                    # Botões de ação
+                    # Botões de ação — o arrastar já não depende de nenhum
+                    # destes (está sempre ativo no mapa); "Salvar Layout",
+                    # "Descartar" e "Reorganizar" ficam sempre visíveis, e
+                    # "Editar" passa a ser um toggle independente, só para o
+                    # modo de conteúdo (cor dos contentores + clique abre a
+                    # edição em vez do círculo).
                     if is_mobile:
                         btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
                         with btn_m1:
                             criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", width="stretch")
                         with btn_m2:
-                            if st.session_state["mapa_modo_edicao"]:
-                                salvar_layout = st.button("💾 Salvar", key="map_save_btn_mobile", type="primary", width="stretch")
+                            if st.session_state["mapa_modo_edicao_conteudo"]:
+                                sair_edicao = st.button("✓ Concluir", key="map_edit_exit_btn_mobile", type="primary", width="stretch")
                             else:
                                 ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", width="stretch")
                         with btn_m3:
-                            if st.session_state["mapa_modo_edicao"]:
-                                cancelar_edicao = st.button("❌ Cancelar", key="map_cancel_btn_mobile", width="stretch")
+                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn_mobile", width="stretch")
+                        btn_m4, btn_m5 = st.columns([1, 1])
+                        with btn_m4:
+                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_mobile", width="stretch")
+                        with btn_m5:
+                            descartar_layout = st.button("↩️ Descartar", key="map_discard_btn_mobile", width="stretch")
                     else:
-                        bar_btn1, bar_btn2, bar_btn3, bar_btn4 = st.columns([1.5, 1.5, 1.5, 2])
+                        bar_btn1, bar_btn2, bar_btn3, bar_btn4, bar_btn5 = st.columns([1.6, 1.4, 1.3, 1.3, 1.3])
                         with bar_btn1:
                             criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
                         with bar_btn2:
-                            if st.session_state["mapa_modo_edicao"]:
-                                salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", type="primary", width="stretch")
-                            else:
-                                ativar_edicao = st.button("✏️ Editar Mapa", key="map_edit_btn_desktop", width="stretch")
+                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", width="stretch")
                         with bar_btn3:
-                            if st.session_state["mapa_modo_edicao"]:
-                                cancelar_edicao = st.button("❌ Cancelar Edição", key="map_cancel_btn_desktop", width="stretch")
+                            descartar_layout = st.button("↩️ Descartar", key="map_discard_btn_desktop", width="stretch", help="Descarta posições arrastadas ainda não gravadas")
                         with bar_btn4:
-                            if not st.session_state["mapa_modo_edicao"]:
-                                reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
+                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
+                        with bar_btn5:
+                            if st.session_state["mapa_modo_edicao_conteudo"]:
+                                sair_edicao = st.button("✓ Concluir Edição", key="map_edit_exit_btn_desktop", type="primary", width="stretch")
+                            else:
+                                ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_desktop", width="stretch")
 
                 if criar_novo:
                     st.session_state['modal_novo_contentor'] = True
                     st.rerun()
 
                 if ativar_edicao:
-                    st.session_state["mapa_modo_edicao"] = True
-                    if js_eval_disponivel:
-                        streamlit_js_eval(
-                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                            key=f"clear_layout_pending_start_{int(time.time() * 1000)}"
-                        )
-                    st.session_state["mapa_salvar_layout_pendente"] = False
-                    st.session_state["mapa_salvar_layout_tentativas"] = 0
+                    st.session_state["mapa_modo_edicao_conteudo"] = True
                     st.rerun()
 
-                if cancelar_edicao:
-                    st.session_state["mapa_modo_edicao"] = False
+                if sair_edicao:
+                    st.session_state["mapa_modo_edicao_conteudo"] = False
+                    st.rerun()
+
+                if descartar_layout:
                     if js_eval_disponivel:
                         streamlit_js_eval(
                             js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                            key=f"clear_layout_pending_cancel_{int(time.time() * 1000)}"
+                            key=f"clear_layout_pending_discard_{int(time.time() * 1000)}"
                         )
                     st.session_state["mapa_salvar_layout_pendente"] = False
                     st.session_state["mapa_salvar_layout_tentativas"] = 0
+                    st.toast("Alterações de posição descartadas", icon="↩️")
                     st.rerun()
 
                 if reorganizar:
@@ -763,7 +785,6 @@ def run_map_page(ctx: dict):
 
                             st.session_state["mapa_salvar_layout_pendente"] = False
                             st.session_state["mapa_salvar_layout_tentativas"] = 0
-                            st.session_state["mapa_modo_edicao"] = False
 
                             if atualizados > 0:
                                 st.toast(t("map.layout_saved", count=atualizados), icon="✅")
@@ -781,9 +802,6 @@ def run_map_page(ctx: dict):
                             st.session_state["mapa_salvar_layout_pendente"] = False
                             st.session_state["mapa_salvar_layout_tentativas"] = 0
                             st.toast(t("map.read_positions_failed"), icon="⚠️")
-
-                if st.session_state["mapa_modo_edicao"] and is_mobile:
-                    pass
 
                 if st.session_state.get("move_feedback"):
                     st.toast(st.session_state.pop("move_feedback"), icon="✅")
@@ -842,7 +860,6 @@ def run_map_page(ctx: dict):
                             linear-gradient(90deg, var(--border) 1px, transparent 1px);
                         background-size: 40px 40px;
                         overflow: hidden;
-                        touch-action: none;
                     }
 
                     .cont-box {
@@ -860,14 +877,17 @@ def run_map_page(ctx: dict):
                         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                         min-width: 100px;
                         min-height: 100px;
-                    }
-
-                    .cont-box.clickable {
-                        cursor: pointer;
-                    }
-
-                    .cont-box.draggable {
                         cursor: grab;
+                        /* Arrastar está sempre ativo (não só em modo edição);
+                           touch-action só aqui (não em #mapa-area inteiro),
+                           para o resto do mapa continuar a deixar a página
+                           fazer scroll normalmente em mobile. */
+                        touch-action: none;
+                    }
+
+                    .cont-box.content-edit {
+                        border-color: var(--primary-dark);
+                        background: linear-gradient(135deg, rgba(var(--primary-rgb),.14) 0%, rgba(var(--primary-rgb),.06) 100%);
                     }
 
                     .cont-box.dragging {
@@ -951,13 +971,23 @@ def run_map_page(ctx: dict):
 
                 <script>
                     const contentores = __CONTENTORES_DATA__;
-                    const isEditMode = __EDIT_MODE__;
+                    const isContentEditMode = __EDIT_MODE__;
                     const isMobile = __IS_MOBILE__;
                     const mapaArea = document.getElementById('mapa-area');
                     const statusBar = document.getElementById('mapa-status');
 
-                    let dragInfo = null;
+                    // Distância mínima (px) para um gesto passar de "pode ser
+                    // clique" a "é arrasto" — maior em touch porque o dedo é
+                    // menos preciso do que o rato. Critério escolhido em vez
+                    // de tempo de pressão: não obriga a uma pausa antes de
+                    // poder começar a arrastar, e um clique lento mas parado
+                    // nunca é mal-classificado como arrasto.
+                    const DRAG_THRESHOLD_MOUSE = 6;
+                    const DRAG_THRESHOLD_TOUCH = 10;
+
+                    let pressInfo = null;
                     let areaScale = 1;
+                    let ultimoToqueTs = 0;
 
                     function computeScale() {
                         const rect = mapaArea.getBoundingClientRect();
@@ -967,9 +997,8 @@ def run_map_page(ctx: dict):
                     function criarContentor(c) {
                         const box = document.createElement('div');
                         box.className = 'cont-box';
+                        if (isContentEditMode) box.classList.add('content-edit');
                         box.dataset.contId = String(c.id);
-                        if (!isEditMode) box.classList.add('clickable');
-                        if (isEditMode) box.classList.add('draggable');
 
                         box.innerHTML = `
                             <div class="cont-codigo">${c.codigo}</div>
@@ -984,88 +1013,133 @@ def run_map_page(ctx: dict):
                         box.style.width = baseW + 'px';
                         box.style.height = baseH + 'px';
 
-                        if (isEditMode) {
-                            box.addEventListener('mousedown', startDrag);
-                            box.addEventListener('touchstart', startDrag, {passive: false});
-                        } else {
-                            // Passo 3: clicar no contentor faz scroll + realce
-                            // até ao cartão dele (onde vivem "Ver interior",
-                            // Editar e Apagar) — em vez de abrir o modal
-                            // directamente daqui. Quem trata esta mensagem
-                            // 'CONTENTOR_MOSTRAR_CARTAO' vive no bridge
-                            // principal, fora deste iframe.
-                            box.addEventListener('click', () => {
-                                const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
-                                targetWin.postMessage({ type: 'CONTENTOR_MOSTRAR_CARTAO', contId: c.id }, '*');
-                            });
-                        }
+                        // Arrastar está sempre ativo; um clique sem
+                        // movimento (ver startPress/endPress) é que decide
+                        // se abre o círculo ou a edição, consoante o modo.
+                        box.addEventListener('mousedown', startPress);
+                        box.addEventListener('touchstart', startPress, {passive: true});
 
                         mapaArea.appendChild(box);
                     }
 
-                    function startDrag(e) {
-                        e.preventDefault();
+                    function startPress(e) {
+                        // Em touch, não faz preventDefault aqui — só quando o
+                        // gesto for confirmado como arrasto (ver
+                        // onPressMove), para não bloquear o scroll normal da
+                        // página num simples toque.
+                        const isTouch = !!e.touches;
+                        if (isTouch) {
+                            ultimoToqueTs = Date.now();
+                        } else if (Date.now() - ultimoToqueTs < 500) {
+                            // Ignora o mousedown "fantasma" que os browsers
+                            // móveis emitem a seguir a um touchend.
+                            return;
+                        } else {
+                            e.preventDefault();
+                        }
+
                         const box = e.currentTarget;
-                        box.classList.add('dragging');
                         const rect = box.getBoundingClientRect();
                         const areaRect = mapaArea.getBoundingClientRect();
-                        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                        const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+                        const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
-                        dragInfo = {
+                        pressInfo = {
                             box: box,
+                            contId: box.dataset.contId,
+                            startX: clientX,
+                            startY: clientY,
                             offsetX: clientX - rect.left,
                             offsetY: clientY - rect.top,
                             areaLeft: areaRect.left,
                             areaTop: areaRect.top,
                             areaW: areaRect.width,
-                            areaH: areaRect.height
+                            areaH: areaRect.height,
+                            isDragging: false,
                         };
 
-                        document.addEventListener('mousemove', onDrag);
-                        document.addEventListener('mouseup', endDrag);
-                        document.addEventListener('touchmove', onDrag, {passive: false});
-                        document.addEventListener('touchend', endDrag);
+                        document.addEventListener('mousemove', onPressMove);
+                        document.addEventListener('mouseup', endPress);
+                        document.addEventListener('touchmove', onPressMove, {passive: false});
+                        document.addEventListener('touchend', endPress);
                     }
 
-                    function onDrag(e) {
-                        if (!dragInfo) return;
-                        e.preventDefault();
-                        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    function onPressMove(e) {
+                        if (!pressInfo) return;
+                        const isTouch = !!e.touches;
+                        const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+                        const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
-                        let newX = clientX - dragInfo.areaLeft - dragInfo.offsetX;
-                        let newY = clientY - dragInfo.areaTop - dragInfo.offsetY;
-
-                        newX = Math.max(0, Math.min(newX, dragInfo.areaW - dragInfo.box.offsetWidth));
-                        newY = Math.max(0, Math.min(newY, dragInfo.areaH - dragInfo.box.offsetHeight));
-
-                        dragInfo.box.style.left = newX + 'px';
-                        dragInfo.box.style.top = newY + 'px';
-                    }
-
-                    function endDrag(e) {
-                        if (!dragInfo) return;
-                        dragInfo.box.classList.remove('dragging');
-                    
-                        const finalX = parseInt(dragInfo.box.style.left) / areaScale;
-                        const finalY = parseInt(dragInfo.box.style.top) / areaScale;
-                        const contId = dragInfo.box.dataset.contId;
-
-                        try {
-                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
-                            const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
-                            layoutData[contId] = {x: Math.round(finalX), y: Math.round(finalY)};
-                            targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
-                        } catch (err) {
-                            console.error('Erro ao salvar posição:', err);
+                        if (!pressInfo.isDragging) {
+                            const dx = clientX - pressInfo.startX;
+                            const dy = clientY - pressInfo.startY;
+                            const limiar = isTouch ? DRAG_THRESHOLD_TOUCH : DRAG_THRESHOLD_MOUSE;
+                            if (Math.hypot(dx, dy) < limiar) {
+                                // Ainda pode ser um clique — não interfere
+                                // com o gesto nativo (scroll da página em
+                                // touch) enquanto não tivermos a certeza.
+                                return;
+                            }
+                            pressInfo.isDragging = true;
+                            pressInfo.box.classList.add('dragging');
                         }
 
-                        document.removeEventListener('mousemove', onDrag);
-                        document.removeEventListener('mouseup', endDrag);
-                        document.removeEventListener('touchmove', onDrag);
-                        document.removeEventListener('touchend', endDrag);
-                        dragInfo = null;
+                        // A partir daqui é arrasto confirmado: passa a
+                        // controlar o gesto por completo.
+                        e.preventDefault();
+                        let newX = clientX - pressInfo.areaLeft - pressInfo.offsetX;
+                        let newY = clientY - pressInfo.areaTop - pressInfo.offsetY;
+
+                        newX = Math.max(0, Math.min(newX, pressInfo.areaW - pressInfo.box.offsetWidth));
+                        newY = Math.max(0, Math.min(newY, pressInfo.areaH - pressInfo.box.offsetHeight));
+
+                        pressInfo.box.style.left = newX + 'px';
+                        pressInfo.box.style.top = newY + 'px';
+                    }
+
+                    function endPress(e) {
+                        if (!pressInfo) return;
+                        const info = pressInfo;
+                        pressInfo = null;
+
+                        document.removeEventListener('mousemove', onPressMove);
+                        document.removeEventListener('mouseup', endPress);
+                        document.removeEventListener('touchmove', onPressMove);
+                        document.removeEventListener('touchend', endPress);
+
+                        // Em touchend, preventDefault evita que o browser
+                        // emita a seguir os eventos "fantasma" de rato
+                        // (mousedown/mouseup/click) para o mesmo toque —
+                        // fariam este handler correr uma segunda vez.
+                        if (e.type === 'touchend') { e.preventDefault(); }
+
+                        if (info.isDragging) {
+                            // Fim de arrasto — grava a posição pendente,
+                            // exatamente como já fazia (só o gatilho para
+                            // começar a arrastar mudou).
+                            info.box.classList.remove('dragging');
+                            const finalX = parseInt(info.box.style.left) / areaScale;
+                            const finalY = parseInt(info.box.style.top) / areaScale;
+                            try {
+                                const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                                const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                                layoutData[info.contId] = {x: Math.round(finalX), y: Math.round(finalY)};
+                                targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                            } catch (err) {
+                                console.error('Erro ao salvar posição:', err);
+                            }
+                        } else {
+                            // Clique sem arrasto: scroll + realce até ao
+                            // cartão do contentor e, consoante o modo, abre
+                            // "Ver interior" ou "Editar" — quem trata a
+                            // mensagem vive no bridge principal, fora deste
+                            // iframe (auto-clica no botão Streamlit real, já
+                            // validado num spike isolado antes de aqui
+                            // entrar).
+                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                            const tipo = isContentEditMode ? 'CONTENTOR_ABRIR_EDICAO' : 'CONTENTOR_MOSTRAR_CARTAO';
+                            targetWin.postMessage({ type: tipo, contId: info.contId }, '*');
+                        }
                     }
 
                     window.addEventListener('resize', () => {
@@ -1082,19 +1156,22 @@ def run_map_page(ctx: dict):
                     computeScale();
                     contentores.forEach(criarContentor);
 
-                    if (!isEditMode) {
-                        statusBar.textContent = 'Clique num contentor para ver o cartão correspondente.';
-                    }
+                    statusBar.textContent = isContentEditMode
+                        ? 'Clique num contentor para editar; arraste para reposicionar.'
+                        : 'Clique num contentor para ver o interior; arraste para reposicionar.';
                 </script>
                 """
                 import streamlit.components.v1 as components
                 mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
-                mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao"] else "false")
+                mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao_conteudo"] else "false")
                 mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
                 mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
+                # __STATUS_TEXT__ serve só de valor inicial — o JS substitui-o
+                # de imediato consoante isContentEditMode (arrastar está
+                # sempre ativo, por isso a mensagem já não depende só disto).
                 status_text = (
                     t("map.status_edit")
-                    if st.session_state["mapa_modo_edicao"]
+                    if st.session_state["mapa_modo_edicao_conteudo"]
                     else t("map.status_view")
                 )
                 mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
@@ -1568,25 +1645,18 @@ def run_map_page(ctx: dict):
 
                     st.markdown("</div></div>", unsafe_allow_html=True)
 
-                    # Ações do contentor em si (editar código/descrição,
-                    # apagar) — pertencem ao contentor, não ao interior, por
-                    # isso ficam aqui no cartão, não dentro do modal.
-                    col_e1, col_e2, col_e3 = st.columns([3, 1, 1])
+                    # Ação do contentor em si (editar) — pertence ao
+                    # contentor, não ao interior, por isso fica aqui no
+                    # cartão, não dentro do modal. "Apagar" vive dentro do
+                    # próprio formulário de edição (ver abaixo), já não é um
+                    # botão à parte.
+                    col_e1, col_e2 = st.columns([4, 1])
                     with col_e2:
-                        pode_apagar = total_palhetas == 0
-                        if st.button("Apagar", key=f"del2_{cont_id}", disabled=not pode_apagar,
-                                     help="Só é possível apagar quando o contentor não tem stock", type="secondary"):
-                            if deletar_contentor(cont_id):
-                                st.success(f"Contentor '{cod}' apagado")
-                                st.rerun()
-                        if not pode_apagar:
-                            st.caption(t("map.delete_blocked"))
-                    with col_e3:
                         if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
                             st.session_state[f'modal_editar_{cont_id}'] = True
                             st.rerun()
 
-                    # Modal edição de código/descrição
+                    # Formulário de edição — nome/descrição + Apagar juntos.
                     if st.session_state.get(f'modal_editar_{cont_id}', False):
                         with st.form(f"form_editar2_{cont_id}"):
                             st.markdown(f"#### {t('map.edit_container_title')}")
@@ -1595,15 +1665,27 @@ def run_map_page(ctx: dict):
                                 novo_codigo = st.text_input(t("label.code"), value=cod)
                             with col_edit2:
                                 nova_descricao = st.text_input(t("label.description"), value=desc)
-                            cs1, cs2 = st.columns(2)
+
+                            pode_apagar = total_palhetas == 0
+                            cs1, cs2, cs3 = st.columns(3)
                             with cs1:
                                 salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
                             with cs2:
                                 cancelar_edit2 = st.form_submit_button(t("btn.cancel"), width="stretch")
+                            with cs3:
+                                apagar_edit = st.form_submit_button(
+                                    "Apagar", width="stretch", disabled=not pode_apagar,
+                                    help=None if pode_apagar else t("map.delete_blocked"),
+                                )
 
                             if cancelar_edit2:
                                 st.session_state[f'modal_editar_{cont_id}'] = False
                                 st.rerun()
+                            if apagar_edit:
+                                if deletar_contentor(cont_id):
+                                    st.session_state[f'modal_editar_{cont_id}'] = False
+                                    st.success(f"Contentor '{cod}' apagado")
+                                    st.rerun()
                             if salvar_edit:
                                 if editar_contentor(cont_id, {'codigo': novo_codigo, 'descricao': nova_descricao,
                                                               'x': row['x'], 'y': row['y'], 'w': row['w'], 'h': row['h']}):
