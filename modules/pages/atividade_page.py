@@ -18,7 +18,7 @@ from modules.components.day_navigator import render_day_navigator
 from modules.i18n import t
 from modules.repositories.dashboard_repo import carregar_atividade_do_dia
 from modules.repositories.transfer_repo import reverter_operacao
-from modules.ui_kit import inject_design_tokens, render_page_header, render_zone_title
+from modules.ui_kit import inject_design_tokens, render_zone_title
 
 
 def _fmt_hora(ts) -> str:
@@ -182,7 +182,6 @@ def run_atividade_page(context: dict) -> None:
     del context
 
     inject_design_tokens()
-    render_page_header("Atividade")
 
     dia = render_day_navigator("atividade")
 

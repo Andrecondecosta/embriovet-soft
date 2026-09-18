@@ -1,3 +1,5 @@
+from datetime import date
+
 import streamlit as st
 from modules.i18n import t
 
@@ -670,6 +672,15 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--primary);
             }}
             #topbar-anchor {{ height: 0; }}
+            /* O próprio elemento do anchor conta como mais um filho do
+               stVerticalBlock (gap:14px — ver o comentário a seguir) —
+               mesmo com altura 0, esse gap "antes" da fila da topbar
+               continua a aplicar-se. Como o anchor não tem nenhum
+               conteúdo visível, anular-lho aqui é seguro e não sai do
+               âmbito da topbar (só este elemento específico). */
+            [data-testid="stElementContainer"]:has(#topbar-anchor) {{
+                margin-bottom: -14px !important;
+            }}
             /* Injetores de JS invisíveis (padding-top forçado; scroll+
                colapso da sidebar ao navegar) — têm de sair do fluxo do
                stVerticalBlock (display:flex; gap:14px), que conta os
@@ -701,12 +712,13 @@ def inject_shell_css(primary_color: str | None):
                 pointer-events: none !important;
                 visibility: hidden !important;
             }}
-            /* Seletor antigo (`#topbar-anchor + div [data-testid=
-               "stHorizontalBlock"]`) nunca correspondia a nada: o
-               anchor não tem irmão ao seu próprio nível (está sozinho
-               dentro do seu markdown). A fila real é irmã do
-               stElementContainer que envolve o anchor, um nível acima,
-               e vem hoje envolvida num stLayoutWrapper extra que não
+            /* Topbar compacta (logo/pesquisa/utilizador) — Passo 1 da
+               compactação transversal. Seletor antigo (`#topbar-anchor +
+               div [data-testid="stHorizontalBlock"]`) nunca correspondia
+               a nada: o anchor não tem irmão ao seu próprio nível (está
+               sozinho dentro do seu markdown). A fila real é irmã do
+               stElementContainer que envolve o anchor, um nível acima, e
+               vem hoje envolvida num stLayoutWrapper extra que não
                existia quando este seletor foi escrito — confirmado em
                runtime com o DOM real. */
             [data-testid="stElementContainer"]:has(#topbar-anchor)
@@ -714,21 +726,138 @@ def inject_shell_css(primary_color: str | None):
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 0 16px;
-                height: 56px;
+                gap: 10px;
+                padding: 0 14px;
+                /* Sem `height` explícito de propósito: o Streamlit
+                   recalcula e reaplica a altura deste elemento a partir
+                   do conteúdo (confirmado empiricamente — mesmo
+                   `height:...!important` posto via JS diretamente no
+                   elemento é revertido pouco depois; `background`
+                   posto da mesma forma fica). A altura final sai então
+                   naturalmente do avatar de 40px (ver mais abaixo),
+                   ficando compacta sem precisar de a forçar. */
                 border-bottom: 1px solid var(--border);
                 background: #ffffff;
-                margin-bottom: 10px;
+                /* Sem margin-bottom própria: o stVerticalBlock que
+                   envolve todo o conteúdo da página já tem um
+                   `gap:14px` genérico entre blocos (usado em toda a
+                   app, fora do âmbito deste ajuste) — uma margem
+                   nossa só se somaria a esse gap em vez de o
+                   substituir. */
+                margin-bottom: 0;
+                /* Nunca empilhar as 3 colunas — é isto que fazia a
+                   topbar saltar de ~84px para ~166px em mobile (o
+                   min-width que o Streamlit força nas colunas abaixo de
+                   ~640px, anulado a seguir, só se torna inofensivo com
+                   isto). */
+                flex-wrap: nowrap !important;
             }}
-            .app-topbar-title {{
-                font-size: 1.05rem;
+            [data-testid="stElementContainer"]:has(#topbar-anchor)
+                + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"]
+                > [data-testid="stColumn"] {{
+                min-width: 0 !important;
+            }}
+            /* Nome da página + data de hoje — substitui a antiga marca
+               (logo + nome da empresa). Mesmo conteúdo em todas as
+               páginas, só o nome muda (vem de `active_key`, já com o
+               texto pronto a mostrar — ver `render_header`); a data é
+               sempre `date.today()`, nunca específica de uma página. */
+            .app-topbar-page {{
+                display: flex;
+                align-items: baseline;
+                gap: 6px;
+                min-width: 0;
+                white-space: nowrap;
+                overflow: hidden;
+            }}
+            .app-topbar-page-name {{
+                font-size: .92rem;
                 font-weight: 700;
                 color: var(--text);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                min-width: 0;
             }}
-            .app-topbar-actions .stButton > button {{
-                font-size: .78rem;
-                padding: 4px 10px;
-                height: 32px;
+            .app-topbar-page-sep {{
+                color: var(--muted);
+                font-size: .8rem;
+                flex: 0 0 auto;
+            }}
+            .app-topbar-page-date {{
+                font-size: .8rem;
+                color: var(--muted);
+                white-space: nowrap;
+                flex: 0 0 auto;
+            }}
+            /* Pesquisa global: em ecrãs estreitos, colapsa para um ícone
+               (só o 🔍 do início do placeholder fica visível) e expande
+               ao ganhar foco — sem tocar no widget em si (mesma key,
+               mesma lógica), só na apresentação. */
+            @media (max-width: 640px) {{
+                /* Repouso: o nome+data ocupam o espaço disponível (têm de
+                   caber sempre, são o único indicador de página) e a
+                   pesquisa fica só com o tamanho do ícone. Sem isto, dar
+                   `flex:1` à coluna da pesquisa "roubava" espaço à da
+                   página mesmo sem estar focada, encolhendo o nome a
+                   quase nada (bug visto em validação: "Dashboard"
+                   reduzido a um traço). */
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"]
+                    > [data-testid="stColumn"]:nth-of-type(1) {{
+                    flex: 1 1 0% !important;
+                    width: auto !important;
+                    min-width: 0 !important;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"]
+                    > [data-testid="stColumn"]:nth-of-type(2) {{
+                    flex: 0 0 auto !important;
+                    width: auto !important;
+                    display: flex;
+                    justify-content: flex-end;
+                }}
+                /* Só quando a pesquisa está mesmo focada é que troca: ela
+                   expande e o nome+data cede o lugar (não precisa de
+                   estar visível ao mesmo tempo que se escreve). Nota:
+                   o Streamlit define `width` explícito (percentual, vindo
+                   da proporção original de `st.columns(...)`) em cada
+                   coluna — como `flex-basis:auto` recorre a esse `width`
+                   quando não é "auto", é preciso anular os dois (`flex`
+                   sozinho não chegava; ficava sempre com a proporção
+                   original em vez da nossa). */
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"]:has(input:focus)
+                    > [data-testid="stColumn"]:nth-of-type(1) {{
+                    flex: 0 0 0px !important;
+                    width: 0 !important;
+                    overflow: hidden;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stHorizontalBlock"]:has(input:focus)
+                    > [data-testid="stColumn"]:nth-of-type(2) {{
+                    flex: 1 1 auto !important;
+                    width: auto !important;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stTextInput"] {{
+                    width: 40px;
+                    transition: width .18s ease;
+                    margin-left: auto;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stTextInput"]:focus-within {{
+                    width: 100%;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stTextInput"] input {{
+                    border-radius: 18px !important;
+                    text-align: center;
+                    padding-left: 8px !important;
+                }}
+                [data-testid="stElementContainer"]:has(#topbar-anchor)
+                    + [data-testid="stLayoutWrapper"] [data-testid="stTextInput"]:focus-within input {{
+                    text-align: left;
+                }}
             }}
             div[data-testid="stElementContainer"] {{
                 margin-bottom: 0.35rem;
@@ -970,39 +1099,34 @@ def _render_resultados_pesquisa(termo: str, resultados: dict) -> None:
                 st.rerun()
 
 
-def render_header(app_settings, user_info):
-    company_name = (app_settings or {}).get("company_name") or "Sistema"
-    logo = (app_settings or {}).get("logo_base64")
-
+def render_header(page_title: str):
+    """Topbar única em toda a app: nome da página atual + data de hoje
+    à esquerda, pesquisa global à direita. Estrutura fixa — só o nome
+    muda por página (`page_title`, vindo do router/estado de navegação
+    em `app.py`); a data é sempre `date.today()`, igual em todas as
+    páginas. Substitui o antigo cabeçalho de página (`render_page_header`
+    e os cabeçalhos manuais) — esse deixou de existir a esse nível."""
     st.markdown("<div id='topbar-anchor'></div>", unsafe_allow_html=True)
 
-    # Layout: marca à esquerda, barra de pesquisa no centro, utilizador à direita
-    col_brand, col_search, col_user = st.columns([3, 4, 2])
+    # Layout: nome de página + data à esquerda, pesquisa a ocupar o
+    # resto. Compacto em desktop e nunca empilha em mobile (ver CSS em
+    # inject_shell_css) — em ecrã estreito, a pesquisa colapsa para um
+    # ícone que expande ao ganhar foco; o nome+data mantêm-se sempre
+    # visíveis (é o único indicador de página que resta).
+    col_page, col_search = st.columns([1, 3])
 
-    with col_brand:
-        if logo:
-            st.markdown(
-                f"""
-                <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
-                    <img src='{logo}' style='height:28px;'/>
-                    <div class='app-topbar-title'>{company_name}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
-            st.markdown(
-                f"""
-                <div style='display:flex; align-items:center; gap:10px; padding: 4px 0 8px 0;'>
-                    <div style='width:28px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:var(--muted);'>
-                        {initials}
-                    </div>
-                    <div class='app-topbar-title'>{company_name}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    with col_page:
+        data_str = date.today().strftime("%d/%m/%Y")
+        st.markdown(
+            f"""
+            <div class='app-topbar-page'>
+                <span class='app-topbar-page-name'>{page_title}</span>
+                <span class='app-topbar-page-sep'>·</span>
+                <span class='app-topbar-page-date'>{data_str}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     with col_search:
         # Limpar o campo (vindo de um click anterior) ANTES de instanciar o widget,
@@ -1018,22 +1142,11 @@ def render_header(app_settings, user_info):
             label_visibility="collapsed",
         )
 
-    with col_user:
-        nome = (user_info or {}).get("nome") or ""
-        if nome:
-            st.markdown(
-                f"<div style='text-align:right;padding:8px 4px;font-size:.82rem;"
-                f"color:#475569;'>{nome}</div>",
-                unsafe_allow_html=True,
-            )
-
     # Resultados da pesquisa (apenas se >= 3 caracteres)
     termo = st.session_state.get("pesquisa_global", "") or ""
     if len(termo.strip()) >= 3:
         resultados = _pesquisa_global(termo)
         _render_resultados_pesquisa(termo, resultados)
-
-    return False, False
 
 
 def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, active_key):

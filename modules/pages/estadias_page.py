@@ -1019,12 +1019,9 @@ def run_estadias_page(context: dict):
         )
         return
 
-    # Cabeçalho com botão à direita
-    col_title, col_btn = st.columns([4, 1])
-    with col_title:
-        st.markdown("## Estadias e Visitas")
+    # Botão de ação — sem título de página aqui (nome+data já vivem na topbar).
+    col_spacer, col_btn = st.columns([4, 1])
     with col_btn:
-        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
         if st.button(
             "+ Nova estadia / visita", type="primary", width="stretch",
         ):

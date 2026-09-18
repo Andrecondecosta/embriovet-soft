@@ -1140,8 +1140,6 @@ if user.get("must_change_password"):
     render_change_credentials(user, app_settings)
     st.stop()
 
-render_header(app_settings, user)
-
 # Menu lateral final (Pedido 7 — 6 itens, sem emojis, sem "Mais opções").
 # Todas as antigas entradas ficam acessíveis por sub-tabs/botões dentro
 # destes 6 sítios. As permissões restrigem apenas o conteúdo de cada
@@ -1217,6 +1215,8 @@ else:
         resolved, _ = _resolve_nav_label(active_key)
         active_key = resolved
         st.session_state["_nav_last_active"] = active_key
+
+render_header(active_key)
 
 aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 if sidebar_logout:

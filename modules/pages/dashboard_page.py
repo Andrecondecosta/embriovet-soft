@@ -45,7 +45,6 @@ from modules.ui_kit import (
     DEFAULT_PRIMARY_COLOR,
     inject_design_tokens,
     render_kpi_row,
-    render_page_header,
     render_status_pill,
     render_zone_title,
 )
@@ -346,13 +345,10 @@ def run_dashboard_page(ctx: dict) -> None:
     """
     del ctx
     app_settings = get_app_settings() or {}
-    company_name = app_settings.get("company_name") or "Sistema"
     primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR
 
     inject_design_tokens()
     _inject_local_css()
-    today_str = date.today().strftime("%d/%m/%Y")
-    render_page_header(t("dashboard.title"), f"{company_name} · {today_str}")
 
     # KPIs
     try:

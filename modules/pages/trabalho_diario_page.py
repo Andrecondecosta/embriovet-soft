@@ -30,7 +30,6 @@ from modules.ui_kit import (
     DEFAULT_PRIMARY_COLOR,
     inject_design_tokens,
     render_kpi_row,
-    render_page_header,
     render_zone_title,
 )
 
@@ -460,8 +459,6 @@ def run_trabalho_diario_page(context: dict):
     inject_design_tokens()
     _inject_lista_css()
 
-    hoje = date.today()
-
     # Barra de cobertura — totais de HOJE, independentes dos filtros.
     try:
         resumo = carregar_resumo_tarefas_hoje()
@@ -469,7 +466,6 @@ def run_trabalho_diario_page(context: dict):
         st.error(f"Erro ao carregar resumo de tarefas: {e}")
         resumo = {"total": 0, "feitas": 0, "por_fazer": 0}
 
-    render_page_header("Trabalho diário", f"Hoje · {hoje.strftime('%d/%m/%Y')}")
     por_fazer_valor = (
         f"<span style='color:{primary_color};'>{resumo['por_fazer']}</span>"
     )
