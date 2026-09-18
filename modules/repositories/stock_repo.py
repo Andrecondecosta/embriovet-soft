@@ -666,12 +666,20 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
         return False
 
 
-def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, andar_destino):
-    """Move palhetas de um lote para outra localização (canister/andar)
-    dentro do MESMO contentor — arrumação física, não transferência de
-    proprietário. Por isso não regista nada em `transferencias` (essa
-    tabela é sobre mudança de dono; aqui o dono nunca muda). Fase 1: só
-    dentro do mesmo contentor — mudar de contentor fica para depois.
+def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, andar_destino,
+                                contentor_destino_id=None):
+    """Move palhetas de um lote para outra localização — canister/andar
+    e, desde a Fase 2, também outro contentor — arrumação física, não
+    transferência de proprietário. Por isso não regista nada em
+    `transferencias` (essa tabela é sobre mudança de dono; aqui o dono
+    nunca muda).
+
+    `contentor_destino_id=None` (omitido) → usa o contentor da própria
+    origem, ou seja, comporta-se exactamente como a Fase 1 (mover só
+    dentro do mesmo contentor). Passar um `contentor_destino_id`
+    diferente move para outro contentor — mesma transação, mesma
+    lógica, só mais uma coluna (`contentor_id`) a mudar no UPDATE/
+    INSERT do destino.
 
     - Se `quantidade` for a existência toda do lote e não houver lote
       do mesmo garanhão já no destino: só reposiciona o próprio registo
@@ -705,6 +713,10 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
             quantidade_int = int(to_py(quantidade) or 0)
             canister_destino_int = int(to_py(canister_destino))
             andar_destino_int = int(to_py(andar_destino))
+            contentor_destino_int = (
+                int(to_py(contentor_destino_id)) if contentor_destino_id is not None
+                else int(to_py(contentor_id) or 0)
+            )
 
             if quantidade_int <= 0:
                 st.error(t("error.qty_positive"))
@@ -714,16 +726,19 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
                 st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
                 return False
 
+            # Mudar de contentor é sempre um destino diferente — só recusa
+            # quando é exactamente o mesmo contentor+canister+andar.
             mesma_localizacao = (
-                canister_destino_int == int(to_py(canister_origem) or 0)
+                contentor_destino_int == int(to_py(contentor_id) or 0)
+                and canister_destino_int == int(to_py(canister_origem) or 0)
                 and andar_destino_int == int(to_py(andar_origem) or 0)
             )
             if mesma_localizacao:
                 st.error("❌ O destino tem de ser diferente da localização atual.")
                 return False
 
-            # Lote do mesmo garanhão já no destino? (scoped ao mesmo
-            # contentor — canister/andar não são únicos entre contentores)
+            # Lote do mesmo garanhão já no destino? (scoped ao CONTENTOR DE
+            # DESTINO — canister/andar não são únicos entre contentores)
             cur.execute("""
                 SELECT id, existencia_atual
                 FROM estoque_dono
@@ -732,22 +747,25 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
                 AND canister = %s AND andar = %s
                 LIMIT 1
             """, (to_py(garanhao), to_py(dono_id), to_py(stock_origem_id),
-                  to_py(contentor_id), canister_destino_int, andar_destino_int))
+                  to_py(contentor_destino_int), canister_destino_int, andar_destino_int))
 
             lote_destino = cur.fetchone()
 
             if quantidade_int == exist_atual and not lote_destino:
                 # Mover o lote inteiro para um sítio sem correspondência:
-                # só reposiciona o registo, sem zerar-e-recriar.
+                # só reposiciona o registo (contentor incluído), sem
+                # zerar-e-recriar.
                 cur.execute("""
                     UPDATE estoque_dono
-                    SET canister = %s, andar = %s
+                    SET contentor_id = %s, canister = %s, andar = %s
                     WHERE id = %s
-                """, (canister_destino_int, andar_destino_int, to_py(stock_origem_id)))
+                """, (to_py(contentor_destino_int), canister_destino_int, andar_destino_int,
+                      to_py(stock_origem_id)))
             else:
                 # Parcial, ou o destino já tem o mesmo garanhão: desconta
-                # na origem e soma/cria no destino (mesma localização de
-                # contentor, dono inalterado).
+                # na origem e soma/cria no destino (dono inalterado; o
+                # contentor pode ser outro — é só mais uma coluna na
+                # mesma transação, não muda nada na atomicidade).
                 cur.execute("""
                     UPDATE estoque_dono
                     SET existencia_atual = existencia_atual - %s
@@ -774,7 +792,7 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
                         quantidade_int, to_py(qual), to_py(conc), to_py(mot),
                         to_py(local), to_py(cert), to_py(dose), to_py(obs),
                         quantidade_int, quantidade_int, to_py(cor),
-                        to_py(contentor_id), canister_destino_int, andar_destino_int,
+                        to_py(contentor_destino_int), canister_destino_int, andar_destino_int,
                         to_py(animal_id)
                     ))
 
@@ -784,7 +802,7 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
         invalidate_data_cache()
         logger.info(
             f"Movimento de localização: {quantidade_int} palhetas do lote {stock_origem_id} "
-            f"para canister {canister_destino_int}/andar {andar_destino_int}"
+            f"para contentor {contentor_destino_int}/canister {canister_destino_int}/andar {andar_destino_int}"
         )
         return True
 
