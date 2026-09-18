@@ -1470,12 +1470,26 @@ def run_map_page(ctx: dict):
                             # visível; o clique real vem do pill no HTML do
                             # detalhe, via handleMoverTriggerClick) + o
                             # mini-formulário, quando um lote está selecionado
-                            # para mover. Fica ANTES do desenho do círculo de
-                            # propósito: se o movimento tiver sucesso,
-                            # `stock_modal` é relido aqui e o círculo/detalhe
-                            # abaixo já saem atualizados na mesma passagem —
-                            # tal como o "Inverter andares" já fazia.
+                            # para mover. Ao confirmar/cancelar com sucesso,
+                            # fecha logo o formulário com `st.rerun(scope=
+                            # "fragment")` (ver mais abaixo) — não precisa de
+                            # ficar ANTES do desenho do círculo só por causa
+                            # disso, mas mantém-se aqui por seguir a mesma
+                            # ordem lógica do "Inverter andares" acima.
                             mover_key = f"mover_form_lote_{cont_id_modal}"
+
+                            # Mensagem de sucesso: `st.toast` NÃO sobrevive ao
+                            # `st.rerun(scope="fragment")` logo a seguir —
+                            # confirmado empiricamente (o toast nunca chega a
+                            # aparecer, a passagem é interrompida antes de o
+                            # frontend o entregar). Por isso guarda-se em
+                            # `session_state` antes do rerun e mostra-se aqui,
+                            # já na passagem seguinte (o `.pop` garante que só
+                            # aparece uma vez).
+                            mover_msg_key = f"mover_ultimo_resultado_{cont_id_modal}"
+                            if st.session_state.get(mover_msg_key):
+                                st.toast(st.session_state.pop(mover_msg_key), icon="✅")
+
                             lotes_andar_sel = stock_modal[stock_modal['andar'] == andar_sel]
                             for _, lote_btn in lotes_andar_sel.iterrows():
                                 lote_id_btn = int(lote_btn['id'])
@@ -1483,7 +1497,6 @@ def run_map_page(ctx: dict):
                                     st.session_state[mover_key] = lote_id_btn
 
                             mover_lote_id = st.session_state.get(mover_key)
-                            moveu_com_sucesso = False
                             if mover_lote_id is not None:
                                 linha_mover = stock_modal[stock_modal['id'] == mover_lote_id]
                                 if linha_mover.empty:
@@ -1567,27 +1580,43 @@ def run_map_page(ctx: dict):
                                                 mover_lote_id, qtd_mover, canister_destino, andar_destino,
                                                 contentor_destino_id=contentor_destino_id,
                                             ):
-                                                st.toast(
+                                                # Guardar a mensagem (não `st.toast`
+                                                # diretamente — ver `mover_msg_key`
+                                                # acima) e só depois limpar o
+                                                # formulário e forçar o rerun do
+                                                # fragmento.
+                                                st.session_state[mover_msg_key] = (
                                                     f"{qtd_mover} palheta(s) movida(s) para "
                                                     f"{contentor_destino_codigo} · Canister {canister_destino} · "
-                                                    f"Andar {andar_destino}.",
-                                                    icon="✅",
+                                                    f"Andar {andar_destino}."
                                                 )
                                                 st.session_state.pop(mover_key, None)
                                                 stock_modal = obter_stock_contentor(cont_id_modal)
-                                                moveu_com_sucesso = True
+                                                # `@st.dialog` herda de `st.fragment`
+                                                # (documentado): um rerun com
+                                                # scope="fragment" volta a chamar só
+                                                # `_modal()` — não a página toda —
+                                                # sem fechar o modal. Com o
+                                                # `mover_key` já limpo e o
+                                                # `stock_modal` já fresco antes
+                                                # deste rerun, a nova passagem de
+                                                # `_modal()` nem chega a desenhar o
+                                                # formulário (mover_lote_id sai
+                                                # None) — fecha-se logo nesta
+                                                # interação, círculo/detalhe já
+                                                # actualizados. Confirmado
+                                                # empiricamente (o `st.rerun()`
+                                                # simples, sem scope, é que fecha o
+                                                # modal — não este).
+                                                st.rerun(scope="fragment")
                                     with col_mv2:
                                         if st.button(
                                             "Cancelar", key=f"mover_cancelar_{mover_lote_id}", width="stretch",
                                         ):
                                             st.session_state.pop(mover_key, None)
+                                            st.rerun(scope="fragment")
 
                                     st.divider()
-
-                            if moveu_com_sucesso:
-                                circle_html, canisters = build_tank_circle_html(
-                                    stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
-                                )
 
                             if circle_html:
                                 st.markdown(circle_html, unsafe_allow_html=True)
