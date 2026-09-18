@@ -21,7 +21,7 @@ from modules.repositories.stock_repo import (
 )
 from modules.ui_kit import (
     inject_design_tokens, render_kpi_row,
-    render_zone_title, safe_pick,
+    safe_pick,
 )
 
 logger = logging.getLogger(__name__)
@@ -268,12 +268,10 @@ def run_reports_page(ctx: dict):
     proprietarios = carregar_proprietarios()
     contentores = carregar_contentores()
 
-    render_zone_title(t("reports.zone.selection"), "ds-zone-title ds-zone-title--first")
     modo = st.radio(
         t("reports.analysis_type"),
         [t("reports.mode.stallion"), t("reports.mode.owner"), t("reports.mode.container"), t("reports.mode.history")],
         horizontal=True,
-        label_visibility="collapsed",
         key="rel_modo",
     )
 
@@ -281,64 +279,70 @@ def run_reports_page(ctx: dict):
     prop_sel = None
     contentor_sel = None
     tipo_hist = None
-
-    if modo == t("reports.mode.stallion") and not stock.empty:
-        garanhao_sel = st.selectbox(t("reports.select_stallion"), sorted(stock["garanhao_nome"].dropna().unique()), key="rel_sel_g")
-    elif modo == t("reports.mode.owner") and not proprietarios.empty:
-        prop_sel = st.selectbox(
-            t("reports.select_owner"),
-            proprietarios["id"].tolist(),
-            format_func=lambda x: proprietarios[proprietarios["id"] == x]["nome"].values[0],
-            key="rel_sel_p",
-        )
-    elif modo == t("reports.mode.container") and not contentores.empty:
-        contentor_sel = st.selectbox(
-            t("reports.select_container"),
-            contentores["id"].tolist(),
-            format_func=lambda x: contentores[contentores["id"] == x]["codigo"].values[0],
-            key="rel_sel_c",
-        )
-    elif modo == t("reports.mode.history"):
-        tipo_hist = st.radio(
-            t("reports.history_type"),
-            [t("reports.history.inseminations"), t("reports.history.transfer_internal"), t("reports.history.transfer_external"), t("reports.history.full_stock")],
-            horizontal=True,
-            label_visibility="collapsed",
-            key="rel_tipo_hist",
-        )
-
-    render_zone_title(t("reports.zone.filters"), "ds-zone-title")
     filtros = {}
-    with st.expander(t("reports.filters_title"), expanded=False):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            usar_periodo = st.checkbox(t("reports.apply_period"), value=False, key="rel_periodo_flag")
-        with c2:
-            data_inicio = st.date_input(t("reports.date_start"), value=None, key="rel_periodo_ini") if usar_periodo else None
-        with c3:
-            data_fim = st.date_input(t("reports.date_end"), value=None, key="rel_periodo_fim") if usar_periodo else None
 
-        if data_inicio and data_fim and data_inicio > data_fim:
-            st.warning(t("reports.invalid_period"))
-            data_inicio, data_fim = None, None
+    # Seletor do modo + filtros lado a lado, numa barra compacta (sem os
+    # antigos títulos "ZONA DE..." — jargão interno sem valor para o
+    # utilizador; o rádio acima e o expander abaixo já se identificam
+    # sozinhos, por isso o rádio deixa de ter o rótulo escondido).
+    col_sel, col_filt = st.columns([1, 2])
 
-        if modo == t("reports.mode.stallion") and garanhao_sel:
-            base = stock[stock["garanhao_nome"] == garanhao_sel]
-            filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_g_prop")
-        elif modo == t("reports.mode.owner") and prop_sel:
-            base = stock[stock["dono_id"] == prop_sel] if not stock.empty else pd.DataFrame()
-            filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao_nome"].dropna().unique()) if not base.empty else [], key="rel_f_p_gar")
-        elif modo == t("reports.mode.container") and contentor_sel:
-            base = stock[stock["contentor_id"] == contentor_sel] if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
-            f1, f2, f3, f4 = st.columns(4)
-            with f1:
-                filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_gar")
-            with f2:
-                filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_prop")
-            with f3:
-                filtros["can"] = st.multiselect(t("reports.canister"), sorted(base["canister"].dropna().unique()) if (not base.empty and "canister" in base.columns) else [], key="rel_f_c_can")
-            with f4:
-                filtros["and"] = st.multiselect(t("reports.floor"), sorted(base["andar"].dropna().unique()) if (not base.empty and "andar" in base.columns) else [], key="rel_f_c_and")
+    with col_sel:
+        if modo == t("reports.mode.stallion") and not stock.empty:
+            garanhao_sel = st.selectbox(t("reports.select_stallion"), sorted(stock["garanhao_nome"].dropna().unique()), key="rel_sel_g")
+        elif modo == t("reports.mode.owner") and not proprietarios.empty:
+            prop_sel = st.selectbox(
+                t("reports.select_owner"),
+                proprietarios["id"].tolist(),
+                format_func=lambda x: proprietarios[proprietarios["id"] == x]["nome"].values[0],
+                key="rel_sel_p",
+            )
+        elif modo == t("reports.mode.container") and not contentores.empty:
+            contentor_sel = st.selectbox(
+                t("reports.select_container"),
+                contentores["id"].tolist(),
+                format_func=lambda x: contentores[contentores["id"] == x]["codigo"].values[0],
+                key="rel_sel_c",
+            )
+        elif modo == t("reports.mode.history"):
+            tipo_hist = st.radio(
+                t("reports.history_type"),
+                [t("reports.history.inseminations"), t("reports.history.transfer_internal"), t("reports.history.transfer_external"), t("reports.history.full_stock")],
+                horizontal=True,
+                key="rel_tipo_hist",
+            )
+
+    with col_filt:
+        with st.expander(t("reports.filters_title"), expanded=False):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                usar_periodo = st.checkbox(t("reports.apply_period"), value=False, key="rel_periodo_flag")
+            with c2:
+                data_inicio = st.date_input(t("reports.date_start"), value=None, key="rel_periodo_ini") if usar_periodo else None
+            with c3:
+                data_fim = st.date_input(t("reports.date_end"), value=None, key="rel_periodo_fim") if usar_periodo else None
+
+            if data_inicio and data_fim and data_inicio > data_fim:
+                st.warning(t("reports.invalid_period"))
+                data_inicio, data_fim = None, None
+
+            if modo == t("reports.mode.stallion") and garanhao_sel:
+                base = stock[stock["garanhao_nome"] == garanhao_sel]
+                filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_g_prop")
+            elif modo == t("reports.mode.owner") and prop_sel:
+                base = stock[stock["dono_id"] == prop_sel] if not stock.empty else pd.DataFrame()
+                filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao_nome"].dropna().unique()) if not base.empty else [], key="rel_f_p_gar")
+            elif modo == t("reports.mode.container") and contentor_sel:
+                base = stock[stock["contentor_id"] == contentor_sel] if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
+                f1, f2, f3, f4 = st.columns(4)
+                with f1:
+                    filtros["gar"] = st.multiselect(t("reports.stallions"), sorted(base["garanhao_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_gar")
+                with f2:
+                    filtros["prop"] = st.multiselect(t("reports.owners"), sorted(base["proprietario_nome"].dropna().unique()) if not base.empty else [], key="rel_f_c_prop")
+                with f3:
+                    filtros["can"] = st.multiselect(t("reports.canister"), sorted(base["canister"].dropna().unique()) if (not base.empty and "canister" in base.columns) else [], key="rel_f_c_can")
+                with f4:
+                    filtros["and"] = st.multiselect(t("reports.floor"), sorted(base["andar"].dropna().unique()) if (not base.empty and "andar" in base.columns) else [], key="rel_f_c_and")
 
     if usar_periodo and (data_inicio or data_fim):
         if not insem.empty:
@@ -348,8 +352,6 @@ def run_reports_page(ctx: dict):
         if not transf_ext.empty:
             transf_ext = aplicar_filtro_data(transf_ext, "data_transferencia", data_inicio, data_fim)
         stock = _filtrar_stock_por_periodo(stock, data_inicio, data_fim)
-
-    render_zone_title(t("reports.zone.results"), "ds-zone-title")
 
     if modo == t("reports.mode.stallion") and garanhao_sel:
         s = stock[stock["garanhao_nome"] == garanhao_sel] if not stock.empty else pd.DataFrame()
