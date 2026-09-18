@@ -20,7 +20,7 @@ from modules.repositories.stock_repo import (
     carregar_stock, carregar_transferencias, carregar_transferencias_externas,
 )
 from modules.ui_kit import (
-    inject_design_tokens, render_kpi_row, render_page_header,
+    inject_design_tokens, render_kpi_row,
     render_zone_title, safe_pick,
 )
 
@@ -260,7 +260,6 @@ def run_reports_page(ctx: dict):
     del ctx
 
     inject_design_tokens()
-    render_page_header(t("reports.title"))
 
     stock = carregar_stock()
     insem = carregar_inseminacoes()

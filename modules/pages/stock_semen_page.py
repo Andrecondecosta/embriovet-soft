@@ -61,7 +61,7 @@ def run_stock_semen_page(ctx: dict) -> None:
 # ─── Topbar (título + botões de ação) ────────────────────────────────
 
 def _render_topbar() -> None:
-    st.header("Stock de sémen")
+    # Sem título de página aqui — nome+data já vivem na topbar da app.
     col_l, col_add, col_imp = st.columns([6, 1.4, 1.2])
     with col_add:
         if st.button("Adicionar lote", key="stock-semen-btn-add",
