@@ -26,7 +26,6 @@ from modules.ui_kit import (
     inject_stepper_css,
     inject_stock_css,
     render_kpi_strip,
-    render_zone_title,
     safe_pick,
 )
 
@@ -87,22 +86,25 @@ def run_stock_page(ctx: dict):
         else:
             idx_default = 0
 
-        render_zone_title(t("stock.zone.selection"), "stock-zone-title")
-        filtro = st.selectbox(t("label.garanhao"), garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
-
-        render_zone_title(t("stock.zone.filters"), "stock-zone-title")
-        with st.expander(t("stock.filters_title"), expanded=False):
-            f1, f2, f3 = st.columns(3)
-            with f1:
-                filtro_props = st.multiselect(
-                    t("label.owner_plural"),
-                    sorted(stock[stock["garanhao_nome"] == filtro]["proprietario_nome"].dropna().unique()),
-                    key="stock_filter_props",
-                )
-            with f2:
-                min_palhetas = st.number_input(t("stock.min_straws"), min_value=0, value=0, step=1, key="stock_filter_min")
-            with f3:
-                mostrar_sem_stock = st.checkbox(t("stock.include_empty"), value=False, key="stock_filter_zero")
+        # Seleção + filtros lado a lado, numa barra compacta (sem os
+        # antigos títulos "ZONA DE..." — jargão interno sem valor para o
+        # utilizador; o selectbox e o expander já se explicam sozinhos).
+        col_sel, col_filt = st.columns([1, 2])
+        with col_sel:
+            filtro = st.selectbox(t("label.garanhao"), garanhaos_disponiveis, index=idx_default, key="stock_garanhao_main")
+        with col_filt:
+            with st.expander(t("stock.filters_title"), expanded=False):
+                f1, f2, f3 = st.columns(3)
+                with f1:
+                    filtro_props = st.multiselect(
+                        t("label.owner_plural"),
+                        sorted(stock[stock["garanhao_nome"] == filtro]["proprietario_nome"].dropna().unique()),
+                        key="stock_filter_props",
+                    )
+                with f2:
+                    min_palhetas = st.number_input(t("stock.min_straws"), min_value=0, value=0, step=1, key="stock_filter_min")
+                with f3:
+                    mostrar_sem_stock = st.checkbox(t("stock.include_empty"), value=False, key="stock_filter_zero")
 
         stock_filtrado = filter_stock_view(
             stock,
@@ -115,7 +117,6 @@ def run_stock_page(ctx: dict):
         transf_hist_all = carregar_transferencias()
         transf_ext_hist_all = carregar_transferencias_externas()
 
-        render_zone_title(t("stock.zone.results"), "stock-zone-title")
         render_kpi_strip(stock_kpis(stock_filtrado, to_py))
 
         resumo_por_proprietario = summarize_stock_by_owner(stock_filtrado)
