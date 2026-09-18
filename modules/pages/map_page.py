@@ -1507,8 +1507,30 @@ def run_map_page(ctx: dict):
                                     # nesta mesma passagem).
                                     st.markdown(
                                         f"**↔ Mover — {gar_mover}** "
-                                        f"(atualmente Canister {canister_atual} · Andar {andar_atual})"
+                                        f"(atualmente {cod_modal} · Canister {canister_atual} · Andar {andar_atual})"
                                     )
+
+                                    # Contentor destino — Fase 2. Por defeito o
+                                    # contentor atual (mantém o caso comum da
+                                    # Fase 1 igual a antes: só muda de sítio
+                                    # dentro do mesmo contentor, a menos que se
+                                    # escolha outro). 1–10/1–2 mantêm-se fixos
+                                    # seja qual for o contentor escolhido — a
+                                    # app não tem (nem esta fase introduz) um
+                                    # número de canisters por contentor.
+                                    idx_contentor_dest = 0
+                                    if cont_id_modal in contentores_df['id'].values:
+                                        idx_contentor_dest = list(contentores_df['id']).index(cont_id_modal)
+                                    contentor_destino_codigo = st.selectbox(
+                                        "Contentor destino", options=contentores_df['codigo'].tolist(),
+                                        index=idx_contentor_dest, key=f"mover_contentor_{mover_lote_id}",
+                                    )
+                                    contentor_destino_id = int(
+                                        contentores_df.loc[
+                                            contentores_df['codigo'] == contentor_destino_codigo, 'id'
+                                        ].iloc[0]
+                                    )
+
                                     col_qtd, col_can, col_and = st.columns(3)
                                     with col_qtd:
                                         qtd_mover = st.number_input(
@@ -1534,14 +1556,21 @@ def run_map_page(ctx: dict):
                                             "Mover palhetas", key=f"mover_confirmar_{mover_lote_id}",
                                             type="primary", width="stretch",
                                         ):
-                                            if canister_destino == canister_atual and andar_destino == andar_atual:
+                                            mesmo_destino = (
+                                                contentor_destino_id == cont_id_modal
+                                                and canister_destino == canister_atual
+                                                and andar_destino == andar_atual
+                                            )
+                                            if mesmo_destino:
                                                 st.warning("Escolhe um destino diferente da localização atual.")
                                             elif mover_palhetas_localizacao(
                                                 mover_lote_id, qtd_mover, canister_destino, andar_destino,
+                                                contentor_destino_id=contentor_destino_id,
                                             ):
                                                 st.toast(
                                                     f"{qtd_mover} palheta(s) movida(s) para "
-                                                    f"Canister {canister_destino} · Andar {andar_destino}.",
+                                                    f"{contentor_destino_codigo} · Canister {canister_destino} · "
+                                                    f"Andar {andar_destino}.",
                                                     icon="✅",
                                                 )
                                                 st.session_state.pop(mover_key, None)
