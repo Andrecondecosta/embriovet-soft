@@ -121,17 +121,11 @@ def run_map_page(ctx: dict):
             unsafe_allow_html=True,
         )
 
-        # Modo "Editar" — puramente de conteúdo (cor dos contentores +
-        # clique abre a edição de nome/descrição/apagar). O arrastar para
-        # reposicionar deixou de depender deste modo: está sempre ativo no
-        # mapa, independentemente disto (ver `criarContentor`/`startPress`
-        # no JS mais abaixo).
-        if "mapa_modo_edicao_conteudo" not in st.session_state:
-            st.session_state["mapa_modo_edicao_conteudo"] = False
-
-        if "mapa_layout_reader_tick" not in st.session_state:
-            st.session_state["mapa_layout_reader_tick"] = 0
-
+        # Arrumação final: já não há modo "Editar" — clicar num contentor
+        # abre sempre o modal (ver + editar nome/descrição + apagar);
+        # arrastar está sempre ativo e grava sozinho (ver
+        # `mapa_salvar_layout_pendente` mais abaixo, agora acionado pelo
+        # próprio arrasto em vez de um botão "Salvar Layout").
         if "mapa_salvar_layout_pendente" not in st.session_state:
             st.session_state["mapa_salvar_layout_pendente"] = False
 
@@ -299,29 +293,29 @@ def run_map_page(ctx: dict):
 
                                         // Clicar (sem arrastar) numa caixa do mapa livre
                                         // (fora deste modal, no components.html do topo
-                                        // da página) faz scroll + realce até ao cartão
-                                        // do contentor, e depois clica sozinho no botão
-                                        // Streamlit real desse cartão — "Ver interior"
-                                        // fora do modo Editar, "Editar" dentro dele. Uma
+                                        // da página) clica sozinho no botão Streamlit
+                                        // real escondido "Ver interior" desse contentor,
+                                        // que abre o modal (ver+editar+apagar). Uma
                                         // Promise assíncrona à espera do clique, através
                                         // da fronteira do iframe, foi testada à parte e
                                         // mostrou-se pouco fiável; este auto-clique foi
                                         // validado num spike isolado (20/20 cliques) por
                                         // ser síncrono, sem nada "à espera" entre reruns.
+                                        // Largar um contentor arrastado (fim do arrasto,
+                                        // ver endPress) usa o mesmo mecanismo para clicar
+                                        // num botão escondido que grava a posição sem
+                                        // precisar do botão "Salvar Layout".
                                         window.addEventListener('message', function(event){
                                             var data = event && event.data ? event.data : null;
                                             if (!data) return;
-                                            if (data.type !== 'CONTENTOR_MOSTRAR_CARTAO' && data.type !== 'CONTENTOR_ABRIR_EDICAO') return;
-                                            var card = targetDoc.querySelector('.cont-card[data-cont-id="' + data.contId + '"]');
-                                            if (card) {
-                                                card.classList.add('cont-card-highlight');
-                                                card.scrollIntoView({behavior: 'smooth', block: 'center'});
-                                                window.setTimeout(function(){ card.classList.remove('cont-card-highlight'); }, 1800);
+                                            var botao = null;
+                                            if (data.type === 'CONTENTOR_MOSTRAR_CARTAO') {
+                                                botao = targetDoc.querySelector('.st-key-ver_interior_' + data.contId + ' button');
+                                            } else if (data.type === 'CONTENTOR_POSICAO_ARRASTADA') {
+                                                botao = targetDoc.querySelector('.st-key-map_autosave_trigger button');
+                                            } else {
+                                                return;
                                             }
-                                            var seletor = data.type === 'CONTENTOR_ABRIR_EDICAO'
-                                                ? '.st-key-edit2_' + data.contId + ' button'
-                                                : '.st-key-ver_interior_' + data.contId + ' button';
-                                            var botao = targetDoc.querySelector(seletor);
                                             if (botao) { botao.click(); }
                                         });
 
@@ -368,21 +362,76 @@ def run_map_page(ctx: dict):
             st.session_state["map_largura_viewport"] = None
 
         if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
+            # window.innerWidth sozinho mede o IFRAME escondido do próprio
+            # streamlit_js_eval (display:none, logo 0), não a janela real —
+            # é preciso window.parent para chegar à janela principal.
             largura_viewport_once = streamlit_js_eval(
-                js_expressions='window.innerWidth',
+                js_expressions='(function(){try{return window.parent.innerWidth}catch(e){return window.innerWidth}})()',
                 key='map_viewport_width_once',
                 want_output=True,
             )
-            if largura_viewport_once is not None:
+            if largura_viewport_once:
                 try:
-                    st.session_state["map_largura_viewport"] = int(largura_viewport_once)
+                    valor = int(largura_viewport_once)
+                    if valor > 0:
+                        st.session_state["map_largura_viewport"] = valor
                 except Exception:
-                    st.session_state["map_largura_viewport"] = 1200
+                    pass
+
+        # Mesmo padrão da largura — lida uma vez por sessão — para o mapa
+        # poder ter uma altura que caiba no ecrã visível sem precisar de
+        # scroll, em vez de uma altura fixa que ignora o tamanho real do
+        # ecrã do utilizador.
+        if "map_altura_viewport" not in st.session_state:
+            st.session_state["map_altura_viewport"] = None
+
+        if js_eval_disponivel and st.session_state["map_altura_viewport"] is None:
+            altura_viewport_once = streamlit_js_eval(
+                js_expressions='(function(){try{return window.parent.innerHeight}catch(e){return window.innerHeight}})()',
+                key='map_viewport_height_once',
+                want_output=True,
+            )
+            if altura_viewport_once:
+                try:
+                    valor = int(altura_viewport_once)
+                    if valor > 0:
+                        st.session_state["map_altura_viewport"] = valor
+                except Exception:
+                    pass
 
         largura_viewport = st.session_state.get("map_largura_viewport")
         is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
         modo_visualizacao = True
 
+        # Botão escondido — o bridge de clique chama-lhe .click() quando um
+        # arrasto termina (ver endPress/JS mais abaixo), para gravar a
+        # posição sem precisar de um "Salvar Layout" manual. Tem de ser
+        # detetado AQUI, antes da leitura de `layout_pending_raw` abaixo:
+        # é o que faz `mapa_salvar_layout_pendente` já estar True *na
+        # mesma rerun* em que o botão é clicado, para essa leitura (e por
+        # tabela o mapa) já verem a posição pendente desde o primeiro
+        # instante — sem isto, essa primeira rerun ainda mostrava a
+        # posição antiga (o "ressalto").
+        auto_commit_layout = False
+        if not contentores_df.empty:
+            auto_commit_layout = st.button("Gravar posição", key="map_autosave_trigger")
+
+        if auto_commit_layout:
+            if not js_eval_disponivel:
+                st.error(t("map.install_dependency"))
+            else:
+                logger.info("Auto-save de posição acionado pelo arrasto")
+                st.session_state["mapa_salvar_layout_pendente"] = True
+                st.session_state["mapa_salvar_layout_tentativas"] = 0
+                st.rerun()
+
+        # Só para a ESCRITA na BD mais abaixo (não para o visual — ver
+        # `posicaoEfetiva` no JS do mapa: essa lê o localStorage
+        # diretamente no browser, sem depender disto, porque esta leitura
+        # tem sempre pelo menos um render de atraso a resolver — é assim
+        # que qualquer componente Streamlit funciona, não há como evitar
+        # esse atraso NESTE lado; corrigir o ressalto exigia contorná-lo,
+        # não apressá-lo).
         layout_pending_raw = None
         if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
             layout_pending_raw = streamlit_js_eval(
@@ -456,7 +505,7 @@ def run_map_page(ctx: dict):
                     unsafe_allow_html=True,
                 )
                 st.markdown("")
-                if st.button("+ Adicionar Primeiro Contentor", type="primary", width="stretch"):
+                if st.button("Adicionar Primeiro Contentor", icon="➕", type="primary", width="stretch"):
                     st.session_state['modal_novo_contentor'] = True
                     st.rerun()
         else:
@@ -488,6 +537,11 @@ def run_map_page(ctx: dict):
                                 "observacoes": observacao,
                             })
 
+                    # A posição pendente (largada há pouco, ainda por
+                    # confirmar na BD) é aplicada no próprio JS do mapa
+                    # (ver `posicaoEfetiva`), lendo o localStorage
+                    # diretamente — não aqui. Ver o comentário junto de
+                    # `layout_pending_raw` sobre porquê.
                     contentores_data.append({
                         "id": int(row['id']),
                         "codigo": row['codigo'],
@@ -501,11 +555,6 @@ def run_map_page(ctx: dict):
                     })
 
                 criar_novo = False
-                ativar_edicao = False
-                sair_edicao = False
-                salvar_layout = False
-                descartar_layout = False
-                reorganizar = False
 
                 st.markdown(
                     """
@@ -518,8 +567,9 @@ def run_map_page(ctx: dict):
                         .st-key-mapa-page-scope div[data-testid="stButton"] > button {
                             border-radius: 8px !important;
                             font-weight: 500 !important;
-                            font-size: 0.9rem !important;
-                            padding: 8px 20px !important;
+                            font-size: 0.82rem !important;
+                            padding: 4px 14px !important;
+                            min-height: 32px !important;
                             transition: all 0.2s ease !important;
                             border: 1px solid #e2e8f0 !important;
                         }
@@ -532,61 +582,45 @@ def run_map_page(ctx: dict):
                            global em `inject_shell_css` (cor da marca) — não
                            hardcodar uma cor aqui. */
 
-                        /* Toolbar premium */
-                        .map-toolbar-shell {
-                            border: 1px solid #e2e8f0;
-                            border-radius: 10px;
-                            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                            padding: 12px 16px;
-                            margin-bottom: 12px;
-                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-                        }
-                    
-                        .map-toolbar-kpis {
+                        /* Topo compacto — só o essencial (Adicionar +
+                           contagens), sem cartão nem barra grande, para
+                           libertar altura para o mapa. */
+                        .map-topbar-kpis {
                             display: flex;
-                            gap: 16px;
+                            gap: 12px;
                             align-items: center;
-                            font-size: 0.85rem;
-                            color: #64748b;
+                            font-size: 0.78rem;
+                            color: #94a3b8;
+                            white-space: nowrap;
                         }
-                    
-                        .map-toolbar-kpis b {
-                            color: #0f172a;
+
+                        .map-topbar-kpis b {
+                            color: #475569;
                             font-weight: 600;
                         }
-                    
-                        /* Container do mapa - altura otimizada */
+
+                        /* Container do mapa — a altura real já vem calculada
+                           em Python (map_height) para caber no ecrã sem
+                           scroll; isto é só uma rede de segurança para
+                           casos extremos (ex.: muitos contentores). */
                         .map-workspace {
-                            max-height: 65vh;
+                            max-height: 90vh;
                             overflow: hidden;
                             border-radius: 12px;
                             border: 1px solid #e2e8f0;
                             background: #ffffff;
                             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
                         }
-                    
+
                         /* Mobile responsive */
                         @media (max-width: 900px) {
-                            .st-key-mapa-page-scope div[data-testid="stButton"] > button {
-                                min-height: 38px !important;
-                                font-size: 0.85rem !important;
-                                padding: 6px 12px !important;
+                            .map-topbar-kpis {
+                                font-size: 0.7rem;
+                                gap: 8px;
                             }
 
-                            .map-toolbar-shell {
-                                padding: 8px 12px;
-                                margin-bottom: 8px;
-                                border-radius: 8px;
-                            }
-                        
-                            .map-toolbar-kpis {
-                                font-size: 0.75rem;
-                                gap: 10px;
-                                flex-wrap: wrap;
-                            }
-                        
                             .map-workspace {
-                                max-height: 55vh;
+                                max-height: 80vh;
                                 border-radius: 8px;
                             }
                         }
@@ -605,6 +639,26 @@ def run_map_page(ctx: dict):
                             height: 0 !important;
                             min-height: 0 !important;
                             display: none !important;
+                        }
+
+                        /* Botões escondidos que só existem para o bridge de
+                           clique lhes chamar .click() (ver targetWin.eval
+                           mais acima) — precisam de estar no DOM e clicáveis
+                           para o Streamlit disparar o onClick real, por isso
+                           não usamos display:none aqui (alguns browsers não
+                           são consistentes a disparar .click() em elementos
+                           com display:none); ficam sim fora do ecrã. */
+                        div[class*="st-key-ver_interior_"],
+                        div[class*="st-key-map_autosave_trigger"] {
+                            position: absolute !important;
+                            width: 1px !important;
+                            height: 1px !important;
+                            padding: 0 !important;
+                            margin: -1px !important;
+                            overflow: hidden !important;
+                            clip: rect(0, 0, 0, 0) !important;
+                            white-space: nowrap !important;
+                            border: 0 !important;
                         }
 
                         /* Logos e header nativo do Streamlit não devem intercetar cliques
@@ -636,105 +690,29 @@ def run_map_page(ctx: dict):
                     unsafe_allow_html=True,
                 )
 
-                with st.container():
-                    # Toolbar com KPIs
+                # Topo compacto — só "Adicionar" (pequeno/discreto) e as
+                # contagens, numa única linha, sem cartão nem barra grande:
+                # tudo sobre um contentor faz-se ao clicar nele (ver+editar+
+                # apagar no modal) e arrastar grava sozinho a posição
+                # (botão escondido "Gravar posição", tratado bem no início
+                # da função) — a toolbar já não precisa de mais nada.
+                col_btn, col_kpi = st.columns([1, 2])
+                with col_btn:
+                    criar_novo = st.button("Adicionar", key="map_add_btn", icon="➕", width="content")
+                with col_kpi:
                     st.markdown(
                         f"""
-                        <div class='map-toolbar-shell'>
-                            <div class='map-toolbar-kpis'>
-                                <span>📍 <b>{total_contentores}</b> Contentores</span>
-                                <span>🧬 <b>{int(total_palhetas_geral)}</b> Palhetas</span>
-                                <span>{'✏️ Modo Edição' if st.session_state['mapa_modo_edicao_conteudo'] else '👁️ Visualização'}</span>
-                            </div>
+                        <div class='map-topbar-kpis' style='justify-content:flex-end;height:100%;'>
+                            <span><b>{total_contentores}</b> contentores</span>
+                            <span><b>{int(total_palhetas_geral)}</b> palhetas</span>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
-                
-                    # Botões de ação — o arrastar já não depende de nenhum
-                    # destes (está sempre ativo no mapa); "Salvar Layout",
-                    # "Descartar" e "Reorganizar" ficam sempre visíveis, e
-                    # "Editar" passa a ser um toggle independente, só para o
-                    # modo de conteúdo (cor dos contentores + clique abre a
-                    # edição em vez do círculo).
-                    if is_mobile:
-                        btn_m1, btn_m2, btn_m3 = st.columns([1, 1, 1])
-                        with btn_m1:
-                            criar_novo = st.button("➕ Novo", key="map_add_btn_mobile", width="stretch")
-                        with btn_m2:
-                            if st.session_state["mapa_modo_edicao_conteudo"]:
-                                sair_edicao = st.button("✓ Concluir", key="map_edit_exit_btn_mobile", type="primary", width="stretch")
-                            else:
-                                ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_mobile", width="stretch")
-                        with btn_m3:
-                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn_mobile", width="stretch")
-                        btn_m4, btn_m5 = st.columns([1, 1])
-                        with btn_m4:
-                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_mobile", width="stretch")
-                        with btn_m5:
-                            descartar_layout = st.button("↩️ Descartar", key="map_discard_btn_mobile", width="stretch")
-                    else:
-                        bar_btn1, bar_btn2, bar_btn3, bar_btn4, bar_btn5 = st.columns([1.6, 1.4, 1.3, 1.3, 1.3])
-                        with bar_btn1:
-                            criar_novo = st.button("➕ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
-                        with bar_btn2:
-                            salvar_layout = st.button("💾 Salvar Layout", key="map_save_btn_desktop", width="stretch")
-                        with bar_btn3:
-                            descartar_layout = st.button("↩️ Descartar", key="map_discard_btn_desktop", width="stretch", help="Descarta posições arrastadas ainda não gravadas")
-                        with bar_btn4:
-                            reorganizar = st.button("⚡ Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
-                        with bar_btn5:
-                            if st.session_state["mapa_modo_edicao_conteudo"]:
-                                sair_edicao = st.button("✓ Concluir Edição", key="map_edit_exit_btn_desktop", type="primary", width="stretch")
-                            else:
-                                ativar_edicao = st.button("✏️ Editar", key="map_edit_btn_desktop", width="stretch")
 
                 if criar_novo:
                     st.session_state['modal_novo_contentor'] = True
                     st.rerun()
-
-                if ativar_edicao:
-                    st.session_state["mapa_modo_edicao_conteudo"] = True
-                    st.rerun()
-
-                if sair_edicao:
-                    st.session_state["mapa_modo_edicao_conteudo"] = False
-                    st.rerun()
-
-                if descartar_layout:
-                    if js_eval_disponivel:
-                        streamlit_js_eval(
-                            js_expressions='(function(){try{window.parent.localStorage.removeItem("contentor_layout_pending")}catch(e){window.localStorage.removeItem("contentor_layout_pending")}})()',
-                            key=f"clear_layout_pending_discard_{int(time.time() * 1000)}"
-                        )
-                    st.session_state["mapa_salvar_layout_pendente"] = False
-                    st.session_state["mapa_salvar_layout_tentativas"] = 0
-                    st.toast("Alterações de posição descartadas", icon="↩️")
-                    st.rerun()
-
-                if reorganizar:
-                    # Distribui contentores em grelha automática
-                    BOX_W, BOX_H, MARGIN = 115, 110, 10
-                    COLS = max(1, min(7, len(contentores_df)))
-                    ok = 0
-                    for i, (_, row) in enumerate(contentores_df.iterrows()):
-                        col_idx = i % COLS
-                        row_idx = i // COLS
-                        nx = MARGIN + col_idx * BOX_W
-                        ny = MARGIN + row_idx * BOX_H
-                        if atualizar_posicao_contentor(int(row['id']), nx, ny):
-                            ok += 1
-                    st.success(t("map.reorganized", count=ok))
-                    st.rerun()
-
-                if salvar_layout:
-                    if not js_eval_disponivel:
-                        st.error(t("map.install_dependency"))
-                    else:
-                        logger.info("Salvar layout acionado pelo utilizador")
-                        st.session_state["mapa_salvar_layout_pendente"] = True
-                        st.session_state["mapa_salvar_layout_tentativas"] = 0
-                        st.rerun()
 
                 if st.session_state.get("mapa_salvar_layout_pendente", False):
                     logger.info(f"Processando save pendente (tentativa={st.session_state.get('mapa_salvar_layout_tentativas', 0)})")
@@ -858,25 +836,22 @@ def run_map_page(ctx: dict):
                         background-image:
                             linear-gradient(var(--border) 1px, transparent 1px),
                             linear-gradient(90deg, var(--border) 1px, transparent 1px);
-                        background-size: 40px 40px;
+                        background-size: 32px 32px;
                         overflow: hidden;
                     }
 
                     .cont-box {
                         position: absolute;
                         background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                        border: 2px solid var(--primary);
-                        border-radius: 12px;
+                        border: 1.5px solid var(--primary);
+                        border-radius: 10px;
                         box-shadow: var(--shadow);
                         display: flex;
                         flex-direction: column;
                         align-items: center;
                         justify-content: center;
-                        padding: 12px;
                         user-select: none;
-                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                        min-width: 100px;
-                        min-height: 100px;
+                        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
                         cursor: grab;
                         /* Arrastar está sempre ativo (não só em modo edição);
                            touch-action só aqui (não em #mapa-area inteiro),
@@ -885,48 +860,48 @@ def run_map_page(ctx: dict):
                         touch-action: none;
                     }
 
-                    .cont-box.content-edit {
-                        border-color: var(--primary-dark);
-                        background: linear-gradient(135deg, rgba(var(--primary-rgb),.14) 0%, rgba(var(--primary-rgb),.06) 100%);
-                    }
-
                     .cont-box.dragging {
                         cursor: grabbing !important;
-                        opacity: 0.85;
+                        opacity: 0.88;
                         z-index: 1000;
                         box-shadow: var(--shadow-lg);
-                        transform: scale(1.05) rotate(2deg);
+                        transform: scale(1.06) rotate(1.5deg);
+                        transition: none;
                     }
 
                     .cont-box:hover {
-                        transform: translateY(-4px) scale(1.02);
-                        box-shadow: 0 12px 24px -4px rgba(var(--primary-rgb), 0.3);
+                        transform: translateY(-3px) scale(1.03);
+                        box-shadow: 0 8px 16px -4px rgba(var(--primary-rgb), 0.28);
                         border-color: var(--primary-dark);
                         z-index: 100;
                     }
 
+                    /* Tamanhos de letra vêm inline (definidos em JS,
+                       proporcionais ao tamanho real da caixa — ver
+                       criarContentor); aqui só o resto do estilo. */
                     .cont-codigo {
-                        font-size: 0.875rem;
                         font-weight: 700;
                         color: var(--primary-dark);
-                        margin-bottom: 4px;
-                        letter-spacing: 0.5px;
+                        margin-bottom: 2px;
+                        letter-spacing: 0.3px;
                         text-transform: uppercase;
+                        max-width: 100%;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                     }
 
                     .cont-qtd {
-                        font-size: 2rem;
                         font-weight: 800;
                         color: var(--text);
                         line-height: 1;
-                        margin-bottom: 2px;
+                        margin-bottom: 1px;
                     }
 
                     .cont-label {
-                        font-size: 0.65rem;
                         color: var(--text-muted);
                         text-transform: uppercase;
-                        letter-spacing: 0.8px;
+                        letter-spacing: 0.6px;
                         font-weight: 600;
                     }
 
@@ -940,27 +915,6 @@ def run_map_page(ctx: dict):
                         font-weight: 500;
                     }
 
-                    /* Mobile Optimizations */
-                    @media (max-width: 640px) {
-                        .cont-box {
-                            min-width: 80px;
-                            min-height: 80px;
-                            padding: 8px;
-                            border-radius: 8px;
-                        }
-
-                        .cont-codigo {
-                            font-size: 0.75rem;
-                        }
-
-                        .cont-qtd {
-                            font-size: 1.5rem;
-                        }
-
-                        .cont-label {
-                            font-size: 0.6rem;
-                        }
-                    }
                 </style>
 
                 <div id="mapa-wrapper" class="__MOBILE_CLASS__">
@@ -971,7 +925,6 @@ def run_map_page(ctx: dict):
 
                 <script>
                     const contentores = __CONTENTORES_DATA__;
-                    const isContentEditMode = __EDIT_MODE__;
                     const isMobile = __IS_MOBILE__;
                     const mapaArea = document.getElementById('mapa-area');
                     const statusBar = document.getElementById('mapa-status');
@@ -994,24 +947,68 @@ def run_map_page(ctx: dict):
                         areaScale = rect.width / (isMobile ? 375 : 900);
                     }
 
+                    // Posição a usar para desenhar um contentor: se há uma
+                    // posição pendente por gravar (largou-se há pouco, o
+                    // auto-save ainda não terminou), usa-a em vez da que
+                    // veio do servidor. Lido diretamente do localStorage,
+                    // sem round-trip ao Python — corrige o ressalto de
+                    // vez: uma leitura por streamlit_js_eval tem sempre
+                    // pelo menos um render de atraso a resolver (é assim
+                    // que qualquer componente Streamlit funciona), o que
+                    // deixava sempre passar pelo menos um repaint do mapa
+                    // com a posição antiga antes da nova ficar disponível
+                    // do lado do Python.
+                    function posicaoEfetiva(c) {
+                        try {
+                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                            const pendentes = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                            const p = pendentes[String(c.id)];
+                            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+                                return { x: p.x, y: p.y };
+                            }
+                        } catch (e) {}
+                        return { x: c.x, y: c.y };
+                    }
+
+                    // Tamanho do contentor: proporcional à escala real do
+                    // mapa (areaScale, a mesma usada para posicionar),
+                    // não um valor fixo por desktop/mobile — maior num
+                    // ecrã largo, mais pequeno num telemóvel, contínuo em
+                    // vez de saltar entre dois tamanhos. BOX_LOGICAL está
+                    // nas mesmas unidades "virtuais" que x/y (0-900
+                    // desktop, 0-375 mobile); os limites min/max evitam
+                    // caixas minúsculas ou gigantes em ecrãs extremos.
+                    const BOX_LOGICAL = isMobile ? 62 : 70;
+                    const BOX_MIN = isMobile ? 46 : 60;
+                    const BOX_MAX = isMobile ? 76 : 100;
+
                     function criarContentor(c) {
                         const box = document.createElement('div');
                         box.className = 'cont-box';
-                        if (isContentEditMode) box.classList.add('content-edit');
                         box.dataset.contId = String(c.id);
 
+                        const baseW = Math.round(Math.max(BOX_MIN, Math.min(BOX_MAX, BOX_LOGICAL * areaScale)));
+                        const baseH = baseW;
+                        // Letra a acompanhar o tamanho da caixa — proporções
+                        // escolhidas para corresponderem visualmente ao que
+                        // já funcionava bem nos tamanhos fixos anteriores
+                        // (68px/60px), agora contínuas em vez de dois saltos.
+                        const fsCodigo = Math.max(8, Math.round(baseW * 0.145));
+                        const fsQtd = Math.max(11, Math.round(baseW * 0.30));
+                        const fsLabel = Math.max(7, Math.round(baseW * 0.115));
+
                         box.innerHTML = `
-                            <div class="cont-codigo">${c.codigo}</div>
-                            <div class="cont-qtd">${c.palhetas}</div>
-                            <div class="cont-label">palhetas</div>
+                            <div class="cont-codigo" style="font-size:${fsCodigo}px">${c.codigo}</div>
+                            <div class="cont-qtd" style="font-size:${fsQtd}px">${c.palhetas}</div>
+                            <div class="cont-label" style="font-size:${fsLabel}px">palhetas</div>
                         `;
 
-                        const baseW = isMobile ? 80 : 100;
-                        const baseH = isMobile ? 80 : 100;
-                        box.style.left = (c.x * areaScale) + 'px';
-                        box.style.top = (c.y * areaScale) + 'px';
+                        const pos = posicaoEfetiva(c);
+                        box.style.left = (pos.x * areaScale) + 'px';
+                        box.style.top = (pos.y * areaScale) + 'px';
                         box.style.width = baseW + 'px';
                         box.style.height = baseH + 'px';
+                        box.style.padding = Math.round(baseW * 0.09) + 'px';
 
                         // Arrastar está sempre ativo; um clique sem
                         // movimento (ver startPress/endPress) é que decide
@@ -1113,32 +1110,33 @@ def run_map_page(ctx: dict):
                         // fariam este handler correr uma segunda vez.
                         if (e.type === 'touchend') { e.preventDefault(); }
 
+                        const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+
                         if (info.isDragging) {
-                            // Fim de arrasto — grava a posição pendente,
-                            // exatamente como já fazia (só o gatilho para
-                            // começar a arrastar mudou).
+                            // Fim de arrasto — grava a posição pendente em
+                            // localStorage (como já fazia) e pede logo ao
+                            // bridge principal para a persistir na BD
+                            // (clica num botão Streamlit real escondido —
+                            // auto-save, já não precisa do "Salvar Layout").
                             info.box.classList.remove('dragging');
                             const finalX = parseInt(info.box.style.left) / areaScale;
                             const finalY = parseInt(info.box.style.top) / areaScale;
                             try {
-                                const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
                                 const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
                                 layoutData[info.contId] = {x: Math.round(finalX), y: Math.round(finalY)};
                                 targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
+                                targetWin.postMessage({ type: 'CONTENTOR_POSICAO_ARRASTADA' }, '*');
                             } catch (err) {
                                 console.error('Erro ao salvar posição:', err);
                             }
                         } else {
-                            // Clique sem arrasto: scroll + realce até ao
-                            // cartão do contentor e, consoante o modo, abre
-                            // "Ver interior" ou "Editar" — quem trata a
-                            // mensagem vive no bridge principal, fora deste
-                            // iframe (auto-clica no botão Streamlit real, já
-                            // validado num spike isolado antes de aqui
-                            // entrar).
-                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
-                            const tipo = isContentEditMode ? 'CONTENTOR_ABRIR_EDICAO' : 'CONTENTOR_MOSTRAR_CARTAO';
-                            targetWin.postMessage({ type: tipo, contId: info.contId }, '*');
+                            // Clique sem arrasto: pede ao bridge principal
+                            // para clicar no botão Streamlit real escondido
+                            // "Ver interior" desse contentor, que abre o
+                            // modal (ver+editar+apagar) — mecanismo validado
+                            // num spike isolado (20/20 cliques) antes de
+                            // entrar na app real.
+                            targetWin.postMessage({ type: 'CONTENTOR_MOSTRAR_CARTAO', contId: info.contId }, '*');
                         }
                     }
 
@@ -1147,8 +1145,9 @@ def run_map_page(ctx: dict):
                         contentores.forEach((c, i) => {
                             const box = mapaArea.children[i];
                             if (box) {
-                                box.style.left = (c.x * areaScale) + 'px';
-                                box.style.top = (c.y * areaScale) + 'px';
+                                const pos = posicaoEfetiva(c);
+                                box.style.left = (pos.x * areaScale) + 'px';
+                                box.style.top = (pos.y * areaScale) + 'px';
                             }
                         });
                     });
@@ -1156,40 +1155,47 @@ def run_map_page(ctx: dict):
                     computeScale();
                     contentores.forEach(criarContentor);
 
-                    statusBar.textContent = isContentEditMode
-                        ? 'Clique num contentor para editar; arraste para reposicionar.'
-                        : 'Clique num contentor para ver o interior; arraste para reposicionar.';
+                    statusBar.textContent = 'Clique num contentor para ver o interior; arraste para reposicionar.';
                 </script>
                 """
                 import streamlit.components.v1 as components
                 mapa_render = mapa_html.replace("__CONTENTORES_DATA__", json.dumps(contentores_data, ensure_ascii=False))
-                mapa_render = mapa_render.replace("__EDIT_MODE__", "true" if st.session_state["mapa_modo_edicao_conteudo"] else "false")
                 mapa_render = mapa_render.replace("__IS_MOBILE__", "true" if is_mobile else "false")
                 mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
-                # __STATUS_TEXT__ serve só de valor inicial — o JS substitui-o
-                # de imediato consoante isContentEditMode (arrastar está
-                # sempre ativo, por isso a mensagem já não depende só disto).
-                status_text = (
-                    t("map.status_edit")
-                    if st.session_state["mapa_modo_edicao_conteudo"]
-                    else t("map.status_view")
-                )
-                mapa_render = mapa_render.replace("__STATUS_TEXT__", status_text)
+                mapa_render = mapa_render.replace("__STATUS_TEXT__", t("map.status_view"))
 
-                # Renderizar mapa com altura responsiva baseada no nº de contentores
-                n_cont = len(contentores_df)
+                # Altura responsiva: ocupa o espaço realmente disponível no
+                # ecrã do utilizador (lido via innerHeight, uma vez por
+                # sessão), para caber sem obrigar a scroll na página — com
+                # o topo agora compacto, sobra mais espaço, e o mapa cresce
+                # para o preencher (ALTURA_MAXIMA só evita ficar
+                # absurdamente alto em monitores muito grandes).
+                # CHROME_ACIMA/ABAIXO foram medidos empiricamente
+                # (cabeçalho da app, tabs, topo compacto do mapa, margens).
+                # Em mobile, o cabeçalho da app (título, tabs, pesquisa) já
+                # ocupa a maior parte de ecrãs típicos de telemóvel — fora
+                # do âmbito deste ajuste (é o cabeçalho de toda a página
+                # "Stock de sémen", partilhado com Lotes/Garanhões/
+                # Transferências, não só do mapa); nesses casos o mínimo
+                # ainda pode obrigar a algum scroll.
+                altura_viewport = st.session_state.get("map_altura_viewport") or 800
                 if is_mobile:
-                    map_height = max(260, min(380, n_cont * 60 + 160))
+                    # ALTURA_MINIMA um pouco acima do que o espaço disponível
+                    # em telemóveis mais pequenos dá de propósito — um mapa
+                    # de ~110px de área útil (o mínimo anterior) mal dá para
+                    # arrastar; prefere-se algum scroll residual nesses
+                    # casos a um mapa impraticável.
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 620, 65, 200, 460
                 else:
-                    map_height = max(340, min(520, n_cont * 55 + 200))
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 410, 90, 220, 760
+                espaco_disponivel = int(altura_viewport) - CHROME_ACIMA - CHROME_ABAIXO
+                map_height = max(ALTURA_MINIMA, min(ALTURA_MAXIMA, espaco_disponivel))
                 st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
                 components.html(mapa_render, height=map_height, scrolling=False)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # ── Cartões de Contentores ──────────────────────────────────────
-                # `primary`, `pr`/`pg`/`pb` já vêm calculados do topo da
-                # função (reaproveitados pelo mapa e por aqui).
-                primary = primary_color
+                # `pr`/`pg`/`pb` já vêm calculados do topo da função
+                # (reaproveitados pelo mapa e pelo modal do tanque redondo).
 
                 def build_tank_circle_html(stock_df, andar_sel, cont_id, primary_r, primary_g, primary_b):
                     """Gera o HTML do 'tanque redondo' — os canisters dispostos
@@ -1356,11 +1362,11 @@ def run_map_page(ctx: dict):
                         )
                     return blocks
 
-                def _abrir_modal_tanque(cont_id_modal, cod_modal, primary_r, primary_g, primary_b):
-                    """Modal do tanque redondo (Passo 3) — seletor de andar,
-                    "Inverter andares" e o círculo com a info por canister.
-                    Só leitura + inverter; mover/editar lotes fica na página,
-                    fora do modal, como pedido.
+                def _abrir_modal_tanque(cont_id_modal, cod_modal, primary_r, primary_g, primary_b, row_modal):
+                    """Modal do tanque redondo — seletor de andar, "Inverter
+                    andares", o círculo com a info por canister, e (arrumação
+                    final) editar nome/descrição + apagar, tudo no mesmo
+                    sítio: é o único lugar onde se age sobre um contentor.
 
                     Chamada depois do loop de contentores (não dentro dele)
                     para seguir o mesmo padrão já usado nos outros diálogos
@@ -1371,86 +1377,108 @@ def run_map_page(ctx: dict):
                     session_state; isto relê o stock fresco.
                     """
                     stock_modal = obter_stock_contentor(cont_id_modal)
+                    total_palhetas_modal = int(stock_modal['existencia_atual'].sum()) if not stock_modal.empty else 0
 
                     @st.dialog(cod_modal, width="large")
                     def _modal():
-                        # Sem st.rerun() explícito em nenhum ponto deste corpo:
-                        # confirmado empiricamente que chamar st.rerun() de
-                        # dentro de uma função @st.dialog fecha o modal (o
-                        # clique do próprio widget já desencadeia o rerun
-                        # implícito de que precisamos — chamar outro por cima
-                        # é isso que o fecha). Onde é preciso reflectir dados
-                        # frescos na mesma passagem (depois de inverter),
-                        # relê-se a variável local em vez de rerunnar.
+                        # Sem st.rerun() explícito para ações que devem manter
+                        # o modal aberto (ex.: inverter andares, guardar
+                        # nome/descrição): confirmado empiricamente que chamar
+                        # st.rerun() de dentro de uma função @st.dialog fecha
+                        # o modal (o clique do próprio widget já desencadeia
+                        # o rerun implícito de que precisamos — chamar outro
+                        # por cima é isso que o fecha). Onde é preciso
+                        # reflectir dados frescos na mesma passagem, relê-se a
+                        # variável local em vez de rerunnar. A única exceção
+                        # é "Apagar": aí queremos mesmo fechar o modal e
+                        # atualizar o mapa, por isso st.rerun() é intencional.
                         nonlocal stock_modal
                         if stock_modal.empty:
                             st.caption("Nenhum lote neste contentor.")
-                            return
+                        else:
+                            andar_key = f"andar_sel_{cont_id_modal}"
+                            col_andar, col_inverter = st.columns([2, 1], vertical_alignment="center")
+                            with col_andar:
+                                with st.container(key=f"andar-toggle-{cont_id_modal}"):
+                                    andar_sel = st.radio(
+                                        "Andar", [1, 2], format_func=lambda x: f"Andar {x}",
+                                        key=andar_key, horizontal=True, label_visibility="collapsed",
+                                    )
+                            with col_inverter:
+                                if st.button("Inverter andares", key=f"inverter_andares_{cont_id_modal}",
+                                             help="Troca os lotes do 1º andar para o 2º e vice-versa"):
+                                    st.session_state[f'confirmar_inverter_{cont_id_modal}'] = True
 
-                        andar_key = f"andar_sel_{cont_id_modal}"
-                        col_andar, col_inverter = st.columns([2, 1], vertical_alignment="center")
-                        with col_andar:
-                            with st.container(key=f"andar-toggle-{cont_id_modal}"):
-                                andar_sel = st.radio(
-                                    "Andar", [1, 2], format_func=lambda x: f"Andar {x}",
-                                    key=andar_key, horizontal=True, label_visibility="collapsed",
+                            if st.session_state.get(f'confirmar_inverter_{cont_id_modal}', False):
+                                st.warning(
+                                    f"Inverter os andares do contentor {cod_modal}? Todos os lotes "
+                                    "do 1º andar passam ao 2º e vice-versa. As localizações dos "
+                                    "lotes serão atualizadas."
                                 )
-                        with col_inverter:
-                            if st.button("Inverter andares", key=f"inverter_andares_{cont_id_modal}",
-                                         help="Troca os lotes do 1º andar para o 2º e vice-versa"):
-                                st.session_state[f'confirmar_inverter_{cont_id_modal}'] = True
+                                col_conf1, col_conf2 = st.columns([1, 1])
+                                with col_conf1:
+                                    if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id_modal}",
+                                                 type="primary", width="stretch"):
+                                        resultado = inverter_andares(cont_id_modal)
+                                        st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
+                                        if resultado is not False:
+                                            st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
+                                            stock_modal = obter_stock_contentor(cont_id_modal)
+                                        else:
+                                            st.error("Erro ao inverter andares. Ver logs.")
+                                with col_conf2:
+                                    if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id_modal}", width="stretch"):
+                                        st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
 
-                        if st.session_state.get(f'confirmar_inverter_{cont_id_modal}', False):
-                            st.warning(
-                                f"Inverter os andares do contentor {cod_modal}? Todos os lotes "
-                                "do 1º andar passam ao 2º e vice-versa. As localizações dos "
-                                "lotes serão atualizadas."
+                            circle_html, canisters = build_tank_circle_html(
+                                stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
                             )
-                            col_conf1, col_conf2 = st.columns([1, 1])
-                            with col_conf1:
-                                if st.button("Confirmar", key=f"confirmar_inverter_btn_{cont_id_modal}",
-                                             type="primary", width="stretch"):
-                                    resultado = inverter_andares(cont_id_modal)
-                                    st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
-                                    if resultado is not False:
-                                        st.toast(f"Andares invertidos: {resultado} lote(s) atualizados.", icon="✅")
-                                        stock_modal = obter_stock_contentor(cont_id_modal)
-                                    else:
-                                        st.error("Erro ao inverter andares. Ver logs.")
-                            with col_conf2:
-                                if st.button("Cancelar", key=f"cancelar_inverter_btn_{cont_id_modal}", width="stretch"):
-                                    st.session_state[f'confirmar_inverter_{cont_id_modal}'] = False
+                            if circle_html:
+                                st.markdown(circle_html, unsafe_allow_html=True)
+                                info_html = build_canister_info_html(stock_modal, andar_sel, canisters)
+                                st.markdown(info_html, unsafe_allow_html=True)
 
-                        circle_html, canisters = build_tank_circle_html(
-                            stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
-                        )
-                        if circle_html:
-                            st.markdown(circle_html, unsafe_allow_html=True)
-                            info_html = build_canister_info_html(stock_modal, andar_sel, canisters)
-                            st.markdown(info_html, unsafe_allow_html=True)
+                        # Editar nome/descrição + Apagar — vivem aqui dentro
+                        # (arrumação final), reaproveitando editar_contentor/
+                        # deletar_contentor tal como já eram usados na página.
+                        # Recolhido por defeito: o modal abre com o círculo à
+                        # vista, o editar só aparece se for pedido.
+                        st.divider()
+                        with st.expander(t('map.edit_container_title'), expanded=False):
+                            with st.form(f"form_editar_modal_{cont_id_modal}"):
+                                col_ed1, col_ed2 = st.columns(2)
+                                with col_ed1:
+                                    novo_codigo = st.text_input(t("label.code"), value=row_modal['codigo'])
+                                with col_ed2:
+                                    nova_descricao = st.text_input(t("label.description"), value=row_modal['descricao'] or '')
+
+                                pode_apagar = total_palhetas_modal == 0
+                                cs1, cs2 = st.columns(2)
+                                with cs1:
+                                    salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
+                                with cs2:
+                                    apagar_edit = st.form_submit_button(
+                                        "Apagar", width="stretch", disabled=not pode_apagar,
+                                        help=None if pode_apagar else t("map.delete_blocked"),
+                                    )
+
+                                if apagar_edit:
+                                    if deletar_contentor(cont_id_modal):
+                                        # Intencional: ação destrutiva, queremos
+                                        # mesmo fechar o modal e atualizar o mapa.
+                                        st.rerun()
+                                if salvar_edit:
+                                    if editar_contentor(cont_id_modal, {
+                                        'codigo': novo_codigo, 'descricao': nova_descricao,
+                                        'x': row_modal['x'], 'y': row_modal['y'],
+                                        'w': row_modal['w'], 'h': row_modal['h'],
+                                    }):
+                                        st.success(t("map.container_updated"))
 
                     _modal()
 
                 st.markdown(f"""
                 <style>
-                    .cont-grid {{ display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:16px; }}
-                    .cont-card {{
-                        background:#fff; border:1.5px solid #e2e8f0; border-radius:14px;
-                        overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.05);
-                        transition:box-shadow .2s;
-                    }}
-                    .cont-card-header {{
-                        background:linear-gradient(135deg,{primary}15,{primary}05);
-                        border-bottom:1.5px solid #e2e8f0;
-                        padding:14px 18px; display:flex; align-items:center; justify-content:space-between;
-                    }}
-                    .cont-card-code {{ font-size:1.1rem; font-weight:800; color:{primary}; letter-spacing:.5px; }}
-                    .cont-card-desc {{ font-size:.75rem; color:#64748b; margin-top:2px; }}
-                    .cont-card-badge {{
-                        background:{primary}; color:#fff; border-radius:20px;
-                        padding:4px 12px; font-size:.78rem; font-weight:700;
-                    }}
-                    .cont-card-body {{ padding:14px 18px; }}
                     .lote-row {{
                         display:flex; align-items:center; justify-content:space-between;
                         background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
@@ -1459,7 +1487,6 @@ def run_map_page(ctx: dict):
                     .lote-row-left {{ display:flex; flex-direction:column; gap:2px; }}
                     .lote-garanhao {{ font-weight:700; color:#0f172a; }}
                     .lote-meta {{ color:#64748b; font-size:.75rem; }}
-                    @media(max-width:700px) {{ .cont-grid {{ grid-template-columns:1fr; }} }}
 
                     /* Heatmap styles (aplicados globalmente a todos os cards) */
                     .hm-grid-wrap {{
@@ -1575,14 +1602,6 @@ def run_map_page(ctx: dict):
                     .lote-row-detalhe .lote-row-left {{ width:100%; }}
                     .lote-medidas {{ color:#94a3b8; font-size:.7rem; margin-top:2px; }}
 
-                    /* Realce temporário do cartão do contentor ao clicar na
-                       caixa correspondente no mapa livre (Passo 3). */
-                    .cont-card-highlight {{ animation:cont-card-pulse 1.8s ease-out; }}
-                    @keyframes cont-card-pulse {{
-                        0% {{ box-shadow:0 0 0 4px rgba({pr},{pg},{pb},.35); }}
-                        100% {{ box-shadow:0 2px 8px rgba(0,0,0,.05); }}
-                    }}
-
                     /* Seletor de andar — pill-tabs (mesmo padrão do
                        separador Stock de sémen: esconde o círculo do rádio
                        nativo, sublinha/realça a opção activa). */
@@ -1609,102 +1628,27 @@ def run_map_page(ctx: dict):
                 </style>
                 """, unsafe_allow_html=True)
 
-                for idx, row in contentores_df.iterrows():
-                    stock_contentor = obter_stock_contentor(row['id'])
-                    total_palhetas = int(stock_contentor['existencia_atual'].sum()) if not stock_contentor.empty else 0
-                    cod = row['codigo']
-                    desc = row['descricao'] or ''
+                # Arrumação final: a página já não mostra cartões por
+                # contentor — só o mapa. Cada contentor tem um botão "Ver
+                # interior" real mas escondido (CSS acima), que o clique na
+                # caixa correspondente aciona via bridge (ver mapa_html).
+                # Abre o modal — que já reúne ver, editar nome/descrição e
+                # apagar, tudo no mesmo sítio.
+                for _, row in contentores_df.iterrows():
                     cont_id = int(row['id'])
+                    if st.button("Ver interior", key=f"ver_interior_{cont_id}"):
+                        st.session_state["abrir_modal_tanque_id"] = cont_id
+                        st.rerun()
 
-                    # Card header
-                    st.markdown(f"""
-                    <div class="cont-card" data-cont-id="{cont_id}">
-                      <div class="cont-card-header">
-                        <div>
-                          <div class="cont-card-code">{cod}</div>
-                          <div class="cont-card-desc">{desc or 'Sem descrição'}</div>
-                        </div>
-                        <div class="cont-card-badge">{total_palhetas} palhetas</div>
-                      </div>
-                      <div class="cont-card-body">
-                    """, unsafe_allow_html=True)
-
-                    if stock_contentor.empty:
-                        st.caption("Nenhum lote neste contentor.")
-                    else:
-                        # ── Ver interior (Passo 3) — abre o tanque redondo num
-                        # modal; toda a leitura (canisters, lotes, medidas),
-                        # o seletor de andar e "Inverter andares" vivem lá
-                        # dentro. O cartão aqui fica só com as ações do
-                        # contentor em si (ver, editar, apagar) — arrumação
-                        # que tirou daqui a listagem duplicada por canister/
-                        # lote e os botões de mover (ver container_repo). ──
-                        if st.button("Ver interior", key=f"ver_interior_{cont_id}"):
-                            st.session_state["abrir_modal_tanque_id"] = cont_id
-                            st.rerun()
-
-                    st.markdown("</div></div>", unsafe_allow_html=True)
-
-                    # Ação do contentor em si (editar) — pertence ao
-                    # contentor, não ao interior, por isso fica aqui no
-                    # cartão, não dentro do modal. "Apagar" vive dentro do
-                    # próprio formulário de edição (ver abaixo), já não é um
-                    # botão à parte.
-                    col_e1, col_e2 = st.columns([4, 1])
-                    with col_e2:
-                        if st.button(t("btn.edit"), key=f"edit2_{cont_id}", type="secondary"):
-                            st.session_state[f'modal_editar_{cont_id}'] = True
-                            st.rerun()
-
-                    # Formulário de edição — nome/descrição + Apagar juntos.
-                    if st.session_state.get(f'modal_editar_{cont_id}', False):
-                        with st.form(f"form_editar2_{cont_id}"):
-                            st.markdown(f"#### {t('map.edit_container_title')}")
-                            col_edit1, col_edit2 = st.columns(2)
-                            with col_edit1:
-                                novo_codigo = st.text_input(t("label.code"), value=cod)
-                            with col_edit2:
-                                nova_descricao = st.text_input(t("label.description"), value=desc)
-
-                            pode_apagar = total_palhetas == 0
-                            cs1, cs2, cs3 = st.columns(3)
-                            with cs1:
-                                salvar_edit = st.form_submit_button(t("btn.save"), width="stretch", type="primary")
-                            with cs2:
-                                cancelar_edit2 = st.form_submit_button(t("btn.cancel"), width="stretch")
-                            with cs3:
-                                apagar_edit = st.form_submit_button(
-                                    "Apagar", width="stretch", disabled=not pode_apagar,
-                                    help=None if pode_apagar else t("map.delete_blocked"),
-                                )
-
-                            if cancelar_edit2:
-                                st.session_state[f'modal_editar_{cont_id}'] = False
-                                st.rerun()
-                            if apagar_edit:
-                                if deletar_contentor(cont_id):
-                                    st.session_state[f'modal_editar_{cont_id}'] = False
-                                    st.success(f"Contentor '{cod}' apagado")
-                                    st.rerun()
-                            if salvar_edit:
-                                if editar_contentor(cont_id, {'codigo': novo_codigo, 'descricao': nova_descricao,
-                                                              'x': row['x'], 'y': row['y'], 'w': row['w'], 'h': row['h']}):
-                                    st.success(t("map.container_updated"))
-                                    st.session_state[f'modal_editar_{cont_id}'] = False
-                                    st.rerun()
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                # Abrir o modal do tanque redondo (Passo 3) — feito depois do
-                # loop, não dentro dele: dentro do loop, `cont_id` já teria
-                # avançado para outra iteração por altura do clique ser
-                # processado. O botão "Ver interior" só marca a intenção.
+                # Feito depois do loop, não dentro dele: dentro do loop,
+                # `cont_id` já teria avançado para outra iteração por altura
+                # do clique ser processado. O botão só marca a intenção.
                 if st.session_state.get("abrir_modal_tanque_id"):
                     cont_id_modal = int(st.session_state.pop("abrir_modal_tanque_id"))
                     linha_modal = contentores_df[contentores_df['id'] == cont_id_modal]
                     if not linha_modal.empty:
-                        cod_modal = linha_modal.iloc[0]['codigo']
-                        _abrir_modal_tanque(cont_id_modal, cod_modal, pr, pg, pb)
+                        row_modal = linha_modal.iloc[0]
+                        _abrir_modal_tanque(cont_id_modal, row_modal['codigo'], pr, pg, pb, row_modal)
 
             else:
                 # MODO LISTA (mantido para compatibilidade)
