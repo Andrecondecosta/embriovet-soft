@@ -505,7 +505,7 @@ def run_map_page(ctx: dict):
                     unsafe_allow_html=True,
                 )
                 st.markdown("")
-                if st.button("+ Adicionar Primeiro Contentor", type="primary", width="stretch"):
+                if st.button("Adicionar Primeiro Contentor", icon="➕", type="primary", width="stretch"):
                     st.session_state['modal_novo_contentor'] = True
                     st.rerun()
         else:
@@ -555,7 +555,6 @@ def run_map_page(ctx: dict):
                     })
 
                 criar_novo = False
-                reorganizar = False
 
                 st.markdown(
                     """
@@ -568,8 +567,9 @@ def run_map_page(ctx: dict):
                         .st-key-mapa-page-scope div[data-testid="stButton"] > button {
                             border-radius: 8px !important;
                             font-weight: 500 !important;
-                            font-size: 0.9rem !important;
-                            padding: 8px 20px !important;
+                            font-size: 0.82rem !important;
+                            padding: 4px 14px !important;
+                            min-height: 32px !important;
                             transition: all 0.2s ease !important;
                             border: 1px solid #e2e8f0 !important;
                         }
@@ -582,69 +582,45 @@ def run_map_page(ctx: dict):
                            global em `inject_shell_css` (cor da marca) — não
                            hardcodar uma cor aqui. */
 
-                        /* Toolbar premium */
-                        .map-toolbar-shell {
-                            border: 1px solid #e2e8f0;
-                            border-radius: 10px;
-                            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-                            padding: 12px 16px;
-                            margin-bottom: 12px;
-                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-                        }
-                    
-                        .map-toolbar-kpis {
+                        /* Topo compacto — só o essencial (Adicionar +
+                           contagens), sem cartão nem barra grande, para
+                           libertar altura para o mapa. */
+                        .map-topbar-kpis {
                             display: flex;
-                            gap: 16px;
+                            gap: 12px;
                             align-items: center;
-                            font-size: 0.85rem;
-                            color: #64748b;
+                            font-size: 0.78rem;
+                            color: #94a3b8;
+                            white-space: nowrap;
                         }
-                    
-                        .map-toolbar-kpis b {
-                            color: #0f172a;
+
+                        .map-topbar-kpis b {
+                            color: #475569;
                             font-weight: 600;
                         }
-                    
+
                         /* Container do mapa — a altura real já vem calculada
                            em Python (map_height) para caber no ecrã sem
                            scroll; isto é só uma rede de segurança para
-                           casos extremos (ex.: muitos contentores).
-                           margin-top negativo: absorve o espaçamento
-                           vertical por defeito que o Streamlit põe entre
-                           os botões da toolbar e o próximo bloco — sem
-                           isto sobrava espaço morto entre os dois. */
+                           casos extremos (ex.: muitos contentores). */
                         .map-workspace {
-                            max-height: 85vh;
+                            max-height: 90vh;
                             overflow: hidden;
                             border-radius: 12px;
                             border: 1px solid #e2e8f0;
                             background: #ffffff;
                             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-                            margin-top: -12px;
                         }
-                    
+
                         /* Mobile responsive */
                         @media (max-width: 900px) {
-                            .st-key-mapa-page-scope div[data-testid="stButton"] > button {
-                                min-height: 38px !important;
-                                font-size: 0.85rem !important;
-                                padding: 6px 12px !important;
+                            .map-topbar-kpis {
+                                font-size: 0.7rem;
+                                gap: 8px;
                             }
 
-                            .map-toolbar-shell {
-                                padding: 8px 12px;
-                                margin-bottom: 8px;
-                                border-radius: 8px;
-                            }
-                        
-                            .map-toolbar-kpis {
-                                font-size: 0.75rem;
-                                gap: 10px;
-                                flex-wrap: wrap;
-                            }
-                        
                             .map-workspace {
-                                max-height: 75vh;
+                                max-height: 80vh;
                                 border-radius: 8px;
                             }
                         }
@@ -714,56 +690,28 @@ def run_map_page(ctx: dict):
                     unsafe_allow_html=True,
                 )
 
-                with st.container():
-                    # Toolbar com KPIs
+                # Topo compacto — só "Adicionar" (pequeno/discreto) e as
+                # contagens, numa única linha, sem cartão nem barra grande:
+                # tudo sobre um contentor faz-se ao clicar nele (ver+editar+
+                # apagar no modal) e arrastar grava sozinho a posição
+                # (botão escondido "Gravar posição", tratado bem no início
+                # da função) — a toolbar já não precisa de mais nada.
+                col_btn, col_kpi = st.columns([1, 2])
+                with col_btn:
+                    criar_novo = st.button("Adicionar", key="map_add_btn", icon="➕", width="content")
+                with col_kpi:
                     st.markdown(
                         f"""
-                        <div class='map-toolbar-shell'>
-                            <div class='map-toolbar-kpis'>
-                                <span><b>{total_contentores}</b> Contentores</span>
-                                <span><b>{int(total_palhetas_geral)}</b> Palhetas</span>
-                            </div>
+                        <div class='map-topbar-kpis' style='justify-content:flex-end;height:100%;'>
+                            <span><b>{total_contentores}</b> contentores</span>
+                            <span><b>{int(total_palhetas_geral)}</b> palhetas</span>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
-                    # Botões de ação — arrumação final: tudo sobre um
-                    # contentor faz-se ao clicar nele (ver+editar+apagar no
-                    # modal) e arrastar grava sozinho a posição (botão
-                    # escondido "Gravar posição", tratado bem no início da
-                    # função — ver comentário lá); a toolbar fica só com
-                    # Adicionar e Reorganizar.
-                    if is_mobile:
-                        btn_m1, btn_m2 = st.columns([1, 1])
-                        with btn_m1:
-                            criar_novo = st.button("+ Novo", key="map_add_btn_mobile", width="stretch")
-                        with btn_m2:
-                            reorganizar = st.button("Reorganizar", key="map_reorganize_btn_mobile", width="stretch")
-                    else:
-                        bar_btn1, bar_btn2 = st.columns([2, 1])
-                        with bar_btn1:
-                            criar_novo = st.button("+ Adicionar Contentor", key="map_add_btn_desktop", width="stretch")
-                        with bar_btn2:
-                            reorganizar = st.button("Reorganizar", key="map_reorganize_btn", width="stretch", help="Distribui todos os contentores em grelha automática")
-
                 if criar_novo:
                     st.session_state['modal_novo_contentor'] = True
-                    st.rerun()
-
-                if reorganizar:
-                    # Distribui contentores em grelha automática
-                    BOX_W, BOX_H, MARGIN = 115, 110, 10
-                    COLS = max(1, min(7, len(contentores_df)))
-                    ok = 0
-                    for i, (_, row) in enumerate(contentores_df.iterrows()):
-                        col_idx = i % COLS
-                        row_idx = i // COLS
-                        nx = MARGIN + col_idx * BOX_W
-                        ny = MARGIN + row_idx * BOX_H
-                        if atualizar_posicao_contentor(int(row['id']), nx, ny):
-                            ok += 1
-                    st.success(t("map.reorganized", count=ok))
                     st.rerun()
 
                 if st.session_state.get("mapa_salvar_layout_pendente", False):
@@ -902,11 +850,8 @@ def run_map_page(ctx: dict):
                         flex-direction: column;
                         align-items: center;
                         justify-content: center;
-                        padding: 6px;
                         user-select: none;
                         transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-                        min-width: 68px;
-                        min-height: 68px;
                         cursor: grab;
                         /* Arrastar está sempre ativo (não só em modo edição);
                            touch-action só aqui (não em #mapa-area inteiro),
@@ -931,8 +876,10 @@ def run_map_page(ctx: dict):
                         z-index: 100;
                     }
 
+                    /* Tamanhos de letra vêm inline (definidos em JS,
+                       proporcionais ao tamanho real da caixa — ver
+                       criarContentor); aqui só o resto do estilo. */
                     .cont-codigo {
-                        font-size: 0.62rem;
                         font-weight: 700;
                         color: var(--primary-dark);
                         margin-bottom: 2px;
@@ -945,7 +892,6 @@ def run_map_page(ctx: dict):
                     }
 
                     .cont-qtd {
-                        font-size: 1.3rem;
                         font-weight: 800;
                         color: var(--text);
                         line-height: 1;
@@ -953,7 +899,6 @@ def run_map_page(ctx: dict):
                     }
 
                     .cont-label {
-                        font-size: 0.5rem;
                         color: var(--text-muted);
                         text-transform: uppercase;
                         letter-spacing: 0.6px;
@@ -970,28 +915,6 @@ def run_map_page(ctx: dict):
                         font-weight: 500;
                     }
 
-                    /* Mobile Optimizations — a caixa encolhe menos do que no
-                       desktop, para o alvo de toque continuar confortável. */
-                    @media (max-width: 640px) {
-                        .cont-box {
-                            min-width: 60px;
-                            min-height: 60px;
-                            padding: 5px;
-                            border-radius: 9px;
-                        }
-
-                        .cont-codigo {
-                            font-size: 0.58rem;
-                        }
-
-                        .cont-qtd {
-                            font-size: 1.1rem;
-                        }
-
-                        .cont-label {
-                            font-size: 0.46rem;
-                        }
-                    }
                 </style>
 
                 <div id="mapa-wrapper" class="__MOBILE_CLASS__">
@@ -1047,24 +970,45 @@ def run_map_page(ctx: dict):
                         return { x: c.x, y: c.y };
                     }
 
+                    // Tamanho do contentor: proporcional à escala real do
+                    // mapa (areaScale, a mesma usada para posicionar),
+                    // não um valor fixo por desktop/mobile — maior num
+                    // ecrã largo, mais pequeno num telemóvel, contínuo em
+                    // vez de saltar entre dois tamanhos. BOX_LOGICAL está
+                    // nas mesmas unidades "virtuais" que x/y (0-900
+                    // desktop, 0-375 mobile); os limites min/max evitam
+                    // caixas minúsculas ou gigantes em ecrãs extremos.
+                    const BOX_LOGICAL = isMobile ? 62 : 70;
+                    const BOX_MIN = isMobile ? 46 : 60;
+                    const BOX_MAX = isMobile ? 76 : 100;
+
                     function criarContentor(c) {
                         const box = document.createElement('div');
                         box.className = 'cont-box';
                         box.dataset.contId = String(c.id);
 
+                        const baseW = Math.round(Math.max(BOX_MIN, Math.min(BOX_MAX, BOX_LOGICAL * areaScale)));
+                        const baseH = baseW;
+                        // Letra a acompanhar o tamanho da caixa — proporções
+                        // escolhidas para corresponderem visualmente ao que
+                        // já funcionava bem nos tamanhos fixos anteriores
+                        // (68px/60px), agora contínuas em vez de dois saltos.
+                        const fsCodigo = Math.max(8, Math.round(baseW * 0.145));
+                        const fsQtd = Math.max(11, Math.round(baseW * 0.30));
+                        const fsLabel = Math.max(7, Math.round(baseW * 0.115));
+
                         box.innerHTML = `
-                            <div class="cont-codigo">${c.codigo}</div>
-                            <div class="cont-qtd">${c.palhetas}</div>
-                            <div class="cont-label">palhetas</div>
+                            <div class="cont-codigo" style="font-size:${fsCodigo}px">${c.codigo}</div>
+                            <div class="cont-qtd" style="font-size:${fsQtd}px">${c.palhetas}</div>
+                            <div class="cont-label" style="font-size:${fsLabel}px">palhetas</div>
                         `;
 
-                        const baseW = isMobile ? 60 : 68;
-                        const baseH = isMobile ? 60 : 68;
                         const pos = posicaoEfetiva(c);
                         box.style.left = (pos.x * areaScale) + 'px';
                         box.style.top = (pos.y * areaScale) + 'px';
                         box.style.width = baseW + 'px';
                         box.style.height = baseH + 'px';
+                        box.style.padding = Math.round(baseW * 0.09) + 'px';
 
                         // Arrastar está sempre ativo; um clique sem
                         // movimento (ver startPress/endPress) é que decide
@@ -1220,31 +1164,32 @@ def run_map_page(ctx: dict):
                 mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
                 mapa_render = mapa_render.replace("__STATUS_TEXT__", t("map.status_view"))
 
-                # Altura responsiva: proporcional ao nº de contentores, mas
-                # sempre limitada ao espaço realmente disponível no ecrã do
-                # utilizador, para o mapa caber sem obrigar a scroll na
-                # página. CHROME_ACIMA/ABAIXO foram medidos empiricamente
-                # (cabeçalho da app, tabs, toolbar do mapa, KPIs, margens)
-                # — o que sobra da altura da janela é o que o mapa pode
-                # ocupar; com poucos contentores, a fórmula por conteúdo já
-                # dá um valor pequeno, este teto só entra em ecrãs baixos.
+                # Altura responsiva: ocupa o espaço realmente disponível no
+                # ecrã do utilizador (lido via innerHeight, uma vez por
+                # sessão), para caber sem obrigar a scroll na página — com
+                # o topo agora compacto, sobra mais espaço, e o mapa cresce
+                # para o preencher (ALTURA_MAXIMA só evita ficar
+                # absurdamente alto em monitores muito grandes).
+                # CHROME_ACIMA/ABAIXO foram medidos empiricamente
+                # (cabeçalho da app, tabs, topo compacto do mapa, margens).
                 # Em mobile, o cabeçalho da app (título, tabs, pesquisa) já
-                # ocupa ~710px por si só em ecrãs típicos de telemóvel —
-                # fora do âmbito deste ajuste (é o cabeçalho de toda a
-                # página "Stock de sémen", partilhado com Lotes/Garanhões/
+                # ocupa a maior parte de ecrãs típicos de telemóvel — fora
+                # do âmbito deste ajuste (é o cabeçalho de toda a página
+                # "Stock de sémen", partilhado com Lotes/Garanhões/
                 # Transferências, não só do mapa); nesses casos o mínimo
-                # ainda pode obrigar a algum scroll, mas bem menos do que
-                # antes.
-                n_cont = len(contentores_df)
+                # ainda pode obrigar a algum scroll.
                 altura_viewport = st.session_state.get("map_altura_viewport") or 800
                 if is_mobile:
-                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA = 715, 45, 160
-                    altura_por_conteudo = n_cont * 34 + 130
+                    # ALTURA_MINIMA um pouco acima do que o espaço disponível
+                    # em telemóveis mais pequenos dá de propósito — um mapa
+                    # de ~110px de área útil (o mínimo anterior) mal dá para
+                    # arrastar; prefere-se algum scroll residual nesses
+                    # casos a um mapa impraticável.
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 620, 65, 200, 460
                 else:
-                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA = 480, 90, 200
-                    altura_por_conteudo = n_cont * 38 + 160
-                espaco_disponivel = max(ALTURA_MINIMA, int(altura_viewport) - CHROME_ACIMA - CHROME_ABAIXO)
-                map_height = max(ALTURA_MINIMA, min(altura_por_conteudo, espaco_disponivel))
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 410, 90, 220, 760
+                espaco_disponivel = int(altura_viewport) - CHROME_ACIMA - CHROME_ABAIXO
+                map_height = max(ALTURA_MINIMA, min(ALTURA_MAXIMA, espaco_disponivel))
                 st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
                 components.html(mapa_render, height=map_height, scrolling=False)
                 st.markdown("</div>", unsafe_allow_html=True)
