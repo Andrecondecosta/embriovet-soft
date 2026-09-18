@@ -18,6 +18,7 @@ from modules.repositories.container_repo import (
 from modules.repositories.settings_repo import get_app_settings
 from modules.repositories.stock_repo import (
     carregar_contentores,
+    mover_palhetas_localizacao,
     obter_stock_contentor,
 )
 from modules.ui_kit import DEFAULT_PRIMARY_COLOR
@@ -266,6 +267,21 @@ def run_map_page(ctx: dict):
                                             }
                                         }
 
+                                        // "Mover" no detalhe de um lote: clica sozinho no
+                                        // botão Streamlit real e escondido desse lote
+                                        // (mesmo mecanismo do "Ver interior" — ver mais
+                                        // abaixo — só que aqui não há fronteira de iframe,
+                                        // o modal já está no documento principal, por isso
+                                        // basta o .click() direto, sem postMessage).
+                                        function handleMoverTriggerClick(ev) {
+                                            ev.stopPropagation();
+                                            var el = ev.currentTarget;
+                                            var loteId = el.getAttribute('data-lote-id');
+                                            var scope = el.closest('[data-testid="stDialog"]') || targetDoc;
+                                            var botao = scope.querySelector('.st-key-mover_trigger_' + loteId + ' button');
+                                            if (botao) { botao.click(); }
+                                        }
+
                                         function bindCells(root) {
                                             try {
                                                 var scope = root || targetDoc;
@@ -287,6 +303,12 @@ def run_map_page(ctx: dict):
                                                     if (el.__hmBound) return;
                                                     el.__hmBound = true;
                                                     try { el.addEventListener('click', handleResumoClick, false); } catch (e) {}
+                                                });
+                                                var moverTriggers = scope.querySelectorAll('.tank-lote-mover-trigger');
+                                                moverTriggers.forEach(function(el){
+                                                    if (el.__hmBound) return;
+                                                    el.__hmBound = true;
+                                                    try { el.addEventListener('click', handleMoverTriggerClick, false); } catch (e) {}
                                                 });
                                             } catch (e) {}
                                         }
@@ -649,7 +671,8 @@ def run_map_page(ctx: dict):
                            são consistentes a disparar .click() em elementos
                            com display:none); ficam sim fora do ecrã. */
                         div[class*="st-key-ver_interior_"],
-                        div[class*="st-key-map_autosave_trigger"] {
+                        div[class*="st-key-map_autosave_trigger"],
+                        div[class*="st-key-mover_trigger_"] {
                             position: absolute !important;
                             width: 1px !important;
                             height: 1px !important;
@@ -1302,9 +1325,16 @@ def run_map_page(ctx: dict):
                     resumo expande o DETALHE — cada lote individual com as
                     medidas (colheita, qualidade, motilidade, concentração).
                     Ambos os níveis são client-side, sem round-trip ao Python
-                    (ver handleResumoClick). Só leitura — sem botões de mover,
-                    como pedido (as ações continuam na página, fora do modal).
-                    Reaproveita os estilos `.lote-row*` já existentes.
+                    (ver handleResumoClick). Reaproveita os estilos
+                    `.lote-row*` já existentes.
+
+                    Cada lote no DETALHE tem agora um gatilho "Mover"
+                    (`.tank-lote-mover-trigger`, `data-lote-id`) — clica num
+                    botão Streamlit real e escondido (`mover_trigger_<id>`,
+                    ver `_abrir_modal_tanque`) que abre o mini-formulário de
+                    mover palhetas para outra localização do mesmo
+                    contentor. Isto é a única escrita nesta vista; o resto
+                    (expandir/recolher) continua client-side puro.
                     """
                     blocks = ""
                     for c in canisters:
@@ -1334,6 +1364,7 @@ def run_map_page(ctx: dict):
                                 qualidade = escape(str(lote['qualidade'] or '—'))
                                 motilidade = int(lote['motilidade'] or 0)
                                 concentracao = int(lote['concentracao'] or 0)
+                                lote_id = int(lote['id'])
                                 detalhe_rows += (
                                     "<div class='lote-row lote-row-detalhe'>"
                                     "<div class='lote-row-left'>"
@@ -1344,6 +1375,7 @@ def run_map_page(ctx: dict):
                                     f"Motilidade: {motilidade}% · Concentração: {concentracao}M/ml"
                                     "</span>"
                                     "</div>"
+                                    f"<span class='tank-lote-mover-trigger' data-lote-id='{lote_id}'>↔ Mover</span>"
                                     "</div>"
                                 )
                             corpo = (
@@ -1433,6 +1465,101 @@ def run_map_page(ctx: dict):
                             circle_html, canisters = build_tank_circle_html(
                                 stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
                             )
+
+                            # "Mover" — botões escondidos (um por lote do andar
+                            # visível; o clique real vem do pill no HTML do
+                            # detalhe, via handleMoverTriggerClick) + o
+                            # mini-formulário, quando um lote está selecionado
+                            # para mover. Fica ANTES do desenho do círculo de
+                            # propósito: se o movimento tiver sucesso,
+                            # `stock_modal` é relido aqui e o círculo/detalhe
+                            # abaixo já saem atualizados na mesma passagem —
+                            # tal como o "Inverter andares" já fazia.
+                            mover_key = f"mover_form_lote_{cont_id_modal}"
+                            lotes_andar_sel = stock_modal[stock_modal['andar'] == andar_sel]
+                            for _, lote_btn in lotes_andar_sel.iterrows():
+                                lote_id_btn = int(lote_btn['id'])
+                                if st.button("Mover", key=f"mover_trigger_{lote_id_btn}"):
+                                    st.session_state[mover_key] = lote_id_btn
+
+                            mover_lote_id = st.session_state.get(mover_key)
+                            moveu_com_sucesso = False
+                            if mover_lote_id is not None:
+                                linha_mover = stock_modal[stock_modal['id'] == mover_lote_id]
+                                if linha_mover.empty:
+                                    # O lote já não existe (esvaziado por outra
+                                    # via entretanto) — fecha o formulário.
+                                    st.session_state.pop(mover_key, None)
+                                else:
+                                    lote_mover = linha_mover.iloc[0]
+                                    exist_lote = int(lote_mover['existencia_atual'])
+                                    canister_atual = int(lote_mover['canister'])
+                                    andar_atual = int(lote_mover['andar'])
+                                    gar_mover = escape(str(lote_mover['garanhao'] or '—'))
+
+                                    # Só a localização atual no cabeçalho (não a
+                                    # quantidade): a localização não muda numa
+                                    # transferência parcial, mas a quantidade sim
+                                    # — mostrá-la aqui ficaria desatualizada no
+                                    # instante logo a seguir a mover com sucesso
+                                    # (o cabeçalho já foi desenhado antes de o
+                                    # clique no botão, mais abaixo, ser processado
+                                    # nesta mesma passagem).
+                                    st.markdown(
+                                        f"**↔ Mover — {gar_mover}** "
+                                        f"(atualmente Canister {canister_atual} · Andar {andar_atual})"
+                                    )
+                                    col_qtd, col_can, col_and = st.columns(3)
+                                    with col_qtd:
+                                        qtd_mover = st.number_input(
+                                            "Quantidade", min_value=1, max_value=exist_lote,
+                                            value=exist_lote, key=f"mover_qtd_{mover_lote_id}",
+                                        )
+                                    with col_can:
+                                        idx_canister_dest = max(0, min(9, canister_atual - 1))
+                                        canister_destino = st.selectbox(
+                                            "Canister destino", options=list(range(1, 11)),
+                                            index=idx_canister_dest, key=f"mover_canister_{mover_lote_id}",
+                                        )
+                                    with col_and:
+                                        andar_destino = st.radio(
+                                            "Andar destino", [1, 2], format_func=lambda x: f"{x}º",
+                                            index=0 if andar_atual == 2 else 1, horizontal=True,
+                                            key=f"mover_andar_{mover_lote_id}",
+                                        )
+
+                                    col_mv1, col_mv2 = st.columns(2)
+                                    with col_mv1:
+                                        if st.button(
+                                            "Mover palhetas", key=f"mover_confirmar_{mover_lote_id}",
+                                            type="primary", width="stretch",
+                                        ):
+                                            if canister_destino == canister_atual and andar_destino == andar_atual:
+                                                st.warning("Escolhe um destino diferente da localização atual.")
+                                            elif mover_palhetas_localizacao(
+                                                mover_lote_id, qtd_mover, canister_destino, andar_destino,
+                                            ):
+                                                st.toast(
+                                                    f"{qtd_mover} palheta(s) movida(s) para "
+                                                    f"Canister {canister_destino} · Andar {andar_destino}.",
+                                                    icon="✅",
+                                                )
+                                                st.session_state.pop(mover_key, None)
+                                                stock_modal = obter_stock_contentor(cont_id_modal)
+                                                moveu_com_sucesso = True
+                                    with col_mv2:
+                                        if st.button(
+                                            "Cancelar", key=f"mover_cancelar_{mover_lote_id}", width="stretch",
+                                        ):
+                                            st.session_state.pop(mover_key, None)
+
+                                    st.divider()
+
+                            if moveu_com_sucesso:
+                                circle_html, canisters = build_tank_circle_html(
+                                    stock_modal, andar_sel, cont_id_modal, primary_r, primary_g, primary_b
+                                )
+
                             if circle_html:
                                 st.markdown(circle_html, unsafe_allow_html=True)
                                 info_html = build_canister_info_html(stock_modal, andar_sel, canisters)
@@ -1598,9 +1725,32 @@ def run_map_page(ctx: dict):
                     .tank-info-detalhe {{
                         margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0;
                     }}
-                    .lote-row-detalhe {{ flex-direction:column; align-items:flex-start; }}
-                    .lote-row-detalhe .lote-row-left {{ width:100%; }}
+                    /* Detalhe do lote: info à esquerda, "Mover" à direita, na
+                       mesma linha (herda align-items:center + justify-
+                       content:space-between de `.lote-row`). `flex-wrap`
+                       só entra em ação se não houver largura para as duas
+                       colunas lado a lado — nesse caso o botão desce para
+                       a linha de baixo sozinho, em vez de espremer o texto. */
+                    .lote-row-detalhe {{ align-items:flex-start; flex-wrap:wrap; row-gap:8px; }}
+                    .lote-row-detalhe .lote-row-left {{ flex:1 1 220px; min-width:0; }}
                     .lote-medidas {{ color:#94a3b8; font-size:.7rem; margin-top:2px; }}
+                    .tank-lote-mover-trigger {{
+                        flex:0 0 auto;
+                        padding:11px 16px;
+                        min-height:18px;
+                        border-radius:8px;
+                        font-size:.72rem;
+                        font-weight:700;
+                        color:rgb({pr},{pg},{pb});
+                        background:rgba({pr},{pg},{pb},.08);
+                        border:1px solid rgba({pr},{pg},{pb},.3);
+                        cursor:pointer;
+                        user-select:none;
+                        display:inline-flex;
+                        align-items:center;
+                        box-sizing:content-box;
+                    }}
+                    .tank-lote-mover-trigger:hover {{ background:rgba({pr},{pg},{pb},.16); }}
 
                     /* Seletor de andar — pill-tabs (mesmo padrão do
                        separador Stock de sémen: esconde o círculo do rádio

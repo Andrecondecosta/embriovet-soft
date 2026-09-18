@@ -9,6 +9,9 @@ Contém:
 - 3 funções de transferência: `transferir_palhetas_parcial` (alias
   `transferir_stock_interno`), `transferir_stock_interno_com_localizacao`,
   `transferir_palhetas_externo` (alias `transferir_stock_externo`).
+- `mover_palhetas_localizacao`: arrumação física dentro do mesmo
+  contentor (canister/andar) — sem mudar de dono, sem registar em
+  `transferencias`.
 
 **Extração pura** — a lógica é bit-for-bit igual à antiga versão em
 `app.py`. A única diferença é a resolução de nomes: `logger`, `to_py`,
@@ -660,6 +663,134 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
     except Exception as e:
         logger.error(f"Erro ao transferir palhetas com nova localização: {e}")
         st.error(f"Erro ao transferir palhetas: {e}")
+        return False
+
+
+def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, andar_destino):
+    """Move palhetas de um lote para outra localização (canister/andar)
+    dentro do MESMO contentor — arrumação física, não transferência de
+    proprietário. Por isso não regista nada em `transferencias` (essa
+    tabela é sobre mudança de dono; aqui o dono nunca muda). Fase 1: só
+    dentro do mesmo contentor — mudar de contentor fica para depois.
+
+    - Se `quantidade` for a existência toda do lote e não houver lote
+      do mesmo garanhão já no destino: só reposiciona o próprio registo
+      (como `atualizar_andar_lote`) — evita criar um lote fantasma com
+      existência 0 no caso mais comum (mover o lote inteiro).
+    - Caso contrário (parcial, ou o destino já tem o mesmo garanhão):
+      desconta na origem e soma/cria no destino — mesmo padrão de
+      `transferir_stock_interno_com_localizacao`, sem mudar de dono.
+    """
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+
+            cur.execute("""
+                SELECT garanhao, dono_id, existencia_atual, data_embriovet, origem_externa,
+                       qualidade, concentracao, motilidade, local_armazenagem, certificado, dose, observacoes, cor,
+                       contentor_id, canister, andar, animal_id
+                FROM estoque_dono WHERE id = %s
+            """, (to_py(stock_origem_id),))
+
+            origem = cur.fetchone()
+            if not origem:
+                st.error(t("error.origin_lot_not_found"))
+                return False
+
+            (garanhao, dono_id, exist_atual, data_emb, origem_ext,
+             qual, conc, mot, local, cert, dose, obs, cor,
+             contentor_id, canister_origem, andar_origem, animal_id) = origem
+
+            exist_atual = int(to_py(exist_atual) or 0)
+            quantidade_int = int(to_py(quantidade) or 0)
+            canister_destino_int = int(to_py(canister_destino))
+            andar_destino_int = int(to_py(andar_destino))
+
+            if quantidade_int <= 0:
+                st.error(t("error.qty_positive"))
+                return False
+
+            if quantidade_int > exist_atual:
+                st.error(f"❌ Quantidade insuficiente! Disponível: {exist_atual}")
+                return False
+
+            mesma_localizacao = (
+                canister_destino_int == int(to_py(canister_origem) or 0)
+                and andar_destino_int == int(to_py(andar_origem) or 0)
+            )
+            if mesma_localizacao:
+                st.error("❌ O destino tem de ser diferente da localização atual.")
+                return False
+
+            # Lote do mesmo garanhão já no destino? (scoped ao mesmo
+            # contentor — canister/andar não são únicos entre contentores)
+            cur.execute("""
+                SELECT id, existencia_atual
+                FROM estoque_dono
+                WHERE garanhao = %s AND dono_id = %s AND id != %s
+                AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
+                AND canister = %s AND andar = %s
+                LIMIT 1
+            """, (to_py(garanhao), to_py(dono_id), to_py(stock_origem_id),
+                  to_py(contentor_id), canister_destino_int, andar_destino_int))
+
+            lote_destino = cur.fetchone()
+
+            if quantidade_int == exist_atual and not lote_destino:
+                # Mover o lote inteiro para um sítio sem correspondência:
+                # só reposiciona o registo, sem zerar-e-recriar.
+                cur.execute("""
+                    UPDATE estoque_dono
+                    SET canister = %s, andar = %s
+                    WHERE id = %s
+                """, (canister_destino_int, andar_destino_int, to_py(stock_origem_id)))
+            else:
+                # Parcial, ou o destino já tem o mesmo garanhão: desconta
+                # na origem e soma/cria no destino (mesma localização de
+                # contentor, dono inalterado).
+                cur.execute("""
+                    UPDATE estoque_dono
+                    SET existencia_atual = existencia_atual - %s
+                    WHERE id = %s
+                """, (quantidade_int, to_py(stock_origem_id)))
+
+                if lote_destino:
+                    cur.execute("""
+                        UPDATE estoque_dono
+                        SET existencia_atual = existencia_atual + %s
+                        WHERE id = %s
+                    """, (quantidade_int, lote_destino[0]))
+                else:
+                    cur.execute("""
+                        INSERT INTO estoque_dono (
+                            garanhao, dono_id, data_embriovet, origem_externa,
+                            palhetas_produzidas, qualidade, concentracao, motilidade,
+                            local_armazenagem, certificado, dose, observacoes,
+                            quantidade_inicial, existencia_atual, cor,
+                            contentor_id, canister, andar, animal_id
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        to_py(garanhao), to_py(dono_id), to_py(data_emb), to_py(origem_ext),
+                        quantidade_int, to_py(qual), to_py(conc), to_py(mot),
+                        to_py(local), to_py(cert), to_py(dose), to_py(obs),
+                        quantidade_int, quantidade_int, to_py(cor),
+                        to_py(contentor_id), canister_destino_int, andar_destino_int,
+                        to_py(animal_id)
+                    ))
+
+            conn.commit()
+            cur.close()
+
+        invalidate_data_cache()
+        logger.info(
+            f"Movimento de localização: {quantidade_int} palhetas do lote {stock_origem_id} "
+            f"para canister {canister_destino_int}/andar {andar_destino_int}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Erro ao mover palhetas de localização: {e}")
+        st.error(f"Erro ao mover palhetas: {e}")
         return False
 
 
