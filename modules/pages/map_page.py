@@ -362,16 +362,42 @@ def run_map_page(ctx: dict):
             st.session_state["map_largura_viewport"] = None
 
         if js_eval_disponivel and st.session_state["map_largura_viewport"] is None:
+            # window.innerWidth sozinho mede o IFRAME escondido do próprio
+            # streamlit_js_eval (display:none, logo 0), não a janela real —
+            # é preciso window.parent para chegar à janela principal.
             largura_viewport_once = streamlit_js_eval(
-                js_expressions='window.innerWidth',
+                js_expressions='(function(){try{return window.parent.innerWidth}catch(e){return window.innerWidth}})()',
                 key='map_viewport_width_once',
                 want_output=True,
             )
-            if largura_viewport_once is not None:
+            if largura_viewport_once:
                 try:
-                    st.session_state["map_largura_viewport"] = int(largura_viewport_once)
+                    valor = int(largura_viewport_once)
+                    if valor > 0:
+                        st.session_state["map_largura_viewport"] = valor
                 except Exception:
-                    st.session_state["map_largura_viewport"] = 1200
+                    pass
+
+        # Mesmo padrão da largura — lida uma vez por sessão — para o mapa
+        # poder ter uma altura que caiba no ecrã visível sem precisar de
+        # scroll, em vez de uma altura fixa que ignora o tamanho real do
+        # ecrã do utilizador.
+        if "map_altura_viewport" not in st.session_state:
+            st.session_state["map_altura_viewport"] = None
+
+        if js_eval_disponivel and st.session_state["map_altura_viewport"] is None:
+            altura_viewport_once = streamlit_js_eval(
+                js_expressions='(function(){try{return window.parent.innerHeight}catch(e){return window.innerHeight}})()',
+                key='map_viewport_height_once',
+                want_output=True,
+            )
+            if altura_viewport_once:
+                try:
+                    valor = int(altura_viewport_once)
+                    if valor > 0:
+                        st.session_state["map_altura_viewport"] = valor
+                except Exception:
+                    pass
 
         largura_viewport = st.session_state.get("map_largura_viewport")
         is_mobile = bool(largura_viewport) and int(largura_viewport) < 900
@@ -399,16 +425,13 @@ def run_map_page(ctx: dict):
                 st.session_state["mapa_salvar_layout_tentativas"] = 0
                 st.rerun()
 
-        # Gated por `mapa_salvar_layout_pendente` (e não sempre ativa): uma
-        # tentativa de a ler incondicionalmente em todos os renders
-        # revelou-se pior — com uma key estática, o streamlit_js_eval fica
-        # preso no primeiro valor que alguma vez leu (None, antes de haver
-        # qualquer arrasto) e nunca mais reavalia, porque o componente
-        # nunca é "desmontado" da árvore para forçar nova leitura. O que
-        # resolve o ressalto é `auto_commit_layout` (logo acima) já ter
-        # sido detetado e `mapa_salvar_layout_pendente` já estar True
-        # *antes* desta leitura, na mesma rerun em que o botão escondido é
-        # clicado.
+        # Só para a ESCRITA na BD mais abaixo (não para o visual — ver
+        # `posicaoEfetiva` no JS do mapa: essa lê o localStorage
+        # diretamente no browser, sem depender disto, porque esta leitura
+        # tem sempre pelo menos um render de atraso a resolver — é assim
+        # que qualquer componente Streamlit funciona, não há como evitar
+        # esse atraso NESTE lado; corrigir o ressalto exigia contorná-lo,
+        # não apressá-lo).
         layout_pending_raw = None
         if st.session_state.get("mapa_salvar_layout_pendente", False) and js_eval_disponivel:
             layout_pending_raw = streamlit_js_eval(
@@ -416,21 +439,6 @@ def run_map_page(ctx: dict):
                 key="map_layout_pending_reader",
                 want_output=True,
             )
-
-        posicoes_pendentes = {}
-        if layout_pending_raw and layout_pending_raw != "null":
-            try:
-                _pend = layout_pending_raw if isinstance(layout_pending_raw, dict) else json.loads(str(layout_pending_raw))
-                if isinstance(_pend, dict) and "output" in _pend:
-                    _output = _pend.get("output")
-                    if isinstance(_output, dict):
-                        _pend = _output
-                    elif isinstance(_output, str) and _output.strip():
-                        _pend = json.loads(_output)
-                if isinstance(_pend, dict):
-                    posicoes_pendentes = _pend
-            except Exception:
-                posicoes_pendentes = {}
 
         # Modal para adicionar contentor - design limpo
         if st.session_state.get('modal_novo_contentor', False):
@@ -529,30 +537,17 @@ def run_map_page(ctx: dict):
                                 "observacoes": observacao,
                             })
 
-                    # Posição a mostrar: se há uma posição pendente (largada
-                    # há pouco, ainda por confirmar na BD), usa-a — evita o
-                    # ressalto de mostrar a posição antiga enquanto o
-                    # auto-save ainda está a decorrer (ver leitura de
-                    # `posicoes_pendentes` mais acima).
-                    pos_pendente = posicoes_pendentes.get(str(int(row['id'])))
-                    if pos_pendente is None:
-                        try:
-                            pos_pendente = posicoes_pendentes.get(int(row['id']))
-                        except Exception:
-                            pos_pendente = None
-                    if isinstance(pos_pendente, dict) and "x" in pos_pendente and "y" in pos_pendente:
-                        x_mostrar = int(pos_pendente["x"])
-                        y_mostrar = int(pos_pendente["y"])
-                    else:
-                        x_mostrar = int(row['x'])
-                        y_mostrar = int(row['y'])
-
+                    # A posição pendente (largada há pouco, ainda por
+                    # confirmar na BD) é aplicada no próprio JS do mapa
+                    # (ver `posicaoEfetiva`), lendo o localStorage
+                    # diretamente — não aqui. Ver o comentário junto de
+                    # `layout_pending_raw` sobre porquê.
                     contentores_data.append({
                         "id": int(row['id']),
                         "codigo": row['codigo'],
                         "descricao": row['descricao'] or "",
-                        "x": x_mostrar,
-                        "y": y_mostrar,
+                        "x": int(row['x']),
+                        "y": int(row['y']),
                         "w": max(80, int(row['w'])),
                         "h": max(80, int(row['h'])),
                         "palhetas": total_palhetas,
@@ -610,14 +605,22 @@ def run_map_page(ctx: dict):
                             font-weight: 600;
                         }
                     
-                        /* Container do mapa - altura otimizada */
+                        /* Container do mapa — a altura real já vem calculada
+                           em Python (map_height) para caber no ecrã sem
+                           scroll; isto é só uma rede de segurança para
+                           casos extremos (ex.: muitos contentores).
+                           margin-top negativo: absorve o espaçamento
+                           vertical por defeito que o Streamlit põe entre
+                           os botões da toolbar e o próximo bloco — sem
+                           isto sobrava espaço morto entre os dois. */
                         .map-workspace {
-                            max-height: 65vh;
+                            max-height: 85vh;
                             overflow: hidden;
                             border-radius: 12px;
                             border: 1px solid #e2e8f0;
                             background: #ffffff;
                             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+                            margin-top: -12px;
                         }
                     
                         /* Mobile responsive */
@@ -641,7 +644,7 @@ def run_map_page(ctx: dict):
                             }
                         
                             .map-workspace {
-                                max-height: 55vh;
+                                max-height: 75vh;
                                 border-radius: 8px;
                             }
                         }
@@ -1021,6 +1024,29 @@ def run_map_page(ctx: dict):
                         areaScale = rect.width / (isMobile ? 375 : 900);
                     }
 
+                    // Posição a usar para desenhar um contentor: se há uma
+                    // posição pendente por gravar (largou-se há pouco, o
+                    // auto-save ainda não terminou), usa-a em vez da que
+                    // veio do servidor. Lido diretamente do localStorage,
+                    // sem round-trip ao Python — corrige o ressalto de
+                    // vez: uma leitura por streamlit_js_eval tem sempre
+                    // pelo menos um render de atraso a resolver (é assim
+                    // que qualquer componente Streamlit funciona), o que
+                    // deixava sempre passar pelo menos um repaint do mapa
+                    // com a posição antiga antes da nova ficar disponível
+                    // do lado do Python.
+                    function posicaoEfetiva(c) {
+                        try {
+                            const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
+                            const pendentes = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                            const p = pendentes[String(c.id)];
+                            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+                                return { x: p.x, y: p.y };
+                            }
+                        } catch (e) {}
+                        return { x: c.x, y: c.y };
+                    }
+
                     function criarContentor(c) {
                         const box = document.createElement('div');
                         box.className = 'cont-box';
@@ -1034,8 +1060,9 @@ def run_map_page(ctx: dict):
 
                         const baseW = isMobile ? 60 : 68;
                         const baseH = isMobile ? 60 : 68;
-                        box.style.left = (c.x * areaScale) + 'px';
-                        box.style.top = (c.y * areaScale) + 'px';
+                        const pos = posicaoEfetiva(c);
+                        box.style.left = (pos.x * areaScale) + 'px';
+                        box.style.top = (pos.y * areaScale) + 'px';
                         box.style.width = baseW + 'px';
                         box.style.height = baseH + 'px';
 
@@ -1174,8 +1201,9 @@ def run_map_page(ctx: dict):
                         contentores.forEach((c, i) => {
                             const box = mapaArea.children[i];
                             if (box) {
-                                box.style.left = (c.x * areaScale) + 'px';
-                                box.style.top = (c.y * areaScale) + 'px';
+                                const pos = posicaoEfetiva(c);
+                                box.style.left = (pos.x * areaScale) + 'px';
+                                box.style.top = (pos.y * areaScale) + 'px';
                             }
                         });
                     });
@@ -1192,12 +1220,31 @@ def run_map_page(ctx: dict):
                 mapa_render = mapa_render.replace("__MOBILE_CLASS__", "mobile" if is_mobile else "desktop")
                 mapa_render = mapa_render.replace("__STATUS_TEXT__", t("map.status_view"))
 
-                # Renderizar mapa com altura responsiva baseada no nº de contentores
+                # Altura responsiva: proporcional ao nº de contentores, mas
+                # sempre limitada ao espaço realmente disponível no ecrã do
+                # utilizador, para o mapa caber sem obrigar a scroll na
+                # página. CHROME_ACIMA/ABAIXO foram medidos empiricamente
+                # (cabeçalho da app, tabs, toolbar do mapa, KPIs, margens)
+                # — o que sobra da altura da janela é o que o mapa pode
+                # ocupar; com poucos contentores, a fórmula por conteúdo já
+                # dá um valor pequeno, este teto só entra em ecrãs baixos.
+                # Em mobile, o cabeçalho da app (título, tabs, pesquisa) já
+                # ocupa ~710px por si só em ecrãs típicos de telemóvel —
+                # fora do âmbito deste ajuste (é o cabeçalho de toda a
+                # página "Stock de sémen", partilhado com Lotes/Garanhões/
+                # Transferências, não só do mapa); nesses casos o mínimo
+                # ainda pode obrigar a algum scroll, mas bem menos do que
+                # antes.
                 n_cont = len(contentores_df)
+                altura_viewport = st.session_state.get("map_altura_viewport") or 800
                 if is_mobile:
-                    map_height = max(260, min(380, n_cont * 60 + 160))
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA = 715, 45, 160
+                    altura_por_conteudo = n_cont * 34 + 130
                 else:
-                    map_height = max(340, min(520, n_cont * 55 + 200))
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA = 480, 90, 200
+                    altura_por_conteudo = n_cont * 38 + 160
+                espaco_disponivel = max(ALTURA_MINIMA, int(altura_viewport) - CHROME_ACIMA - CHROME_ABAIXO)
+                map_height = max(ALTURA_MINIMA, min(altura_por_conteudo, espaco_disponivel))
                 st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)
                 components.html(mapa_render, height=map_height, scrolling=False)
                 st.markdown("</div>", unsafe_allow_html=True)
