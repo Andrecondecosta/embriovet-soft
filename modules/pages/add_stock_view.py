@@ -49,7 +49,6 @@ def _render_add_stock_view():
     convertido em função para ser invocado pelo orquestrador de
     'Stock de sémen' (Pedido 7). Lógica inalterada.
     """
-    st.header(t("add_stock.title"))
     primary = (app_settings or {}).get("primary_color") or DEFAULT_PRIMARY_COLOR
     inject_add_stock_form_css(primary_color=primary)
 
@@ -142,7 +141,7 @@ def _render_add_stock_view():
 
             # ── Identificação do Garanhão (FORA do form para permitir
             # pré-selecção de garanhão recém-criado via session_state) ────
-            st.markdown('<div class="form-card"><div class="form-section-header">🐴 Identificação</div>', unsafe_allow_html=True)
+            render_zone_title("Identificação", "ds-zone-title ds-zone-title--first")
             col_id1, col_id_btn, col_id2 = st.columns([3, 1, 3])
             with col_id1:
                 # Selectbox por id (permite pré-seleccionar via novo_animal_id
@@ -206,11 +205,10 @@ def _render_add_stock_view():
                     index=idx_default, key="add_stock_prop_select",
                 )
                 dono_id = int(proprietarios.loc[proprietarios["nome"] == proprietario_nome, "id"].iloc[0])
-            st.markdown('</div>', unsafe_allow_html=True)
-            
+
             with st.form("novo_stock"):
                 # SEÇÃO 2: DADOS TÉCNICOS
-                st.markdown('<div class="form-card"><div class="form-section-header">🔬 Dados Técnicos</div>', unsafe_allow_html=True)
+                render_zone_title("Dados Técnicos", "ds-zone-title")
                 col_tec1, col_tec2, col_tec3, col_tec4 = st.columns(4)
                 
                 with col_tec1:
@@ -227,10 +225,9 @@ def _render_add_stock_view():
                     certificado = st.selectbox(t("stock.certificate"), [t("common.yes"), t("common.no")])
                 with col_tec6:
                     dose = st.text_input(t("stock.dose"))
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 # SEÇÃO 3: PRODUÇÃO
-                st.markdown('<div class="form-card"><div class="form-section-header">📦 Produção</div>', unsafe_allow_html=True)
+                render_zone_title("Produção", "ds-zone-title")
                 col_prod1, col_prod2, col_prod3 = st.columns(3)
                 
                 with col_prod1:
@@ -239,11 +236,10 @@ def _render_add_stock_view():
                     palhetas = st.number_input(t("stock.straws_produced"), min_value=0, value=0)
                 with col_prod3:
                     origem = st.text_input(t("stock.external_origin"))
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 # SEÇÃO 4: LOCALIZAÇÃO
-                st.markdown('<div class="form-card"><div class="form-section-header">📍 Localização no Contentor</div>', unsafe_allow_html=True)
-                
+                render_zone_title("Localização no Contentor", "ds-zone-title")
+
                 col_loc1, col_loc2, col_loc3 = st.columns(3)
                 with col_loc1:
                     contentor_selecionado = st.selectbox(
@@ -268,12 +264,10 @@ def _render_add_stock_view():
                         horizontal=True,
                         help=t("add_stock.floor_help")
                     )
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 # OBSERVAÇÕES E SUBMIT
-                st.markdown('<div class="form-card"><div class="form-section-header">💬 Observações</div>', unsafe_allow_html=True)
+                render_zone_title("Observações", "ds-zone-title")
                 observacoes = st.text_area(t("label.notes"), help=t("add_stock.notes_help"), label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
 
                 submitted = st.form_submit_button(t("btn.save"), type="primary", width="stretch")
 
