@@ -40,16 +40,17 @@ def render_day_navigator(key_prefix: str, default: date | None = None) -> date:
         [0.08, 0.32, 0.08, 0.16], gap="small", vertical_alignment="bottom",
     )
     with col_prev:
-        if st.button("◀", key=f"{key_prefix}_dia_anterior", width="stretch"):
+        # Navegação — discreto (mesmo padrão das setas de mês em Estadias).
+        if st.button("◀", key=f"{key_prefix}_dia_anterior", type="tertiary", width="stretch"):
             st.session_state[widget_key] = dia_atual - timedelta(days=1)
             st.rerun()
     with col_next:
-        if st.button("▶", key=f"{key_prefix}_dia_seguinte", width="stretch"):
+        if st.button("▶", key=f"{key_prefix}_dia_seguinte", type="tertiary", width="stretch"):
             st.session_state[widget_key] = dia_atual + timedelta(days=1)
             st.rerun()
     with col_hoje:
         if not is_hoje:
-            if st.button("Hoje", key=f"{key_prefix}_ir_para_hoje", width="stretch"):
+            if st.button("Hoje", key=f"{key_prefix}_ir_para_hoje", type="tertiary", width="stretch"):
                 st.session_state[widget_key] = date.today()
                 st.rerun()
     with col_date:

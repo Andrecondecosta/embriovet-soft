@@ -134,7 +134,7 @@ def _render_painel_resultado() -> bool:
             "Esta tarefa não está ligada a uma inseminação registada. "
             "Marque como concluída manualmente na ficha do animal."
         )
-        if st.button("← Voltar", key="btn_res_voltar_erro"):
+        if st.button("← Voltar", key="btn_res_voltar_erro", type="tertiary"):
             st.session_state.pop("resultado_task_id", None)
             st.session_state.pop("resultado_task_tipo", None)
             st.rerun()
@@ -418,7 +418,7 @@ def run_trabalho_diario_page(context: dict):
     if st.session_state.get("insem_flow_active"):
         from modules.pages.insemination_page import run_insemination_page
         if st.button("← Voltar ao Trabalho Diário",
-                     key="btn_voltar_insem_flow"):
+                     key="btn_voltar_insem_flow", type="tertiary"):
             st.session_state.pop("insem_flow_active", None)
             st.session_state.pop("insem_egua_prefill", None)
             st.rerun()
@@ -427,7 +427,7 @@ def run_trabalho_diario_page(context: dict):
 
     # Drill-down para ficha do animal
     if st.session_state.get("ver_animal_id") is not None:
-        if st.button("← Voltar ao trabalho diário", key="btn_voltar_trab_diario"):
+        if st.button("← Voltar ao trabalho diário", key="btn_voltar_trab_diario", type="tertiary"):
             st.session_state.pop("ver_animal_id", None)
             st.session_state.pop("ver_animal_tab", None)
             st.rerun()
