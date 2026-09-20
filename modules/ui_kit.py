@@ -576,8 +576,19 @@ def inject_shell_css(primary_color: str | None):
                 background: var(--bg);
                 border-right: 1px solid var(--border);
             }}
+            /* `stSidebarHeader` é a caixa nativa do Streamlit que aloja o
+               botão de colapsar (◀) — a sua altura fica intocada de
+               propósito (é o alvo de toque do botão). Só o `margin-bottom`
+               nativo (puro espaço vazio a seguir à caixa, não faz parte
+               dela) é anulado, para o conteúdo da sidebar começar mais
+               acima. O botão de reabrir em mobile (`stExpandSidebarButton`)
+               vive fora da sidebar, no conteúdo principal — não é afectado
+               por nada aqui. */
+            [data-testid="stSidebarHeader"] {{
+                margin-bottom: 0 !important;
+            }}
             .sidebar-brand {{
-                padding: 12px 12px 8px 12px;
+                padding: 6px 12px 8px 12px;
                 border-bottom: 1px solid var(--border);
             }}
             .sidebar-brand-title {{
@@ -608,24 +619,26 @@ def inject_shell_css(primary_color: str | None):
                 color: var(--muted);
                 margin-top: 4px;
             }}
-            [data-testid="stSidebar"] [role="radiogroup"] label {{
-                border: 1px solid transparent;
-                border-radius: var(--radius);
-                padding: 6px 8px;
-                margin: 2px 8px;
-                color: var(--text);
+            /* Navegação principal — `st.sidebar.button(key=f"_nav_pri_{{item}}")`,
+               nunca um `st.sidebar.radio` (não existe nenhum no
+               repositório). Scoped ao prefixo de key `_nav_pri_` para
+               nunca afectar o botão de terminar sessão (`_sidebar_logout`),
+               que vive no mesmo `[data-testid="stSidebar"]`. */
+            [data-testid="stSidebar"] div[class*="st-key-_nav_pri_"] button[kind="secondary"]:hover {{
+                background: var(--ds-gray-100);
+                border-color: var(--ds-gray-200);
             }}
-            [data-testid="stSidebar"] [role="radiogroup"] label:hover {{
-                background: #f1f5f9;
-                border-color: var(--border);
-            }}
-            [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
-                background: #eef2ff;
-                border-color: rgba(37, 99, 235, 0.3);
-                color: var(--primary);
+            /* Item activo — o Python continua a marcá-lo `type="primary"`,
+               mas aqui deixa de ser o bloco cheio na cor da marca (fraco
+               contraste texto branco/vermelho) e passa a fundo neutro +
+               texto na cor da marca + barra à esquerda. */
+            [data-testid="stSidebar"] div[class*="st-key-_nav_pri_"] button[kind="primary"] {{
+                background: var(--ds-gray-100) !important;
+                border-color: var(--ds-gray-200) !important;
+                color: var(--primary) !important;
                 position: relative;
             }}
-            [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {{
+            [data-testid="stSidebar"] div[class*="st-key-_nav_pri_"] button[kind="primary"]::before {{
                 content: "";
                 position: absolute;
                 left: 0;
@@ -1121,20 +1134,25 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
     user_name = (user_info or {}).get("nome") or "Utilizador"
     nivel = (user_info or {}).get("nivel") or ""
 
-    st.sidebar.markdown("<div class='sidebar-brand'>", unsafe_allow_html=True)
     if logo:
-        st.sidebar.markdown(
-            f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>",
-            unsafe_allow_html=True,
-        )
+        brand_mark = f"<img src='{logo}' style='max-width:100%; height:40px; object-fit:contain; margin-bottom:6px;'/>"
     else:
         initials = "".join([p[0] for p in company_name.split()[:2] if p]) or "S"
-        st.sidebar.markdown(
-            f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:700; margin-bottom:6px;'>{initials}</div>",
-            unsafe_allow_html=True,
+        brand_mark = (
+            f"<div style='width:40px; height:40px; border-radius:8px; background:#ffffff; "
+            f"border:1px solid var(--border); display:flex; align-items:center; "
+            f"justify-content:center; color:var(--muted); font-weight:700; "
+            f"margin-bottom:6px;'>{initials}</div>"
         )
-    st.sidebar.markdown(f"<div class='sidebar-brand-title'>{company_name}</div>", unsafe_allow_html=True)
-    st.sidebar.markdown("</div>", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        f"""
+        <div class='sidebar-brand'>
+            {brand_mark}
+            <div class='sidebar-brand-title'>{company_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.sidebar.markdown(
         f"""
@@ -1202,19 +1220,6 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
             item, key=f"_nav_pri_{item}", width="stretch", type=btn_style,
             on_click=_select_nav_item, args=(item,),
         )
-
-    # ---- Menu Secundário: botões dentro do expander ----
-    if menu_secundario:
-        expanded = current_page in menu_secundario
-        with st.sidebar.expander("Mais opções", expanded=expanded):
-            for item in menu_secundario:
-                is_active = current_page == item
-                label = f"▶ {item}" if is_active else item
-                btn_type = "primary" if is_active else "secondary"
-                st.button(
-                    label, key=f"_nav_sec_{item}", width="stretch", type=btn_type,
-                    on_click=_select_nav_item, args=(item,),
-                )
 
     # ---- Terminar Sessão (fundo da sidebar) ----
     st.sidebar.markdown("---")
