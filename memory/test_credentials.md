@@ -1,4 +1,4 @@
-# Test Credentials — EquiCore / Embriovet
+# Test Credentials — EquiCore
 
 ## Admin (app Streamlit)
 - URL: https://multi-lot-ops.preview.emergentagent.com

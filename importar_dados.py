@@ -154,7 +154,7 @@ def importar_stock(csv_file, proprietario_padrao_id):
 
 def main():
     print("="*60)
-    print("  🐴 IMPORTAÇÃO DE DADOS - EMBRIOVET GESTOR")
+    print("  🐴 IMPORTAÇÃO DE DADOS - EQUICORE GESTOR")
     print("="*60)
     
     # 1. Criar proprietário padrão

@@ -154,7 +154,7 @@ def verificar_render_yaml():
 
 def main():
     print("="*60)
-    print("🚀 VERIFICAÇÃO PRÉ-DEPLOY - EMBRIOVET")
+    print("🚀 VERIFICAÇÃO PRÉ-DEPLOY - EQUICORE")
     print("="*60)
     print()
     

@@ -1,4 +1,4 @@
-# 🐴 EmbrioVet - Sistema de Gestão de Sémen
+# 🐴 EquiCore - Sistema de Gestão de Sémen
 
 Sistema completo para gestão de sémen equino, desenvolvido em Streamlit com PostgreSQL.
 
@@ -195,7 +195,7 @@ O Render fará deploy automático.
 
 ## 📝 Licença
 
-Uso privado - EmbrioVet © 2025
+Uso privado - EquiCore © 2025
 
 ## 👨‍💻 Suporte
 

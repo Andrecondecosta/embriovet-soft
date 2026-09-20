@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script de inicialização para Render
 
-echo "🚀 Iniciando EmbrioVet..."
+echo "🚀 Iniciando EquiCore..."
 
 # Configurar banco de dados na primeira execução
 if [ ! -f ".db_initialized" ]; then
