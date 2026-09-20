@@ -722,7 +722,8 @@ def _render_tab_diario_clinico(animal_id: int) -> None:
         cols[7].write(obs_txt[:40] + ("…" if len(obs_txt) > 40 else ""))
 
         with cols[8]:
-            if st.button("Editar", key=f"btn_dc_edit_{rid}", width="stretch"):
+            # Navegação para o modo de edição — discreto.
+            if st.button("Editar", key=f"btn_dc_edit_{rid}", type="tertiary", width="stretch"):
                 st.session_state[edit_key] = True
                 # Fecha qualquer confirmação de apagar pendente
                 st.session_state[del_confirm_key] = False

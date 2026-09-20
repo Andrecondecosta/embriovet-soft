@@ -130,7 +130,8 @@ def _render_linha(op: dict, idx: int) -> None:
                 unsafe_allow_html=True,
             )
         with col_editar:
-            if st.button("Editar", key=f"ativ-editar-{idx}", width="stretch"):
+            # Navegação para o modo de edição — discreto.
+            if st.button("Editar", key=f"ativ-editar-{idx}", type="tertiary", width="stretch"):
                 _iniciar_edicao(op)
         with col_anular:
             if st.button("Anular", key=f"ativ-anular-{idx}", width="stretch"):

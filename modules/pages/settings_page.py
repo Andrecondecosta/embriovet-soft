@@ -200,7 +200,8 @@ def _render_tab_alojamentos() -> None:
                 st.rerun()
 
         with cols[5]:
-            if st.button("Editar", key=f"edit_aloj_{aid}", width="stretch"):
+            # Navegação para o modo de edição — discreto.
+            if st.button("Editar", key=f"edit_aloj_{aid}", type="tertiary", width="stretch"):
                 st.session_state[f"aloj_edit_{aid}"] = True
                 st.rerun()
 
