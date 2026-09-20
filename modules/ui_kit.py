@@ -11,19 +11,16 @@ DEFAULT_PRIMARY_COLOR = "#E85D4A"
 
 
 def inject_all_css_consolidated():
-    """Injetar TODO o CSS em um único bloco para evitar containers vazios"""
+    """Injetar TODO o CSS em um único bloco para evitar containers vazios.
+
+    Os tokens `--ds-*` (cor, raio, sombra, espaçamento) vivem só em
+    `inject_design_tokens()` — chamada globalmente em app.py a par desta
+    função, precisamente para que `var(--ds-*)` usado aqui abaixo (ex.:
+    `border-radius: var(--ds-radius)`) resolva em todas as páginas, não
+    só nas que também chamam `inject_design_tokens()` directamente."""
     st.markdown(
         """
         <style>
-            /* Design System Global */
-            :root {
-                --ds-font-size: 0.9rem;
-                --ds-radius: 8px;
-                --ds-radius-sm: 6px;
-                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
-                --ds-spacing: 0.7rem;
-            }
             html, body, [data-testid="stAppViewContainer"] {
                 font-size: 14px;
                 color: #0f172a;
@@ -32,6 +29,11 @@ def inject_all_css_consolidated():
             [data-testid="stDeployButton"],
             [data-testid="stDecoration"],
             #MainMenu { display: none !important; }
+            /* Header compacto mas visível (contém os botões da sidebar) */
+            [data-testid="stToolbar"] {
+                background: transparent !important;
+                box-shadow: none !important;
+            }
             /* Espaçamento normal no topo */
             [data-testid="stMain"] > .stMainBlockContainer,
             [data-testid="stMain"] > .block-container,
@@ -228,86 +230,6 @@ def inject_all_css_consolidated():
                 color: #b91c1c;
                 border-color: #fecaca;
                 background: #fee2e2;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def inject_design_system():
-    st.markdown(
-        """
-        <style>
-            :root {
-                --ds-font-size: 0.9rem;
-                --ds-radius: 8px;
-                --ds-radius-sm: 6px;
-                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
-                --ds-spacing: 0.7rem;
-            }
-            html, body, [data-testid="stAppViewContainer"] {
-                font-size: 14px;
-                color: #0f172a;
-            }
-            /* Ocultar apenas Deploy e menu — manter botões de controlo da sidebar */
-            [data-testid="stDeployButton"],
-            [data-testid="stDecoration"],
-            #MainMenu { display: none !important; }
-            /* Header compacto mas visível (contém os botões da sidebar) */
-            [data-testid="stToolbar"] {
-                background: transparent !important;
-                box-shadow: none !important;
-            }
-            [data-testid="stMain"] > .stMainBlockContainer,
-            [data-testid="stMain"] > .block-container,
-            [data-testid="stMainBlockContainer"],
-            .stMainBlockContainer,
-            .block-container {
-                padding-top: 60px !important;
-                padding-bottom: 1.4rem;
-            }
-            .stElementContainer:has([data-testid="stMarkdownContainer"] > style),
-            .stMarkdown:has([data-testid="stMarkdownContainer"] > style),
-            .stElementContainer:has(iframe[height="0"]) {
-                position: absolute !important;
-                width: 0 !important;
-                height: 0 !important;
-                min-height: 0 !important;
-                max-height: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-                pointer-events: none !important;
-                visibility: hidden !important;
-            }
-            div[data-testid="stElementContainer"]:empty,
-            div[data-testid="stVerticalBlock"]:empty,
-            .stElementContainer:empty {
-                display: none !important;
-                height: 0px !important;
-                min-height: 0px !important;
-                max-height: 0px !important;
-                margin: 0px !important;
-                padding: 0px !important;
-                overflow: hidden !important;
-            }
-            .stButton > button,
-            .stDownloadButton > button,
-            .stTextInput input,
-            .stSelectbox select,
-            .stTextArea textarea,
-            .stNumberInput input,
-            .stDateInput input {
-                border-radius: var(--ds-radius) !important;
-            }
-            .stCard, .app-card {
-                border-radius: var(--ds-radius) !important;
-                box-shadow: var(--ds-shadow-sm);
-            }
-            .stMarkdown {
-                line-height: 1.45;
             }
         </style>
         """,
@@ -653,13 +575,6 @@ def inject_shell_css(primary_color: str | None):
             [data-testid="stSidebar"] {{
                 background: var(--bg);
                 border-right: 1px solid var(--border);
-            }}
-            .sidebar-shell {{
-                background: #f8fafc;
-                padding: 14px 12px;
-                border-radius: 14px;
-                border: 1px solid var(--border);
-                box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
             }}
             .sidebar-brand {{
                 padding: 12px 12px 8px 12px;
@@ -1347,7 +1262,13 @@ def safe_pick(df, cols):
 def inject_design_tokens():
     """Tokens do design system (cor, tipografia, espaçamento) +
     classes utilitárias dos componentes base. Prefixo `--ds-`/`ds-`
-    para nunca colidir com as variáveis/classes antigas."""
+    para nunca colidir com as variáveis/classes antigas.
+
+    Única declaração de `:root` com tokens `--ds-*` em todo o ficheiro —
+    `inject_all_css_consolidated()` usa `var(--ds-radius)`/`var(--ds-shadow-sm)`
+    mas já não os declara, para não haver duas fontes a competir pelo
+    mesmo valor consoante a ordem de injeção (era o caso de
+    `--ds-radius-sm`, antes 6px numa função e 4px aqui)."""
     st.markdown(
         f"""
         <style>
@@ -1381,8 +1302,12 @@ def inject_design_tokens():
                 --ds-space-4: 16px;
                 --ds-space-5: 24px;
 
+                --ds-font-size: 0.9rem;
+                --ds-spacing: 0.7rem;
                 --ds-radius-sm: 4px;
                 --ds-radius: 8px;
+                --ds-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+                --ds-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
             }}
 
             /* Cabeçalho de página — denso, sem gradiente/card */
