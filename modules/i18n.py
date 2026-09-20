@@ -533,7 +533,7 @@ TRANSLATIONS = {
         "users.password_required": "❌ Digite a nova password",
         "users.password_changed": "✅ Password alterada para {name}!",
         "users.new_password_info": "🔐 Nova password: `{password}`",
-        "footer.version": "**Embriovet Gestor v3.0**",
+        "footer.version": "**EquiCore Gestor v3.0**",
         "footer.auth": "✅ Sistema com Autenticação",
     },
     "en": {
@@ -1059,7 +1059,7 @@ TRANSLATIONS = {
         "users.password_required": "❌ Enter the new password",
         "users.password_changed": "✅ Password changed for {name}!",
         "users.new_password_info": "🔐 New password: `{password}`",
-        "footer.version": "**Embriovet Gestor v3.0**",
+        "footer.version": "**EquiCore Gestor v3.0**",
         "footer.auth": "✅ Authenticated system",
     },
     "fr": {
@@ -1554,7 +1554,7 @@ TRANSLATIONS = {
         "users.password_required": "❌ Saisissez le nouveau mot de passe",
         "users.password_changed": "✅ Mot de passe modifié pour {name} !",
         "users.new_password_info": "🔐 Nouveau mot de passe : `{password}`",
-        "footer.version": "**Embriovet Gestor v3.0**",
+        "footer.version": "**EquiCore Gestor v3.0**",
         "footer.auth": "✅ Système avec authentification",
     },
     "de": {
@@ -2049,7 +2049,7 @@ TRANSLATIONS = {
         "users.password_required": "❌ Neues Passwort eingeben",
         "users.password_changed": "✅ Passwort für {name} geändert!",
         "users.new_password_info": "🔐 Neues Passwort: `{password}`",
-        "footer.version": "**Embriovet Gestor v3.0**",
+        "footer.version": "**EquiCore Gestor v3.0**",
         "footer.auth": "✅ System mit Authentifizierung",
     },
 }

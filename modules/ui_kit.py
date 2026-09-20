@@ -3,7 +3,7 @@ from datetime import date
 import streamlit as st
 from modules.i18n import t
 
-# Cor primária por defeito do projeto (marca EmbrioVet). Única fonte de
+# Cor primária por defeito do projeto (marca EquiCore). Única fonte de
 # verdade para qualquer fallback de `app_settings.primary_color` vazio
 # ou inválido — nenhum outro sítio do código deve hardcodar um hex à
 # parte desta constante.

@@ -1,4 +1,4 @@
-# PRD — Embriovet / EquiCore — Gestão de Sémen Veterinário
+# PRD — EquiCore — Gestão de Sémen Veterinário
 
 ## Última Atualização
 **Fev 2026** — **Pedido 9 · Fase 2 (globals().update(ctx) eliminado)** ✅ concluído. Todas as páginas em `modules/pages/` migradas para imports explícitos no topo; nenhum `globals().update(ctx)` ou `__dict__.update(ctx)` restante no código (só um comentário histórico em `settings_page.py:213`). Extrações auxiliares realizadas para viabilizar imports puros: `registar_historico_edicao` → `modules/repositories/audit_repo.py`, `registrar_inseminacao_multiplas` → `modules/repositories/insemination_repo.py`, `gerar_pdf_garanhao` + `aplicar_filtro_data` → `modules/pages/reports_page.py`. `app.py` continua a re-exportar tudo por compat com o namespace `__main__` legado. **91/91 pytest passing** em cada uma das 11 páginas refatoradas. Smoke test HTTP 200 e screenshots validando Dashboard, Definições, Relatórios, Stock de sémen (Lotes/Transferências) — todas renderizam com dados reais.
