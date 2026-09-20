@@ -214,15 +214,18 @@ def run_stock_page(ctx: dict):
             ):
 
                 # Tabs: Mostrar conforme permissões
-                if verificar_permissao('Administrador'):
-                    # Admin vê: Detalhes, Editar
-                    tab1, tab2 = st.tabs([t("stock.tab.details"), t("stock.tab.edit")])
-                    tab3 = None
-                else:
-                    # Gestor e Visualizador vêem apenas: Detalhes
-                    tab1 = st.tabs([t("stock.tab.details")])[0]
-                    tab2 = None
-                    tab3 = None
+                # Key própria por lote — evita colisão entre linhas e com
+                # tabs de outras páginas (ver nota em estadias_page.py).
+                with st.container(key=f"stock-lote-tabs-{row['id']}"):
+                    if verificar_permissao('Administrador'):
+                        # Admin vê: Detalhes, Editar
+                        tab1, tab2 = st.tabs([t("stock.tab.details"), t("stock.tab.edit")])
+                        tab3 = None
+                    else:
+                        # Gestor e Visualizador vêem apenas: Detalhes
+                        tab1 = st.tabs([t("stock.tab.details")])[0]
+                        tab2 = None
+                        tab3 = None
 
                 # TAB 1: Detalhes
                 with tab1:

@@ -1451,7 +1451,10 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
     if (animal.get("tipo") or "").lower() == "garanhao":
         # ── Layout específico para garanhão ─────────────────────────────────
         nomes_tabs = ["Resumo", "Produção de sémen", "Fertilidade", "Alertas"]
-        tab_resumo, tab_producao, tab_fert, tab_alertas = st.tabs(nomes_tabs)
+        # Key própria — ver nota em estadias_page.py sobre o Streamlit
+        # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+        with st.container(key="animal-ficha-tabs-garanhao"):
+            tab_resumo, tab_producao, tab_fert, tab_alertas = st.tabs(nomes_tabs)
 
         with tab_resumo:
             _render_tab_resumo(animal)
@@ -1474,7 +1477,10 @@ def run_animal_page(animal_id: int, context: dict, tab_inicial: int = 0):
 
     # ── Layout padrão para égua/receptora (mantido) ─────────────────────────
     nomes_tabs = ["Resumo", "Diário clínico", "Historial reprodutivo", "Estadias"]
-    tab_resumo, tab_clinico, tab_repro, tab_estadias = st.tabs(nomes_tabs)
+    # Key própria — ver nota em estadias_page.py sobre o Streamlit
+    # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+    with st.container(key="animal-ficha-tabs-padrao"):
+        tab_resumo, tab_clinico, tab_repro, tab_estadias = st.tabs(nomes_tabs)
 
     with tab_resumo:
         _render_tab_resumo(animal)
