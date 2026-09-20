@@ -99,6 +99,66 @@ def inject_all_css_consolidated():
             [data-testid="stSelectbox"] > div > div {
                 border-color: var(--ds-gray-400) !important;
             }
+            /* Widgets nativos compactos — mesma direção dos botões
+               (min-height 32px desktop / 40px mobile). A altura "gorda"
+               por omissão do Streamlit (~34-35px) vinha do padding
+               vertical do <input> em si (7px) — reduz para 5px.
+               Selectbox/multiselect têm o mesmo padding um nível mais
+               fundo (texto + ícone da seta, ambos filhos directos do
+               wrapper com borda). O número não fica a 32px exactos — o
+               ícone da seta tem 21px fixos que travam a caixa nos 33px;
+               encolher o ícone seria mudar o seu tamanho visual, fora
+               do âmbito de "compactar espaçamento" (1px não é
+               perceptível). O <textarea> NÃO é tocado — a altura é
+               para escrever, não é o mesmo problema dos campos de uma
+               linha. Não afecta os separadores-rádio do Stock de sémen
+               nem o `.stepper-value` (display, não input) — nenhum dos
+               dois é um destes tipos de widget. */
+            [data-baseweb="input"] input,
+            [data-testid="stNumberInputField"] {
+                padding: 5px 10px !important;
+            }
+            [data-testid="stSelectbox"] > div > div > div,
+            [data-testid="stMultiSelect"] > div > div > div {
+                padding: 5px 10.5px !important;
+            }
+            /* Setas nativas +/- do number_input (distintas dos botões
+               -/+ próprios do render_stepper) — sem isto, ficam a 33px
+               e o min-height do container abaixo não tem efeito nenhum
+               (o conteúdo continua maior do que o mínimo). */
+            [data-testid="stNumberInputContainer"] button {
+                height: 32px !important;
+            }
+            [data-baseweb="input"],
+            [data-testid="stNumberInputContainer"],
+            [data-testid="stSelectbox"] > div > div,
+            [data-testid="stMultiSelect"] > div > div {
+                min-height: 32px !important;
+            }
+            [data-testid="stExpander"] summary {
+                min-height: 32px !important;
+                padding: 6px 10.5px !important;
+            }
+            @media (max-width: 992px) {
+                [data-baseweb="input"] input,
+                [data-testid="stNumberInputField"] {
+                    padding: 8px 10px !important;
+                }
+                [data-testid="stSelectbox"] > div > div > div,
+                [data-testid="stMultiSelect"] > div > div > div {
+                    padding: 8px 10.5px !important;
+                }
+                [data-testid="stNumberInputContainer"] button {
+                    height: 40px !important;
+                }
+                [data-baseweb="input"],
+                [data-testid="stNumberInputContainer"],
+                [data-testid="stSelectbox"] > div > div,
+                [data-testid="stMultiSelect"] > div > div,
+                [data-testid="stExpander"] summary {
+                    min-height: 40px !important;
+                }
+            }
             /* Botões compactos — base global (direção: compacto mas
                respirável). Substitui o mínimo de 35px que o Streamlit
                aplica por defeito em todos os botões da app, sem tocar
