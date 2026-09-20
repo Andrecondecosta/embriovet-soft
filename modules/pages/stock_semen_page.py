@@ -40,7 +40,16 @@ def run_stock_semen_page(ctx: dict) -> None:
 
     # Sub-views (add_stock / import) — activadas pelos botões topo ou
     # por redirects legacy (t("menu.add_stock") / t("menu.import")).
-    sub_view = st.session_state.pop("stock_semen_view", None)
+    # NOTA: `.get()`, não `.pop()` — a flag tem de sobreviver a todos os
+    # reruns dentro da sub-vista (qualquer widget fora de um `st.form`,
+    # e a própria submissão do form, disparam um rerun). Um `.pop()`
+    # aqui consumia a flag logo no 1º rerun, fazendo qualquer interação
+    # seguinte (escolher um garanhão, ou até clicar "Guardar") cair de
+    # volta na vista padrão sem chegar a gravar nada. Só se limpa a
+    # flag explicitamente ao sair (botão "Voltar" ou gravação com
+    # sucesso) — ver `_render_add_stock_topbar`/`_render_import_topbar`
+    # e `add_stock_view._render_add_stock_view`.
+    sub_view = st.session_state.get("stock_semen_view")
 
     if sub_view == "add_stock":
         _render_add_stock_topbar()
@@ -89,12 +98,14 @@ def _render_add_stock_topbar() -> None:
     # Navegação de retrocesso — discreto.
     if st.button("← Voltar ao Stock de sémen",
                  key="stock-semen-back-from-add", type="tertiary"):
+        st.session_state.pop("stock_semen_view", None)
         st.rerun()
 
 
 def _render_import_topbar() -> None:
     if st.button("← Voltar ao Stock de sémen",
                  key="stock-semen-back-from-import", type="tertiary"):
+        st.session_state.pop("stock_semen_view", None)
         st.rerun()
 
 

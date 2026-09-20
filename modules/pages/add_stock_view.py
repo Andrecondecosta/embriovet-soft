@@ -330,9 +330,14 @@ def _render_add_stock_view():
                                         f"Não foi possível concluir a colheita: {_e}"
                                     )
                             # Redirect para o separador "Lotes" do novo
-                            # Stock de sémen (Pedido 7).
+                            # Stock de sémen (Pedido 7). Tem de limpar
+                            # `stock_semen_view` explicitamente — deixou
+                            # de ser uma flag de utilização única (ver
+                            # `run_stock_semen_page`), por isso sem isto
+                            # ficaríamos presos na vista "Adicionar lote".
                             st.session_state['aba_selecionada'] = NAV_STOCK_SEMEN
                             st.session_state['stock_semen_tab'] = "Lotes"
+                            st.session_state.pop("stock_semen_view", None)
                             st.rerun()
 
 

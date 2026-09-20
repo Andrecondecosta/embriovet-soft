@@ -976,4 +976,5 @@ def _step_report():
             type="primary",
         ):
             st.session_state["aba_selecionada"] = t("menu.stock")
+            st.session_state.pop("stock_semen_view", None)
             st.rerun()
