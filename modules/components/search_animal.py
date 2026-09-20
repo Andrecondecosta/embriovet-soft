@@ -127,12 +127,15 @@ def _render_modal_todos_animais(
             return
 
         # Tabs por tipo (respeita tipo_filter se definido)
-        if tipo_filter:
-            tabs = [tipo_filter]
-            tab_objs = st.tabs([tipo_filter.capitalize()])
-        else:
-            tabs = ["todos", "egua", "garanhao", "receptora"]
-            tab_objs = st.tabs(["Todos", "Éguas", "Garanhões", "Receptoras"])
+        # Key própria — ver nota em estadias_page.py sobre o Streamlit
+        # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+        with st.container(key=f"search-animal-tabs-{key}"):
+            if tipo_filter:
+                tabs = [tipo_filter]
+                tab_objs = st.tabs([tipo_filter.capitalize()])
+            else:
+                tabs = ["todos", "egua", "garanhao", "receptora"]
+                tab_objs = st.tabs(["Todos", "Éguas", "Garanhões", "Receptoras"])
 
         for i, t in enumerate(tabs):
             sub = df if t == "todos" else df[df["tipo"] == t]

@@ -74,7 +74,10 @@ def _render_owners_view():
     # Recarregar proprietários (todos, não apenas ativos) - sempre fresh
     proprietarios_todos = carregar_proprietarios(apenas_ativos=False)
     
-    tab1, tab2 = st.tabs([t("owners.tab.list"), t("owners.tab.add")])
+    # Key própria — ver nota em estadias_page.py sobre o Streamlit
+    # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+    with st.container(key="owners-view-tabs"):
+        tab1, tab2 = st.tabs([t("owners.tab.list"), t("owners.tab.add")])
     
     # TAB 1: Lista
     with tab1:
@@ -125,7 +128,10 @@ def _render_owners_view():
                 with st.expander(titulo, expanded=expandido):
                     
                     # Tabs: Detalhes e Editar
-                    tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
+                    # Key própria por proprietário — evita colisão entre
+                    # linhas e com tabs de outras páginas (ver nota acima).
+                    with st.container(key=f"owners-detail-tabs-{prop['id']}"):
+                        tab_det, tab_edit = st.tabs([t("owners.tab.details"), t("owners.tab.edit")])
 
                     # TAB: Detalhes
                     with tab_det:

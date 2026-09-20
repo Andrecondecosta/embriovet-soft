@@ -46,7 +46,12 @@ def run_definicoes_page(ctx: dict) -> None:
         labels.append("Utilizadores")
     labels.append("Idioma")
 
-    tabs = st.tabs(labels)
+    # Key própria (com nº de sequência de navegação, ver app.py) — ver
+    # nota em estadias_page.py sobre o Streamlit reaproveitar `st.tabs`
+    # entre páginas por posição, não por conteúdo.
+    _seq = st.session_state.get("_nav_render_seq", 0)
+    with st.container(key=f"definicoes-tabs-{_seq}"):
+        tabs = st.tabs(labels)
 
     # Marca (a antiga `_run_settings_geral` mistura marca+idioma; aqui só
     # vamos mostrar a componente de marca no separador Marca e o selector

@@ -1255,18 +1255,38 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
     if redirect_target:
         st.session_state["_nav_last_active"] = redirect_target
 
+    # Navegação própria da sidebar via `on_click` — o callback corre
+    # ANTES do resto do script re-executar (garantia documentada do
+    # Streamlit), por isso `_nav_last_active` já está actualizado
+    # quando o `current_page`/`is_active` abaixo são calculados, sem
+    # precisar de `st.rerun()`.
+    #
+    # Antes, cada clique disparava sempre DUAS execuções do script: uma
+    # que arrancava com o estado antigo e era abortada a meio pelo
+    # `st.rerun()` que aqui existia, seguida de uma segunda já com o
+    # estado certo. Isso deixava uma janela onde o browser por vezes
+    # falhava em aplicar o conteúdo da segunda execução, mostrando a
+    # página nova no cabeçalho/sidebar mas o conteúdo da página anterior
+    # por baixo — via `on_click` isto resolve-se numa única execução
+    # coerente. (Uma primeira tentativa com "espreitar" `session_state`
+    # de cada botão antes de o desenhar não é fiável para `st.button` —
+    # confirmado empiricamente; `on_click` é o mecanismo suportado.)
+    def _select_nav_item(item):
+        _clear_page_state()
+        st.session_state["_nav_last_active"] = item
+        st.session_state["_just_navigated"] = True
+        st.session_state["_nav_render_seq"] = st.session_state.get("_nav_render_seq", 0) + 1
+
     current_page = st.session_state["_nav_last_active"]
 
     # ---- Menu Principal: botões estilizados ----
     for item in menu_principal:
         is_active = current_page == item
         btn_style = "primary" if is_active else "secondary"
-        if st.sidebar.button(item, key=f"_nav_pri_{item}", width="stretch", type=btn_style):
-            _clear_page_state()
-            st.session_state["_nav_last_active"] = item
-            st.session_state["aba_selecionada"] = item
-            st.session_state["_just_navigated"] = True
-            st.rerun()
+        st.sidebar.button(
+            item, key=f"_nav_pri_{item}", width="stretch", type=btn_style,
+            on_click=_select_nav_item, args=(item,),
+        )
 
     # ---- Menu Secundário: botões dentro do expander ----
     if menu_secundario:
@@ -1276,12 +1296,10 @@ def render_sidebar(app_settings, user_info, menu_principal, menu_secundario, act
                 is_active = current_page == item
                 label = f"▶ {item}" if is_active else item
                 btn_type = "primary" if is_active else "secondary"
-                if st.button(label, key=f"_nav_sec_{item}", width="stretch", type=btn_type):
-                    _clear_page_state()
-                    st.session_state["_nav_last_active"] = item
-                    st.session_state["aba_selecionada"] = item
-                    st.session_state["_just_navigated"] = True
-                    st.rerun()
+                st.button(
+                    label, key=f"_nav_sec_{item}", width="stretch", type=btn_type,
+                    on_click=_select_nav_item, args=(item,),
+                )
 
     # ---- Terminar Sessão (fundo da sidebar) ----
     st.sidebar.markdown("---")

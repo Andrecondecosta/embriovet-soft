@@ -1038,9 +1038,15 @@ def run_estadias_page(context: dict):
             st.rerun()
 
     # Tabs (ordem pedida: Calendário → Activas → Encerradas)
-    tab_calendario, tab_activas, tab_encerradas = st.tabs(
-        ["Calendário", "Activas", "Encerradas"]
-    )
+    # Key própria (com nº de sequência de navegação, ver app.py) — evita
+    # que o Streamlit reaproveite este `st.tabs` (que identifica widgets
+    # pela posição no script, não pelo conteúdo) ao trocar para outra
+    # página que também tenha tabs na mesma posição.
+    _seq = st.session_state.get("_nav_render_seq", 0)
+    with st.container(key=f"estadias-tabs-{_seq}"):
+        tab_calendario, tab_activas, tab_encerradas = st.tabs(
+            ["Calendário", "Activas", "Encerradas"]
+        )
 
     with tab_calendario:
         _render_tab_calendario()

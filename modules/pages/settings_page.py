@@ -217,7 +217,10 @@ def run_settings_page(ctx: dict):
 
     st.header(t("settings.title"))
 
-    tab_geral, tab_alojamentos = st.tabs(["Geral", "Alojamentos"])
+    # Key própria — ver nota em estadias_page.py sobre o Streamlit
+    # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+    with st.container(key="settings-geral-tabs"):
+        tab_geral, tab_alojamentos = st.tabs(["Geral", "Alojamentos"])
 
     with tab_geral:
         _run_settings_geral()

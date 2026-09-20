@@ -45,11 +45,14 @@ def _render_users_view():
 
     usuarios_df = carregar_usuarios()
 
-    tab1, tab2, tab3 = st.tabs([
-        t("users.tab.list"),
-        t("users.tab.add"),
-        t("users.tab.change_password"),
-    ])
+    # Key própria — ver nota em estadias_page.py sobre o Streamlit
+    # reaproveitar `st.tabs` entre páginas por posição, não por conteúdo.
+    with st.container(key="users-view-tabs"):
+        tab1, tab2, tab3 = st.tabs([
+            t("users.tab.list"),
+            t("users.tab.add"),
+            t("users.tab.change_password"),
+        ])
 
     # TAB 1: Lista
     with tab1:

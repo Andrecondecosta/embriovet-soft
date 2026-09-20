@@ -1207,6 +1207,11 @@ if 'aba_selecionada' in st.session_state:
         st.session_state[k] = v
     # Sinalizar redirect para o render_sidebar
     st.session_state['_nav_redirect_active'] = active_key
+    # Nº de sequência incrementado a cada navegação real (não em reruns
+    # dentro da mesma página) — usado para dar ao container da página
+    # (`page-{aba}-{seq}`) uma key nunca repetida, para o Streamlit nunca
+    # tentar reaproveitar/remendar a subárvore de uma navegação anterior.
+    st.session_state['_nav_render_seq'] = st.session_state.get('_nav_render_seq', 0) + 1
 else:
     active_key = st.session_state.get("_nav_last_active", menu_principal[0])
     # Se o `_nav_last_active` guardado é de um menu antigo (ex.: reload
@@ -1216,9 +1221,19 @@ else:
         active_key = resolved
         st.session_state["_nav_last_active"] = active_key
 
-render_header(active_key)
-
+# A sidebar corre ANTES do cabeçalho: resolve um eventual clique num dos
+# seus próprios botões de navegação NESTA MESMA execução (sem
+# `st.rerun()` — ver render_sidebar em ui_kit.py), por isso `aba` já
+# reflete sempre a página definitiva a mostrar. Chamar `render_header`
+# com isto (em vez do `active_key` pré-sidebar, que pode estar
+# desactualizado quando o clique vem de um botão da própria sidebar)
+# garante que o cabeçalho e o conteúdo despachado nunca dessincronizam.
 aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
+
+nav_render_seq = st.session_state.setdefault('_nav_render_seq', 0)
+
+render_header(aba)
+
 if sidebar_logout:
     token = st.session_state.pop('auth_token', None)
     if token:
@@ -1228,9 +1243,17 @@ if sidebar_logout:
     st.rerun()
 
 # Scroll ao topo + fechar sidebar (mobile) ao navegar
-if st.session_state.pop("_just_navigated", False):
-    import streamlit.components.v1 as _stcomp
-    with st.container(key="js-nav-scroll-collapse"):
+#
+# O container tem de existir em TODOS os runs (só o conteúdo lá dentro é
+# condicional) — um container com `key=` que aparece/desaparece consoante
+# `_just_navigated` desalinha a posição de tudo o que vem a seguir no
+# script (o router de páginas) entre execuções, o que confundia a
+# reconciliação do Streamlit e deixava conteúdo residual de outra página
+# por baixo do conteúdo novo ao navegar.
+_just_navigated = st.session_state.pop("_just_navigated", False)
+with st.container(key="js-nav-scroll-collapse"):
+    if _just_navigated:
+        import streamlit.components.v1 as _stcomp
         _stcomp.html(
             """
             <script>
@@ -1297,38 +1320,53 @@ if proprietarios.empty:
 # sejam executados; mantê-los aqui garante que os orquestradores
 # em stock_semen_page/definicoes_page conseguem `from app import ...`)
 
+# Cada página corre dentro de um placeholder `st.empty()` próprio, com
+# uma key que inclui `nav_render_seq` — um nº que só avança numa
+# navegação real (nunca dentro de reruns da mesma página). Isto garante
+# que CADA navegação recebe uma key nunca antes vista, para o Streamlit
+# nunca tentar reaproveitar/remendar a subárvore de uma navegação
+# anterior. Sem isto, trocar de página podia deixar conteúdo residual —
+# ex.: a tabela "Hoje na clínica" do Dashboard a aparecer dentro do
+# separador "Marca" de Definições.
 if aba == NAV_DASHBOARD:
-    run_dashboard_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-dashboard-{nav_render_seq}"):
+        run_dashboard_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_ESTADIAS:
-    run_estadias_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-estadias-{nav_render_seq}"):
+        run_estadias_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_TRABALHO_DIARIO:
-    run_trabalho_diario_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-trabalho-diario-{nav_render_seq}"):
+        run_trabalho_diario_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_ATIVIDADE:
-    run_atividade_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-atividade-{nav_render_seq}"):
+        run_atividade_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_RELATORIOS:
-    run_reports_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-relatorios-{nav_render_seq}"):
+        run_reports_page({**globals(), **locals()})
     st.stop()
 
 # Stock de sémen: orquestrador com 4 tabs (Lotes, Garanhões, Mapa,
 # Transferências) e 2 botões topo (Adicionar lote, Importar).
 if aba == NAV_STOCK_SEMEN:
     from modules.pages.stock_semen_page import run_stock_semen_page
-    run_stock_semen_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-stock-semen-{nav_render_seq}"):
+        run_stock_semen_page({**globals(), **locals()})
     st.stop()
 
 # Definições: orquestrador com 5 separadores (Marca, Alojamentos,
 # Proprietários, Utilizadores, Idioma) respeitando permissões.
 if aba == NAV_DEFINICOES:
     from modules.pages.definicoes_page import run_definicoes_page
-    run_definicoes_page({**globals(), **locals()})
+    with st.empty().container(key=f"page-definicoes-{nav_render_seq}"):
+        run_definicoes_page({**globals(), **locals()})
     st.stop()
 
 # Stock de sémen: dispatch de sub-views (add_stock / import).
