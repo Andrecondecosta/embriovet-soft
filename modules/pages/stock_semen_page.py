@@ -53,9 +53,19 @@ def run_stock_semen_page(ctx: dict) -> None:
         run_import_page(ctx)
         return
 
-    # Vista padrão: tabs.
-    _render_topbar()
-    _render_tabs(ctx)
+    # Vista padrão: separadores sempre visíveis na mesma posição,
+    # "Adicionar lote"/"Importar" por baixo (só fazem sentido no
+    # separador Lotes — não têm relação com Garanhões, Mapa dos
+    # contentores ou Transferências), depois o conteúdo do separador.
+    # A topbar vem DEPOIS da barra de separadores de propósito: se
+    # viesse antes, a barra "dançava" de posição ao mudar de separador
+    # (aparecia/desaparecia consoante o separador tivesse ou não a
+    # topbar acima dela).
+    aba_ativa = _resolver_aba_ativa()
+    _render_tab_bar()
+    if aba_ativa == "Lotes":
+        _render_topbar()
+    _render_tab_content(ctx, aba_ativa)
 
 
 # ─── Topbar (título + botões de ação) ────────────────────────────────
@@ -146,27 +156,43 @@ def _inject_tabs_css() -> None:
     )
 
 
-def _render_tabs(ctx: dict) -> None:
-    # Consumir eventual redirect que aponte para um separador
-    # específico — ao contrário do antigo st.tabs, este valor é
-    # respeitado de facto.
+def _resolver_aba_ativa() -> str:
+    """Resolve qual separador está/fica activo — incluindo um eventual
+    redirect vindo de fora (ex.: "Editar" transferência a partir da
+    Atividade aponta para "Transferências" via `stock_semen_tab`).
+
+    Separado de `_render_tab_bar`/`_render_tab_content` para o valor
+    poder ser conhecido ANTES de decidir mostrar a topbar (Adicionar
+    lote/Importar só aparecem no separador Lotes) — chamado antes do
+    `st.radio` ser instanciado, por isso pode escrever em
+    `_TAB_STATE_KEY` sem violar a regra do Streamlit sobre widgets
+    com `key`.
+    """
     incoming = st.session_state.pop("stock_semen_tab", None)
     if incoming in _TABS:
         st.session_state[_TAB_STATE_KEY] = incoming
     elif _TAB_STATE_KEY not in st.session_state:
         st.session_state[_TAB_STATE_KEY] = _TABS[0]
+    return st.session_state[_TAB_STATE_KEY]
 
+
+def _render_tab_bar() -> None:
     _inject_tabs_css()
     with st.container(key="stock-semen-tabs"):
-        aba_ativa = st.radio(
+        st.radio(
             "Separador", _TABS, key=_TAB_STATE_KEY,
             horizontal=True, label_visibility="collapsed",
         )
 
+
+def _render_tab_content(ctx: dict, aba_ativa: str) -> None:
     # Só o separador activo é renderizado (ao contrário do st.tabs
     # nativo, que corria o corpo dos 4 sempre) — é o que nos permite
     # abrir directamente no separador certo sem depender de os outros
-    # 3 já terem corrido "em fundo".
+    # 3 já terem corrido "em fundo". `aba_ativa` já vem resolvido de
+    # `_resolver_aba_ativa` (chamado antes do `st.radio` em
+    # `_render_tab_bar`, por isso é sempre o mesmo valor que o widget
+    # mostra/devolve aí).
     if aba_ativa == "Lotes":
         run_stock_page(ctx)
     elif aba_ativa == "Garanhões":
