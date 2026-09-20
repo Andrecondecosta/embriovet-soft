@@ -645,10 +645,16 @@ def run_insemination_page(ctx):
         return f"{e['nome']} — {aloj_label} — {dono}"
 
     # Modo edição — se a operação em curso já tem égua, tentar
-    # pré-seleccioná-la na nova lista. Também consumir `insem_egua_prefill`
+    # pré-seleccioná-la na nova lista. Também aplicar `insem_egua_prefill`
     # que vem do botão "🔁 Repetir inseminação" do Trabalho Diário.
+    # `.get()`, não `.pop()` — só é seguro consumir a flag DEPOIS de a
+    # aplicar ao selectbox abaixo (mesmo padrão de `novo_animal_id` em
+    # add_stock_view.py). Um `.pop()` incondicional aqui só "funcionava"
+    # por acidente de ordem de execução (nenhum código antes desta linha,
+    # nesta função, chama `st.rerun()`) — era o mesmo tipo de fragilidade
+    # que causou o bug de sub-vista do "Adicionar lote".
     egua_edit_default = 0
-    prefill = st.session_state.pop("insem_egua_prefill", None)
+    prefill = st.session_state.get("insem_egua_prefill")
     if prefill:
         for i, e in enumerate(eguas_ativas):
             if int(e["animal_id"]) == int(prefill["animal_id"]):
@@ -673,6 +679,9 @@ def run_insemination_page(ctx):
         )
         egua_sel = eguas_ativas[egua_idx]
         egua = egua_sel["nome"]  # nome para retro-compatibilidade
+        # Limpa o marcador de pré-selecção só depois de aplicado.
+        if prefill is not None:
+            st.session_state.pop("insem_egua_prefill", None)
     with c2:
         data_insem = st.date_input(t("label.insemination_date"), key="insem_data")
     
