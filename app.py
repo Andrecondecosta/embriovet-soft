@@ -29,7 +29,7 @@ import warnings
 from modules.ui_kit import (
     DEFAULT_PRIMARY_COLOR,
     inject_all_css_consolidated,
-    inject_design_system,
+    inject_design_tokens,
     inject_reports_css,
     inject_stock_css,
     inject_stepper_css,
@@ -650,8 +650,15 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Injetar TODO o CSS consolidado em um único bloco
+# Injetar TODO o CSS consolidado em um único bloco. `inject_design_tokens()`
+# corre já aqui (antes do login) porque é a única fonte dos tokens `--ds-*`
+# (cor, raio, sombra, espaçamento) usados pelo CSS consolidado — sem isto,
+# `var(--ds-radius)` etc. ficavam por definir em qualquer página que não
+# chamasse `inject_design_tokens()` por si própria. O ecrã de login não
+# referencia nenhuma classe `.ds-*`/`var(--ds-gray-*)`, por isso isto não
+# lhe muda o aspecto.
 inject_all_css_consolidated()
+inject_design_tokens()
 
 # ------------------------------------------------------------
 # 🔐 Sistema de Login
@@ -1060,7 +1067,6 @@ if not app_settings:
 if "lang" not in st.session_state:
     st.session_state["lang"] = app_settings.get("language", "pt-PT")
 
-inject_design_system()
 inject_shell_css(app_settings.get("primary_color"))
 
 # Forçar padding-top via JS (CSS é sobreposto pelo Streamlit interno)
