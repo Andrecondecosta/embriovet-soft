@@ -78,3 +78,82 @@ python3 -m pytest tests/ -v
   `TEST_DATABASE_URL` **antes** de qualquer import da app, para
   garantir que o pool de conexões (`modules.db`) aponta para a base
   correcta.
+
+## Testes de fluxo completo com `AppTest` (streamlit.testing.v1)
+
+Para páginas/formulários que escrevem na base de dados, prefere um
+teste de **fluxo completo** (abrir a vista → preencher como um
+utilizador → submeter → confirmar o INSERT/UPDATE na BD) a um teste
+que só chama a função de repositório isolada. Foi exactamente a
+ausência deste tipo de teste que deixou o bug do "Adicionar lote"
+(sub-vista que perdia o estado a meio do preenchimento) escondido
+durante meses — ver `test_stock_semen_subview_persistente.py` para o
+padrão de referência.
+
+### Limitação conhecida: `@st.dialog` não persiste entre `.run()`
+
+O `AppTest` **não simula fielmente diálogos que ficam abertos entre
+várias interacções**. Num browser real, um `@st.dialog` herda de
+`st.fragment`: depois de aberto, qualquer widget lá dentro dispara um
+rerun `scope="fragment"` (só a função do diálogo volta a correr, a
+página por trás não é tocada) — e é por isso que um "gate" de
+utilização única em `session_state` (ex.: `st.session_state.pop(
+"abrir_modal_x_id")`) é seguro para ABRIR um diálogo: só precisa de
+ser verdadeiro uma vez.
+
+O `AppTest`, ao contrário, **reexecuta o script todo do zero em cada
+`.run()`** — não há memória de "este diálogo já estava aberto" entre
+chamadas. Isto tem duas consequências práticas:
+
+1. **Um diálogo com várias interacções internas "fecha-se" sozinho**
+   no teste, assim que o gate que o abriu já não está em
+   `session_state` (foi consumido na 1ª passagem). Sintoma: depois de
+   clicar num botão dentro do diálogo e chamar `.run()`, os widgets do
+   diálogo desaparecem de `at.button`/`at.selectbox`/etc. — não
+   porque a app tenha um bug, mas porque o `AppTest` "esqueceu-se" de
+   que o diálogo estava aberto.
+
+   **Contorno**: antes de cada `.run()` que precise de manter o
+   diálogo aberto, redefine manualmente o gate:
+   ```python
+   def reabrir_e_correr():
+       at.session_state["abrir_modal_x_id"] = id_alvo
+       at.run(timeout=30)
+   ```
+   `session_state` que já vive DENTRO do diálogo (ex.: qual lote está
+   a ser movido) continua a persistir normalmente entre `.run()` —
+   só o gate de abertura precisa deste reforço manual.
+
+2. **`st.rerun(scope="fragment")` dentro do diálogo lança
+   `StreamlitAPIException`** quando chamado a partir de um `.run()`
+   reconstruído à mão como acima (o `AppTest` não estabelece o
+   contexto de "estou numa fragment rerun" que esse `scope` exige).
+   Isto acontece **depois** de qualquer escrita na BD já ter corrido
+   — não invalida o resultado gravado, só a bookkeeping de UI a
+   seguir. Se a asserção que importa é "gravou na BD", confirma isso
+   directamente na BD e não te preocupes com esta excepção específica
+   quando a mensagem for exactamente sobre `scope="fragment"`.
+
+   Se precisares de testar o que acontece depois desse rerun (ex.: o
+   diálogo fecha, o formulário limpa), não é possível com o `AppTest`
+   tal como está — fica como limitação a documentar, não a contornar.
+
+Um diálogo chamado **sem** um gate de utilização única (ex.: chamar
+`render_modal_animal(...)` directamente no teu próprio script de
+teste, em vez de passar pelo botão real que activa uma flag
+`session_state`) reabre-se sozinho em cada `.run()` e não sofre deste
+problema — é a forma mais simples de testar o conteúdo de um diálogo
+quando não precisas de exercitar o mecanismo de abertura em si.
+
+### Limitação conhecida: `selectbox`/`format_func` sobre valores não-string
+
+Um `st.selectbox(options=[...ids inteiros...], format_func=...)`
+usado com `.select_index(n)`/`.select(valor)` no `AppTest` pode
+rebentar com `ValueError: '#<algo>' is not in list` — bug conhecido
+do `AppTest` ao tentar recalcular o índice a partir do valor já
+formatado. **Contorno**: escreve directamente no `session_state` do
+widget em vez de usar os métodos `.select*()`:
+```python
+at.session_state["<key_do_selectbox>"] = valor_bruto  # ex.: o id
+at.run(timeout=30)
+```
