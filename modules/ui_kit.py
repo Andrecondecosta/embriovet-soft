@@ -83,6 +83,22 @@ def inject_all_css_consolidated():
             .stDateInput input {
                 border-radius: var(--ds-radius) !important;
             }
+            /* Bordo dos campos de entrada em repouso — o `#e2e8f0`/
+               `#f0f2f6` que o Streamlit aplica por omissão (na caixa que
+               desenha a borda visível, não no `<input>` em si — por isso
+               o alvo não é `.stTextInput input`, é o wrapper) é quase
+               impercetível sobre branco. Testado visualmente com
+               --ds-gray-300 primeiro — ainda ficava subtil demais (ecrã
+               com luz forte), por isso ficou em --ds-gray-400. Não mexe
+               em cartões/separadores/linhas de tabela (esses ficam
+               propositadamente em --ds-gray-200 — são decorativos, não
+               campos onde se escreve). */
+            [data-baseweb="input"],
+            [data-testid="stTextAreaRootElement"],
+            [data-testid="stNumberInputContainer"],
+            [data-testid="stSelectbox"] > div > div {
+                border-color: var(--ds-gray-400) !important;
+            }
             /* Botões compactos — base global (direção: compacto mas
                respirável). Substitui o mínimo de 35px que o Streamlit
                aplica por defeito em todos os botões da app, sem tocar
@@ -387,7 +403,9 @@ def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
             margin-bottom: 3px !important;
         }}
 
-        /* Inputs — stronger border + subtle focus ring */
+        /* Inputs — stronger border + focus ring sólido (não transparente
+           — a versão a 13% de opacidade não se via bem ao sol/num ecrã
+           de telemóvel). */
         [data-testid="stForm"] input,
         [data-testid="stForm"] textarea,
         [data-testid="stForm"] .stSelectbox > div > div {{
@@ -395,7 +413,7 @@ def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
         }}
         [data-testid="stForm"] input:focus {{
             border-color: {primary_color} !important;
-            box-shadow: 0 0 0 3px {primary_color}22 !important;
+            box-shadow: 0 0 0 2px {primary_color} !important;
         }}
 
         /* Number input — center align value */
