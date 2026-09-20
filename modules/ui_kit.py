@@ -81,6 +81,55 @@ def inject_all_css_consolidated():
             .stDateInput input {
                 border-radius: var(--ds-radius) !important;
             }
+            /* Botões compactos — base global (direção: compacto mas
+               respirável). Substitui o mínimo de 35px que o Streamlit
+               aplica por defeito em todos os botões da app, sem tocar
+               em nenhum call-site. Valores alinhados com o padrão já
+               validado em map_page.py (.st-key-mapa-page-scope), que
+               passa a ser o resto da app a seguir, não uma excepção.
+               Aplica-se a todos os "kind" (primary/secondary/tertiary)
+               — a hierarquia distingue-se pela cor/peso, não pela
+               altura, para os botões alinharem bem quando aparecem
+               lado a lado (ex.: Cancelar + Guardar).
+
+               Descendente (` `), não filho direto (`>`): um botão com
+               `help=` (tooltip) fica envolvido pelo Streamlit num
+               `div[data-testid="stTooltipHoverTarget"]` extra — com
+               `>` o seletor não lhe chegava (confirmado empiricamente:
+               "Inverter andares", que tem `help=`, ficava de fora e
+               mantinha os 35px antigos; outros botões sem `help=` no
+               mesmo modal já respeitavam os 32px). */
+            .stButton button,
+            .stDownloadButton button,
+            .stFormSubmitButton button {
+                min-height: 32px !important;
+                padding: 4px 14px !important;
+                font-size: 0.82rem !important;
+                font-weight: 500 !important;
+                line-height: 1.3 !important;
+            }
+            /* `[kind^="primary"]` (começa por, não é exatamente) —
+               confirmado que um `st.form_submit_button(type="primary")`
+               recebe `kind="primaryFormSubmit"`, não só "primary"; um
+               match exato deixava-o de fora e ficava sem o negrito
+               extra (a cor já lhe chegava por outra via, o tema nativo
+               do Streamlit). */
+            .stButton button[kind^="primary"],
+            .stFormSubmitButton button[kind^="primary"] {
+                font-weight: 600 !important;
+            }
+            /* Em ecrãs de toque (mesmo breakpoint já usado nesta app
+               para inputs — ver abaixo), o alvo de toque não pode
+               ficar abaixo de ~40px mesmo com a compactação. */
+            @media (max-width: 992px) {
+                .stButton button,
+                .stDownloadButton button,
+                .stFormSubmitButton button {
+                    min-height: 40px !important;
+                    padding: 8px 16px !important;
+                    font-size: 0.88rem !important;
+                }
+            }
             .stCard, .app-card {
                 border-radius: var(--ds-radius) !important;
                 box-shadow: var(--ds-shadow-sm);

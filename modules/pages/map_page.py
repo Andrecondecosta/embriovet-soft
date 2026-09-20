@@ -482,7 +482,8 @@ def run_map_page(ctx: dict):
 
                 col_submit1, col_submit2 = st.columns([1, 1])
                 with col_submit1:
-                    submitted = st.form_submit_button(t("btn.create_container"), width="stretch")
+                    # Ação principal do form — primário (como "Guardar").
+                    submitted = st.form_submit_button(t("btn.create_container"), type="primary", width="stretch")
                 with col_submit2:
                     cancelar = st.form_submit_button(t("btn.cancel"), width="stretch")
 
@@ -1437,7 +1438,9 @@ def run_map_page(ctx: dict):
                                         key=andar_key, horizontal=True, label_visibility="collapsed",
                                     )
                             with col_inverter:
+                                # Ação principal do modal — primário.
                                 if st.button("Inverter andares", key=f"inverter_andares_{cont_id_modal}",
+                                             type="primary",
                                              help="Troca os lotes do 1º andar para o 2º e vice-versa"):
                                     st.session_state[f'confirmar_inverter_{cont_id_modal}'] = True
 
@@ -1844,7 +1847,9 @@ def run_map_page(ctx: dict):
                 # apagar, tudo no mesmo sítio.
                 for _, row in contentores_df.iterrows():
                     cont_id = int(row['id'])
-                    if st.button("Ver interior", key=f"ver_interior_{cont_id}"):
+                    # Botão sempre escondido (CSS) — o `type` não muda o
+                    # aspeto visível, só a semântica (navegação/consulta).
+                    if st.button("Ver interior", key=f"ver_interior_{cont_id}", type="tertiary"):
                         st.session_state["abrir_modal_tanque_id"] = cont_id
                         st.rerun()
 

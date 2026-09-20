@@ -601,7 +601,8 @@ def _render_tab_calendario() -> None:
     # ── Navegação ────────────────────────────────────────────────────────
     c_prev, c_title, c_next = st.columns([1, 2, 1])
     with c_prev:
-        if st.button("◀ Mês anterior", key="cal_btn_prev", width="stretch"):
+        # Navegação, não ação — discreto (type="tertiary"), sem contorno.
+        if st.button("◀ Mês anterior", key="cal_btn_prev", type="tertiary", width="stretch"):
             st.session_state["calendario_offset"] = offset - 1
             st.rerun()
     with c_title:
@@ -611,7 +612,7 @@ def _render_tab_calendario() -> None:
             unsafe_allow_html=True,
         )
     with c_next:
-        if st.button("Mês seguinte ▶", key="cal_btn_next", width="stretch"):
+        if st.button("Mês seguinte ▶", key="cal_btn_next", type="tertiary", width="stretch"):
             st.session_state["calendario_offset"] = offset + 1
             st.rerun()
 
@@ -806,9 +807,13 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
         estadia_id = int(row["id"])
         if apenas_activas:
             with cols[6]:
+                # "Ver ficha" é navegação, não uma ação sobre a estadia —
+                # discreto (type="tertiary"), para não competir visualmente
+                # com "Registar saída" (a ação principal desta linha).
                 if st.button(
                     "Ver ficha",
                     key=f"{key_prefix}_ver_{estadia_id}",
+                    type="tertiary",
                     width="stretch",
                 ):
                     st.session_state["ver_animal_id"] = int(row["animal_id"])
@@ -851,6 +856,7 @@ def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: s
                 if st.button(
                     "Ver ficha",
                     key=f"{key_prefix}_ver_{estadia_id}",
+                    type="tertiary",
                     width="stretch",
                 ):
                     st.session_state["ver_animal_id"] = int(row["animal_id"])
@@ -1007,7 +1013,9 @@ def run_estadias_page(context: dict):
 
     # ── Drill-down para ficha do animal ─────────────────────────────────────
     if st.session_state.get("ver_animal_id") is not None:
-        if st.button("← Voltar às estadias", key="btn_voltar_estadias"):
+        # Link de retrocesso — discreto (type="tertiary"), largura ao
+        # conteúdo (nunca teve width="stretch"; mantém-se assim).
+        if st.button("← Voltar às estadias", key="btn_voltar_estadias", type="tertiary"):
             st.session_state.pop("ver_animal_id", None)
             st.session_state.pop("ver_animal_tab", None)
             st.rerun()

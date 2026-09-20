@@ -76,14 +76,15 @@ def _render_topbar() -> None:
 
 
 def _render_add_stock_topbar() -> None:
+    # Navegação de retrocesso — discreto.
     if st.button("← Voltar ao Stock de sémen",
-                 key="stock-semen-back-from-add"):
+                 key="stock-semen-back-from-add", type="tertiary"):
         st.rerun()
 
 
 def _render_import_topbar() -> None:
     if st.button("← Voltar ao Stock de sémen",
-                 key="stock-semen-back-from-import"):
+                 key="stock-semen-back-from-import", type="tertiary"):
         st.rerun()
 
 
@@ -247,9 +248,11 @@ def _render_tab_garanhoes(ctx: dict) -> None:
             # sem FK ainda não têm ponto de entrada — clara chamada à
             # limpeza de schema.
             if animal_id is not None:
+                # Navegação, não uma ação — discreto.
                 if st.button(
                     "Ver ficha",
                     key=f"stock-semen-gar-ficha-{animal_id}",
+                    type="tertiary",
                     width="stretch",
                 ):
                     st.session_state["ver_animal_id"] = int(animal_id)

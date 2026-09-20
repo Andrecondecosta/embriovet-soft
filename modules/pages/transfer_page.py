@@ -1101,8 +1101,10 @@ def _render_linha_historico(op: dict, idx: int) -> None:
             # Apenas transferências podem ser editadas via este botão — as
             # inseminações são editadas via `insemination_page` (mantém a
             # regra antiga).
+            # "Editar" é navegação para o modo de edição, não uma ação em
+            # si — discreto.
             if op["tipo"] in ("transfer_internal", "transfer_external"):
-                if st.button("Editar", key=key_edit, width="stretch"):
+                if st.button("Editar", key=key_edit, type="tertiary", width="stretch"):
                     st.session_state["edit_transfer_id"] = op["action_id"]
                     st.session_state["edit_transfer_type"] = op["tipo"]
                     st.session_state["edit_transfer_op_id"] = op.get("operation_id")
@@ -1115,7 +1117,7 @@ def _render_linha_historico(op: dict, idx: int) -> None:
                         st.session_state.pop(k, None)
                     st.rerun()
             elif op["tipo"] == "insemination":
-                if st.button("Editar", key=key_edit, width="stretch"):
+                if st.button("Editar", key=key_edit, type="tertiary", width="stretch"):
                     st.session_state["edit_insemination_id"] = op["action_id"]
                     st.session_state["edit_insemination_op_id"] = op.get("operation_id")
                     st.session_state["aba_selecionada"] = t("menu.register_insemination")
