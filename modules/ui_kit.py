@@ -409,39 +409,15 @@ def inject_stepper_css():
 
 
 def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
+    """CSS do form 'Adicionar lote' — alinhado ao design v2 (títulos de
+    secção via `render_zone_title(..., "ds-zone-title")`, sem cartões
+    nem emojis). `.form-section-header`/`.form-card`/`.form-obs`
+    (cartão decorativo + classe de espaçamento nunca usada) foram
+    removidos daqui — eram o estilo antigo, já não têm nenhum
+    call-site."""
     st.markdown(
         f"""
         <style>
-        /* ═══════════════════════════════════════
-           ADD STOCK — Premium Form Design
-        ═══════════════════════════════════════ */
-
-        /* Section header — accent left border */
-        .form-section-header {{
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            color: #475569;
-            font-size: 0.72rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            border-left: 3px solid {primary_color};
-            padding-left: 9px;
-            margin: 0 0 12px 0;
-            line-height: 1.4;
-        }}
-
-        /* Section card — subtle card around each group */
-        .form-card {{
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 16px 18px 6px 18px;
-            margin-bottom: 10px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-        }}
-
         /* Main Streamlit form container — borderless, transparent */
         [data-testid="stForm"] {{
             border: none !important;
@@ -523,9 +499,16 @@ def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
             transform: translateY(0);
         }}
 
-        /* "+ Novo Proprietário" button — outline style */
+        /* "+ Novo garanhão" button — outline style. Antes era
+           `div:has(+ div [data-testid="stForm"]) button`: um seletor
+           estrutural (a div que precede o form) apanhava TODOS os
+           botões dentro dela, incluindo o ícone de ajuda (`help=`) do
+           selectbox "Garanhão" — que vive na mesma secção "Identificação"
+           — e dava-lhe por engano a mesma borda/fundo do botão outline.
+           Substituído por um alvo directo pela key do botão, tal como o
+           resto da app já faz (ex.: nav da sidebar por `st-key-_nav_pri_`). */
         [data-testid="stButton"][id="btn_add_prop_stock"] button,
-        div:has(+ div [data-testid="stForm"]) button {{
+        div[class*="st-key-btn_novo_garanhao_stock"] button {{
             border: 1.5px solid {primary_color} !important;
             color: {primary_color} !important;
             background: transparent !important;
@@ -534,11 +517,6 @@ def inject_add_stock_form_css(primary_color=DEFAULT_PRIMARY_COLOR):
             border-radius: 6px !important;
             padding: 4px 12px !important;
             transition: background .15s;
-        }}
-
-        /* Observations section gap */
-        .form-obs {{
-            margin-top: 4px;
         }}
 
         /* Max width for the form area */
