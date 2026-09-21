@@ -62,6 +62,24 @@ ESTADOS_SAIDA = ["gestante", "alta", "sem_resultado", "transferido"]
 # hoje incluído.
 _JANELA_MOVIMENTOS_DIAS = 6
 
+# Filtro por tipo de animal (Internadas agora, Histórico) — os 3
+# valores reais de `animais.tipo` (CHECK constraint na BD, coluna
+# NOT NULL: nunca vazio/nulo, por isso "Todos" é o único caso a
+# tratar a parte).
+TIPO_ANIMAL_FILTRO = {
+    "Todos": None,
+    "Éguas": "egua",
+    "Garanhões": "garanhao",
+    "Receptoras": "receptora",
+}
+
+
+def _filtrar_por_tipo_animal(df: pd.DataFrame, tipo_sel: str) -> pd.DataFrame:
+    valor = TIPO_ANIMAL_FILTRO.get(tipo_sel)
+    if valor is None:
+        return df
+    return df[df["animal_tipo"] == valor]
+
 
 def _label_motivo(m: str | None) -> str:
     return MOTIVO_LABELS.get(m or "", (m or "—").capitalize())
@@ -693,22 +711,42 @@ def _render_linha_internada(row: pd.Series, col_w: list[float]) -> None:
 def _render_tab_internadas() -> None:
     df = _carregar_estadias("e.data_saida IS NULL")
 
-    render_kpi_row([("Internadas", len(df))])
-    render_zone_title("Éguas internadas agora", "ds-zone-title ds-zone-title--first")
+    # Valor actual do filtro lido directamente de session_state (antes
+    # do próprio selectbox ser criado, mais abaixo) só para o KPI já
+    # sair correcto no mesmo render em que o filtro muda.
+    tipo_sel_atual = st.session_state.get("internadas_tipo", "Todos")
+    df_filtrado_kpi = _filtrar_por_tipo_animal(df, tipo_sel_atual)
+    total, mostrado = len(df), len(df_filtrado_kpi)
+    valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
+    render_kpi_row([("Internadas", valor_kpi)])
+    render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
 
     if df.empty:
         st.caption("Sem estadias ou visitas activas.")
         return
 
-    ordem_sel = st.selectbox(
-        "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
-        key="internadas_ordem", label_visibility="collapsed",
-    )
+    col_tipo, col_ordem = st.columns(2)
+    with col_tipo:
+        tipo_sel = st.selectbox(
+            "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+            key="internadas_tipo", label_visibility="collapsed",
+        )
+    with col_ordem:
+        ordem_sel = st.selectbox(
+            "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
+            key="internadas_ordem", label_visibility="collapsed",
+        )
+
+    df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
+    if df_filtrado.empty:
+        st.caption("Sem estadias activas deste tipo de animal.")
+        return
+
     campo, ascendente = _ORDEM_INTERNADAS[ordem_sel]
-    df_ordenado = df.sort_values(campo, ascending=ascendente, na_position="last")
+    df_ordenado = df_filtrado.sort_values(campo, ascending=ascendente, na_position="last")
 
     col_w = [2.1, 1.5, 1.3, 1.2, 0.9, 1.1, 1.3]
-    _render_header_row(col_w, ["Égua", "Dono", "Box", "Motivo", "Há dias", "", ""])
+    _render_header_row(col_w, ["Animal", "Dono", "Box", "Motivo", "Há dias", "", ""])
 
     with st.container(key="est-list-internadas"):
         for _, row in df_ordenado.iterrows():
@@ -847,7 +885,11 @@ def _render_tab_historico() -> None:
         (ultimo, primeiro),
     )
 
-    render_kpi_row([("Passagens no mês", len(df))])
+    tipo_sel_atual = st.session_state.get("historico_tipo", "Todos")
+    df_filtrado_kpi = _filtrar_por_tipo_animal(df, tipo_sel_atual)
+    total, mostrado = len(df), len(df_filtrado_kpi)
+    valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
+    render_kpi_row([("Passagens no mês", valor_kpi)])
     render_zone_title(
         f"Estadias e visitas em {MESES_PT[target_m - 1]} {target_y}", "ds-zone-title",
     )
@@ -856,13 +898,24 @@ def _render_tab_historico() -> None:
         st.caption("Sem estadias ou visitas neste mês.")
         return
 
+    col_tipo, _col_spacer = st.columns([1, 3])
+    with col_tipo:
+        tipo_sel = st.selectbox(
+            "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+            key="historico_tipo", label_visibility="collapsed",
+        )
+    df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
+    if df_filtrado.empty:
+        st.caption("Sem estadias ou visitas deste tipo de animal neste mês.")
+        return
+
     col_w = [1.9, 0.9, 1.4, 1.2, 1.1, 1.0, 1.0, 1.0, 1.0]
     _render_header_row(col_w, [
-        "Égua", "Tipo", "Dono", "Box", "Motivo", "Estado",
+        "Animal", "Tipo", "Dono", "Box", "Motivo", "Estado",
         "Entrada", "Saída", "",
     ])
     with st.container(key="est-list-historico"):
-        for _, row in df.sort_values("data_entrada", ascending=False).iterrows():
+        for _, row in df_filtrado.sort_values("data_entrada", ascending=False).iterrows():
             _render_linha_historico(row, col_w)
 
 
