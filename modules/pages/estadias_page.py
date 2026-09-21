@@ -1,7 +1,17 @@
-"""Página de Estadias e Visitas — gestão de internamentos e visitas dos animais."""
+"""Página de Estadias e Visitas — gestão de internamentos e visitas dos animais.
+
+Separadores (redesenho): "Internadas agora" (lista densa das estadias
+em aberto), "Movimentos da semana" (quem entra/sai nos próximos 7
+dias — substitui o antigo calendário de grelha) e "Histórico" (todas
+as passagens de um mês seleccionável, incluindo as já encerradas).
+
+Os dois diálogos ("Nova estadia / visita" e "Registar saída") e a
+lógica de dados (carregar/gravar estadias) mantêm-se inalterados —
+só a apresentação e a organização dos separadores mudou.
+"""
 
 import calendar as _calendar
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -10,6 +20,7 @@ from modules.components.modal_animal import render_modal_animal
 from modules.components.modal_proprietario import render_modal_proprietario
 from modules.components.search_animal import render_search_animal
 from modules.db import get_connection
+from modules.ui_kit import inject_design_tokens, render_kpi_row, render_zone_title
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -18,12 +29,26 @@ from modules.db import get_connection
 TIPOS_REGISTO = ["estadia", "visita", "externo"]
 MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
 
-CORES_MOTIVO = {
-    "inseminacao": "#9FE1CB",
-    "colheita":    "#FAC775",
-    "diagnostico": "#F4C0D1",
-    "tratamento":  "#B5D4F4",
-    "embriao":     "#DDD6FE",
+MOTIVO_LABELS = {
+    "inseminacao": "Inseminação",
+    "colheita": "Colheita",
+    "diagnostico": "Diagnóstico",
+    "tratamento": "Tratamento",
+    "embriao": "Embrião",
+}
+TIPO_REGISTO_LABELS = {
+    "estadia": "Estadia",
+    "visita": "Visita",
+    "externo": "Externo",
+}
+ESTADO_LABELS = {
+    "internado": "Internado",
+    "visitante": "Visitante",
+    "gestante": "Gestante",
+    "alta": "Alta",
+    "sem_resultado": "Outro",
+    "transferido": "Transferido",
+    "externo": "Externo",
 }
 MESES_PT = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -32,6 +57,49 @@ MESES_PT = [
 
 # Estados finais permitidos ao registar a saída de uma estadia.
 ESTADOS_SAIDA = ["gestante", "alta", "sem_resultado", "transferido"]
+
+# Janela de "esta semana" usada no separador Movimentos — 7 dias,
+# hoje incluído.
+_JANELA_MOVIMENTOS_DIAS = 6
+
+# Filtro por tipo de animal (Internadas agora, Histórico) — os 3
+# valores reais de `animais.tipo` (CHECK constraint na BD, coluna
+# NOT NULL: nunca vazio/nulo, por isso "Todos" é o único caso a
+# tratar a parte).
+TIPO_ANIMAL_FILTRO = {
+    "Todos": None,
+    "Éguas": "egua",
+    "Garanhões": "garanhao",
+    "Receptoras": "receptora",
+}
+
+
+def _filtrar_por_tipo_animal(df: pd.DataFrame, tipo_sel: str) -> pd.DataFrame:
+    valor = TIPO_ANIMAL_FILTRO.get(tipo_sel)
+    if valor is None:
+        return df
+    return df[df["animal_tipo"] == valor]
+
+
+def _label_popover_filtros(tipo_sel: str) -> str:
+    """Rótulo do botão que abre o popover de filtros — sinaliza no
+    próprio botão quando há um filtro activo, para se saber que a
+    lista está filtrada mesmo com o popover fechado."""
+    if tipo_sel and tipo_sel != "Todos":
+        return f"Filtros ({tipo_sel})"
+    return "Filtros"
+
+
+def _label_motivo(m: str | None) -> str:
+    return MOTIVO_LABELS.get(m or "", (m or "—").capitalize())
+
+
+def _label_tipo_registo(t: str | None) -> str:
+    return TIPO_REGISTO_LABELS.get(t or "", (t or "—").capitalize())
+
+
+def _label_estado(e: str | None) -> str:
+    return ESTADO_LABELS.get(e or "", (e or "—").capitalize())
 
 
 def _ensure_saida_constraints() -> None:
@@ -88,30 +156,37 @@ def _registar_saida_estadia(
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers de acesso à BD
 # ────────────────────────────────────────────────────────────────────────────
-def _carregar_estadias(apenas_activas: bool) -> pd.DataFrame:
-    """Carrega estadias activas (data_saida IS NULL) ou encerradas."""
-    where = "e.data_saida IS NULL" if apenas_activas else "e.data_saida IS NOT NULL"
+def _carregar_estadias(where_sql: str, params: tuple = ()) -> pd.DataFrame:
+    """Carrega estadias/visitas conforme a cláusula WHERE dada.
+
+    Uma só query, partilhada pelos 4 recortes que a página mostra
+    (internadas agora, entram esta semana, saem esta semana, histórico
+    do mês) — todos usam os mesmos JOINs e o mesmo cálculo de
+    `dias_internado`; só a condição de filtro muda.
+    """
     sql = f"""
         SELECT
             e.id,
             e.animal_id,
-            a.nome                                       AS animal,
-            e.tipo_registo                               AS tipo,
-            a.tipo                                       AS animal_tipo,
-            d.nome                                       AS proprietario,
+            a.nome                                        AS animal,
+            e.tipo_registo                                AS tipo,
+            a.tipo                                         AS animal_tipo,
+            d.nome                                         AS proprietario,
             e.motivo,
             e.estado,
             e.data_entrada,
             e.data_saida,
+            al.nome                                        AS alojamento_nome,
             EXTRACT(DAY FROM (NOW() - e.data_entrada))::int AS dias_internado
         FROM estadias e
-        JOIN animais a ON a.id = e.animal_id
-        JOIN dono    d ON d.id = e.dono_id
-        WHERE {where}
+        JOIN animais a           ON a.id = e.animal_id
+        JOIN dono    d           ON d.id = e.dono_id
+        LEFT JOIN alojamentos al ON al.id = e.alojamento_id
+        WHERE {where_sql}
         ORDER BY e.data_entrada DESC, e.id DESC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn)
+        return pd.read_sql_query(sql, conn, params=params)
 
 
 def _carregar_animal_detalhe(animal_id: int) -> dict:
@@ -519,7 +594,7 @@ def _render_modal_nova_estadia() -> None:
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# Calendário visual de ocupação mensal
+# Navegação por mês (Histórico) — mesmo mecanismo que o antigo calendário
 # ────────────────────────────────────────────────────────────────────────────
 def _target_year_month(offset: int) -> tuple[int, int]:
     today = date.today()
@@ -533,335 +608,335 @@ def _target_year_month(offset: int) -> tuple[int, int]:
     return y, m
 
 
-def _carregar_estadias_mes(primeiro: date, ultimo: date) -> pd.DataFrame:
-    sql = """
-        SELECT
-            e.id, e.animal_id, e.alojamento_id,
-            a.nome AS animal_nome,
-            d.nome AS proprietario_nome,
-            e.data_entrada, e.data_saida, e.motivo, e.tipo_registo
-        FROM estadias e
-        JOIN animais   a  ON a.id  = e.animal_id
-        JOIN dono      d  ON d.id  = e.dono_id
-        JOIN alojamentos al ON al.id = e.alojamento_id
-        WHERE e.tipo_registo = 'estadia'
-          AND e.alojamento_id IS NOT NULL
-          AND e.data_entrada <= %s
-          AND (e.data_saida IS NULL OR e.data_saida >= %s)
-    """
-    with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(ultimo, primeiro))
+# ────────────────────────────────────────────────────────────────────────────
+# Lista densa — CSS e helpers partilhados pelos 3 separadores
+# ────────────────────────────────────────────────────────────────────────────
+def _inject_lista_css() -> None:
+    """CSS da lista densa — mesma direcção do Trabalho diário (zebra
+    subtil, sem cartões, container com scroll interno para aguentar
+    centenas de linhas sem esticar a página)."""
+    st.markdown(
+        """
+        <style>
+            .ds-list-header {
+                font-size: var(--ds-text-xs);
+                color: var(--ds-gray-400);
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                font-weight: 700;
+            }
+            div.st-key-est-list-internadas,
+            div.st-key-est-list-historico {
+                max-height: calc(100vh - 430px);
+                overflow-y: auto;
+                padding-right: 4px;
+            }
+            /* Movimentos — duas listas na mesma vista, por isso mais
+               baixas cada (curtas no caso comum; limitadas em altura
+               para não estourar a página em bases com muito volume). */
+            div.st-key-est-list-entram,
+            div.st-key-est-list-saem {
+                max-height: 340px;
+                overflow-y: auto;
+                padding-right: 4px;
+            }
+            div.st-key-est-list-internadas > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-estrow-"],
+            div.st-key-est-list-historico > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-estrow-"],
+            div.st-key-est-list-entram > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-estrow-"],
+            div.st-key-est-list-saem > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-estrow-"] {
+                background: var(--ds-gray-50);
+            }
+            div[class*="st-key-estrow-"] {
+                padding: 4px 6px;
+                border-radius: 4px;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def _contar_ocupados_em(d: date) -> int:
-    sql = """
-        SELECT COUNT(DISTINCT alojamento_id)
-        FROM estadias
-        WHERE tipo_registo = 'estadia'
-          AND alojamento_id IS NOT NULL
-          AND data_entrada <= %s
-          AND (data_saida IS NULL OR data_saida >= %s)
-    """
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(sql, (d, d))
-        n = int(cur.fetchone()[0] or 0)
-        cur.close()
-        return n
+def _render_header_row(col_w: list[float], headers: list[str]) -> None:
+    head_cols = st.columns(col_w)
+    for i, h in enumerate(headers):
+        head_cols[i].markdown(f"<div class='ds-list-header'>{h}</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid var(--ds-gray-200);margin:4px 0 8px;'>",
+        unsafe_allow_html=True,
+    )
 
 
-def _render_tab_calendario() -> None:
-    """Calendário visual mensal — linhas = alojamentos, colunas = dias."""
-    # ── Drill-down via query-param (clique nos blocos) ───────────────────
-    try:
-        qp = st.query_params
-        if "ver_animal_cal" in qp:
-            raw = qp.get("ver_animal_cal")
-            try:
-                aid = int(raw if isinstance(raw, str) else raw[0])
-                st.session_state["ver_animal_id"] = aid
-                st.session_state["ver_animal_tab"] = 0
-            except (TypeError, ValueError):
-                pass
-            del qp["ver_animal_cal"]
-            st.rerun()
-    except Exception:
-        pass
+def _ir_para_ficha(animal_id: int) -> None:
+    st.session_state["ver_animal_id"] = int(animal_id)
+    st.session_state["ver_animal_tab"] = 0
+    st.rerun()
 
-    if "calendario_offset" not in st.session_state:
-        st.session_state["calendario_offset"] = 0
 
-    offset = int(st.session_state["calendario_offset"])
+# ────────────────────────────────────────────────────────────────────────────
+# Separador "Internadas agora"
+# ────────────────────────────────────────────────────────────────────────────
+_ORDEM_INTERNADAS = {
+    "Há mais dias": ("dias_internado", False),
+    "Nome (A-Z)": ("animal", True),
+    "Box": ("alojamento_nome", True),
+}
+
+
+def _render_linha_internada(row: pd.Series, col_w: list[float]) -> None:
+    estadia_id = int(row["id"])
+    with st.container(key=f"estrow-int-{estadia_id}"):
+        cols = st.columns(col_w)
+        cols[0].write(row["animal"] or "—")
+        cols[1].write(row["proprietario"] or "—")
+        cols[2].write(row["alojamento_nome"] or "—")
+        cols[3].write(_label_motivo(row["motivo"]))
+        dias = row.get("dias_internado")
+        cols[4].write(str(max(int(dias), 0)) if pd.notna(dias) else "—")
+        with cols[5]:
+            # Navegação, não uma ação — discreto (type="tertiary"), para
+            # não competir com "Registar saída" (a ação desta linha).
+            if st.button(
+                "Ver ficha", key=f"int_ver_{estadia_id}",
+                type="tertiary", width="stretch",
+            ):
+                _ir_para_ficha(row["animal_id"])
+        with cols[6]:
+            # Só "Registar saída" — "Registar inseminação" foi removido
+            # daqui de propósito: regista-se na ficha da égua via
+            # Trabalho diário, para não duplicar o fluxo.
+            if st.button(
+                "Registar saída", key=f"int_saida_{estadia_id}",
+                type="primary", width="stretch",
+            ):
+                st.session_state["abrir_modal_saida_id"] = estadia_id
+                st.session_state["abrir_modal_saida_animal"] = row["animal"]
+                st.rerun()
+
+
+def _render_tab_internadas() -> None:
+    df = _carregar_estadias("e.data_saida IS NULL")
+
+    # Valor actual do filtro lido directamente de session_state (antes
+    # do próprio selectbox ser criado, mais abaixo) só para o KPI já
+    # sair correcto no mesmo render em que o filtro muda.
+    tipo_sel_atual = st.session_state.get("internadas_tipo", "Todos")
+    df_filtrado_kpi = _filtrar_por_tipo_animal(df, tipo_sel_atual)
+    total, mostrado = len(df), len(df_filtrado_kpi)
+    valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
+    render_kpi_row([("Internadas", valor_kpi)])
+
+    if df.empty:
+        render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
+        st.caption("Sem estadias ou visitas activas.")
+        return
+
+    # Título e botão de filtros na mesma linha — título numa coluna
+    # larga, botão discreto numa coluna estreita à direita. Em ecrãs
+    # estreitos o Streamlit empilha as colunas automaticamente (o botão
+    # desce para uma linha abaixo do título, em vez de espremer).
+    col_titulo, col_filtros = st.columns([4, 1])
+    with col_titulo:
+        render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
+    with col_filtros:
+        with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
+            tipo_sel = st.selectbox(
+                "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+                key="internadas_tipo",
+            )
+            ordem_sel = st.selectbox(
+                "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
+                key="internadas_ordem",
+            )
+
+    df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
+    if df_filtrado.empty:
+        st.caption("Sem estadias activas deste tipo de animal.")
+        return
+
+    campo, ascendente = _ORDEM_INTERNADAS[ordem_sel]
+    df_ordenado = df_filtrado.sort_values(campo, ascending=ascendente, na_position="last")
+
+    col_w = [2.1, 1.5, 1.3, 1.2, 0.9, 1.1, 1.3]
+    _render_header_row(col_w, ["Animal", "Dono", "Box", "Motivo", "Há dias", "", ""])
+
+    with st.container(key="est-list-internadas"):
+        for _, row in df_ordenado.iterrows():
+            _render_linha_internada(row, col_w)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Separador "Movimentos da semana"
+# ────────────────────────────────────────────────────────────────────────────
+def _render_linha_movimento(
+    row: pd.Series, col_w: list[float], campo_data: str, key_prefix: str,
+) -> None:
+    estadia_id = int(row["id"])
+    with st.container(key=f"estrow-{key_prefix}-{estadia_id}"):
+        cols = st.columns(col_w)
+        cols[0].write(row["animal"] or "—")
+        cols[1].write(row["proprietario"] or "—")
+        cols[2].write(row["alojamento_nome"] or "—")
+        cols[3].write(_label_motivo(row["motivo"]))
+        val = row.get(campo_data)
+        cols[4].write(val.strftime("%d/%m/%Y") if pd.notna(val) else "—")
+        with cols[5]:
+            if st.button(
+                "Ver ficha", key=f"{key_prefix}_ver_{estadia_id}",
+                type="tertiary", width="stretch",
+            ):
+                _ir_para_ficha(row["animal_id"])
+
+
+def _render_tab_movimentos() -> None:
+    hoje = date.today()
+    fim_semana = hoje + timedelta(days=_JANELA_MOVIMENTOS_DIAS)
+
+    df_entram = _carregar_estadias(
+        "e.data_entrada BETWEEN %s AND %s", (hoje, fim_semana),
+    ).sort_values("data_entrada")
+    df_saem = _carregar_estadias(
+        "e.data_saida IS NOT NULL AND e.data_saida BETWEEN %s AND %s",
+        (hoje, fim_semana),
+    ).sort_values("data_saida")
+
+    render_kpi_row([
+        ("Entram", len(df_entram)),
+        ("Saem", len(df_saem)),
+    ])
+
+    col_w = [2.1, 1.5, 1.3, 1.2, 1.1, 1.1]
+
+    render_zone_title("Entram esta semana", "ds-zone-title ds-zone-title--first")
+    if df_entram.empty:
+        st.caption("Sem entradas nos próximos 7 dias.")
+    else:
+        _render_header_row(col_w, ["Égua", "Dono", "Box", "Motivo", "Entrada", ""])
+        with st.container(key="est-list-entram"):
+            for _, row in df_entram.iterrows():
+                _render_linha_movimento(row, col_w, "data_entrada", "mov_ent")
+
+    render_zone_title("Saem esta semana", "ds-zone-title")
+    if df_saem.empty:
+        # Ver nota em run_estadias_page / resumo ao utilizador: a app só
+        # regista a data de saída no momento em que "Registar saída" é
+        # usado — não existe um campo de "saída prevista" separado para
+        # estadias ainda abertas, por isso esta lista só mostra saídas
+        # já efectivamente registadas dentro da janela dos 7 dias.
+        st.caption(
+            "Sem saídas registadas nos próximos 7 dias — a app regista a "
+            "data de saída só quando 'Registar saída' é usado; não há "
+            "ainda um campo de saída prevista para quem está internada."
+        )
+    else:
+        _render_header_row(col_w, ["Égua", "Dono", "Box", "Motivo", "Saída", ""])
+        with st.container(key="est-list-saem"):
+            for _, row in df_saem.iterrows():
+                _render_linha_movimento(row, col_w, "data_saida", "mov_sai")
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Separador "Histórico"
+# ────────────────────────────────────────────────────────────────────────────
+def _render_linha_historico(row: pd.Series, col_w: list[float]) -> None:
+    estadia_id = int(row["id"])
+    with st.container(key=f"estrow-hist-{estadia_id}"):
+        cols = st.columns(col_w)
+        cols[0].write(row["animal"] or "—")
+        cols[1].write(_label_tipo_registo(row["tipo"]))
+        cols[2].write(row["proprietario"] or "—")
+        cols[3].write(row["alojamento_nome"] or "—")
+        cols[4].write(_label_motivo(row["motivo"]))
+        cols[5].write(_label_estado(row["estado"]))
+        data_entrada = row.get("data_entrada")
+        cols[6].write(
+            data_entrada.strftime("%d/%m/%Y") if pd.notna(data_entrada) else "—"
+        )
+        data_saida = row.get("data_saida")
+        cols[7].write(
+            data_saida.strftime("%d/%m/%Y") if pd.notna(data_saida) else "Em curso"
+        )
+        with cols[8]:
+            if st.button(
+                "Ver ficha", key=f"hist_ver_{estadia_id}",
+                type="tertiary", width="stretch",
+            ):
+                _ir_para_ficha(row["animal_id"])
+
+
+def _render_tab_historico() -> None:
+    if "historico_offset" not in st.session_state:
+        st.session_state["historico_offset"] = 0
+    offset = int(st.session_state["historico_offset"])
     target_y, target_m = _target_year_month(offset)
     primeiro = date(target_y, target_m, 1)
     _, last_d = _calendar.monthrange(target_y, target_m)
     ultimo = date(target_y, target_m, last_d)
-    today = date.today()
 
-    # ── Navegação ────────────────────────────────────────────────────────
+    # Navegação de mês — mesmo padrão de setas do navegador de dia
+    # (`day_navigator.py`), aqui a granularidade de mês.
     c_prev, c_title, c_next = st.columns([1, 2, 1])
     with c_prev:
-        # Navegação, não ação — discreto (type="tertiary"), sem contorno.
-        if st.button("◀ Mês anterior", key="cal_btn_prev", type="tertiary", width="stretch"):
-            st.session_state["calendario_offset"] = offset - 1
+        if st.button("◀ Mês anterior", key="hist_btn_prev", type="tertiary", width="stretch"):
+            st.session_state["historico_offset"] = offset - 1
             st.rerun()
     with c_title:
         st.markdown(
-            f"<h3 style='text-align:center;margin:6px 0;color:#0f172a;"
-            f"font-weight:700;'>{MESES_PT[target_m - 1]} {target_y}</h3>",
+            f"<div style='text-align:center;font-weight:700;"
+            f"color:var(--ds-gray-900);font-size:1.05rem;padding-top:6px;'>"
+            f"{MESES_PT[target_m - 1]} {target_y}</div>",
             unsafe_allow_html=True,
         )
     with c_next:
-        if st.button("Mês seguinte ▶", key="cal_btn_next", type="tertiary", width="stretch"):
-            st.session_state["calendario_offset"] = offset + 1
+        if st.button("Mês seguinte ▶", key="hist_btn_next", type="tertiary", width="stretch"):
+            st.session_state["historico_offset"] = offset + 1
             st.rerun()
 
-    # ── Carregar dados ───────────────────────────────────────────────────
-    alojamentos = _carregar_alojamentos()
-    if alojamentos.empty:
-        st.info("Sem alojamentos activos. Crie um em Definições → Alojamentos.")
-        return
-
-    df_est = _carregar_estadias_mes(primeiro, ultimo)
-
-    # ── Pré-computar ocupação (aloj_id, dia) → estadia ───────────────────
-    # Regras de pintura:
-    #   • dia_inicio = data_entrada
-    #   • dia_fim = MIN(data_saida se existe, hoje)
-    #   • Dias futuros ficam SEMPRE brancos — nunca pintar além de hoje.
-    occ: dict[tuple[int, int], dict] = {}
-    aloj_ids_validos = {int(a) for a in alojamentos["id"].tolist()}
-    for _, r in df_est.iterrows():
-        aloj_id = int(r["alojamento_id"])
-        if aloj_id not in aloj_ids_validos:
-            continue
-        de_d = pd.to_datetime(r["data_entrada"]).date()
-        if pd.notna(r["data_saida"]):
-            ds = min(pd.to_datetime(r["data_saida"]).date(), today)
-        else:
-            ds = today  # estadia em curso — só pinta até hoje (inclusive)
-        for d_num in range(1, last_d + 1):
-            cur_day = date(target_y, target_m, d_num)
-            if de_d <= cur_day <= ds:
-                # Mantém a estadia mais recente para esse par (aloj_id, dia)
-                occ[(aloj_id, d_num)] = {
-                    "animal_id": int(r["animal_id"]),
-                    "animal_nome": r["animal_nome"] or "",
-                    "proprietario": r["proprietario_nome"] or "",
-                    "motivo": r["motivo"] or "",
-                }
-
-    # ── KPIs ─────────────────────────────────────────────────────────────
-    total_aloj = len(alojamentos)
-    ocupados_hoje = _contar_ocupados_em(today)
-    livres_hoje = max(total_aloj - ocupados_hoje, 0)
-
-    total_dias_aloj = total_aloj * last_d
-    dias_ocupados = len(occ)  # pares únicos (aloj_id, dia)
-    taxa = (dias_ocupados / total_dias_aloj * 100) if total_dias_aloj > 0 else 0.0
-    taxa = min(taxa, 100.0)  # safety: nunca passa de 100%
-
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total alojamentos", total_aloj)
-    k2.metric("Ocupados hoje", ocupados_hoje)
-    k3.metric("Livres hoje", livres_hoje)
-    k4.metric("Taxa de ocupação (mês)", f"{taxa:.0f}%")
-
-    st.markdown(
-        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:8px 0 12px;'>",
-        unsafe_allow_html=True,
+    df = _carregar_estadias(
+        "e.data_entrada <= %s AND (e.data_saida IS NULL OR e.data_saida >= %s)",
+        (ultimo, primeiro),
     )
 
-    # ── Construir HTML da grelha ─────────────────────────────────────────
-    header_cells = []
-    for d_num in range(1, last_d + 1):
-        is_today = (target_y, target_m, d_num) == (today.year, today.month, today.day)
-        bg = "#DBEAFE" if is_today else "#F8FAFC"
-        color = "#1E40AF" if is_today else "#64748B"
-        header_cells.append(
-            f"<th style='padding:4px 6px;font-size:10px;text-align:center;"
-            f"background:{bg};color:{color};border:1px solid #E2E8F0;"
-            f"font-weight:700;min-width:30px;'>{d_num}</th>"
-        )
+    tipo_sel_atual = st.session_state.get("historico_tipo", "Todos")
+    df_filtrado_kpi = _filtrar_por_tipo_animal(df, tipo_sel_atual)
+    total, mostrado = len(df), len(df_filtrado_kpi)
+    valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
+    render_kpi_row([("Passagens no mês", valor_kpi)])
+    titulo_historico = f"Estadias e visitas em {MESES_PT[target_m - 1]} {target_y}"
 
-    rows_html = []
-    for _, aloj in alojamentos.iterrows():
-        aloj_id = int(aloj["id"])
-        aloj_label = f"{aloj['nome']}"
-        cells = []
-        for d_num in range(1, last_d + 1):
-            entry = occ.get((aloj_id, d_num))
-            if entry:
-                cor = CORES_MOTIVO.get(entry["motivo"], "#E2E8F0")
-                nome_trunc = entry["animal_nome"][:8] if entry["animal_nome"] else ""
-                title = (
-                    f"{entry['animal_nome']} ({entry['proprietario']})"
-                    f" — {entry['motivo']}"
-                ).replace('"', "'")
-                cells.append(
-                    f"<td style='padding:0;border:1px solid #E2E8F0;'>"
-                    f"<a href='?ver_animal_cal={entry['animal_id']}' "
-                    f"target='_self' "
-                    f"style='display:block;background:{cor};padding:6px 4px;"
-                    f"font-size:10px;color:#1E293B;text-decoration:none;"
-                    f"text-align:center;font-weight:600;white-space:nowrap;"
-                    f"overflow:hidden;text-overflow:ellipsis;cursor:pointer;' "
-                    f"title=\"{title}\">{nome_trunc}</a></td>"
-                )
-            else:
-                cells.append(
-                    "<td style='background:white;border:1px solid #E2E8F0;"
-                    "padding:6px 4px;min-width:30px;'>&nbsp;</td>"
-                )
-        rows_html.append(
-            f"<tr><th style='text-align:left;padding:4px 10px;"
-            f"border:1px solid #E2E8F0;background:#F8FAFC;font-size:11px;"
-            f"font-weight:600;color:#1E293B;white-space:nowrap;"
-            f"position:sticky;left:0;z-index:1;'>{aloj_label}</th>"
-            f"{''.join(cells)}</tr>"
-        )
-
-    grid_html = f"""
-    <div style='overflow-x:auto;border:1px solid #E2E8F0;border-radius:6px;
-                background:white;'>
-      <table style='border-collapse:collapse;font-family:inherit;width:100%;'>
-        <thead>
-          <tr>
-            <th style='text-align:left;padding:6px 10px;background:#F8FAFC;
-                       border:1px solid #E2E8F0;font-size:10px;color:#64748B;
-                       font-weight:700;text-transform:uppercase;
-                       letter-spacing:.5px;position:sticky;left:0;z-index:2;'>
-              Alojamento
-            </th>
-            {''.join(header_cells)}
-          </tr>
-        </thead>
-        <tbody>{''.join(rows_html)}</tbody>
-      </table>
-    </div>
-    """
-    st.markdown(grid_html, unsafe_allow_html=True)
-
-    # ── Legenda ──────────────────────────────────────────────────────────
-    legenda_items = " · ".join(
-        f"<span style='display:inline-block;width:11px;height:11px;"
-        f"background:{cor};border:1px solid #E2E8F0;border-radius:2px;"
-        f"vertical-align:middle;margin-right:5px;'></span>{m.capitalize()}"
-        for m, cor in CORES_MOTIVO.items()
-    )
-    st.markdown(
-        f"<div style='margin-top:12px;font-size:11px;color:#64748B;'>"
-        f"<b style='color:#1E293B;'>Legenda:</b> {legenda_items}</div>",
-        unsafe_allow_html=True,
-    )
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# Lista de estadias
-# ────────────────────────────────────────────────────────────────────────────
-def _render_lista_estadias(df: pd.DataFrame, apenas_activas: bool, key_prefix: str) -> None:
-    """Renderiza a lista de estadias com botão 'Ver ficha' em cada linha."""
     if df.empty:
-        st.info(
-            "Sem estadias ou visitas activas." if apenas_activas
-            else "Sem estadias encerradas."
-        )
+        render_zone_title(titulo_historico, "ds-zone-title")
+        st.caption("Sem estadias ou visitas neste mês.")
         return
 
-    if apenas_activas:
-        col_w = [1.6, 0.8, 1.5, 1.2, 1.1, 0.8, 1.2, 1.3, 1.3]
-        headers = [
-            "Animal", "Tipo", "Proprietário", "Motivo", "Estado",
-            "Dias", "", "", "",
-        ]
-    else:
-        col_w = [1.8, 1, 1.8, 1.4, 1.3, 1, 1.2, 1.2]
-        headers = [
-            "Animal", "Tipo", "Proprietário", "Motivo", "Estado",
-            "Dias", "Data saída", "",
-        ]
-
-    head_cols = st.columns(col_w)
-    for i, h in enumerate(headers):
-        head_cols[i].markdown(
-            f"<div style='font-size:.7rem;color:#94a3b8;text-transform:uppercase;"
-            f"letter-spacing:.5px;font-weight:700;'>{h}</div>",
-            unsafe_allow_html=True,
-        )
-    st.markdown(
-        "<hr style='border:none;border-top:1px solid #e2e8f0;margin:4px 0 8px;'>",
-        unsafe_allow_html=True,
-    )
-
-    for _, row in df.iterrows():
-        cols = st.columns(col_w)
-        cols[0].write(row["animal"])
-        cols[1].write(row["tipo"])
-        cols[2].write(row["proprietario"])
-        cols[3].write(row["motivo"])
-        cols[4].write(row["estado"])
-        cols[5].write(
-            str(int(row["dias_internado"])) if pd.notna(row["dias_internado"]) else "—"
-        )
-
-        estadia_id = int(row["id"])
-        if apenas_activas:
-            with cols[6]:
-                # "Ver ficha" é navegação, não uma ação sobre a estadia —
-                # discreto (type="tertiary"), para não competir visualmente
-                # com "Registar saída" (a ação principal desta linha).
-                if st.button(
-                    "Ver ficha",
-                    key=f"{key_prefix}_ver_{estadia_id}",
-                    type="tertiary",
-                    width="stretch",
-                ):
-                    st.session_state["ver_animal_id"] = int(row["animal_id"])
-                    st.session_state["ver_animal_tab"] = 0
-                    st.rerun()
-            with cols[7]:
-                # Botão "Registar inseminação" (Pedido 7) — só faz sentido
-                # em éguas (o formulário filtra o dropdown por éguas ativas
-                # de qualquer forma; aqui só evitamos ruído visual em
-                # garanhões/outros).
-                if str(row.get("animal_tipo") or "").lower() == "egua":
-                    if st.button(
-                        "Registar inseminação",
-                        key=f"{key_prefix}_insem_{estadia_id}",
-                        width="stretch",
-                    ):
-                        st.session_state["insem_egua_prefill"] = {
-                            "animal_id": int(row["animal_id"]),
-                            "estadia_id": estadia_id,
-                        }
-                        st.session_state["insem_flow_active"] = True
-                        st.session_state["aba_selecionada"] = "Trabalho diário"
-                        st.rerun()
-            with cols[8]:
-                if st.button(
-                    "Registar saída",
-                    key=f"{key_prefix}_saida_{estadia_id}",
-                    type="primary",
-                    width="stretch",
-                ):
-                    st.session_state["abrir_modal_saida_id"] = estadia_id
-                    st.session_state["abrir_modal_saida_animal"] = row["animal"]
-                    st.rerun()
-        else:
-            data_saida = row.get("data_saida")
-            cols[6].write(
-                data_saida.strftime("%d/%m/%Y") if pd.notna(data_saida) else "—"
+    # Título e botão de filtros na mesma linha — mesmo padrão de
+    # "Internadas agora" (título numa coluna larga, botão discreto
+    # numa coluna estreita à direita; empilha em ecrãs estreitos).
+    col_titulo, col_filtros = st.columns([4, 1])
+    with col_titulo:
+        render_zone_title(titulo_historico, "ds-zone-title")
+    with col_filtros:
+        with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
+            tipo_sel = st.selectbox(
+                "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+                key="historico_tipo",
             )
-            with cols[7]:
-                if st.button(
-                    "Ver ficha",
-                    key=f"{key_prefix}_ver_{estadia_id}",
-                    type="tertiary",
-                    width="stretch",
-                ):
-                    st.session_state["ver_animal_id"] = int(row["animal_id"])
-                    st.session_state["ver_animal_tab"] = 0
-                    st.rerun()
+    df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
+    if df_filtrado.empty:
+        st.caption("Sem estadias ou visitas deste tipo de animal neste mês.")
+        return
+
+    col_w = [1.9, 0.9, 1.4, 1.2, 1.1, 1.0, 1.0, 1.0, 1.0]
+    _render_header_row(col_w, [
+        "Animal", "Tipo", "Dono", "Box", "Motivo", "Estado",
+        "Entrada", "Saída", "",
+    ])
+    with st.container(key="est-list-historico"):
+        for _, row in df_filtrado.sort_values("data_entrada", ascending=False).iterrows():
+            _render_linha_historico(row, col_w)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1027,6 +1102,9 @@ def run_estadias_page(context: dict):
         )
         return
 
+    inject_design_tokens()
+    _inject_lista_css()
+
     # Botão de ação — sem título de página aqui (nome+data já vivem na topbar).
     col_spacer, col_btn = st.columns([4, 1])
     with col_btn:
@@ -1037,24 +1115,22 @@ def run_estadias_page(context: dict):
             st.session_state["abrir_modal_nova_estadia"] = True
             st.rerun()
 
-    # Tabs (ordem pedida: Calendário → Activas → Encerradas)
+    # Tabs (redesenho): Internadas agora → Movimentos da semana → Histórico.
     # Key própria (com nº de sequência de navegação, ver app.py) — evita
     # que o Streamlit reaproveite este `st.tabs` (que identifica widgets
     # pela posição no script, não pelo conteúdo) ao trocar para outra
     # página que também tenha tabs na mesma posição.
     _seq = st.session_state.get("_nav_render_seq", 0)
     with st.container(key=f"estadias-tabs-{_seq}"):
-        tab_calendario, tab_activas, tab_encerradas = st.tabs(
-            ["Calendário", "Activas", "Encerradas"]
+        tab_internadas, tab_movimentos, tab_historico = st.tabs(
+            ["Internadas agora", "Movimentos da semana", "Histórico"]
         )
 
-    with tab_calendario:
-        _render_tab_calendario()
+    with tab_internadas:
+        _render_tab_internadas()
 
-    with tab_activas:
-        df = _carregar_estadias(apenas_activas=True)
-        _render_lista_estadias(df, apenas_activas=True, key_prefix="act")
+    with tab_movimentos:
+        _render_tab_movimentos()
 
-    with tab_encerradas:
-        df = _carregar_estadias(apenas_activas=False)
-        _render_lista_estadias(df, apenas_activas=False, key_prefix="enc")
+    with tab_historico:
+        _render_tab_historico()

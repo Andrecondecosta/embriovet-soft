@@ -219,16 +219,18 @@ def test_carregar_garanhoes_com_stock_exclui_lotes_zerados(db):
 # (d) Pontos de entrada da inseminação activam `insem_flow_active`
 # ────────────────────────────────────────────────────────────────────
 
-def test_estadias_page_seta_insem_flow_active():
+def test_estadias_page_ja_nao_ativa_insem_flow_active():
+    """Redesenho dos separadores de Estadias: o botão "Registar
+    inseminação" foi removido da lista de "Internadas agora" de
+    propósito — duplicava o fluxo já disponível na ficha da égua via
+    Trabalho diário (`test_animal_page_seta_insem_flow_active`, abaixo,
+    continua a cobrir esse único ponto de entrada vivo). Este teste
+    substitui `test_estadias_page_seta_insem_flow_active` (Pedido 7),
+    que exigia o oposto."""
     src = (ROOT / "modules/pages/estadias_page.py").read_text()
-    # No botão "Registar inseminação" (fila de estadia activa) tem de
-    # setar o flag.
-    assert 'insem_flow_active' in src, (
-        "estadias_page.py deve activar `insem_flow_active` no botão "
-        "'Registar inseminação'"
-    )
-    assert '"Trabalho diário"' in src, (
-        "estadias_page.py deve redireccionar para 'Trabalho diário'"
+    assert 'insem_flow_active' not in src, (
+        "estadias_page.py não deve voltar a activar `insem_flow_active` — "
+        "esse fluxo vive só na ficha do animal (Trabalho diário)"
     )
 
 
