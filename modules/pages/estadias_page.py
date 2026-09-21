@@ -728,21 +728,29 @@ def _render_tab_internadas() -> None:
     total, mostrado = len(df), len(df_filtrado_kpi)
     valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
     render_kpi_row([("Internadas", valor_kpi)])
-    render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
 
     if df.empty:
+        render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
         st.caption("Sem estadias ou visitas activas.")
         return
 
-    with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
-        tipo_sel = st.selectbox(
-            "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
-            key="internadas_tipo",
-        )
-        ordem_sel = st.selectbox(
-            "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
-            key="internadas_ordem",
-        )
+    # Título e botão de filtros na mesma linha — título numa coluna
+    # larga, botão discreto numa coluna estreita à direita. Em ecrãs
+    # estreitos o Streamlit empilha as colunas automaticamente (o botão
+    # desce para uma linha abaixo do título, em vez de espremer).
+    col_titulo, col_filtros = st.columns([4, 1])
+    with col_titulo:
+        render_zone_title("Internadas agora", "ds-zone-title ds-zone-title--first")
+    with col_filtros:
+        with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
+            tipo_sel = st.selectbox(
+                "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+                key="internadas_tipo",
+            )
+            ordem_sel = st.selectbox(
+                "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
+                key="internadas_ordem",
+            )
 
     df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
     if df_filtrado.empty:
@@ -897,19 +905,25 @@ def _render_tab_historico() -> None:
     total, mostrado = len(df), len(df_filtrado_kpi)
     valor_kpi = f"{mostrado} de {total}" if mostrado != total else total
     render_kpi_row([("Passagens no mês", valor_kpi)])
-    render_zone_title(
-        f"Estadias e visitas em {MESES_PT[target_m - 1]} {target_y}", "ds-zone-title",
-    )
+    titulo_historico = f"Estadias e visitas em {MESES_PT[target_m - 1]} {target_y}"
 
     if df.empty:
+        render_zone_title(titulo_historico, "ds-zone-title")
         st.caption("Sem estadias ou visitas neste mês.")
         return
 
-    with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
-        tipo_sel = st.selectbox(
-            "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
-            key="historico_tipo",
-        )
+    # Título e botão de filtros na mesma linha — mesmo padrão de
+    # "Internadas agora" (título numa coluna larga, botão discreto
+    # numa coluna estreita à direita; empilha em ecrãs estreitos).
+    col_titulo, col_filtros = st.columns([4, 1])
+    with col_titulo:
+        render_zone_title(titulo_historico, "ds-zone-title")
+    with col_filtros:
+        with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
+            tipo_sel = st.selectbox(
+                "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
+                key="historico_tipo",
+            )
     df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
     if df_filtrado.empty:
         st.caption("Sem estadias ou visitas deste tipo de animal neste mês.")
