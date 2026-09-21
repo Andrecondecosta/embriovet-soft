@@ -147,8 +147,11 @@ def _inject_lista_css() -> None:
         f"""
         <style>
             /* Lista com scroll interno — só isto rola, cabeçalho/KPIs/
-               filtros (fora deste container) ficam sempre visíveis. */
-            div.st-key-td-list {{
+               filtros (fora deste container) ficam sempre visíveis.
+               Regra partilhada por "Por fazer" (td-list) e "Feitas
+               hoje" (td-list-feitas) — mesma densidade nas duas. */
+            div.st-key-td-list,
+            div.st-key-td-list-feitas {{
                 max-height: {_LISTA_MAX_HEIGHT_CSS};
                 overflow-y: auto;
                 gap: 0 !important;
@@ -157,8 +160,12 @@ def _inject_lista_css() -> None:
 
             /* Zebra — alternância de fundo entre linhas, sem bordas.
                :nth-child conta os wrappers directos (stLayoutWrapper)
-               de cada `st.container(key=...)` dentro da lista. */
+               de cada `st.container(key=...)` dentro da lista. Cobre
+               as duas listas — todas as linhas partilham a classe
+               `tdrow-` (ver nota abaixo). */
             div.st-key-td-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-tdrow-"],
+            div.st-key-td-list-feitas > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-tdrow-"] {{
                 background: var(--ds-gray-50);
             }}
@@ -219,32 +226,40 @@ def _inject_lista_css() -> None:
                 font-variant-numeric: tabular-nums;
             }}
 
-            /* Lista "Feitas hoje" — só leitura (sem botão), mesmo
-               contentor com scroll e zebra da lista "Por fazer", mas
-               cada linha é texto simples (não navega para lado
-               nenhum; editar/desmarcar fica na página Atividade). */
-            div.st-key-td-list-feitas {{
-                max-height: {_LISTA_MAX_HEIGHT_CSS};
-                overflow-y: auto;
-                gap: 0 !important;
-                padding-right: 4px;
-            }}
-            div.st-key-td-list-feitas > div[data-testid="stLayoutWrapper"]:nth-child(even)
-                > div[class*="st-key-tdfeita-"] {{
-                background: var(--ds-gray-50);
-            }}
-            div[class*="st-key-tdfeita-"] {{
-                border-left: 3px solid var(--ds-gray-200);
-                padding: 3px 10px 3px 12px;
-            }}
-            div[class*="st-key-tdfeita-"] p {{
+            /* Linha "Feitas hoje" — mesma classe `tdrow-` (mesmo
+               padding/border-left partilhado acima), mas sem botão:
+               é texto simples (`st.markdown`), sem ação nem
+               navegação — editar/desmarcar continua só na página
+               Atividade. Repete aqui, para o `<p>` do markdown, a
+               MESMA altura/tipografia que o `<button>` já tem acima,
+               para as duas listas ficarem visualmente idênticas.
+               Como nenhuma linha "feita" usa um sufixo de urgência
+               (`tdrow-feita-{{id}}`, não `tdrow-urgente-{{id}}` etc.),
+               `{{regras_urgencia}}` acima nunca lhe acerta — o
+               border-left fica sempre transparente, sem risco de
+               urgência a mostrar (correcto: uma tarefa feita não tem
+               urgência para triar). */
+            /* O wrapper do markdown do Streamlit traz uma margin-bottom
+               negativa própria (-14px, para compensar espaçamento
+               nativo entre blocos) — sem a anular aqui, colapsava a
+               linha "feita" para menos de metade da altura real do
+               `<p>`, ficando mais baixa que a linha "por fazer". */
+            div[class*="st-key-tdrow-"] [data-testid="stMarkdownContainer"] {{
                 margin: 0 !important;
-                font-size: .8rem !important;
+            }}
+            div[class*="st-key-tdrow-"] [data-testid="stMarkdownContainer"] p {{
+                margin: 0 !important;
+                padding: 0 8px !important;
+                min-height: 30px !important;
                 line-height: 30px !important;
+                font-weight: 400 !important;
+                font-size: .8rem !important;
+                color: var(--ds-gray-900) !important;
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 font-variant-numeric: tabular-nums;
+                cursor: default !important;
             }}
         </style>
         """,
@@ -285,22 +300,23 @@ def _render_linha_tarefa(row: dict, numero: int) -> None:
 
 
 def _render_linha_feita(row: dict, numero: int) -> None:
-    """Linha só de leitura da lista "Feitas hoje" — sem botão, sem
-    navegação. Editar/desmarcar uma tarefa já feita é na página
-    Atividade, não aqui."""
+    """Linha só de leitura da lista "Feitas hoje" — mesma classe
+    `tdrow-` da lista "Por fazer" (ver `_inject_lista_css`), para as
+    duas ficarem visualmente idênticas (altura, espaçamento,
+    tipografia). Sem botão, sem navegação, sem risco de urgência —
+    editar/desmarcar uma tarefa já feita é na página Atividade, não
+    aqui."""
     tid = int(row["tarefa_id"])
     tipo_tarefa = row.get("tipo") or ""
     is_colheita = tipo_tarefa == "colheita"
     nome_exibido = f"Colheita — {row['animal']}" if is_colheita else (row.get("animal") or "—")
     tipo_label = _label_tipo(tipo_tarefa)
     utilizador = row.get("utilizador") or "—"
-    dt_conclusao = row.get("data_conclusao")
-    dt_label = dt_conclusao.strftime("%d/%m") if pd.notna(dt_conclusao) else "—"
 
-    with st.container(key=f"tdfeita-{tid}"):
+    with st.container(key=f"tdrow-feita-{tid}"):
         st.markdown(
             f":gray[{numero:>4}]  **{nome_exibido}**  ·  {tipo_label}  ·  "
-            f":gray[{utilizador}]  ·  :gray[{dt_label}]"
+            f":gray[{utilizador}]"
         )
 
 
