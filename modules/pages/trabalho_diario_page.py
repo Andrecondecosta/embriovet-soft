@@ -68,6 +68,21 @@ def _label_tipo(tipo: str) -> str:
     return _LABEL_TIPO_TAREFA.get(tipo, tipo or "—")
 
 
+def _label_popover_filtros_trabalho(minhas: bool, dono_sel: str) -> str:
+    """Rótulo do botão que abre o popover de filtros — sinaliza no
+    próprio botão quais filtros estão activos (podem ser os dois ao
+    mesmo tempo), tal como em Estadias, para se saber que a lista está
+    filtrada mesmo com o popover fechado."""
+    partes = []
+    if minhas:
+        partes.append("As minhas")
+    if dono_sel and dono_sel != "Todos":
+        partes.append(dono_sel)
+    if not partes:
+        return "Filtros"
+    return f"Filtros ({', '.join(partes)})"
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers DB
 # ────────────────────────────────────────────────────────────────────────────
@@ -313,23 +328,32 @@ def run_trabalho_diario_page(context: dict):
         st.error(f"Erro ao carregar tarefas de hoje: {e}")
         df = pd.DataFrame()
 
-    render_zone_title("Tarefas por fazer", "ds-zone-title")
-
     # Filtros — não alteram os totais da barra de cobertura, só a lista.
+    # Título e botão de filtros na mesma linha (título numa coluna
+    # larga, botão discreto numa coluna estreita à direita — mesmo
+    # padrão validado em Estadias); em ecrãs estreitos o Streamlit
+    # empilha as colunas automaticamente, sem espremer o botão.
     utilizador_atual = (st.session_state.get("user") or {}).get("username")
-    f1, f2 = st.columns([0.3, 0.7])
-    with f1:
-        minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
-    with f2:
-        donos_disponiveis = (
-            sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
-        )
-        dono_sel = st.selectbox(
-            "Dono",
-            ["Todos"] + donos_disponiveis,
-            key="td_filtro_dono",
-            label_visibility="collapsed",
-        )
+    minhas_atual = st.session_state.get("td_filtro_minhas", False)
+    dono_sel_atual = st.session_state.get("td_filtro_dono", "Todos")
+
+    col_titulo, col_filtros = st.columns([4, 1])
+    with col_titulo:
+        render_zone_title("Tarefas por fazer", "ds-zone-title")
+    with col_filtros:
+        with st.popover(
+            _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
+            type="tertiary",
+        ):
+            minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
+            donos_disponiveis = (
+                sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
+            )
+            dono_sel = st.selectbox(
+                "Dono",
+                ["Todos"] + donos_disponiveis,
+                key="td_filtro_dono",
+            )
 
     df_filtrado = df
     if minhas and utilizador_atual:
