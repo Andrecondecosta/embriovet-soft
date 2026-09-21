@@ -81,6 +81,15 @@ def _filtrar_por_tipo_animal(df: pd.DataFrame, tipo_sel: str) -> pd.DataFrame:
     return df[df["animal_tipo"] == valor]
 
 
+def _label_popover_filtros(tipo_sel: str) -> str:
+    """Rótulo do botão que abre o popover de filtros — sinaliza no
+    próprio botão quando há um filtro activo, para se saber que a
+    lista está filtrada mesmo com o popover fechado."""
+    if tipo_sel and tipo_sel != "Todos":
+        return f"Filtros ({tipo_sel})"
+    return "Filtros"
+
+
 def _label_motivo(m: str | None) -> str:
     return MOTIVO_LABELS.get(m or "", (m or "—").capitalize())
 
@@ -725,16 +734,14 @@ def _render_tab_internadas() -> None:
         st.caption("Sem estadias ou visitas activas.")
         return
 
-    col_tipo, col_ordem = st.columns(2)
-    with col_tipo:
+    with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
         tipo_sel = st.selectbox(
             "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
-            key="internadas_tipo", label_visibility="collapsed",
+            key="internadas_tipo",
         )
-    with col_ordem:
         ordem_sel = st.selectbox(
             "Ordenar por", list(_ORDEM_INTERNADAS.keys()),
-            key="internadas_ordem", label_visibility="collapsed",
+            key="internadas_ordem",
         )
 
     df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
@@ -898,11 +905,10 @@ def _render_tab_historico() -> None:
         st.caption("Sem estadias ou visitas neste mês.")
         return
 
-    col_tipo, _col_spacer = st.columns([1, 3])
-    with col_tipo:
+    with st.popover(_label_popover_filtros(tipo_sel_atual), type="tertiary"):
         tipo_sel = st.selectbox(
             "Tipo de animal", list(TIPO_ANIMAL_FILTRO.keys()),
-            key="historico_tipo", label_visibility="collapsed",
+            key="historico_tipo",
         )
     df_filtrado = _filtrar_por_tipo_animal(df, tipo_sel)
     if df_filtrado.empty:
