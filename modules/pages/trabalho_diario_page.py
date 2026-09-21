@@ -21,6 +21,7 @@ import streamlit as st
 
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
+    carregar_tarefas_feitas_hoje,
     carregar_tarefas_hoje,
 )
 from modules.repositories.settings_repo import get_app_settings
@@ -66,6 +67,21 @@ _LABEL_TIPO_TAREFA = {
 
 def _label_tipo(tipo: str) -> str:
     return _LABEL_TIPO_TAREFA.get(tipo, tipo or "—")
+
+
+def _label_popover_filtros_trabalho(minhas: bool, dono_sel: str) -> str:
+    """Rótulo do botão que abre o popover de filtros — sinaliza no
+    próprio botão quais filtros estão activos (podem ser os dois ao
+    mesmo tempo), tal como em Estadias, para se saber que a lista está
+    filtrada mesmo com o popover fechado."""
+    partes = []
+    if minhas:
+        partes.append("As minhas")
+    if dono_sel and dono_sel != "Todos":
+        partes.append(dono_sel)
+    if not partes:
+        return "Filtros"
+    return f"Filtros ({', '.join(partes)})"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -131,8 +147,11 @@ def _inject_lista_css() -> None:
         f"""
         <style>
             /* Lista com scroll interno — só isto rola, cabeçalho/KPIs/
-               filtros (fora deste container) ficam sempre visíveis. */
-            div.st-key-td-list {{
+               filtros (fora deste container) ficam sempre visíveis.
+               Regra partilhada por "Por fazer" (td-list) e "Feitas
+               hoje" (td-list-feitas) — mesma densidade nas duas. */
+            div.st-key-td-list,
+            div.st-key-td-list-feitas {{
                 max-height: {_LISTA_MAX_HEIGHT_CSS};
                 overflow-y: auto;
                 gap: 0 !important;
@@ -141,8 +160,12 @@ def _inject_lista_css() -> None:
 
             /* Zebra — alternância de fundo entre linhas, sem bordas.
                :nth-child conta os wrappers directos (stLayoutWrapper)
-               de cada `st.container(key=...)` dentro da lista. */
+               de cada `st.container(key=...)` dentro da lista. Cobre
+               as duas listas — todas as linhas partilham a classe
+               `tdrow-` (ver nota abaixo). */
             div.st-key-td-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-tdrow-"],
+            div.st-key-td-list-feitas > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-tdrow-"] {{
                 background: var(--ds-gray-50);
             }}
@@ -202,6 +225,42 @@ def _inject_lista_css() -> None:
                 text-overflow: ellipsis !important;
                 font-variant-numeric: tabular-nums;
             }}
+
+            /* Linha "Feitas hoje" — mesma classe `tdrow-` (mesmo
+               padding/border-left partilhado acima), mas sem botão:
+               é texto simples (`st.markdown`), sem ação nem
+               navegação — editar/desmarcar continua só na página
+               Atividade. Repete aqui, para o `<p>` do markdown, a
+               MESMA altura/tipografia que o `<button>` já tem acima,
+               para as duas listas ficarem visualmente idênticas.
+               Como nenhuma linha "feita" usa um sufixo de urgência
+               (`tdrow-feita-{{id}}`, não `tdrow-urgente-{{id}}` etc.),
+               `{{regras_urgencia}}` acima nunca lhe acerta — o
+               border-left fica sempre transparente, sem risco de
+               urgência a mostrar (correcto: uma tarefa feita não tem
+               urgência para triar). */
+            /* O wrapper do markdown do Streamlit traz uma margin-bottom
+               negativa própria (-14px, para compensar espaçamento
+               nativo entre blocos) — sem a anular aqui, colapsava a
+               linha "feita" para menos de metade da altura real do
+               `<p>`, ficando mais baixa que a linha "por fazer". */
+            div[class*="st-key-tdrow-"] [data-testid="stMarkdownContainer"] {{
+                margin: 0 !important;
+            }}
+            div[class*="st-key-tdrow-"] [data-testid="stMarkdownContainer"] p {{
+                margin: 0 !important;
+                padding: 0 8px !important;
+                min-height: 30px !important;
+                line-height: 30px !important;
+                font-weight: 400 !important;
+                font-size: .8rem !important;
+                color: var(--ds-gray-900) !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                font-variant-numeric: tabular-nums;
+                cursor: default !important;
+            }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -238,6 +297,27 @@ def _render_linha_tarefa(row: dict, numero: int) -> None:
             st.session_state["ver_animal_id"] = int(row["animal_id"])
             st.session_state["ver_animal_tab"] = 0
             st.rerun()
+
+
+def _render_linha_feita(row: dict, numero: int) -> None:
+    """Linha só de leitura da lista "Feitas hoje" — mesma classe
+    `tdrow-` da lista "Por fazer" (ver `_inject_lista_css`), para as
+    duas ficarem visualmente idênticas (altura, espaçamento,
+    tipografia). Sem botão, sem navegação, sem risco de urgência —
+    editar/desmarcar uma tarefa já feita é na página Atividade, não
+    aqui."""
+    tid = int(row["tarefa_id"])
+    tipo_tarefa = row.get("tipo") or ""
+    is_colheita = tipo_tarefa == "colheita"
+    nome_exibido = f"Colheita — {row['animal']}" if is_colheita else (row.get("animal") or "—")
+    tipo_label = _label_tipo(tipo_tarefa)
+    utilizador = row.get("utilizador") or "—"
+
+    with st.container(key=f"tdrow-feita-{tid}"):
+        st.markdown(
+            f":gray[{numero:>4}]  **{nome_exibido}**  ·  {tipo_label}  ·  "
+            f":gray[{utilizador}]"
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -306,46 +386,82 @@ def run_trabalho_diario_page(context: dict):
         ("Feitas", resumo["feitas"]),
     ])
 
-    # Tarefas de hoje por fazer (motor existente — dashboard_repo)
-    try:
-        df = carregar_tarefas_hoje()
-    except Exception as e:
-        st.error(f"Erro ao carregar tarefas de hoje: {e}")
-        df = pd.DataFrame()
+    # Duas colunas lado a lado — "Por fazer" (inalterada) e, nova,
+    # "Feitas hoje" (só leitura). Em ecrãs estreitos o Streamlit
+    # empilha-as automaticamente ("Feitas" desce para baixo).
+    col_por_fazer, col_feitas = st.columns([1, 1])
 
-    render_zone_title("Tarefas por fazer", "ds-zone-title")
+    with col_por_fazer:
+        # Tarefas de hoje por fazer (motor existente — dashboard_repo)
+        try:
+            df = carregar_tarefas_hoje()
+        except Exception as e:
+            st.error(f"Erro ao carregar tarefas de hoje: {e}")
+            df = pd.DataFrame()
 
-    # Filtros — não alteram os totais da barra de cobertura, só a lista.
-    utilizador_atual = (st.session_state.get("user") or {}).get("username")
-    f1, f2 = st.columns([0.3, 0.7])
-    with f1:
-        minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
-    with f2:
-        donos_disponiveis = (
-            sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
-        )
-        dono_sel = st.selectbox(
-            "Dono",
-            ["Todos"] + donos_disponiveis,
-            key="td_filtro_dono",
-            label_visibility="collapsed",
-        )
+        # Filtros — não alteram os totais da barra de cobertura, só a
+        # lista. Título e botão de filtros na mesma linha (título numa
+        # coluna larga, botão discreto numa coluna estreita à direita —
+        # mesmo padrão validado em Estadias); em ecrãs estreitos o
+        # Streamlit empilha as colunas automaticamente, sem espremer o
+        # botão.
+        utilizador_atual = (st.session_state.get("user") or {}).get("username")
+        minhas_atual = st.session_state.get("td_filtro_minhas", False)
+        dono_sel_atual = st.session_state.get("td_filtro_dono", "Todos")
 
-    df_filtrado = df
-    if minhas and utilizador_atual:
-        df_filtrado = df_filtrado[df_filtrado["utilizador"] == utilizador_atual]
-    if dono_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel]
+        col_titulo, col_filtros = st.columns([4, 1])
+        with col_titulo:
+            render_zone_title("Tarefas por fazer", "ds-zone-title")
+        with col_filtros:
+            with st.popover(
+                _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
+                type="tertiary",
+            ):
+                minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
+                donos_disponiveis = (
+                    sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
+                )
+                dono_sel = st.selectbox(
+                    "Dono",
+                    ["Todos"] + donos_disponiveis,
+                    key="td_filtro_dono",
+                )
 
-    if df_filtrado.empty:
-        if df.empty:
-            st.caption("Sem tarefas por fazer hoje.")
+        df_filtrado = df
+        if minhas and utilizador_atual:
+            df_filtrado = df_filtrado[df_filtrado["utilizador"] == utilizador_atual]
+        if dono_sel != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel]
+
+        if df_filtrado.empty:
+            if df.empty:
+                st.caption("Sem tarefas por fazer hoje.")
+            else:
+                st.caption("Sem tarefas por fazer com estes filtros.")
         else:
-            st.caption("Sem tarefas por fazer com estes filtros.")
-    else:
-        df_ordenado = df_filtrado.assign(
-            _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
-        ).sort_values(["_ordem", "animal"])
-        with st.container(key="td-list"):
-            for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
-                _render_linha_tarefa(row.to_dict(), numero)
+            df_ordenado = df_filtrado.assign(
+                _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
+            ).sort_values(["_ordem", "animal"])
+            with st.container(key="td-list"):
+                for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
+                    _render_linha_tarefa(row.to_dict(), numero)
+
+    with col_feitas:
+        # Tarefas de hoje já concluídas — só leitura. Uma tarefa só
+        # aparece aqui depois do trabalho clínico real ser registado
+        # (resultado na ficha do animal, colheita concluída, etc.) —
+        # não há botão de "concluir" solto nesta página.
+        try:
+            df_feitas = carregar_tarefas_feitas_hoje()
+        except Exception as e:
+            st.error(f"Erro ao carregar tarefas feitas: {e}")
+            df_feitas = pd.DataFrame()
+
+        render_zone_title(f"Feitas hoje ({len(df_feitas)})", "ds-zone-title")
+
+        if df_feitas.empty:
+            st.caption("Nenhuma tarefa feita ainda hoje.")
+        else:
+            with st.container(key="td-list-feitas"):
+                for numero, (_, row) in enumerate(df_feitas.iterrows(), start=1):
+                    _render_linha_feita(row.to_dict(), numero)
