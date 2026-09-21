@@ -171,6 +171,36 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
         return pd.read_sql_query(sql, conn)
 
 
+def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
+    """Espelho de `carregar_tarefas_hoje()` — tarefas de HOJE já
+    concluídas (`concluida = TRUE`), com `data_conclusao` e
+    `utilizador`. Usada pela coluna "Feitas hoje" do Trabalho Diário
+    (só leitura — sem editar/desmarcar aqui, isso é na página
+    Atividade).
+
+    Nota: `data_conclusao` é uma `DATE`, sem componente de hora — o
+    schema não guarda a hora exacta a que uma tarefa foi concluída,
+    só o dia. Para linhas desta lista (sempre `data_tarefa =
+    CURRENT_DATE`), `data_conclusao` será tipicamente hoje também.
+    """
+    sql = """
+        SELECT td.id AS tarefa_id,
+               td.animal_id, td.estadia_id,
+               a.nome AS animal,
+               d.nome AS dono,
+               td.tipo, td.motivo, td.urgencia, td.utilizador,
+               td.data_tarefa, td.data_conclusao
+        FROM trabalho_diario td
+        JOIN animais a ON a.id = td.animal_id
+        LEFT JOIN dono d ON d.id = a.dono_id
+        WHERE td.data_tarefa = CURRENT_DATE
+          AND td.concluida = TRUE
+        ORDER BY td.data_conclusao DESC NULLS LAST, td.id DESC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn)
+
+
 def carregar_resumo_tarefas_hoje() -> dict:
     """Contagem de tarefas de hoje — total, feitas e por fazer.
 

@@ -21,6 +21,7 @@ import streamlit as st
 
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
+    carregar_tarefas_feitas_hoje,
     carregar_tarefas_hoje,
 )
 from modules.repositories.settings_repo import get_app_settings
@@ -217,6 +218,34 @@ def _inject_lista_css() -> None:
                 text-overflow: ellipsis !important;
                 font-variant-numeric: tabular-nums;
             }}
+
+            /* Lista "Feitas hoje" — só leitura (sem botão), mesmo
+               contentor com scroll e zebra da lista "Por fazer", mas
+               cada linha é texto simples (não navega para lado
+               nenhum; editar/desmarcar fica na página Atividade). */
+            div.st-key-td-list-feitas {{
+                max-height: {_LISTA_MAX_HEIGHT_CSS};
+                overflow-y: auto;
+                gap: 0 !important;
+                padding-right: 4px;
+            }}
+            div.st-key-td-list-feitas > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-tdfeita-"] {{
+                background: var(--ds-gray-50);
+            }}
+            div[class*="st-key-tdfeita-"] {{
+                border-left: 3px solid var(--ds-gray-200);
+                padding: 3px 10px 3px 12px;
+            }}
+            div[class*="st-key-tdfeita-"] p {{
+                margin: 0 !important;
+                font-size: .8rem !important;
+                line-height: 30px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                font-variant-numeric: tabular-nums;
+            }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -253,6 +282,26 @@ def _render_linha_tarefa(row: dict, numero: int) -> None:
             st.session_state["ver_animal_id"] = int(row["animal_id"])
             st.session_state["ver_animal_tab"] = 0
             st.rerun()
+
+
+def _render_linha_feita(row: dict, numero: int) -> None:
+    """Linha só de leitura da lista "Feitas hoje" — sem botão, sem
+    navegação. Editar/desmarcar uma tarefa já feita é na página
+    Atividade, não aqui."""
+    tid = int(row["tarefa_id"])
+    tipo_tarefa = row.get("tipo") or ""
+    is_colheita = tipo_tarefa == "colheita"
+    nome_exibido = f"Colheita — {row['animal']}" if is_colheita else (row.get("animal") or "—")
+    tipo_label = _label_tipo(tipo_tarefa)
+    utilizador = row.get("utilizador") or "—"
+    dt_conclusao = row.get("data_conclusao")
+    dt_label = dt_conclusao.strftime("%d/%m") if pd.notna(dt_conclusao) else "—"
+
+    with st.container(key=f"tdfeita-{tid}"):
+        st.markdown(
+            f":gray[{numero:>4}]  **{nome_exibido}**  ·  {tipo_label}  ·  "
+            f":gray[{utilizador}]  ·  :gray[{dt_label}]"
+        )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -321,55 +370,82 @@ def run_trabalho_diario_page(context: dict):
         ("Feitas", resumo["feitas"]),
     ])
 
-    # Tarefas de hoje por fazer (motor existente — dashboard_repo)
-    try:
-        df = carregar_tarefas_hoje()
-    except Exception as e:
-        st.error(f"Erro ao carregar tarefas de hoje: {e}")
-        df = pd.DataFrame()
+    # Duas colunas lado a lado — "Por fazer" (inalterada) e, nova,
+    # "Feitas hoje" (só leitura). Em ecrãs estreitos o Streamlit
+    # empilha-as automaticamente ("Feitas" desce para baixo).
+    col_por_fazer, col_feitas = st.columns([1, 1])
 
-    # Filtros — não alteram os totais da barra de cobertura, só a lista.
-    # Título e botão de filtros na mesma linha (título numa coluna
-    # larga, botão discreto numa coluna estreita à direita — mesmo
-    # padrão validado em Estadias); em ecrãs estreitos o Streamlit
-    # empilha as colunas automaticamente, sem espremer o botão.
-    utilizador_atual = (st.session_state.get("user") or {}).get("username")
-    minhas_atual = st.session_state.get("td_filtro_minhas", False)
-    dono_sel_atual = st.session_state.get("td_filtro_dono", "Todos")
+    with col_por_fazer:
+        # Tarefas de hoje por fazer (motor existente — dashboard_repo)
+        try:
+            df = carregar_tarefas_hoje()
+        except Exception as e:
+            st.error(f"Erro ao carregar tarefas de hoje: {e}")
+            df = pd.DataFrame()
 
-    col_titulo, col_filtros = st.columns([4, 1])
-    with col_titulo:
-        render_zone_title("Tarefas por fazer", "ds-zone-title")
-    with col_filtros:
-        with st.popover(
-            _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
-            type="tertiary",
-        ):
-            minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
-            donos_disponiveis = (
-                sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
-            )
-            dono_sel = st.selectbox(
-                "Dono",
-                ["Todos"] + donos_disponiveis,
-                key="td_filtro_dono",
-            )
+        # Filtros — não alteram os totais da barra de cobertura, só a
+        # lista. Título e botão de filtros na mesma linha (título numa
+        # coluna larga, botão discreto numa coluna estreita à direita —
+        # mesmo padrão validado em Estadias); em ecrãs estreitos o
+        # Streamlit empilha as colunas automaticamente, sem espremer o
+        # botão.
+        utilizador_atual = (st.session_state.get("user") or {}).get("username")
+        minhas_atual = st.session_state.get("td_filtro_minhas", False)
+        dono_sel_atual = st.session_state.get("td_filtro_dono", "Todos")
 
-    df_filtrado = df
-    if minhas and utilizador_atual:
-        df_filtrado = df_filtrado[df_filtrado["utilizador"] == utilizador_atual]
-    if dono_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel]
+        col_titulo, col_filtros = st.columns([4, 1])
+        with col_titulo:
+            render_zone_title("Tarefas por fazer", "ds-zone-title")
+        with col_filtros:
+            with st.popover(
+                _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
+                type="tertiary",
+            ):
+                minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
+                donos_disponiveis = (
+                    sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
+                )
+                dono_sel = st.selectbox(
+                    "Dono",
+                    ["Todos"] + donos_disponiveis,
+                    key="td_filtro_dono",
+                )
 
-    if df_filtrado.empty:
-        if df.empty:
-            st.caption("Sem tarefas por fazer hoje.")
+        df_filtrado = df
+        if minhas and utilizador_atual:
+            df_filtrado = df_filtrado[df_filtrado["utilizador"] == utilizador_atual]
+        if dono_sel != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel]
+
+        if df_filtrado.empty:
+            if df.empty:
+                st.caption("Sem tarefas por fazer hoje.")
+            else:
+                st.caption("Sem tarefas por fazer com estes filtros.")
         else:
-            st.caption("Sem tarefas por fazer com estes filtros.")
-    else:
-        df_ordenado = df_filtrado.assign(
-            _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
-        ).sort_values(["_ordem", "animal"])
-        with st.container(key="td-list"):
-            for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
-                _render_linha_tarefa(row.to_dict(), numero)
+            df_ordenado = df_filtrado.assign(
+                _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
+            ).sort_values(["_ordem", "animal"])
+            with st.container(key="td-list"):
+                for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
+                    _render_linha_tarefa(row.to_dict(), numero)
+
+    with col_feitas:
+        # Tarefas de hoje já concluídas — só leitura. Uma tarefa só
+        # aparece aqui depois do trabalho clínico real ser registado
+        # (resultado na ficha do animal, colheita concluída, etc.) —
+        # não há botão de "concluir" solto nesta página.
+        try:
+            df_feitas = carregar_tarefas_feitas_hoje()
+        except Exception as e:
+            st.error(f"Erro ao carregar tarefas feitas: {e}")
+            df_feitas = pd.DataFrame()
+
+        render_zone_title(f"Feitas hoje ({len(df_feitas)})", "ds-zone-title")
+
+        if df_feitas.empty:
+            st.caption("Nenhuma tarefa feita ainda hoje.")
+        else:
+            with st.container(key="td-list-feitas"):
+                for numero, (_, row) in enumerate(df_feitas.iterrows(), start=1):
+                    _render_linha_feita(row.to_dict(), numero)
