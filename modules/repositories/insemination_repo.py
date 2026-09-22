@@ -626,10 +626,11 @@ def registar_resultado(
                     UPDATE trabalho_diario
                     SET concluida = TRUE,
                         data_conclusao = CURRENT_DATE,
+                        concluida_por = %s,
                         observacoes_conclusao = %s
                     WHERE id = %s AND concluida = FALSE
                     """,
-                    (obs_conclusao, int(task_id)),
+                    (utilizador[:50], obs_conclusao, int(task_id)),
                 )
             elif estadia_id is not None:
                 cur.execute(
@@ -637,11 +638,12 @@ def registar_resultado(
                     UPDATE trabalho_diario
                     SET concluida = TRUE,
                         data_conclusao = CURRENT_DATE,
+                        concluida_por = %s,
                         observacoes_conclusao = %s
                     WHERE estadia_id = %s AND tipo = %s
                       AND concluida = FALSE
                     """,
-                    (obs_conclusao, estadia_id, tipo_tarefa),
+                    (utilizador[:50], obs_conclusao, estadia_id, tipo_tarefa),
                 )
 
             # 5. Ramificação por resultado.

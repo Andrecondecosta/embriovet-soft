@@ -311,12 +311,15 @@ def _render_linha_feita(row: dict, numero: int) -> None:
     is_colheita = tipo_tarefa == "colheita"
     nome_exibido = f"Colheita — {row['animal']}" if is_colheita else (row.get("animal") or "—")
     tipo_label = _label_tipo(tipo_tarefa)
-    utilizador = row.get("utilizador") or "—"
+    # `concluida_por` (quem fez), não `utilizador` (quem criou/agendou
+    # a tarefa) — tarefas concluídas antes da migration 031 não têm
+    # `concluida_por`; mostra "—" em vez de um nome errado.
+    concluida_por = row.get("concluida_por") or "—"
 
     with st.container(key=f"tdrow-feita-{tid}"):
         st.markdown(
             f":gray[{numero:>4}]  **{nome_exibido}**  ·  {tipo_label}  ·  "
-            f":gray[{utilizador}]"
+            f":gray[{concluida_por}]"
         )
 
 

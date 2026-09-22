@@ -189,13 +189,19 @@ def _criar_tarefa_proxima_observacao(
         cur.close()
 
 
-def _concluir_tarefas_animal_hoje(animal_id: int) -> int:
+def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None) -> int:
     """Marca como concluídas todas as tarefas pendentes do animal para hoje.
-    Devolve o número de tarefas concluídas."""
+    Devolve o número de tarefas concluídas.
+
+    `utilizador` é quem está a registar o diário clínico agora — grava-se
+    em `concluida_por`, distinto de `trabalho_diario.utilizador` (quem
+    criou/agendou a tarefa, normalmente diferente com vários
+    veterinários)."""
     sql = """
         UPDATE trabalho_diario
         SET concluida = TRUE,
             data_conclusao = CURRENT_DATE,
+            concluida_por = %s,
             observacoes_conclusao = 'Concluído via registo clínico'
         WHERE animal_id = %s
           AND data_tarefa = CURRENT_DATE
@@ -203,7 +209,7 @@ def _concluir_tarefas_animal_hoje(animal_id: int) -> int:
     """
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute(sql, (animal_id,))
+        cur.execute(sql, ((utilizador or "—")[:50], animal_id))
         n = cur.rowcount
         conn.commit()
         cur.close()
@@ -541,7 +547,7 @@ def _render_form_novo_registo(animal_id: int) -> None:
                 # 1) Concluir tarefas pendentes do animal para hoje
                 tarefas_concluidas = 0
                 try:
-                    tarefas_concluidas = _concluir_tarefas_animal_hoje(animal_id)
+                    tarefas_concluidas = _concluir_tarefas_animal_hoje(animal_id, utilizador)
                 except Exception as e:
                     st.warning(f"Registo guardado, mas falha ao concluir tarefas: {e}")
 

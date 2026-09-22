@@ -174,7 +174,7 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
 def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
     """Espelho de `carregar_tarefas_hoje()` — tarefas de HOJE já
     concluídas (`concluida = TRUE`), com `data_conclusao` e
-    `utilizador`. Usada pela coluna "Feitas hoje" do Trabalho Diário
+    `concluida_por`. Usada pela coluna "Feitas hoje" do Trabalho Diário
     (só leitura — sem editar/desmarcar aqui, isso é na página
     Atividade).
 
@@ -182,13 +182,21 @@ def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
     schema não guarda a hora exacta a que uma tarefa foi concluída,
     só o dia. Para linhas desta lista (sempre `data_tarefa =
     CURRENT_DATE`), `data_conclusao` será tipicamente hoje também.
+
+    `concluida_por` (não `utilizador`) é quem fez o trabalho clínico —
+    `utilizador` é só quem CRIOU/agendou a tarefa, que com vários
+    veterinários é frequentemente uma pessoa diferente de quem a
+    concluiu. Tarefas concluídas antes da migration 031 ficam com
+    `concluida_por` a `NULL` — a página mostra "—" nesses casos, em
+    vez de inventar um nome.
     """
     sql = """
         SELECT td.id AS tarefa_id,
                td.animal_id, td.estadia_id,
                a.nome AS animal,
                d.nome AS dono,
-               td.tipo, td.motivo, td.urgencia, td.utilizador,
+               td.tipo, td.motivo, td.urgencia,
+               td.utilizador, td.concluida_por,
                td.data_tarefa, td.data_conclusao
         FROM trabalho_diario td
         JOIN animais a ON a.id = td.animal_id
