@@ -173,17 +173,30 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
 
 
 def carregar_tarefas_por_fazer(dia: date) -> pd.DataFrame:
-    """Tarefas do trabalho diário para um dia à escolha (não concluídas)
-    — versão parametrizada de `carregar_tarefas_hoje()`, para o
-    navegador de dias da lista "Por fazer" do Trabalho Diário (ver
-    trabalho diário anterior/seguinte, sem afectar `carregar_tarefas_hoje()`,
-    que continua fixa em hoje e é usada por outros sítios — dashboard,
-    testes).
+    """Tarefas do trabalho diário por fazer "à data de `dia`" — inclui
+    as agendadas exactamente para `dia` E as de dias anteriores ainda
+    não concluídas ("em atraso"), para nenhuma égua se perder por a
+    tarefa ter ficado presa num dia já passado. Versão parametrizada
+    e alargada de `carregar_tarefas_hoje()` (que se mantém fixa em
+    hoje, sem atrasadas, usada noutros sítios — dashboard, testes).
 
-    Mesmas colunas e mesma ordem (urgência, depois nome) — `urgencia`
-    é um valor gravado na criação da tarefa, não recalculado consoante
-    o dia visto, por isso a ordenação continua válida para qualquer
-    dia.
+    `data_tarefa` NUNCA é alterada — continua a ser a verdade de
+    quando a tarefa devia ter sido feita. O atraso calcula-se aqui
+    (`dias_atraso = dia - data_tarefa`) sem tocar nela; a página
+    decide, com este valor, se mostra a linha na secção "Em atraso"
+    (`dias_atraso > 0`) ou na secção normal (`dias_atraso == 0` —
+    nunca é negativo, dado o filtro `data_tarefa <= dia`).
+
+    Para um `dia` no futuro, isto devolve tudo o que ainda estará por
+    fazer nessa altura se nada mudar entretanto — hoje + o que estiver
+    atrasado + o que estiver agendado até lá inclusive. Não há
+    "atraso" possível no futuro por definição (nada com `data_tarefa
+    <= dia` pode ser posterior a `dia`).
+
+    Mesma ordem de sempre (urgência, depois nome) — `urgencia` é um
+    valor gravado na criação da tarefa, não recalculado consoante o
+    dia visto; a página reordena as duas secções à parte (atrasadas
+    por `dias_atraso` descendente, normais por esta mesma ordem).
     """
     sql = """
         SELECT td.id AS tarefa_id,
@@ -191,11 +204,12 @@ def carregar_tarefas_por_fazer(dia: date) -> pd.DataFrame:
                a.nome AS animal,
                d.nome AS dono,
                td.tipo, td.motivo, td.urgencia, td.utilizador,
-               td.data_tarefa
+               td.data_tarefa,
+               (%s::date - td.data_tarefa) AS dias_atraso
         FROM trabalho_diario td
         JOIN animais a ON a.id = td.animal_id
         LEFT JOIN dono d ON d.id = a.dono_id
-        WHERE td.data_tarefa = %s
+        WHERE td.data_tarefa <= %s
           AND td.concluida = FALSE
         ORDER BY
             CASE td.urgencia
@@ -207,7 +221,7 @@ def carregar_tarefas_por_fazer(dia: date) -> pd.DataFrame:
             a.nome ASC
     """
     with get_connection() as conn:
-        return pd.read_sql_query(sql, conn, params=(dia,))
+        return pd.read_sql_query(sql, conn, params=(dia, dia))
 
 
 def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
@@ -249,28 +263,40 @@ def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
 
 
 def carregar_resumo_tarefas_hoje() -> dict:
-    """Contagem de tarefas de hoje — total, feitas e por fazer.
+    """Contagem para a barra de cobertura do Trabalho Diário — total,
+    feitas e por fazer. Fixa em hoje, independente do dia navegado na
+    lista "Por fazer" e dos filtros (os totais não devem mudar quando
+    a lista é filtrada nem quando se navega para outro dia).
 
-    Usada pela barra de cobertura do Trabalho Diário. Ao contrário de
-    `carregar_tarefas_hoje()` (só pendentes), aqui contam-se TODAS as
-    tarefas de `data_tarefa = CURRENT_DATE`, concluídas ou não — os
-    totais não devem mudar quando a lista é filtrada.
+    `por_fazer` inclui as tarefas em atraso (`data_tarefa <
+    CURRENT_DATE`, ainda não concluídas) — são trabalho real por
+    fazer, não deviam desaparecer da contagem só por serem de dias
+    anteriores. `feitas` mantém-se só as de HOJE (`data_tarefa =
+    CURRENT_DATE`), tal como a lista "Feitas hoje" (que não conta
+    conclusões de tarefas atrasadas — fica FORA do âmbito deste
+    pedido, mantido tal e qual está). `total` passa a ser
+    `por_fazer + feitas` (antes era só a contagem de `data_tarefa =
+    CURRENT_DATE`) — assim os três números da barra continuam a bater
+    certo por construção.
     """
     sql = """
         SELECT
-            COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE concluida = TRUE) AS feitas
+            COUNT(*) FILTER (
+                WHERE data_tarefa <= CURRENT_DATE AND concluida = FALSE
+            ) AS por_fazer,
+            COUNT(*) FILTER (
+                WHERE data_tarefa = CURRENT_DATE AND concluida = TRUE
+            ) AS feitas
         FROM trabalho_diario
-        WHERE data_tarefa = CURRENT_DATE
     """
     with get_connection() as conn:
         cur = conn.cursor()
         cur.execute(sql)
         row = cur.fetchone()
         cur.close()
-    total = int(row[0] or 0)
+    por_fazer = int(row[0] or 0)
     feitas = int(row[1] or 0)
-    return {"total": total, "feitas": feitas, "por_fazer": total - feitas}
+    return {"total": por_fazer + feitas, "feitas": feitas, "por_fazer": por_fazer}
 
 
 # ─── Partos previstos ─────────────────────────────────────────────────

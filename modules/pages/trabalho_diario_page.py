@@ -76,6 +76,18 @@ def _label_tipo(tipo: str) -> str:
     return _LABEL_TIPO_TAREFA.get(tipo, tipo or "—")
 
 
+def _label_atraso(dias: int) -> str:
+    """"há X dias" com destaque crescente conforme o atraso (dentro do
+    sensato — só 3 níveis, cor+peso, nada de escala contínua)."""
+    plural = "dia" if dias == 1 else "dias"
+    texto = f"há {dias} {plural}"
+    if dias >= 7:
+        return f"**:red[{texto}]**"
+    if dias >= 3:
+        return f":red[{texto}]"
+    return f":orange[{texto}]"
+
+
 def _label_popover_filtros_trabalho(minhas: bool, dono_sel: str) -> str:
     """Rótulo do botão que abre o popover de filtros — sinaliza no
     próprio botão quais filtros estão activos (podem ser os dois ao
@@ -164,11 +176,21 @@ def _inject_lista_css() -> None:
         <style>
             /* Lista com scroll interno — só isto rola, cabeçalho/KPIs/
                filtros (fora deste container) ficam sempre visíveis.
-               Regra partilhada por "Por fazer" (td-list) e "Feitas
-               hoje" (td-list-feitas) — mesma densidade nas duas. */
+               Regra partilhada por "Por fazer" (td-list), "Em atraso"
+               (td-list-atrasadas) e "Feitas hoje" (td-list-feitas) —
+               mesma densidade nas três. "Em atraso" fica mais baixa
+               de propósito (não é a lista principal, e pode ter muitas
+               linhas acumuladas) para não empurrar "Hoje" para fora
+               do ecrã. */
             div.st-key-td-list,
             div.st-key-td-list-feitas {{
                 max-height: {_LISTA_MAX_HEIGHT_CSS};
+                overflow-y: auto;
+                gap: 0 !important;
+                padding-right: 4px;
+            }}
+            div.st-key-td-list-atrasadas {{
+                max-height: 300px;
                 overflow-y: auto;
                 gap: 0 !important;
                 padding-right: 4px;
@@ -177,13 +199,24 @@ def _inject_lista_css() -> None:
             /* Zebra — alternância de fundo entre linhas, sem bordas.
                :nth-child conta os wrappers directos (stLayoutWrapper)
                de cada `st.container(key=...)` dentro da lista. Cobre
-               as duas listas — todas as linhas partilham a classe
+               as três listas — todas as linhas partilham a classe
                `tdrow-` (ver nota abaixo). */
             div.st-key-td-list > div[data-testid="stLayoutWrapper"]:nth-child(even)
+                > div[class*="st-key-tdrow-"],
+            div.st-key-td-list-atrasadas > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-tdrow-"],
             div.st-key-td-list-feitas > div[data-testid="stLayoutWrapper"]:nth-child(even)
                 > div[class*="st-key-tdrow-"] {{
                 background: var(--ds-gray-50);
+            }}
+
+            /* Título "Em atraso" — cor de urgência em vez do cinza
+               neutro dos outros títulos, discreto (só a cor muda),
+               sem emoji nem selo — é a mesma linguagem já usada no
+               risco lateral das linhas atrasadas. */
+            .ds-zone-title--atraso {{
+                color: {URGENCIA_COR["urgente"]} !important;
+                border-top-color: {URGENCIA_COR["urgente"]} !important;
             }}
 
             div[class*="st-key-tdrow-"] {{
@@ -286,7 +319,13 @@ def _inject_lista_css() -> None:
 # ────────────────────────────────────────────────────────────────────────────
 # Lista densa — linha de tarefa
 # ────────────────────────────────────────────────────────────────────────────
-def _render_linha_tarefa(row: dict, numero: int) -> None:
+def _render_linha_tarefa(row: dict, numero: int, dias_atraso: int | None = None) -> None:
+    """`dias_atraso` (>0) marca a linha como "em atraso": o risco à
+    esquerda fica sempre vermelho ("urgente", reaproveitando a mesma
+    CSS/classe da secção normal — não é uma cor nova), e o último
+    segmento do rótulo troca a urgência original por "há X dias" (mais
+    útil aqui do que "Hoje"/"Amanhã", que se refere à data original,
+    já ultrapassada)."""
     tid = int(row["tarefa_id"])
     urgencia = row.get("urgencia") or "observacao"
     urgencia_label = URGENCIA_LABEL.get(urgencia, urgencia)
@@ -299,12 +338,19 @@ def _render_linha_tarefa(row: dict, numero: int) -> None:
     dono_exibido = row.get("dono") or "—"
     tipo_label = _label_tipo(tipo_tarefa)
 
+    em_atraso = bool(dias_atraso and dias_atraso > 0)
+    ultimo_segmento = _label_atraso(dias_atraso) if em_atraso else f":gray[{urgencia_label}]"
     label = (
         f":gray[{numero:>4}]  **{nome_exibido}**  ·  {dono_exibido}  ·  "
-        f"{tipo_label}  ·  :gray[{urgencia_label}]"
+        f"{tipo_label}  ·  {ultimo_segmento}"
     )
 
-    with st.container(key=f"tdrow-{urgencia}-{tid}"):
+    # Chave do risco lateral: "urgente" força a cor vermelha (já
+    # definida em `regras_urgencia`) para qualquer tarefa em atraso,
+    # substituindo a urgência original — uma tarefa atrasada é, por
+    # definição, a mais urgente que há.
+    chave_urgencia = "urgente" if em_atraso else urgencia
+    with st.container(key=f"tdrow-{chave_urgencia}-{tid}"):
         # Linha inteira clicável → ficha do animal (mesmo destino que o
         # antigo botão "Ver"). A lista serve só para triar e navegar;
         # registar resultados, colheitas e inseminações já têm os seus
@@ -473,12 +519,35 @@ def run_trabalho_diario_page(context: dict):
             else:
                 st.caption("Sem tarefas por fazer com estes filtros.")
         else:
-            df_ordenado = df_filtrado.assign(
-                _ordem=df_filtrado["urgencia"].map(URGENCIA_ORDEM).fillna(9),
+            # Separa em atrasadas (dias_atraso > 0 — nunca negativo,
+            # dado o filtro `data_tarefa <= dia` da query) e normais
+            # (exactamente o dia visto). As atrasadas vêm SEMPRE
+            # primeiro, das mais antigas para as mais recentes — mais
+            # dias de atraso no topo, para nunca se perder a égua há
+            # mais tempo à espera.
+            df_atrasadas = df_filtrado[df_filtrado["dias_atraso"] > 0].sort_values(
+                "dias_atraso", ascending=False,
+            )
+            df_normais = df_filtrado[df_filtrado["dias_atraso"] == 0].assign(
+                _ordem=lambda d: d["urgencia"].map(URGENCIA_ORDEM).fillna(9),
             ).sort_values(["_ordem", "animal"])
-            with st.container(key="td-list"):
-                for numero, (_, row) in enumerate(df_ordenado.iterrows(), start=1):
-                    _render_linha_tarefa(row.to_dict(), numero)
+
+            if not df_atrasadas.empty:
+                render_zone_title(f"Em atraso ({len(df_atrasadas)})", "ds-zone-title ds-zone-title--atraso")
+                with st.container(key="td-list-atrasadas"):
+                    for numero, (_, row) in enumerate(df_atrasadas.iterrows(), start=1):
+                        _render_linha_tarefa(row.to_dict(), numero, dias_atraso=int(row["dias_atraso"]))
+
+            if not df_normais.empty:
+                # Título secundário só faz sentido quando há uma secção
+                # "Em atraso" acima a separar — sem atrasadas, o título
+                # "Tarefas por fazer" já lá em cima chega.
+                if not df_atrasadas.empty:
+                    label_normal = "Hoje" if dia_selecionado == date.today() else dia_selecionado.strftime("%d/%m")
+                    render_zone_title(f"{label_normal} ({len(df_normais)})", "ds-zone-title")
+                with st.container(key="td-list"):
+                    for numero, (_, row) in enumerate(df_normais.iterrows(), start=1):
+                        _render_linha_tarefa(row.to_dict(), numero)
 
     with col_feitas:
         # Tarefas de hoje já concluídas — só leitura. Uma tarefa só
