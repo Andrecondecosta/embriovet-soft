@@ -13,6 +13,7 @@ Este ficheiro não contém nenhum UPDATE/DELETE/INSERT — validado por
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 import pandas as pd
@@ -169,6 +170,44 @@ def carregar_tarefas_hoje() -> pd.DataFrame:
     """
     with get_connection() as conn:
         return pd.read_sql_query(sql, conn)
+
+
+def carregar_tarefas_por_fazer(dia: date) -> pd.DataFrame:
+    """Tarefas do trabalho diário para um dia à escolha (não concluídas)
+    — versão parametrizada de `carregar_tarefas_hoje()`, para o
+    navegador de dias da lista "Por fazer" do Trabalho Diário (ver
+    trabalho diário anterior/seguinte, sem afectar `carregar_tarefas_hoje()`,
+    que continua fixa em hoje e é usada por outros sítios — dashboard,
+    testes).
+
+    Mesmas colunas e mesma ordem (urgência, depois nome) — `urgencia`
+    é um valor gravado na criação da tarefa, não recalculado consoante
+    o dia visto, por isso a ordenação continua válida para qualquer
+    dia.
+    """
+    sql = """
+        SELECT td.id AS tarefa_id,
+               td.animal_id, td.estadia_id,
+               a.nome AS animal,
+               d.nome AS dono,
+               td.tipo, td.motivo, td.urgencia, td.utilizador,
+               td.data_tarefa
+        FROM trabalho_diario td
+        JOIN animais a ON a.id = td.animal_id
+        LEFT JOIN dono d ON d.id = a.dono_id
+        WHERE td.data_tarefa = %s
+          AND td.concluida = FALSE
+        ORDER BY
+            CASE td.urgencia
+                WHEN 'urgente' THEN 0
+                WHEN 'hoje'    THEN 1
+                WHEN 'amanha'  THEN 2
+                ELSE 3
+            END,
+            a.nome ASC
+    """
+    with get_connection() as conn:
+        return pd.read_sql_query(sql, conn, params=(dia,))
 
 
 def carregar_tarefas_feitas_hoje() -> pd.DataFrame:

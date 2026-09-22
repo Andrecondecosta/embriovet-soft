@@ -12,17 +12,24 @@ ainda não está construída — o marcar-feita continua a acontecer por
 via indireta (drill-down para a ficha do animal / registo de
 resultado / colheita), tal como antes.
 
-Motor de dados inalterado: `trabalho_diario` + `dashboard_repo.py`
-(`carregar_tarefas_hoje`, `carregar_resumo_tarefas_hoje`).
+Motor de dados: `trabalho_diario` + `dashboard_repo.py`. A coluna
+"Por fazer" tem um navegador de dias (`render_day_navigator`,
+`key_prefix="td_por_fazer"`) — usa `carregar_tarefas_por_fazer(dia)`,
+não `carregar_tarefas_hoje()` (essa mantém-se fixa em hoje, ainda
+usada pelo dashboard). "Feitas hoje" e a barra de cobertura no topo
+não navegam — ficam sempre em hoje.
 """
+
+from datetime import date
 
 import pandas as pd
 import streamlit as st
 
+from modules.components.day_navigator import render_day_navigator
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
     carregar_tarefas_feitas_hoje,
-    carregar_tarefas_hoje,
+    carregar_tarefas_por_fazer,
 )
 from modules.repositories.settings_repo import get_app_settings
 from modules.ui_kit import (
@@ -82,6 +89,15 @@ def _label_popover_filtros_trabalho(minhas: bool, dono_sel: str) -> str:
     if not partes:
         return "Filtros"
     return f"Filtros ({', '.join(partes)})"
+
+
+def _titulo_por_fazer(dia: date, total: int) -> str:
+    """Título da coluna "Por fazer" — mostra o dia escolhido no
+    navegador só quando não é hoje (evita "Tarefas por fazer — hoje",
+    redundante com o resto da app), sempre com o contador desse dia."""
+    if dia == date.today():
+        return f"Tarefas por fazer ({total})"
+    return f"Tarefas por fazer — {dia.strftime('%d/%m')} ({total})"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -373,7 +389,14 @@ def run_trabalho_diario_page(context: dict):
     inject_design_tokens()
     _inject_lista_css()
 
-    # Barra de cobertura — totais de HOJE, independentes dos filtros.
+    # Barra de cobertura — totais de HOJE, independentes dos filtros
+    # E do navegador de dias da coluna "Por fazer" abaixo. Decisão
+    # deliberada: fica sempre em hoje, não no dia visto na lista —
+    # é o "estado de saúde do dia" (quantas por fazer/feitas hoje),
+    # não um resumo do que se está a navegar; deixá-la seguir o dia
+    # visto ia colidir com "Feitas", que também é sempre hoje (não
+    # navega) — os dois números ao lado um do outro deixariam de
+    # bater certo assim que se navegasse para outro dia.
     try:
         resumo = carregar_resumo_tarefas_hoje()
     except Exception as e:
@@ -395,11 +418,16 @@ def run_trabalho_diario_page(context: dict):
     col_por_fazer, col_feitas = st.columns([1, 1])
 
     with col_por_fazer:
-        # Tarefas de hoje por fazer (motor existente — dashboard_repo)
+        # Navegador de dias — só nesta coluna. "Feitas hoje" (à
+        # direita) não navega, fica sempre em hoje. Key própria
+        # ("td_por_fazer") para não colidir com a Atividade
+        # ("atividade") nem as Transferências ("transfer_hist").
+        dia_selecionado = render_day_navigator("td_por_fazer")
+
         try:
-            df = carregar_tarefas_hoje()
+            df = carregar_tarefas_por_fazer(dia_selecionado)
         except Exception as e:
-            st.error(f"Erro ao carregar tarefas de hoje: {e}")
+            st.error(f"Erro ao carregar tarefas: {e}")
             df = pd.DataFrame()
 
         # Filtros — não alteram os totais da barra de cobertura, só a
@@ -414,7 +442,7 @@ def run_trabalho_diario_page(context: dict):
 
         col_titulo, col_filtros = st.columns([4, 1])
         with col_titulo:
-            render_zone_title("Tarefas por fazer", "ds-zone-title")
+            render_zone_title(_titulo_por_fazer(dia_selecionado, len(df)), "ds-zone-title")
         with col_filtros:
             with st.popover(
                 _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
@@ -438,7 +466,10 @@ def run_trabalho_diario_page(context: dict):
 
         if df_filtrado.empty:
             if df.empty:
-                st.caption("Sem tarefas por fazer hoje.")
+                if dia_selecionado == date.today():
+                    st.caption("Sem tarefas por fazer hoje.")
+                else:
+                    st.caption(f"Sem tarefas por fazer para {dia_selecionado.strftime('%d/%m')}.")
             else:
                 st.caption("Sem tarefas por fazer com estes filtros.")
         else:
