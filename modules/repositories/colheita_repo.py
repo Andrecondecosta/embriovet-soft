@@ -161,13 +161,19 @@ def concluir_colheita(tarefa_id: int, utilizador: str) -> bool:
                 UPDATE trabalho_diario
                    SET concluida = TRUE,
                        data_conclusao = CURRENT_DATE,
+                       concluida_por = %s,
                        observacoes_conclusao = COALESCE(observacoes_conclusao,
                            'Colheita registada por ' || %s)
                  WHERE id = %s
                    AND tipo = %s
                    AND concluida = FALSE
                 """,
-                (utilizador or "sistema", int(tarefa_id), TIPO_COLHEITA),
+                (
+                    (utilizador or "sistema")[:50],
+                    utilizador or "sistema",
+                    int(tarefa_id),
+                    TIPO_COLHEITA,
+                ),
             )
             n = cur.rowcount
             conn.commit()
