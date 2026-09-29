@@ -182,7 +182,13 @@ def run_stock_page(ctx: dict):
         for _, row in stock_filtrado.iterrows():
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
             referencia = row.get("origem_externa") or row.get("data_embriovet") or t("common.no_reference")
-            proprietario_nome = row.get("proprietario_nome", t("common.no_owner"))
+            # `row.get(key, default)` só usa o default se a COLUNA não
+            # existir — para um lote sem proprietário a coluna existe,
+            # só o valor é NaN, por isso `.get()` devolvia o próprio NaN
+            # (mostrava "nan" literal no título do expander).
+            proprietario_nome = row.get("proprietario_nome")
+            if pd.isna(proprietario_nome):
+                proprietario_nome = t("common.no_owner")
             
             # Buscar localização
             localizacao = "—"

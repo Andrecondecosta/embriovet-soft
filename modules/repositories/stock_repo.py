@@ -83,7 +83,13 @@ def carregar_stock(apenas_ativos=True):
                 WHERE e.existencia_atual > 0
             """
             if apenas_ativos:
-                query += " AND d.ativo = TRUE"
+                # `e.dono_id IS NULL` ("sem proprietário", desde a
+                # importação passar a permitir isto) tem de continuar
+                # visível aqui: sem este OR, o `LEFT JOIN` produz
+                # `d.ativo = NULL`, e `NULL = TRUE` nunca é verdadeiro em
+                # SQL — o lote desaparecia da lista principal por
+                # completo, mesmo continuando a existir na BD.
+                query += " AND (d.ativo = TRUE OR e.dono_id IS NULL)"
             query += " ORDER BY garanhao_nome, e.id"
             df = pd.read_sql_query(query, conn)
         return df
