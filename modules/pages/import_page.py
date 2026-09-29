@@ -886,7 +886,23 @@ def _validate_import_df(df, row_nums, cont_map, prop_map, contentor_temp_id=None
 def _executar_importacao(linhas):
     report_rows = []
     try:
-        with get_connection() as conn:
+        # Resolve todos os animal_id (um por garanhão distinto) ANTES de
+        # abrir a ligação principal — `get_or_create_garanhao` abre a sua
+        # própria ligação a cada chamada; fazê-lo aqui, uma vez por
+        # garanhão, evita manter DUAS ligações do pool (1..10) abertas
+        # em simultâneo por cada linha durante todo o loop de inserção.
+        # Com várias linhas (ou outros separadores da app em simultâneo),
+        # isso conseguia esgotar o pool a meio da importação — sem
+        # qualquer feedback visual (ver `st.spinner` abaixo) a explicar
+        # a demora ou a falha.
+        from modules.repositories.animal_repo import get_or_create_garanhao
+        animal_ids = {}
+        for linha in linhas:
+            garanhao = linha.get("garanhao")
+            if garanhao not in animal_ids:
+                animal_ids[garanhao] = get_or_create_garanhao(garanhao)
+
+        with st.spinner(t("import.progress", n=len(linhas))), get_connection() as conn:
             cur = conn.cursor()
             criado_por = st.session_state.get("user", {}).get("username", "importacao")
 
@@ -903,9 +919,7 @@ def _executar_importacao(linhas):
                     data_criacao = datetime.date.today()
                     date_note = ""
 
-                # Resolve animal_id do garanhão (cria em `animais` se necessário)
-                from modules.repositories.animal_repo import get_or_create_garanhao
-                animal_id = get_or_create_garanhao(linha.get("garanhao"))
+                animal_id = animal_ids.get(linha.get("garanhao"))
 
                 cur.execute(
                     """

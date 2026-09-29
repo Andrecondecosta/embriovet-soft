@@ -26,7 +26,12 @@ def summarize_stock_by_owner(stock_df):
     if stock_df.empty:
         return pd.DataFrame(columns=["Proprietário", "Total Palhetas"])
 
-    resumo = stock_df.groupby("proprietario_nome")["existencia_atual"].sum().reset_index()
+    # `groupby` ignora por omissão as linhas com chave NaN — um lote
+    # sem proprietário (`proprietario_nome` a NULL, desde a importação
+    # passar a permitir isto) desaparecia deste resumo por completo, em
+    # vez de aparecer como "Sem proprietário".
+    proprietario = stock_df["proprietario_nome"].fillna("Sem proprietário")
+    resumo = stock_df.groupby(proprietario)["existencia_atual"].sum().reset_index()
     resumo.columns = ["Proprietário", "Total Palhetas"]
     return resumo.sort_values("Total Palhetas", ascending=False)
 
