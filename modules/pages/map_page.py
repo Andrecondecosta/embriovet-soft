@@ -26,6 +26,47 @@ from modules.ui_kit import DEFAULT_PRIMARY_COLOR
 logger = logging.getLogger(__name__)
 
 
+def _lote_int(valor, default: int = 0) -> int:
+    """Nº de um campo de lote (canister, andar, motilidade,
+    concentração, existência...), tolerante a `None`/NaN/vazio — dados
+    reais de lotes antigos ou incompletos frequentemente têm campos
+    opcionais (ex.: concentração, motilidade) por preencher.
+
+    `valor or default` NÃO chega: NaN é "truthy" em Python (só `0.0`
+    é falso entre os floats), por isso `NaN or 0` continua a ser NaN,
+    e `int(NaN)` rebenta com `ValueError: cannot convert float NaN to
+    integer` — era isto que fazia a página do Mapa dos contentores
+    rebentar ao abrir o detalhe de um lote com concentração vazia.
+    """
+    if valor is None:
+        return default
+    try:
+        if valor != valor:  # NaN é o único valor que não é igual a si próprio
+            return default
+    except Exception:
+        pass
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return default
+
+
+def _lote_str(valor, default: str = "—") -> str:
+    """Texto de um campo de lote (qualidade, referência...), tolerante
+    a `None`/NaN/vazio — mesmo risco que `_lote_int`: `valor or
+    default` não apanha NaN (é "truthy"), o que mostraria literalmente
+    "nan" em vez do traço por preencher."""
+    if valor is None:
+        return default
+    try:
+        if valor != valor:
+            return default
+    except Exception:
+        pass
+    texto = str(valor).strip()
+    return texto if texto else default
+
+
 def run_map_page(ctx: dict):
     with st.container(key="mapa-page-scope"):
         # Pedido 9 · Fase 2: `ctx` mantido para compat com o router; nada é
@@ -554,9 +595,9 @@ def run_map_page(ctx: dict):
                             lotes.append({
                                 "garanhao": lote.get('garanhao_nome') or lote.get('garanhao') or "—",
                                 "proprietario": lote.get('proprietario_nome') or "—",
-                                "quantidade": int(lote.get('existencia_atual') or 0),
-                                "canister": int(lote.get('canister') or 0),
-                                "andar": int(lote.get('andar') or 0),
+                                "quantidade": _lote_int(lote.get('existencia_atual')),
+                                "canister": _lote_int(lote.get('canister')),
+                                "andar": _lote_int(lote.get('andar')),
                                 "observacoes": observacao,
                             })
 
@@ -1247,11 +1288,11 @@ def run_map_page(ctx: dict):
                     cell_qty = {}
                     cell_garanhoes = {}
                     for _, r in stock_df.iterrows():
-                        c, a = int(r['canister'] or 0), int(r['andar'] or 0)
+                        c, a = _lote_int(r['canister']), _lote_int(r['andar'])
                         if not c or not a:
                             continue
-                        cell_qty[(c, a)] = cell_qty.get((c, a), 0) + int(r['existencia_atual'] or 0)
-                        cell_garanhoes.setdefault((c, a), []).append(str(r['garanhao'] or '—'))
+                        cell_qty[(c, a)] = cell_qty.get((c, a), 0) + _lote_int(r['existencia_atual'])
+                        cell_garanhoes.setdefault((c, a), []).append(_lote_str(r['garanhao']))
 
                     if not cell_qty:
                         return "", []
@@ -1268,8 +1309,16 @@ def run_map_page(ctx: dict):
                     slots_html = ""
                     for i, c in enumerate(canisters):
                         angulo = math.radians(i * (360 / n) - 90)
-                        x = centro + raio * math.cos(angulo)
-                        y = centro + raio * math.sin(angulo)
+                        # Posição em % do diâmetro, não em px absolutos: o
+                        # `.tank` encolhe de 272px para 220px no mobile
+                        # (`@media(max-width:480px)`, mais abaixo neste
+                        # ficheiro) e, como é sempre quadrado, a mesma %
+                        # acerta o slot no anel em qualquer tamanho — sem
+                        # isto, os slots ficavam com as posições calculadas
+                        # para 272px mesmo dentro do círculo já encolhido,
+                        # saindo do anel no mobile.
+                        x_pct = (centro + raio * math.cos(angulo)) / diametro * 100
+                        y_pct = (centro + raio * math.sin(angulo)) / diametro * 100
                         qty = cell_qty.get((c, andar_sel), 0)
                         garanhoes = cell_garanhoes.get((c, andar_sel), [])
 
@@ -1292,7 +1341,7 @@ def run_map_page(ctx: dict):
                             f"<div class='hm-cell tank-slot {classe}' "
                             f"data-cont='{cont_id}' data-c='{c}' data-a='{andar_sel}' "
                             f"title='C{c} / A{andar_sel}: {qty} palhetas' "
-                            f"style='left:{x:.1f}px;top:{y:.1f}px;background:{bg};border-color:{border_cor};'>"
+                            f"style='left:{x_pct:.2f}%;top:{y_pct:.2f}%;background:{bg};border-color:{border_cor};'>"
                             f"<span class='tank-cnum'>C{c}</span>{conteudo}"
                             f"</div>"
                         )
@@ -1346,13 +1395,14 @@ def run_map_page(ctx: dict):
                             resumo_rows = ""
                             detalhe_rows = ""
                             for _, lote in lotes.iterrows():
-                                gar = escape(str(lote['garanhao'] or '—'))
-                                prop = escape(str(lote['proprietario_nome'] or '—'))
-                                qty = int(lote['existencia_atual'])
-                                ref = escape(str(
-                                    lote['origem_externa'] or lote['data_embriovet']
-                                    or f"Lote #{int(lote['id'])}"
-                                ).split(' ')[0])
+                                gar = escape(_lote_str(lote['garanhao']))
+                                prop = escape(_lote_str(lote['proprietario_nome']))
+                                qty = _lote_int(lote['existencia_atual'])
+                                origem_txt = _lote_str(lote['origem_externa'], default="")
+                                data_txt = _lote_str(lote['data_embriovet'], default="")
+                                ref = escape(
+                                    (origem_txt or data_txt or f"Lote #{_lote_int(lote['id'])}").split(' ')[0]
+                                )
                                 resumo_rows += (
                                     "<div class='lote-row'>"
                                     "<div class='lote-row-left'>"
@@ -1361,11 +1411,19 @@ def run_map_page(ctx: dict):
                                     "</div>"
                                     "</div>"
                                 )
-                                colheita = escape(str(lote['data_embriovet'] or '—'))
-                                qualidade = escape(str(lote['qualidade'] or '—'))
-                                motilidade = int(lote['motilidade'] or 0)
-                                concentracao = int(lote['concentracao'] or 0)
-                                lote_id = int(lote['id'])
+                                colheita = escape(_lote_str(lote['data_embriovet']))
+                                qualidade = escape(_lote_str(lote['qualidade']))
+                                # `concentracao`/`motilidade` são os campos de
+                                # laboratório mais frequentemente por
+                                # preencher em lotes reais — era aqui
+                                # (`int(lote['concentracao'] or 0)`) que a
+                                # página rebentava com `ValueError: cannot
+                                # convert float NaN to integer` (NaN é
+                                # "truthy" em Python, por isso `NaN or 0`
+                                # continuava a ser NaN).
+                                motilidade = _lote_int(lote['motilidade'])
+                                concentracao = _lote_int(lote['concentracao'])
+                                lote_id = _lote_int(lote['id'])
                                 detalhe_rows += (
                                     "<div class='lote-row lote-row-detalhe'>"
                                     "<div class='lote-row-left'>"
@@ -1508,10 +1566,10 @@ def run_map_page(ctx: dict):
                                     st.session_state.pop(mover_key, None)
                                 else:
                                     lote_mover = linha_mover.iloc[0]
-                                    exist_lote = int(lote_mover['existencia_atual'])
-                                    canister_atual = int(lote_mover['canister'])
-                                    andar_atual = int(lote_mover['andar'])
-                                    gar_mover = escape(str(lote_mover['garanhao'] or '—'))
+                                    exist_lote = _lote_int(lote_mover['existencia_atual'])
+                                    canister_atual = _lote_int(lote_mover['canister'])
+                                    andar_atual = _lote_int(lote_mover['andar'])
+                                    gar_mover = escape(_lote_str(lote_mover['garanhao']))
 
                                     # Só a localização atual no cabeçalho (não a
                                     # quantidade): a localização não muda numa
@@ -1888,5 +1946,5 @@ def run_map_page(ctx: dict):
                                     stock_andar = stock_canister[stock_canister['andar'] == andar]
 
                                     for _, lote in stock_andar.iterrows():
-                                        ref = lote['origem_externa'] or lote['data_embriovet'] or '—'
-                                        st.markdown(f"  - {lote.get('garanhao_nome') or lote['garanhao']} | {lote['proprietario_nome']} | {int(lote['existencia_atual'])} palhetas | {ref}")
+                                        ref = _lote_str(lote['origem_externa'], default="") or _lote_str(lote['data_embriovet'])
+                                        st.markdown(f"  - {lote.get('garanhao_nome') or lote['garanhao']} | {lote['proprietario_nome']} | {_lote_int(lote['existencia_atual'])} palhetas | {ref}")
