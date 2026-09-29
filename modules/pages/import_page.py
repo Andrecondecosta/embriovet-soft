@@ -12,7 +12,10 @@ import streamlit as st
 
 from modules.db import get_connection, invalidate_data_cache, to_py
 from modules.i18n import t
-from modules.repositories.container_repo import adicionar_contentor
+from modules.repositories.container_repo import (
+    adicionar_contentor,
+    obter_ou_criar_contentor_temporario,
+)
 from modules.repositories.owner_repo import adicionar_proprietario
 from modules.repositories.stock_repo import (
     carregar_contentores, carregar_proprietarios,
@@ -630,8 +633,19 @@ def _step_validate():
     st.session_state["import_editor_df"] = updated_df
 
     # ─── Validate ─────────────────────────────────────────────────────────
+    # Contentor placeholder "TEMPORÁRIO" — só se realmente há alguma
+    # linha sem código de contentor, para não criar o contentor à toa
+    # em importações onde todas as linhas já o têm preenchido.
+    contentor_temp_id = None
+    if "contentor_codigo" in updated_df.columns:
+        precisa_temp = updated_df["contentor_codigo"].apply(
+            lambda v: _is_empty(str(v).strip())
+        ).any()
+        if precisa_temp:
+            contentor_temp_id = obter_ou_criar_contentor_temporario()
+
     errors_map, erros_df, linhas_validas = _validate_import_df(
-        updated_df, row_numbers, cont_map, prop_map
+        updated_df, row_numbers, cont_map, prop_map, contentor_temp_id
     )
 
     render_zone_title(t("import.zone.validate"), "import-zone-title")
@@ -721,7 +735,7 @@ def _render_error_table(df, columns, error_map):
     st.markdown(table_html, unsafe_allow_html=True)
 
 
-def _validate_import_df(df, row_nums, cont_map, prop_map):
+def _validate_import_df(df, row_nums, cont_map, prop_map, contentor_temp_id=None):
     errors = {}
     errors_list = []
     valid_rows = []
@@ -737,9 +751,15 @@ def _validate_import_df(df, row_nums, cont_map, prop_map):
         if _is_empty(garanhao):
             add_error("garanhao", t("import.error.garanhao_required"))
 
+        # Proprietário é opcional — uma linha sem dono importa-se na
+        # mesma, fica com `dono_id = NULL` ("sem proprietário"),
+        # atribuível mais tarde na ficha do lote. Uma célula vazia na
+        # folha chega aqui como NaN (float) — `str(NaN)` dava
+        # literalmente "nan" (aparecia assim no relatório final); passa
+        # a "" sempre que `_is_empty` a reconhece como vazia.
         prop_nome = str(row.get("proprietario_nome", "")).strip()
         if _is_empty(prop_nome):
-            add_error("proprietario_nome", t("import.error.owner_required"))
+            prop_nome = ""
 
         data_ref = str(row.get("data_embriovet/ref", "")).strip()
         if _is_empty(data_ref):
@@ -764,24 +784,45 @@ def _validate_import_df(df, row_nums, cont_map, prop_map):
             if conc_val is None:
                 add_error("concentracao", t("import.error.concentration_invalid"))
 
+        # Contentor é opcional — sem código na folha, a linha vai para o
+        # contentor placeholder "TEMPORÁRIO" (`contentor_temp_id`,
+        # resolvido uma vez em `_step_validate` via
+        # `obter_ou_criar_contentor_temporario`), em vez de bloquear a
+        # linha ou ficar sem local nenhum. Um código PREENCHIDO mas
+        # desconhecido continua a ser erro — esse caso já tem resolução
+        # própria no passo anterior (_step_entities, criar/mapear).
         cont_code = str(row.get("contentor_codigo", "")).strip()
         cont_key = cont_code.upper()
         if _is_empty(cont_code):
-            add_error("contentor_codigo", t("import.error.container_required"))
+            contentor_id_resolvido = contentor_temp_id
         elif cont_key not in cont_map:
+            contentor_id_resolvido = None
             add_error("contentor_codigo", t("import.error.container_missing"))
+        else:
+            contentor_id_resolvido = cont_map[cont_key]
 
-        canister = _parse_int(row.get("canister"))
-        if canister is None:
-            add_error("canister", t("import.error.canister_invalid"))
-        elif canister < 1 or canister > 10:
-            add_error("canister", t("import.error.canister_range"))
+        # Canister/andar são opcionais — por omissão 1/1 (ajustável
+        # depois na ficha do contentor). Só dão erro se vierem
+        # preenchidos mas inválidos.
+        canister_raw = row.get("canister")
+        if _is_empty(canister_raw):
+            canister = 1
+        else:
+            canister = _parse_int(canister_raw)
+            if canister is None:
+                add_error("canister", t("import.error.canister_invalid"))
+            elif canister < 1 or canister > 10:
+                add_error("canister", t("import.error.canister_range"))
 
-        andar = _parse_int(row.get("andar"))
-        if andar is None:
-            add_error("andar", t("import.error.floor_invalid"))
-        elif andar not in [1, 2]:
-            add_error("andar", t("import.error.floor_range"))
+        andar_raw = row.get("andar")
+        if _is_empty(andar_raw):
+            andar = 1
+        else:
+            andar = _parse_int(andar_raw)
+            if andar is None:
+                add_error("andar", t("import.error.floor_invalid"))
+            elif andar not in [1, 2]:
+                add_error("andar", t("import.error.floor_range"))
 
         # Optional fields
         dose = str(row.get("dose", "")).strip() if not _is_empty(row.get("dose")) else None
@@ -817,7 +858,7 @@ def _validate_import_df(df, row_nums, cont_map, prop_map):
                 "existencia_atual": palhetas,
                 "dose": dose,
                 "motilidade": motilidade,
-                "contentor_id": cont_map.get(cont_key) if not _is_empty(cont_code) else None,
+                "contentor_id": contentor_id_resolvido,
                 "contentor_codigo": cont_code,
                 "canister": canister,
                 "andar": andar,

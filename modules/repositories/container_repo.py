@@ -13,6 +13,12 @@ from modules.db import get_connection, invalidate_data_cache, to_py
 
 logger = logging.getLogger(__name__)
 
+# Código do contentor-placeholder usado pela importação em massa quando
+# uma linha não traz contentor/local preenchido — ver
+# `obter_ou_criar_contentor_temporario`. `codigo` tem UNIQUE na tabela,
+# por isso este nome é sempre reutilizado em vez de duplicado.
+CONTENTOR_TEMPORARIO_CODIGO = "TEMPORÁRIO"
+
 
 def adicionar_contentor(dados):
     """Adiciona novo contentor"""
@@ -42,6 +48,55 @@ def adicionar_contentor(dados):
         logger.error(f"Erro ao adicionar contentor: {e}")
         st.error(f"Erro ao adicionar contentor: {e}")
         return None
+
+
+def obter_ou_criar_contentor_temporario():
+    """Devolve o id do contentor placeholder "TEMPORÁRIO" — usado pela
+    importação em massa (import_page.py) quando uma linha da folha não
+    tem contentor/local preenchido. Em vez de bloquear a linha com
+    erro, o lote fica visível e gerível no Mapa dos contentores (e
+    move-se depois para o sítio real com "Mover palhetas", já
+    existente) em vez de ficar sem contentor nenhum.
+
+    Cria-o só na primeira vez que for preciso; a partir daí `codigo`
+    (UNIQUE) garante que é sempre o mesmo, nunca um duplicado."""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM contentores WHERE codigo = %s",
+                (CONTENTOR_TEMPORARIO_CODIGO,),
+            )
+            row = cur.fetchone()
+            if row:
+                cur.close()
+                return int(row[0])
+
+            cur.execute(
+                """
+                INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    CONTENTOR_TEMPORARIO_CODIGO,
+                    "Criado automaticamente pela importação — lotes sem "
+                    "contentor na folha original. Move para o contentor "
+                    "real assim que souberes onde ficam.",
+                    20, 20, 150, 150,
+                    True,
+                ),
+            )
+            contentor_id = int(cur.fetchone()[0])
+            conn.commit()
+            cur.close()
+            invalidate_data_cache()
+            logger.info(f"Contentor \"{CONTENTOR_TEMPORARIO_CODIGO}\" criado (ID: {contentor_id})")
+            return contentor_id
+    except Exception as e:
+        logger.error(f"Erro ao obter/criar contentor temporário: {e}")
+        return None
+
 
 def editar_contentor(contentor_id, dados):
     """Edita um contentor existente"""
