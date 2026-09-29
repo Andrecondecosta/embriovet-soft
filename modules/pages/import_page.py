@@ -771,11 +771,18 @@ def _validate_import_df(df, row_nums, cont_map, prop_map, contentor_temp_id=None
         elif palhetas <= 0:
             add_error("existencia_atual", t("import.error.stock_positive"))
 
-        motilidade = _parse_int(row.get("motilidade"))
-        if motilidade is None:
-            add_error("motilidade", t("import.error.motility_invalid"))
-        elif motilidade < 0 or motilidade > 100:
-            add_error("motilidade", t("import.error.motility_range"))
+        # Motilidade é opcional — mesma lógica que a concentração logo
+        # abaixo: é uma medida de laboratório, nem sempre feita/registada.
+        # Vazia fica None (NULL na BD); só dá erro se vier preenchida
+        # mas não for um número válido em 0–100.
+        motilidade_raw = row.get("motilidade")
+        motilidade = None
+        if not _is_empty(motilidade_raw):
+            motilidade = _parse_int(motilidade_raw)
+            if motilidade is None:
+                add_error("motilidade", t("import.error.motility_invalid"))
+            elif motilidade < 0 or motilidade > 100:
+                add_error("motilidade", t("import.error.motility_range"))
 
         conc_raw = row.get("concentracao")
         conc_val = None
