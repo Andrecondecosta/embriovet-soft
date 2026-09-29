@@ -12,6 +12,8 @@ era inventar um proprietário ou um contentor que não existe. Agora:
   (criado automaticamente na primeira vez que for preciso), visível e
   giríve no Mapa dos contentores, movível depois com "Mover palhetas".
 - Canister/andar vazios → assumem 1/1 por omissão.
+- Motilidade vazia → fica `NULL` (mesma lógica já aplicada à
+  concentração — é uma medida de laboratório, nem sempre feita).
 - Um código de contentor PREENCHIDO mas desconhecido continua a ser
   erro (esse caso resolve-se no passo anterior do assistente,
   criar/mapear a entidade — não faz sentido inventar-lhe um local).
@@ -114,13 +116,28 @@ def test_canister_preenchido_mas_invalido_continua_erro():
     assert "canister" in errors[0]
 
 
+def test_motilidade_vazia_nao_da_erro_e_fica_none():
+    df = _df(_linha(motilidade=""))
+    errors, erros_df, validas = _validate_import_df(df, [2], {}, {})
+    assert errors == {}
+    assert validas[0]["motilidade"] is None
+
+
+def test_motilidade_preenchida_mas_invalida_continua_erro():
+    df = _df(_linha(motilidade=150))
+    errors, erros_df, validas = _validate_import_df(df, [2], {}, {})
+    assert 0 in errors
+    assert "motilidade" in errors[0]
+
+
 def test_linha_so_com_dados_essenciais_fica_totalmente_valida():
-    """Garanhão, data, existência e motilidade continuam obrigatórios
-    — mas nada mais precisa de estar preenchido."""
+    """Garanhão, data e existência continuam obrigatórios — mas nada
+    mais precisa de estar preenchido (nem proprietário, contentor,
+    canister/andar, motilidade ou concentração)."""
     df = _df(_linha(
         proprietario_nome="", contentor_codigo="", canister="", andar="",
         qualidade="", concentracao="", cor="", dose="", observacoes="",
-        certificado="",
+        certificado="", motilidade="",
     ))
     errors, erros_df, validas = _validate_import_df(
         df, [2], {}, {}, contentor_temp_id=42,
@@ -132,6 +149,7 @@ def test_linha_so_com_dados_essenciais_fica_totalmente_valida():
     assert linha["contentor_id"] == 42
     assert linha["canister"] == 1
     assert linha["andar"] == 1
+    assert linha["motilidade"] is None
 
 
 # ────────────────────────────────────────────────────────────────────
