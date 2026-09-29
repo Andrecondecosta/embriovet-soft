@@ -59,6 +59,18 @@ def ensure_sslmode_require(url: str) -> str:
     return urlunparse(parsed)
 
 
+def is_production_database_url(url: str) -> bool:
+    """True se `url` apontar para a base gerida pelo Render (produção) —
+    identificado pelo host, não por qual variável de ambiente o trouxe.
+    Usado para mostrar um aviso visível caso a app alguma vez fique
+    ligada à produção sem ser o próprio deployment no Render (ver
+    `app.py`, onde localmente `DATABASE_URL` é sempre substituída por
+    `TEST_DATABASE_URL` — isto é só uma rede de segurança adicional)."""
+    if not url:
+        return False
+    return "render.com" in (urlparse(url).hostname or "")
+
+
 @st.cache_resource(show_spinner=False)
 def build_connection_pool():
     """Constrói (uma única vez) o pool de conexões."""
