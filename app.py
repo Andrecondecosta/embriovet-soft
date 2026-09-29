@@ -62,7 +62,7 @@ from modules.pages.estadias_page import run_estadias_page
 from modules.pages.trabalho_diario_page import run_trabalho_diario_page
 from modules.pages.atividade_page import run_atividade_page
 from modules.i18n import t, get_i18n_diagnostics
-from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection, invalidate_data_cache
+from modules.db import to_py, ensure_sslmode_require, build_connection_pool, get_connection, invalidate_data_cache, is_production_database_url
 from modules.repositories.stock_repo import (
     carregar_proprietarios,
     carregar_stock,
@@ -121,7 +121,25 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------
 # Carregar variáveis de ambiente
 # ------------------------------------------------------------
-load_dotenv("/app/.env", override=True)
+# `RENDER` é definida automaticamente pelo próprio Render em todos os
+# serviços — sinal fiável de que estamos no deployment real, não numa
+# máquina de desenvolvimento. Em produção o Render injeta DATABASE_URL/
+# DB_* diretamente como variáveis de ambiente (ver render.yaml); não há
+# nenhum .env a carregar aí.
+IS_RENDER = bool(os.getenv("RENDER"))
+
+if not IS_RENDER:
+    # Local: carregar o .env do próprio projeto (não "/app/.env", que só
+    # existe dentro do deployment) e forçar sempre a base de TESTE — nunca
+    # produção — mesma proteção que tests/conftest.py já aplica aos
+    # testes automáticos. Isto sobrepõe-se a qualquer DATABASE_URL já
+    # exportada na shell, incluindo por engano.
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+    _test_database_url = (os.getenv("TEST_DATABASE_URL") or "").strip()
+    if _test_database_url:
+        os.environ["DATABASE_URL"] = _test_database_url
+    else:
+        os.environ.pop("DATABASE_URL", None)
 
 # ------------------------------------------------------------
 # DB connection pool — definido em modules/db.py.
@@ -659,6 +677,28 @@ st.markdown(
 # lhe muda o aspecto.
 inject_all_css_consolidated()
 inject_design_tokens()
+
+# ------------------------------------------------------------
+# ⚠️ Aviso de produção fora do Render
+# ------------------------------------------------------------
+# Rede de segurança: se esta app estiver ligada à base de produção
+# (identificada pelo host, não pela origem da variável) sem ser o
+# deployment real no Render, mostra-se sempre uma faixa bem visível —
+# para uma ligação por engano à produção (ex.: alguém exportar
+# DATABASE_URL manualmente) se ver imediatamente, em vez de só se
+# descobrir depois de já se ter escrito lá. No deployment real
+# (IS_RENDER) não se mostra — os clientes não veem isto.
+if not IS_RENDER and is_production_database_url(os.getenv("DATABASE_URL") or ""):
+    st.markdown(
+        """
+        <div style='position:sticky;top:0;z-index:9999;background:#b91c1c;
+                    color:#fff;text-align:center;padding:8px 12px;
+                    font-weight:700;font-size:.85rem;letter-spacing:.02em;'>
+            ⚠ A LIGAR À BASE DE DADOS DE PRODUÇÃO — isto não devia acontecer fora do Render
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ------------------------------------------------------------
 # 🔐 Sistema de Login

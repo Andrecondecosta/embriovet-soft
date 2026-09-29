@@ -12,12 +12,17 @@ ainda não está construída — o marcar-feita continua a acontecer por
 via indireta (drill-down para a ficha do animal / registo de
 resultado / colheita), tal como antes.
 
-Motor de dados: `trabalho_diario` + `dashboard_repo.py`. A coluna
-"Por fazer" tem um navegador de dias (`render_day_navigator`,
-`key_prefix="td_por_fazer"`) — usa `carregar_tarefas_por_fazer(dia)`,
-não `carregar_tarefas_hoje()` (essa mantém-se fixa em hoje, ainda
-usada pelo dashboard). "Feitas hoje" e a barra de cobertura no topo
-não navegam — ficam sempre em hoje.
+Motor de dados: `trabalho_diario` + `dashboard_repo.py`. Layout em
+duas colunas (`st.columns([3, 2])`, esquerda um pouco mais larga): a
+coluna esquerda é "Tarefas de hoje" — tem o navegador de dias
+(`render_day_navigator`, `key_prefix="td_por_fazer"`) por baixo do
+título e usa `carregar_tarefas_por_fazer(dia)` (não
+`carregar_tarefas_hoje()`, que se mantém fixa em hoje, ainda usada
+pelo dashboard). A coluna direita estreita empilha duas caixas
+secundárias: "Em atraso" (compacta, scroll interno a partir de ~5
+linhas) por cima de "Feitas hoje" — nenhuma das duas navega, ficam
+sempre em hoje, tal como a barra de cobertura e o aviso "N em atraso"
+no topo da página (este último some quando não há atrasadas).
 """
 
 from datetime import date
@@ -103,13 +108,15 @@ def _label_popover_filtros_trabalho(minhas: bool, dono_sel: str) -> str:
     return f"Filtros ({', '.join(partes)})"
 
 
-def _titulo_por_fazer(dia: date, total: int) -> str:
-    """Título da coluna "Por fazer" — mostra o dia escolhido no
-    navegador só quando não é hoje (evita "Tarefas por fazer — hoje",
-    redundante com o resto da app), sempre com o contador desse dia."""
+def _titulo_tarefas_dia(dia: date, total: int) -> str:
+    """Título da coluna "Tarefas de hoje" — mostra o dia escolhido no
+    navegador só quando não é hoje (evita "Tarefas de hoje — hoje",
+    redundante com o resto da app). `total` é só o dia exacto visto
+    (sem atrasadas — essas têm a sua própria caixa "Em atraso" na
+    coluna lateral, ver `run_trabalho_diario_page`)."""
     if dia == date.today():
-        return f"Tarefas por fazer ({total})"
-    return f"Tarefas por fazer — {dia.strftime('%d/%m')} ({total})"
+        return f"Tarefas de hoje ({total})"
+    return f"Tarefas — {dia.strftime('%d/%m')} ({total})"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -160,7 +167,7 @@ def _gerar_tarefas_primeira_observacao() -> int:
 _LISTA_MAX_HEIGHT_CSS = "calc(100vh - 410px)"
 
 
-def _inject_lista_css() -> None:
+def _inject_lista_css(primary_color: str = DEFAULT_PRIMARY_COLOR) -> None:
     """CSS da lista densa — linhas de folha de cálculo (~36px), zebra
     cinza/branco, risco de urgência fino à esquerda, sem bordas
     pesadas. A lista inteira vive num `st.container(key="td-list")`
@@ -176,12 +183,15 @@ def _inject_lista_css() -> None:
         <style>
             /* Lista com scroll interno — só isto rola, cabeçalho/KPIs/
                filtros (fora deste container) ficam sempre visíveis.
-               Regra partilhada por "Por fazer" (td-list), "Em atraso"
-               (td-list-atrasadas) e "Feitas hoje" (td-list-feitas) —
-               mesma densidade nas três. "Em atraso" fica mais baixa
-               de propósito (não é a lista principal, e pode ter muitas
-               linhas acumuladas) para não empurrar "Hoje" para fora
-               do ecrã. */
+               Regra partilhada por "Tarefas de hoje" (td-list), "Em
+               atraso" (td-list-atrasadas) e "Feitas hoje"
+               (td-list-feitas) — mesma densidade nas três. "Em atraso"
+               vive numa caixa lateral compacta (coluna estreita ao
+               lado de "Tarefas de hoje") — mostra no máximo ~5 linhas
+               (36px cada: 30px de altura da linha + 6px de padding
+               vertical do container) e faz scroll a partir daí; pode
+               ter muitas linhas acumuladas, mas não é a lista
+               principal, por isso fica pequena de propósito. */
             div.st-key-td-list,
             div.st-key-td-list-feitas {{
                 max-height: {_LISTA_MAX_HEIGHT_CSS};
@@ -190,7 +200,7 @@ def _inject_lista_css() -> None:
                 padding-right: 4px;
             }}
             div.st-key-td-list-atrasadas {{
-                max-height: 300px;
+                max-height: 190px;
                 overflow-y: auto;
                 gap: 0 !important;
                 padding-right: 4px;
@@ -217,6 +227,31 @@ def _inject_lista_css() -> None:
             .ds-zone-title--atraso {{
                 color: {URGENCIA_COR["urgente"]} !important;
                 border-top-color: {URGENCIA_COR["urgente"]} !important;
+            }}
+
+            /* Aviso "N em atraso" — sempre visível no topo da página
+               (fixo em hoje, como a barra de cobertura), para nunca se
+               perder que há éguas de dias anteriores por ver mesmo com
+               "Em atraso" agora numa caixa lateral mais discreta. Cor
+               de urgência sobre fundo suave, sem emoji colorido nem
+               selo — clicável (âncora HTML pura para `#td-atraso-alvo`,
+               sem precisar de rerun) para descer até essa caixa. */
+            .td-aviso-atraso {{
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 5px 12px;
+                margin: 2px 0 12px;
+                border-radius: 6px;
+                background: color-mix(in srgb, {URGENCIA_COR["urgente"]} 10%, transparent);
+                color: {URGENCIA_COR["urgente"]};
+                font-size: .8rem;
+                font-weight: 600;
+                text-decoration: none;
+                cursor: pointer;
+            }}
+            .td-aviso-atraso:hover {{
+                background: color-mix(in srgb, {URGENCIA_COR["urgente"]} 18%, transparent);
             }}
 
             div[class*="st-key-tdrow-"] {{
@@ -303,12 +338,26 @@ def _inject_lista_css() -> None:
                 line-height: 30px !important;
                 font-weight: 400 !important;
                 font-size: .8rem !important;
-                color: var(--ds-gray-900) !important;
+                /* Mais claro que o --ds-gray-900 das linhas "por fazer"/
+                   "atrasadas" (essas ficam pretas e a negrito no nome) —
+                   de propósito: sinaliza "já tratado", recuando
+                   visualmente sem introduzir nenhuma cor nova (o único
+                   toque de cor nestas linhas é o ✓ inicial, na cor da
+                   marca — ver `_render_linha_feita`). */
+                color: var(--ds-gray-500) !important;
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 font-variant-numeric: tabular-nums;
                 cursor: default !important;
+            }}
+            /* "✓" das feitas — único toque de cor permitido nestas linhas
+               (cor da marca, nunca verde). Precisa de ser uma classe, não
+               um `style=` inline: o Streamlit despoja o atributo `style`
+               de tags inline quando o valor contém `!important`, o que
+               deixaria o "✓" a herdar o cinza do texto à volta. */
+            div[class*="st-key-tdrow-feita-"] .td-feita-check {{
+                color: {primary_color} !important;
             }}
         </style>
         """,
@@ -364,10 +413,17 @@ def _render_linha_tarefa(row: dict, numero: int, dias_atraso: int | None = None)
 def _render_linha_feita(row: dict, numero: int) -> None:
     """Linha só de leitura da lista "Feitas hoje" — mesma classe
     `tdrow-` da lista "Por fazer" (ver `_inject_lista_css`), para as
-    duas ficarem visualmente idênticas (altura, espaçamento,
+    três ficarem visualmente idênticas (altura, espaçamento,
     tipografia). Sem botão, sem navegação, sem risco de urgência —
     editar/desmarcar uma tarefa já feita é na página Atividade, não
-    aqui."""
+    aqui.
+
+    Tratamento visual deliberado para se distinguir das "por
+    fazer"/"atrasadas" SEM usar verde (a app é vermelho + neutros): um
+    "✓" na cor da marca (o único toque de cor — sinaliza "concluído"
+    de relance) e o resto da linha em cinza mais claro que o preto das
+    outras listas, texto normal em vez de negrito — para recuar
+    visualmente, como já tratado."""
     tid = int(row["tarefa_id"])
     tipo_tarefa = row.get("tipo") or ""
     is_colheita = tipo_tarefa == "colheita"
@@ -380,8 +436,9 @@ def _render_linha_feita(row: dict, numero: int) -> None:
 
     with st.container(key=f"tdrow-feita-{tid}"):
         st.markdown(
-            f":gray[{numero:>4}]  **{nome_exibido}**  ·  {tipo_label}  ·  "
-            f":gray[{concluida_por}]"
+            f"<span class='td-feita-check'>✓</span>  "
+            f"{numero:>4}  {nome_exibido}  ·  {tipo_label}  ·  {concluida_por}",
+            unsafe_allow_html=True,
         )
 
 
@@ -433,10 +490,10 @@ def run_trabalho_diario_page(context: dict):
     primary_color = app_settings.get("primary_color") or DEFAULT_PRIMARY_COLOR
 
     inject_design_tokens()
-    _inject_lista_css()
+    _inject_lista_css(primary_color)
 
     # Barra de cobertura — totais de HOJE, independentes dos filtros
-    # E do navegador de dias da coluna "Por fazer" abaixo. Decisão
+    # E do navegador de dias da coluna "Tarefas de hoje" abaixo. Decisão
     # deliberada: fica sempre em hoje, não no dia visto na lista —
     # é o "estado de saúde do dia" (quantas por fazer/feitas hoje),
     # não um resumo do que se está a navegar; deixá-la seguir o dia
@@ -447,7 +504,7 @@ def run_trabalho_diario_page(context: dict):
         resumo = carregar_resumo_tarefas_hoje()
     except Exception as e:
         st.error(f"Erro ao carregar resumo de tarefas: {e}")
-        resumo = {"total": 0, "feitas": 0, "por_fazer": 0}
+        resumo = {"total": 0, "feitas": 0, "por_fazer": 0, "atrasadas": 0}
 
     por_fazer_valor = (
         f"<span style='color:{primary_color};'>{resumo['por_fazer']}</span>"
@@ -458,16 +515,45 @@ def run_trabalho_diario_page(context: dict):
         ("Feitas", resumo["feitas"]),
     ])
 
-    # Duas colunas lado a lado — "Por fazer" (inalterada) e, nova,
-    # "Feitas hoje" (só leitura). Em ecrãs estreitos o Streamlit
-    # empilha-as automaticamente ("Feitas" desce para baixo).
-    col_por_fazer, col_feitas = st.columns([1, 1])
+    # Aviso "N em atraso" — sempre visível no topo, acima das duas
+    # colunas, fixo em hoje (não segue o navegador de dias abaixo, tal
+    # como a barra de cobertura). Com "Em atraso" agora recolhida numa
+    # caixa lateral mais discreta, isto garante que nunca se perde que
+    # há éguas de dias anteriores por ver. Só aparece quando há
+    # atrasadas; clicável — desce até à caixa "Em atraso" por âncora
+    # HTML pura (`#td-atraso-alvo`), sem precisar de rerun. "⚠" com
+    # selecionador de variação de texto (︎) para não renderizar
+    # como emoji colorido — a cor vem sempre do CSS (`.td-aviso-atraso`),
+    # como o resto da linguagem de urgência da página.
+    if resumo.get("atrasadas", 0) > 0:
+        st.markdown(
+            f"<a href='#td-atraso-alvo' class='td-aviso-atraso'>"
+            f"⚠︎ {resumo['atrasadas']} em atraso</a>",
+            unsafe_allow_html=True,
+        )
 
-    with col_por_fazer:
-        # Navegador de dias — só nesta coluna. "Feitas hoje" (à
-        # direita) não navega, fica sempre em hoje. Key própria
-        # ("td_por_fazer") para não colidir com a Atividade
-        # ("atividade") nem as Transferências ("transfer_hist").
+    # Coluna esquerda um pouco mais larga: "Tarefas de hoje" continua a
+    # dominar (é o foco principal), mas [2, 1] deixava a direita
+    # apertada demais para "Em atraso"/"Feitas hoje" — [3, 2] dá-lhes
+    # espaço a respirar sem tirar o destaque à esquerda. Em ecrãs
+    # estreitos o Streamlit empilha as colunas automaticamente
+    # (esquerda primeiro, depois a direita inteira).
+    col_hoje, col_lateral = st.columns([3, 2])
+
+    with col_hoje:
+        # Placeholder do título — preenchido mais abaixo, depois de o
+        # navegador dar o dia escolhido e a lista carregar (o texto do
+        # título depende do total). Reserva já a posição no topo, antes
+        # do navegador, que é o que o coloca visualmente por cima dele.
+        titulo_placeholder = st.empty()
+
+        # Navegador de dias — numa linha própria, por baixo do título.
+        # É esta lista que navega pelos dias, por isso o navegador vive
+        # dentro desta secção (não separado/acima da coluna toda). A
+        # coluna lateral ("Em atraso" + "Feitas hoje") não navega, fica
+        # sempre em hoje. Key própria ("td_por_fazer") para não colidir
+        # com a Atividade ("atividade") nem as Transferências
+        # ("transfer_hist").
         dia_selecionado = render_day_navigator("td_por_fazer")
 
         try:
@@ -476,41 +562,56 @@ def run_trabalho_diario_page(context: dict):
             st.error(f"Erro ao carregar tarefas: {e}")
             df = pd.DataFrame()
 
-        # Filtros — não alteram os totais da barra de cobertura, só a
-        # lista. Título e botão de filtros na mesma linha (título numa
-        # coluna larga, botão discreto numa coluna estreita à direita —
-        # mesmo padrão validado em Estadias); em ecrãs estreitos o
-        # Streamlit empilha as colunas automaticamente, sem espremer o
-        # botão.
+        # Filtros — não alteram os totais da barra de cobertura, só as
+        # listas ("Tarefas de hoje" E "Em atraso" — os dois lêem o
+        # mesmo `df_filtrado`). Lidos do session_state ANTES do popover
+        # renderizar (`*_atual`) para já se poder separar
+        # atrasadas/normais e calcular os totais dos dois títulos antes
+        # de chegar à linha do título — o valor é o mesmo que os
+        # próprios widgets devolveriam a seguir, só lido mais cedo.
         utilizador_atual = (st.session_state.get("user") or {}).get("username")
         minhas_atual = st.session_state.get("td_filtro_minhas", False)
         dono_sel_atual = st.session_state.get("td_filtro_dono", "Todos")
 
-        col_titulo, col_filtros = st.columns([4, 1])
-        with col_titulo:
-            render_zone_title(_titulo_por_fazer(dia_selecionado, len(df)), "ds-zone-title")
-        with col_filtros:
-            with st.popover(
-                _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
-                type="tertiary",
-            ):
-                minhas = st.toggle("As minhas tarefas", key="td_filtro_minhas")
-                donos_disponiveis = (
-                    sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
-                )
-                dono_sel = st.selectbox(
-                    "Dono",
-                    ["Todos"] + donos_disponiveis,
-                    key="td_filtro_dono",
-                )
-
         df_filtrado = df
-        if minhas and utilizador_atual:
+        if minhas_atual and utilizador_atual:
             df_filtrado = df_filtrado[df_filtrado["utilizador"] == utilizador_atual]
-        if dono_sel != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel]
+        if dono_sel_atual != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["dono"] == dono_sel_atual]
 
-        if df_filtrado.empty:
+        # Separa em atrasadas (dias_atraso > 0 — nunca negativo, dado o
+        # filtro `data_tarefa <= dia` da query) e normais (exactamente
+        # o dia visto). Atrasadas: mais antigas primeiro — mais dias de
+        # atraso no topo, para nunca se perder a égua há mais tempo à
+        # espera. Normais: mesma ordem de sempre (urgência, depois
+        # nome).
+        df_atrasadas = df_filtrado[df_filtrado["dias_atraso"] > 0].sort_values(
+            "dias_atraso", ascending=False,
+        )
+        df_normais = df_filtrado[df_filtrado["dias_atraso"] == 0].assign(
+            _ordem=lambda d: d["urgencia"].map(URGENCIA_ORDEM).fillna(9),
+        ).sort_values(["_ordem", "animal"])
+
+        with titulo_placeholder.container():
+            col_titulo, col_filtros = st.columns([4, 1])
+            with col_titulo:
+                render_zone_title(_titulo_tarefas_dia(dia_selecionado, len(df_normais)), "ds-zone-title")
+            with col_filtros:
+                with st.popover(
+                    _label_popover_filtros_trabalho(minhas_atual, dono_sel_atual),
+                    type="tertiary",
+                ):
+                    st.toggle("As minhas tarefas", key="td_filtro_minhas")
+                    donos_disponiveis = (
+                        sorted(df["dono"].dropna().unique().tolist()) if not df.empty else []
+                    )
+                    st.selectbox(
+                        "Dono",
+                        ["Todos"] + donos_disponiveis,
+                        key="td_filtro_dono",
+                    )
+
+        if df_normais.empty:
             if df.empty:
                 if dia_selecionado == date.today():
                     st.caption("Sem tarefas por fazer hoje.")
@@ -519,37 +620,23 @@ def run_trabalho_diario_page(context: dict):
             else:
                 st.caption("Sem tarefas por fazer com estes filtros.")
         else:
-            # Separa em atrasadas (dias_atraso > 0 — nunca negativo,
-            # dado o filtro `data_tarefa <= dia` da query) e normais
-            # (exactamente o dia visto). As atrasadas vêm SEMPRE
-            # primeiro, das mais antigas para as mais recentes — mais
-            # dias de atraso no topo, para nunca se perder a égua há
-            # mais tempo à espera.
-            df_atrasadas = df_filtrado[df_filtrado["dias_atraso"] > 0].sort_values(
-                "dias_atraso", ascending=False,
-            )
-            df_normais = df_filtrado[df_filtrado["dias_atraso"] == 0].assign(
-                _ordem=lambda d: d["urgencia"].map(URGENCIA_ORDEM).fillna(9),
-            ).sort_values(["_ordem", "animal"])
+            with st.container(key="td-list"):
+                for numero, (_, row) in enumerate(df_normais.iterrows(), start=1):
+                    _render_linha_tarefa(row.to_dict(), numero)
 
-            if not df_atrasadas.empty:
-                render_zone_title(f"Em atraso ({len(df_atrasadas)})", "ds-zone-title ds-zone-title--atraso")
-                with st.container(key="td-list-atrasadas"):
-                    for numero, (_, row) in enumerate(df_atrasadas.iterrows(), start=1):
-                        _render_linha_tarefa(row.to_dict(), numero, dias_atraso=int(row["dias_atraso"]))
+    with col_lateral:
+        # Âncora-alvo do aviso "N em atraso" do topo da página — um
+        # `<div>` vazio só para o browser ter para onde saltar (link
+        # `#td-atraso-alvo` definido acima, junto à barra de cobertura).
+        st.markdown("<div id='td-atraso-alvo'></div>", unsafe_allow_html=True)
+        render_zone_title(f"Em atraso ({len(df_atrasadas)})", "ds-zone-title ds-zone-title--atraso")
+        if df_atrasadas.empty:
+            st.caption("Sem tarefas em atraso.")
+        else:
+            with st.container(key="td-list-atrasadas"):
+                for numero, (_, row) in enumerate(df_atrasadas.iterrows(), start=1):
+                    _render_linha_tarefa(row.to_dict(), numero, dias_atraso=int(row["dias_atraso"]))
 
-            if not df_normais.empty:
-                # Título secundário só faz sentido quando há uma secção
-                # "Em atraso" acima a separar — sem atrasadas, o título
-                # "Tarefas por fazer" já lá em cima chega.
-                if not df_atrasadas.empty:
-                    label_normal = "Hoje" if dia_selecionado == date.today() else dia_selecionado.strftime("%d/%m")
-                    render_zone_title(f"{label_normal} ({len(df_normais)})", "ds-zone-title")
-                with st.container(key="td-list"):
-                    for numero, (_, row) in enumerate(df_normais.iterrows(), start=1):
-                        _render_linha_tarefa(row.to_dict(), numero)
-
-    with col_feitas:
         # Tarefas de hoje já concluídas — só leitura. Uma tarefa só
         # aparece aqui depois do trabalho clínico real ser registado
         # (resultado na ficha do animal, colheita concluída, etc.) —

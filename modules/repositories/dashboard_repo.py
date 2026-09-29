@@ -264,9 +264,10 @@ def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
 
 def carregar_resumo_tarefas_hoje() -> dict:
     """Contagem para a barra de cobertura do Trabalho Diário — total,
-    feitas e por fazer. Fixa em hoje, independente do dia navegado na
-    lista "Por fazer" e dos filtros (os totais não devem mudar quando
-    a lista é filtrada nem quando se navega para outro dia).
+    feitas, por fazer e em atraso. Fixa em hoje, independente do dia
+    navegado na lista "Tarefas de hoje" e dos filtros (os totais não
+    devem mudar quando a lista é filtrada nem quando se navega para
+    outro dia).
 
     `por_fazer` inclui as tarefas em atraso (`data_tarefa <
     CURRENT_DATE`, ainda não concluídas) — são trabalho real por
@@ -277,7 +278,10 @@ def carregar_resumo_tarefas_hoje() -> dict:
     pedido, mantido tal e qual está). `total` passa a ser
     `por_fazer + feitas` (antes era só a contagem de `data_tarefa =
     CURRENT_DATE`) — assim os três números da barra continuam a bater
-    certo por construção.
+    certo por construção. `atrasadas` (`data_tarefa < CURRENT_DATE`,
+    ainda não concluídas) alimenta o aviso "N em atraso" sempre visível
+    no topo da página — fixo em hoje pela mesma razão que `por_fazer`:
+    não deve variar com o dia navegado na lista.
     """
     sql = """
         SELECT
@@ -286,7 +290,10 @@ def carregar_resumo_tarefas_hoje() -> dict:
             ) AS por_fazer,
             COUNT(*) FILTER (
                 WHERE data_tarefa = CURRENT_DATE AND concluida = TRUE
-            ) AS feitas
+            ) AS feitas,
+            COUNT(*) FILTER (
+                WHERE data_tarefa < CURRENT_DATE AND concluida = FALSE
+            ) AS atrasadas
         FROM trabalho_diario
     """
     with get_connection() as conn:
@@ -296,7 +303,13 @@ def carregar_resumo_tarefas_hoje() -> dict:
         cur.close()
     por_fazer = int(row[0] or 0)
     feitas = int(row[1] or 0)
-    return {"total": por_fazer + feitas, "feitas": feitas, "por_fazer": por_fazer}
+    atrasadas = int(row[2] or 0)
+    return {
+        "total": por_fazer + feitas,
+        "feitas": feitas,
+        "por_fazer": por_fazer,
+        "atrasadas": atrasadas,
+    }
 
 
 # ─── Partos previstos ─────────────────────────────────────────────────
