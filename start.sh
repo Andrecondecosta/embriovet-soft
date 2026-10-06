@@ -19,6 +19,10 @@ else
     echo "✅ Banco de dados já inicializado"
 fi
 
+# Ecrã de carregamento: símbolo a rodar em vez dos traços cinzentos
+# (nunca impede o arranque — o script devolve sempre 0)
+python scripts/personalizar_carregamento.py || true
+
 # Iniciar Streamlit
 echo "🎯 Iniciando Streamlit..."
 streamlit run app.py \
