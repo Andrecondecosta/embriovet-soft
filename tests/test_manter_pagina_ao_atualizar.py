@@ -81,3 +81,26 @@ def test_valor_invalido_no_endereco_e_ignorado():
     at.run()
     assert not at.exception
     assert at.session_state["_nav_last_active"] == "Dashboard"
+
+
+def test_css_esconde_a_pagina_anterior_ao_navegar():
+    """Ao mudar de página, o CSS emitido logo no início esconde todos os
+    containers de página excepto o da página nova (key nova a cada
+    navegação) — a página anterior deixa de ficar visível, esbatida,
+    enquanto a nova é desenhada."""
+    at = _app(pagina="dashboard")
+    at.run()
+    seq0 = at.session_state["_nav_render_seq"]
+
+    # Navegação real (como o on_click da sidebar).
+    at.session_state["_nav_last_active"] = "Atividade"
+    at.session_state["_nav_render_seq"] = seq0 + 1
+    at.run()
+    estilos = [m.value for m in at.markdown if "st-key-page-" in m.value]
+    assert estilos, "CSS de esconder a página anterior não foi emitido"
+    assert f".st-key-page-atividade-{seq0 + 1})" in estilos[0]
+    assert "display:none" in estilos[0]
+
+    # Rerun dentro da mesma página: a key (e o CSS) não muda.
+    at.run()
+    assert f".st-key-page-atividade-{seq0 + 1})" in [m.value for m in at.markdown if "st-key-page-" in m.value][0]
