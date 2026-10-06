@@ -28,6 +28,53 @@ from modules.pages.settings_page import (
 from modules.services.auth_service import verificar_permissao
 
 
+def _render_backup() -> None:
+    """Separador "Cópia de segurança" (só Administrador): descarrega um
+    ZIP com todos os dados. O ficheiro só é gerado ao clicar (callable
+    no `data` do download_button) — `st.tabs` renderiza todos os
+    separadores, e isto não pode pesar em cada visita às Definições."""
+    from datetime import datetime
+
+    from modules.backup import contar_linhas, gerar_backup_zip
+    from modules.db import get_connection
+
+    st.markdown(f"#### {t('backup.title')}")
+    st.caption(t("backup.help"))
+
+    try:
+        with get_connection() as conn:
+            linhas = contar_linhas(conn)
+        principais = {
+            t("backup.count.lots"): linhas.get("estoque_dono", 0),
+            t("backup.count.owners"): linhas.get("dono", 0),
+            t("backup.count.animals"): linhas.get("animais", 0),
+            t("backup.count.inseminations"): linhas.get("inseminacoes", 0),
+            t("backup.count.stays"): linhas.get("estadias", 0),
+        }
+        st.caption(" · ".join(f"**{n}** {nome}" for nome, n in principais.items())
+                   + " · " + t("backup.count.tables", n=len(linhas)))
+    except Exception:
+        pass
+
+    utilizador = (st.session_state.get("user") or {}).get("username")
+
+    def _gerar() -> bytes:
+        with get_connection() as conn:
+            return gerar_backup_zip(conn, criado_por=utilizador)
+
+    st.download_button(
+        t("backup.download"),
+        data=_gerar,
+        file_name=f"embriovet_backup_{datetime.now():%Y%m%d_%H%M}.zip",
+        mime="application/zip",
+        icon=":material/download:",
+        type="primary",
+        key="definicoes_backup_download",
+        on_click="ignore",
+    )
+    st.info(t("backup.advice"), icon=":material/info:")
+
+
 def run_definicoes_page(ctx: dict) -> None:
     """Entry-point da nova página Definições (Pedido 7)."""
     # `ctx` mantido na assinatura por compatibilidade com o router,
@@ -44,6 +91,7 @@ def run_definicoes_page(ctx: dict) -> None:
     labels = ["Marca", "Alojamentos", "Proprietários"]
     if is_admin:
         labels.append("Utilizadores")
+        labels.append(t("backup.tab"))
     labels.append("Idioma")
 
     # Key própria (com nº de sequência de navegação, ver app.py) — ver
@@ -74,6 +122,9 @@ def run_definicoes_page(ctx: dict) -> None:
         with tabs[idx]:
             from modules.pages.users_view import _render_users_view
             _render_users_view()
+        idx += 1
+        with tabs[idx]:
+            _render_backup()
         idx += 1
 
     with tabs[idx]:

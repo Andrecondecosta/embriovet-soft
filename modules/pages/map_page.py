@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import time
+from datetime import datetime
 from html import escape
 
 import streamlit as st
@@ -11,6 +12,7 @@ from modules.i18n import t
 from modules.repositories.container_repo import (
     adicionar_contentor,
     atualizar_posicao_contentor,
+    atualizar_posicoes_contentores,
     deletar_contentor,
     editar_contentor,
     inverter_andares,
@@ -18,8 +20,17 @@ from modules.repositories.container_repo import (
 from modules.repositories.settings_repo import get_app_settings
 from modules.repositories.stock_repo import (
     carregar_contentores,
+    obter_inventario_contentores,
     mover_palhetas_localizacao,
     obter_stock_contentor,
+)
+from modules.mapa_export import gerar_excel_inventario, gerar_pdf_inventario
+from modules.mapa_layout import (
+    CONTENTOR_LADO_VIRTUAL,
+    MAPA_VIRTUAL_H,
+    MAPA_VIRTUAL_W,
+    chave_natural,
+    posicoes_em_grelha,
 )
 from modules.ui_kit import DEFAULT_PRIMARY_COLOR
 
@@ -65,6 +76,52 @@ def _lote_str(valor, default: str = "—") -> str:
         pass
     texto = str(valor).strip()
     return texto if texto else default
+
+
+def _render_exportar(contentores_df):
+    """Conteúdo do popover "Exportar": escolha dos contentores + PDF/Excel.
+
+    Os ficheiros só são gerados ao clicar (callable no `data` do
+    `st.download_button`), não a cada rerun do mapa."""
+    st.caption(t("map.export_help"))
+    ordenados = sorted(
+        zip(contentores_df["id"].astype(int), contentores_df["codigo"]),
+        key=lambda c: chave_natural(c[1]),
+    )
+    nomes = dict(ordenados)
+    escolhidos = st.multiselect(
+        t("map.export_containers"),
+        options=[cid for cid, _ in ordenados],
+        format_func=lambda cid: str(nomes.get(cid, cid)),
+        placeholder=t("map.export_all"),
+        key="map_export_contentores",
+    )
+    ids = list(escolhidos) or None
+    sufixo = datetime.now().strftime("%Y%m%d")
+
+    col_pdf, col_xlsx = st.columns(2)
+    with col_pdf:
+        st.download_button(
+            "PDF",
+            data=lambda: gerar_pdf_inventario(obter_inventario_contentores(ids)),
+            file_name=f"inventario_contentores_{sufixo}.pdf",
+            mime="application/pdf",
+            icon=":material/picture_as_pdf:",
+            key="map_export_pdf",
+            on_click="ignore",
+            width="stretch",
+        )
+    with col_xlsx:
+        st.download_button(
+            "Excel",
+            data=lambda: gerar_excel_inventario(obter_inventario_contentores(ids)),
+            file_name=f"inventario_contentores_{sufixo}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/table_view:",
+            key="map_export_xlsx",
+            on_click="ignore",
+            width="stretch",
+        )
 
 
 def run_map_page(ctx: dict):
@@ -539,14 +596,11 @@ def run_map_page(ctx: dict):
                         if codigo in contentores_df['codigo'].values:
                             st.error(t("map.container_code_exists", code=codigo))
                         else:
-                            import random
+                            # Sem x/y: o repositório põe-no ao lado do
+                            # último criado (antes era um sítio aleatório).
                             contentor_id = adicionar_contentor({
                                 'codigo': codigo,
                                 'descricao': descricao,
-                                'x': random.randint(100, 600),
-                                'y': random.randint(100, 350),
-                                'w': 90,
-                                'h': 90
                             })
                             if contentor_id:
                                 st.success(t("map.container_created", code=codigo))
@@ -569,7 +623,7 @@ def run_map_page(ctx: dict):
                     unsafe_allow_html=True,
                 )
                 st.markdown("")
-                if st.button("Adicionar Primeiro Contentor", icon="➕", type="primary", width="stretch"):
+                if st.button("Adicionar Primeiro Contentor", icon=":material/add:", type="primary", width="stretch"):
                     st.session_state['modal_novo_contentor'] = True
                     st.rerun()
         else:
@@ -761,19 +815,37 @@ def run_map_page(ctx: dict):
                 # apagar no modal) e arrastar grava sozinho a posição
                 # (botão escondido "Gravar posição", tratado bem no início
                 # da função) — a toolbar já não precisa de mais nada.
-                col_btn, col_kpi = st.columns([1, 2])
+                # Alinhados pelo topo: Adicionar/Organizar/Exportar na mesma
+                # linha; as contagens ficam por baixo do Exportar, à direita.
+                col_btn, col_kpi = st.columns([3, 1], vertical_alignment="top")
                 with col_btn:
-                    criar_novo = st.button("Adicionar", key="map_add_btn", icon="➕", width="content")
+                    with st.container(horizontal=True, gap="small"):
+                        criar_novo = st.button(t("map.add"), key="map_add_btn", icon=":material/add:", width="content")
+                        # Popover em vez de botão directo: reescreve a
+                        # posição de todos os contentores, por isso pede
+                        # uma confirmação antes.
+                        with st.popover(t("map.organize"), icon=":material/grid_view:"):
+                            st.caption(t("map.organize_help"))
+                            if st.button(t("map.organize_confirm"), key="map_organize_btn", type="primary"):
+                                posicoes = posicoes_em_grelha(
+                                    zip(contentores_df["id"].astype(int), contentores_df["codigo"])
+                                )
+                                if atualizar_posicoes_contentores(posicoes):
+                                    st.session_state["move_feedback"] = t("map.organized", count=len(posicoes))
+                                    st.rerun()
                 with col_kpi:
-                    st.markdown(
-                        f"""
-                        <div class='map-topbar-kpis' style='justify-content:flex-end;height:100%;'>
-                            <span><b>{total_contentores}</b> contentores</span>
-                            <span><b>{int(total_palhetas_geral)}</b> palhetas</span>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    with st.container(gap="xxsmall", horizontal_alignment="right"):
+                        with st.popover(t("map.export"), icon=":material/download:"):
+                            _render_exportar(contentores_df)
+                        st.markdown(
+                            f"""
+                            <div class='map-topbar-kpis' style='justify-content:flex-end;margin-top:4px;'>
+                                <span><b>{total_contentores}</b> contentores</span>
+                                <span><b>{int(total_palhetas_geral)}</b> palhetas</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
                 if criar_novo:
                     st.session_state['modal_novo_contentor'] = True
@@ -811,10 +883,12 @@ def run_map_page(ctx: dict):
 
                                 novo_x = int(pos.get("x", int(row['x'])))
                                 novo_y = int(pos.get("y", int(row['y'])))
-                                largura = max(1, int(row['w']))
-                                altura = max(1, int(row['h']))
-                                novo_x = max(0, min(novo_x, 900 - largura))
-                                novo_y = max(0, min(novo_y, 550 - altura))
+                                # Mesmo espaço virtual e lado de caixa do JS
+                                # (VIRTUAL_W/H, BOX) — `w`/`h` da BD são do
+                                # desenho antigo (150) e já não correspondem
+                                # ao tamanho mostrado.
+                                novo_x = max(0, min(novo_x, MAPA_VIRTUAL_W - CONTENTOR_LADO_VIRTUAL))
+                                novo_y = max(0, min(novo_y, MAPA_VIRTUAL_H - CONTENTOR_LADO_VIRTUAL))
 
                                 if novo_x != int(row['x']) or novo_y != int(row['y']):
                                     if atualizar_posicao_contentor(int(row['id']), novo_x, novo_y):
@@ -902,7 +976,14 @@ def run_map_page(ctx: dict):
                             linear-gradient(var(--border) 1px, transparent 1px),
                             linear-gradient(90deg, var(--border) 1px, transparent 1px);
                         background-size: 32px 32px;
-                        overflow: hidden;
+                        /* Normalmente o canvas cabe na área (escala
+                           ajustada ao conteúdo); só faz scroll quando a
+                           escala mínima o obriga (ecrãs pequenos). */
+                        overflow: auto;
+                    }
+
+                    #mapa-canvas {
+                        position: relative;
                     }
 
                     .cont-box {
@@ -984,6 +1065,7 @@ def run_map_page(ctx: dict):
 
                 <div id="mapa-wrapper" class="__MOBILE_CLASS__">
                     <div id="mapa-area">
+                        <div id="mapa-canvas"></div>
                     </div>
                     <div id="mapa-status">__STATUS_TEXT__</div>
                 </div>
@@ -992,6 +1074,7 @@ def run_map_page(ctx: dict):
                     const contentores = __CONTENTORES_DATA__;
                     const isMobile = __IS_MOBILE__;
                     const mapaArea = document.getElementById('mapa-area');
+                    const mapaCanvas = document.getElementById('mapa-canvas');
                     const statusBar = document.getElementById('mapa-status');
 
                     // Distância mínima (px) para um gesto passar de "pode ser
@@ -1007,9 +1090,47 @@ def run_map_page(ctx: dict):
                     let areaScale = 1;
                     let ultimoToqueTs = 0;
 
+                    // Espaço "virtual" único para TODOS os ecrãs (x/y
+                    // gravados na BD vivem aqui): antes o telemóvel usava
+                    // 375 de largura e o desktop 900, por isso uma posição
+                    // gravada num aparecia noutro sítio no outro. BOX é o
+                    // lado de uma caixa nas mesmas unidades — tem de bater
+                    // com CONTENTOR_LADO_VIRTUAL no Python (limite ao gravar).
+                    const VIRTUAL_W = 900;
+                    const VIRTUAL_H = 550;
+                    const BOX = 70;
+                    // Limites da escala: abaixo do mínimo as caixas ficavam
+                    // ilegíveis (passa a haver scroll em vez de encolher
+                    // mais); acima do máximo ficavam gigantes com poucos
+                    // contentores.
+                    const SCALE_MIN = isMobile ? 0.75 : 0.5;
+                    const SCALE_MAX = 1.4;
+
+                    // Escala ajustada à largura E à altura disponíveis, a
+                    // partir da extensão real dos contentores — antes só
+                    // contava a largura, e num ecrã baixo os contentores
+                    // gravados mais abaixo ficavam cortados (invisíveis e
+                    // impossíveis de arrastar de volta).
                     function computeScale() {
-                        const rect = mapaArea.getBoundingClientRect();
-                        areaScale = rect.width / (isMobile ? 375 : 900);
+                        const areaW = mapaArea.clientWidth;
+                        const areaH = mapaArea.clientHeight;
+                        let extW = BOX, extH = BOX;
+                        contentores.forEach(c => {
+                            const pos = posicaoEfetiva(c);
+                            extW = Math.max(extW, pos.x + BOX);
+                            extH = Math.max(extH, pos.y + BOX);
+                        });
+                        // Folga para o arredondamento das caixas e para o
+                        // realce ao passar o rato não criarem scroll.
+                        const FOLGA = 12;
+                        const fit = Math.min(areaW / (extW + FOLGA), areaH / (extH + FOLGA));
+                        areaScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, fit));
+                        // Canvas = pelo menos a área visível (para haver
+                        // espaço onde largar), nunca além do espaço virtual.
+                        const canvasW = Math.min(VIRTUAL_W, Math.max(extW, areaW / areaScale));
+                        const canvasH = Math.min(VIRTUAL_H, Math.max(extH, areaH / areaScale));
+                        mapaCanvas.style.width = Math.floor(canvasW * areaScale) + 'px';
+                        mapaCanvas.style.height = Math.floor(canvasH * areaScale) + 'px';
                     }
 
                     // Posição a usar para desenhar um contentor: se há uma
@@ -1023,36 +1144,34 @@ def run_map_page(ctx: dict):
                     // deixava sempre passar pelo menos um repaint do mapa
                     // com a posição antiga antes da nova ficar disponível
                     // do lado do Python.
+                    const PENDENTE_VALIDADE_MS = 20000;
                     function posicaoEfetiva(c) {
                         try {
                             const targetWin = (window.parent && window.parent !== window) ? window.parent : window;
                             const pendentes = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
                             const p = pendentes[String(c.id)];
-                            if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+                            // Só vale enquanto o auto-save não termina; sem
+                            // prazo, uma pendente que nunca chegou a gravar
+                            // (ex.: página fechada logo a seguir) ficava a
+                            // sobrepor-se para sempre à posição da BD neste
+                            // browser.
+                            const recente = typeof p?.ts === 'number' && (Date.now() - p.ts) < PENDENTE_VALIDADE_MS;
+                            if (recente && typeof p.x === 'number' && typeof p.y === 'number') {
                                 return { x: p.x, y: p.y };
                             }
                         } catch (e) {}
                         return { x: c.x, y: c.y };
                     }
 
-                    // Tamanho do contentor: proporcional à escala real do
-                    // mapa (areaScale, a mesma usada para posicionar),
-                    // não um valor fixo por desktop/mobile — maior num
-                    // ecrã largo, mais pequeno num telemóvel, contínuo em
-                    // vez de saltar entre dois tamanhos. BOX_LOGICAL está
-                    // nas mesmas unidades "virtuais" que x/y (0-900
-                    // desktop, 0-375 mobile); os limites min/max evitam
-                    // caixas minúsculas ou gigantes em ecrãs extremos.
-                    const BOX_LOGICAL = isMobile ? 62 : 70;
-                    const BOX_MIN = isMobile ? 46 : 60;
-                    const BOX_MAX = isMobile ? 76 : 100;
-
                     function criarContentor(c) {
                         const box = document.createElement('div');
                         box.className = 'cont-box';
                         box.dataset.contId = String(c.id);
 
-                        const baseW = Math.round(Math.max(BOX_MIN, Math.min(BOX_MAX, BOX_LOGICAL * areaScale)));
+                        // Mesma escala das posições — com um mínimo/máximo
+                        // próprio as caixas sobrepunham-se quando a escala
+                        // descia.
+                        const baseW = Math.round(BOX * areaScale);
                         const baseH = baseW;
                         // Letra a acompanhar o tamanho da caixa — proporções
                         // escolhidas para corresponderem visualmente ao que
@@ -1081,7 +1200,7 @@ def run_map_page(ctx: dict):
                         box.addEventListener('mousedown', startPress);
                         box.addEventListener('touchstart', startPress, {passive: true});
 
-                        mapaArea.appendChild(box);
+                        mapaCanvas.appendChild(box);
                     }
 
                     function startPress(e) {
@@ -1102,7 +1221,7 @@ def run_map_page(ctx: dict):
 
                         const box = e.currentTarget;
                         const rect = box.getBoundingClientRect();
-                        const areaRect = mapaArea.getBoundingClientRect();
+                        const areaRect = mapaCanvas.getBoundingClientRect();
                         const clientX = isTouch ? e.touches[0].clientX : e.clientX;
                         const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
@@ -1187,8 +1306,17 @@ def run_map_page(ctx: dict):
                             const finalX = parseInt(info.box.style.left) / areaScale;
                             const finalY = parseInt(info.box.style.top) / areaScale;
                             try {
-                                const layoutData = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
-                                layoutData[info.contId] = {x: Math.round(finalX), y: Math.round(finalY)};
+                                const guardado = JSON.parse(targetWin.localStorage.getItem('contentor_layout_pending') || '{}');
+                                // Descarta pendentes expiradas: o auto-save
+                                // grava TODAS as entradas, e uma antiga
+                                // repunha na BD uma posição já ultrapassada.
+                                const layoutData = {};
+                                Object.entries(guardado).forEach(([id, p]) => {
+                                    if (typeof p?.ts === 'number' && (Date.now() - p.ts) < PENDENTE_VALIDADE_MS) {
+                                        layoutData[id] = p;
+                                    }
+                                });
+                                layoutData[info.contId] = {x: Math.round(finalX), y: Math.round(finalY), ts: Date.now()};
                                 targetWin.localStorage.setItem('contentor_layout_pending', JSON.stringify(layoutData));
                                 targetWin.postMessage({ type: 'CONTENTOR_POSICAO_ARRASTADA' }, '*');
                             } catch (err) {
@@ -1205,16 +1333,12 @@ def run_map_page(ctx: dict):
                         }
                     }
 
+                    // Redesenha tudo: a escala muda o tamanho das caixas,
+                    // não só a posição.
                     window.addEventListener('resize', () => {
+                        mapaCanvas.innerHTML = '';
                         computeScale();
-                        contentores.forEach((c, i) => {
-                            const box = mapaArea.children[i];
-                            if (box) {
-                                const pos = posicaoEfetiva(c);
-                                box.style.left = (pos.x * areaScale) + 'px';
-                                box.style.top = (pos.y * areaScale) + 'px';
-                            }
-                        });
+                        contentores.forEach(criarContentor);
                     });
 
                     computeScale();
@@ -1252,7 +1376,10 @@ def run_map_page(ctx: dict):
                     # casos a um mapa impraticável.
                     CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 620, 65, 200, 460
                 else:
-                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 410, 90, 220, 760
+                    # Medido de novo (out/2026): o mapa começa a ~270px do
+                    # topo (contagens por baixo do Exportar); o 410 antigo é de quando o topo era mais alto e
+                    # deixava o mapa com pouco mais de 200px num portátil.
+                    CHROME_ACIMA, CHROME_ABAIXO, ALTURA_MINIMA, ALTURA_MAXIMA = 280, 60, 260, 760
                 espaco_disponivel = int(altura_viewport) - CHROME_ACIMA - CHROME_ABAIXO
                 map_height = max(ALTURA_MINIMA, min(ALTURA_MAXIMA, espaco_disponivel))
                 st.markdown("<div class='map-workspace'>", unsafe_allow_html=True)

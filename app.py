@@ -282,7 +282,7 @@ def registrar_inseminacao(registro):
                 existencia_atual = 0
 
             if existencia_atual < palhetas_int:
-                st.error(f"❌ Estoque insuficiente! Disponível: {existencia_atual} palhetas")
+                st.error(f"❌ Stock insuficiente! Disponível: {existencia_atual} palhetas")
                 return False
 
             cur.execute(
@@ -354,7 +354,7 @@ def registrar_inseminacao_linha(garanhao, dono_id, data_inseminacao, egua, proto
             existencia = int(result[0] or 0)
 
             if existencia < palhetas:
-                st.error(f"❌ Estoque insuficiente! Disponível: {existencia} palhetas")
+                st.error(f"❌ Stock insuficiente! Disponível: {existencia} palhetas")
                 return False
 
             # Inserir inseminação

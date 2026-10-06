@@ -10,6 +10,7 @@ import logging
 import streamlit as st
 
 from modules.db import get_connection, invalidate_data_cache, to_py
+from modules.mapa_layout import CONTENTOR_LADO_VIRTUAL, proxima_posicao
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +21,25 @@ logger = logging.getLogger(__name__)
 CONTENTOR_TEMPORARIO_CODIGO = "TEMPORÁRIO"
 
 
+def _posicao_novo_contentor(cur):
+    """Posição para um contentor novo: ao lado do último criado (maior
+    id activo), sem sobrepor nenhum — em vez de um sítio aleatório."""
+    cur.execute("SELECT id, x, y FROM contentores WHERE ativo = TRUE ORDER BY id")
+    linhas = cur.fetchall()
+    ocupadas = [(int(x or 0), int(y or 0)) for _id, x, y in linhas]
+    ultima = ocupadas[-1] if ocupadas else None
+    return proxima_posicao(ocupadas, ultima)
+
+
 def adicionar_contentor(dados):
-    """Adiciona novo contentor"""
+    """Adiciona novo contentor. Sem `x`/`y` em `dados`, fica ao lado do
+    último criado (ver `_posicao_novo_contentor`)."""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            if dados.get('x') is None or dados.get('y') is None:
+                x, y = _posicao_novo_contentor(cur)
+                dados = {**dados, 'x': x, 'y': y}
             cur.execute("""
                 INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -34,8 +49,8 @@ def adicionar_contentor(dados):
                 to_py(dados.get('descricao', '')),
                 to_py(dados.get('x', 100)),
                 to_py(dados.get('y', 100)),
-                to_py(dados.get('w', 150)),
-                to_py(dados.get('h', 150)),
+                to_py(dados.get('w', CONTENTOR_LADO_VIRTUAL)),
+                to_py(dados.get('h', CONTENTOR_LADO_VIRTUAL)),
                 True
             ))
             contentor_id = cur.fetchone()[0]
@@ -72,6 +87,7 @@ def obter_ou_criar_contentor_temporario():
                 cur.close()
                 return int(row[0])
 
+            x, y = _posicao_novo_contentor(cur)
             cur.execute(
                 """
                 INSERT INTO contentores (codigo, descricao, x, y, w, h, ativo)
@@ -83,7 +99,7 @@ def obter_ou_criar_contentor_temporario():
                     "Criado automaticamente pela importação — lotes sem "
                     "contentor na folha original. Move para o contentor "
                     "real assim que souberes onde ficam.",
-                    20, 20, 150, 150,
+                    x, y, CONTENTOR_LADO_VIRTUAL, CONTENTOR_LADO_VIRTUAL,
                     True,
                 ),
             )
@@ -125,6 +141,28 @@ def editar_contentor(contentor_id, dados):
         logger.error(f"Erro ao editar contentor: {e}")
         st.error(f"Erro ao editar contentor: {e}")
         return False
+
+def atualizar_posicoes_contentores(posicoes) -> bool:
+    """Grava várias posições de uma vez (botão "Organizar" do mapa).
+    `posicoes`: `{contentor_id: (x, y)}`. Tudo ou nada."""
+    try:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            for contentor_id, (x, y) in posicoes.items():
+                cur.execute(
+                    "UPDATE contentores SET x = %s, y = %s WHERE id = %s",
+                    (int(x), int(y), int(to_py(contentor_id))),
+                )
+            conn.commit()
+            cur.close()
+            invalidate_data_cache()
+            logger.info(f"Contentores organizados: {len(posicoes)}")
+            return True
+    except Exception as e:
+        logger.error(f"Erro ao organizar contentores: {e}")
+        st.error(f"Erro ao organizar contentores: {e}")
+        return False
+
 
 def atualizar_posicao_contentor(contentor_id, x, y):
     """Atualiza apenas a posição (x,y) de um contentor"""

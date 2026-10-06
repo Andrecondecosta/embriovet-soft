@@ -73,19 +73,24 @@ def is_production_database_url(url: str) -> bool:
 
 @st.cache_resource(show_spinner=False)
 def build_connection_pool():
-    """Constrói (uma única vez) o pool de conexões."""
+    """Constrói (uma única vez) o pool de conexões.
+
+    `ThreadedConnectionPool` (com lock) e não `SimpleConnectionPool`: o
+    Streamlit corre cada sessão na sua thread, e os `st.download_button`
+    com callable (exportações, cópia de segurança) geram o ficheiro
+    noutra — o pool é partilhado entre todas."""
     database_url = (os.getenv("DATABASE_URL") or "").strip()
 
     if database_url:
         database_url = ensure_sslmode_require(database_url)
-        pool_obj = psycopg2.pool.SimpleConnectionPool(
+        pool_obj = psycopg2.pool.ThreadedConnectionPool(
             1, 10,
             dsn=database_url
         )
         logger.info("✅ Pool criado com DATABASE_URL (sslmode=require)")
         return pool_obj
 
-    pool_obj = psycopg2.pool.SimpleConnectionPool(
+    pool_obj = psycopg2.pool.ThreadedConnectionPool(
         1, 10,
         dbname=os.getenv("DB_NAME", "embriovet"),
         user=os.getenv("DB_USER", "postgres"),
