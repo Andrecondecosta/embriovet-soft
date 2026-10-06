@@ -43,6 +43,7 @@ from modules.ui_kit import (
     inject_add_stock_form_css,
 )
 from migration_runner import run_migrations
+from modules.url_state import guardar_no_endereco, opcao_do_endereco
 from modules.stock_reporting import (
     filter_stock_view,
     summarize_stock_by_owner,
@@ -156,11 +157,21 @@ except Exception as e:
 # ------------------------------------------------------------
 # ✅ Migrations automáticas no arranque
 # ------------------------------------------------------------
-try:
+@st.cache_resource(show_spinner=False)
+def _aplicar_migrations_uma_vez() -> bool:
+    """Corre as migrations uma vez por processo (antes corriam em cada
+    rerun — 4 queries + advisory lock em cada mudança de página). Só
+    mudam com um novo deploy, que reinicia o processo. Se falhar, o
+    `cache_resource` não guarda nada e a próxima execução tenta de novo."""
     with get_connection() as conn:
         BASE_DIR = Path(__file__).resolve().parent
         MIGRATIONS_DIR = BASE_DIR / "migrations"
         run_migrations(conn, migrations_dir=str(MIGRATIONS_DIR))
+    return True
+
+
+try:
+    _aplicar_migrations_uma_vez()
 except Exception as e:
     logger.error(f"❌ Falha ao aplicar migrations: {e}")
     st.error(f"Falha ao aplicar migrations: {e}")
@@ -1243,6 +1254,13 @@ def _resolve_nav_label(label):
     return _LEGACY_NAV_MAP.get(label, (label, {}))
 
 
+# Sessão nova (ex.: "Atualizar" no browser): voltar à página que estava
+# no endereço (`?pagina=`), em vez de cair sempre no Dashboard.
+if "_nav_last_active" not in st.session_state:
+    _pagina_url = opcao_do_endereco("pagina", menu_principal)
+    if _pagina_url:
+        st.session_state["_nav_last_active"] = _pagina_url
+
 # Verificar se há redirecionamento pendente
 if 'aba_selecionada' in st.session_state:
     raw = st.session_state['aba_selecionada']
@@ -1277,6 +1295,13 @@ else:
 aba, sidebar_logout = render_sidebar(app_settings, user, menu_principal, menu_secundario, active_key)
 
 nav_render_seq = st.session_state.setdefault('_nav_render_seq', 0)
+
+# Página actual no endereço, para sobreviver a um "Atualizar". O
+# separador do Stock de sémen é gerido pela própria página; fora dela
+# sai do endereço.
+guardar_no_endereco("pagina", aba)
+if aba != NAV_STOCK_SEMEN:
+    guardar_no_endereco("separador", None)
 
 render_header(aba)
 
