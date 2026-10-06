@@ -1305,6 +1305,28 @@ if aba != NAV_STOCK_SEMEN:
 
 render_header(aba)
 
+# Container da página actual — key nova a cada navegação (ver o router
+# lá em baixo). Este CSS chega ao browser logo no início da execução e
+# esconde de imediato o container da página ANTERIOR: sem isto, o
+# Streamlit mantinha-a visível (esbatida) até a nova acabar de ser
+# desenhada — via-se a página anterior e depois "corrigia". Reruns dentro
+# da mesma página mantêm a mesma key, por isso não são afectados.
+_PAGINA_CONTAINER = {
+    NAV_DASHBOARD: "dashboard",
+    NAV_ESTADIAS: "estadias",
+    NAV_TRABALHO_DIARIO: "trabalho-diario",
+    NAV_ATIVIDADE: "atividade",
+    NAV_RELATORIOS: "relatorios",
+    NAV_STOCK_SEMEN: "stock-semen",
+    NAV_DEFINICOES: "definicoes",
+}
+pagina_container_key = f"page-{_PAGINA_CONTAINER.get(aba, 'outra')}-{nav_render_seq}"
+st.markdown(
+    "<style>div[class*='st-key-page-']:not(.st-key-" + pagina_container_key + ")"
+    "{display:none !important;}</style>",
+    unsafe_allow_html=True,
+)
+
 if sidebar_logout:
     token = st.session_state.pop('auth_token', None)
     if token:
@@ -1400,27 +1422,27 @@ if proprietarios.empty:
 # ex.: a tabela "Hoje na clínica" do Dashboard a aparecer dentro do
 # separador "Marca" de Definições.
 if aba == NAV_DASHBOARD:
-    with st.empty().container(key=f"page-dashboard-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_dashboard_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_ESTADIAS:
-    with st.empty().container(key=f"page-estadias-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_estadias_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_TRABALHO_DIARIO:
-    with st.empty().container(key=f"page-trabalho-diario-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_trabalho_diario_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_ATIVIDADE:
-    with st.empty().container(key=f"page-atividade-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_atividade_page({**globals(), **locals()})
     st.stop()
 
 if aba == NAV_RELATORIOS:
-    with st.empty().container(key=f"page-relatorios-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_reports_page({**globals(), **locals()})
     st.stop()
 
@@ -1428,7 +1450,7 @@ if aba == NAV_RELATORIOS:
 # Transferências) e 2 botões topo (Adicionar lote, Importar).
 if aba == NAV_STOCK_SEMEN:
     from modules.pages.stock_semen_page import run_stock_semen_page
-    with st.empty().container(key=f"page-stock-semen-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_stock_semen_page({**globals(), **locals()})
     st.stop()
 
@@ -1436,7 +1458,7 @@ if aba == NAV_STOCK_SEMEN:
 # Proprietários, Utilizadores, Idioma) respeitando permissões.
 if aba == NAV_DEFINICOES:
     from modules.pages.definicoes_page import run_definicoes_page
-    with st.empty().container(key=f"page-definicoes-{nav_render_seq}"):
+    with st.empty().container(key=pagina_container_key):
         run_definicoes_page({**globals(), **locals()})
     st.stop()
 
