@@ -11,6 +11,7 @@ import os
 import psycopg2
 import pytest
 
+import modules.db as db
 from modules.db import build_connection_pool, get_connection
 
 
@@ -21,7 +22,10 @@ def _matar(pid: int):
     admin.close()
 
 
-def test_ligacao_morta_no_pool_e_substituida():
+def test_ligacao_morta_no_pool_e_substituida(monkeypatch):
+    # Simula uma ligação parada há muito (só essas são testadas antes de
+    # serem entregues — ver `_TESTAR_SE_PARADA_HA_S`).
+    monkeypatch.setattr(db, "_TESTAR_SE_PARADA_HA_S", 0)
     with get_connection() as conn:
         pid = conn.get_backend_pid()
     # A ligação voltou ao pool; o servidor fecha-a enquanto está parada.
@@ -49,3 +53,11 @@ def test_erro_original_nao_e_escondido_pelo_rollback():
 
 def test_pool_e_thread_safe():
     assert isinstance(build_connection_pool(), psycopg2.pool.ThreadedConnectionPool)
+
+
+def test_ligacao_usada_ha_pouco_nao_e_testada():
+    """Uma ligação devolvida há instantes é entregue sem o SELECT 1 extra
+    (testar sempre duplicava as idas à BD em cada página)."""
+    with get_connection() as conn:
+        pass
+    assert db._ligacao_valida(conn) is True  # sem tocar na BD

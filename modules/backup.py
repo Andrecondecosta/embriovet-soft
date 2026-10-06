@@ -89,13 +89,15 @@ def ordem_por_dependencias(cur, tabelas) -> list:
 
 
 def contar_linhas(conn) -> dict:
-    """{tabela: nº de linhas} — para mostrar o que vai na cópia."""
+    """{tabela: nº de linhas} — para mostrar o que vai na cópia. Uma só
+    query (corre em cada visita às Definições: `st.tabs` renderiza
+    todos os separadores)."""
     with conn.cursor() as cur:
-        out = {}
-        for t in listar_tabelas(cur):
-            cur.execute(f"SELECT COUNT(*) FROM {_ident(t)}")
-            out[t] = int(cur.fetchone()[0])
-        return out
+        tabelas = listar_tabelas(cur)
+        if not tabelas:
+            return {}
+        cur.execute("SELECT " + ", ".join(f"(SELECT COUNT(*) FROM {_ident(t)})" for t in tabelas))
+        return dict(zip(tabelas, (int(n) for n in cur.fetchone())))
 
 
 def gerar_backup_zip(conn, criado_por: str | None = None) -> bytes:

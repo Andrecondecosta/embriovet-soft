@@ -7,6 +7,7 @@ em todo o codebase.
 
 import os
 import logging
+import time
 import datetime as dt
 from contextlib import contextmanager
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
@@ -73,6 +74,11 @@ def is_production_database_url(url: str) -> bool:
 
 # TCP keepalives: o servidor/rede deixa de fechar tão facilmente ligações
 # paradas no pool (e quando fecha, `_ligacao_valida` substitui-as).
+# No psycopg2, `minconn` é também o nº máximo de ligações PARADAS que o
+# pool guarda: com 1, qualquer ligação extra (outro utilizador ao mesmo
+# tempo) era fechada ao ser devolvida e reaberta na vez seguinte — cada
+# abertura ao Render custa várias idas e voltas (TLS + autenticação).
+_POOL_MIN, _POOL_MAX = 3, 10
 _KEEPALIVES = dict(keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5)
 
 
@@ -89,7 +95,7 @@ def build_connection_pool():
     if database_url:
         database_url = ensure_sslmode_require(database_url)
         pool_obj = psycopg2.pool.ThreadedConnectionPool(
-            1, 10,
+            _POOL_MIN, _POOL_MAX,
             dsn=database_url,
             **_KEEPALIVES,
         )
@@ -97,7 +103,7 @@ def build_connection_pool():
         return pool_obj
 
     pool_obj = psycopg2.pool.ThreadedConnectionPool(
-        1, 10,
+        _POOL_MIN, _POOL_MAX,
         dbname=os.getenv("DB_NAME", "embriovet"),
         user=os.getenv("DB_USER", "postgres"),
         password=os.getenv("DB_PASSWORD", "123"),
@@ -109,12 +115,21 @@ def build_connection_pool():
     return pool_obj
 
 
+# Só se testa (SELECT 1) uma ligação que esteve parada mais do que isto:
+# uma ligação usada há instantes está viva, e testar sempre duplicava as
+# idas à BD em cada página.
+_TESTAR_SE_PARADA_HA_S = 30
+_ultimo_uso: dict = {}  # id(conn) -> time.monotonic() da devolução ao pool
+
+
 def _ligacao_valida(conn) -> bool:
     """True se a ligação ainda está viva. O pool não sabe quando o
     servidor fecha uma ligação parada (inactividade, reinício, rede):
     continuaria a entregá-la e o primeiro uso falhava."""
     if conn.closed:
         return False
+    if time.monotonic() - _ultimo_uso.get(id(conn), 0) < _TESTAR_SE_PARADA_HA_S:
+        return True
     try:
         if conn.info.transaction_status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
             conn.rollback()
@@ -158,6 +173,10 @@ def get_connection():
         raise
     finally:
         if conn:
+            if conn.closed:
+                _ultimo_uso.pop(id(conn), None)
+            else:
+                _ultimo_uso[id(conn)] = time.monotonic()
             pool.putconn(conn, close=bool(conn.closed))
 
 

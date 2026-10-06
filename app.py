@@ -156,11 +156,21 @@ except Exception as e:
 # ------------------------------------------------------------
 # ✅ Migrations automáticas no arranque
 # ------------------------------------------------------------
-try:
+@st.cache_resource(show_spinner=False)
+def _aplicar_migrations_uma_vez() -> bool:
+    """Corre as migrations uma vez por processo (antes corriam em cada
+    rerun — 4 queries + advisory lock em cada mudança de página). Só
+    mudam com um novo deploy, que reinicia o processo. Se falhar, o
+    `cache_resource` não guarda nada e a próxima execução tenta de novo."""
     with get_connection() as conn:
         BASE_DIR = Path(__file__).resolve().parent
         MIGRATIONS_DIR = BASE_DIR / "migrations"
         run_migrations(conn, migrations_dir=str(MIGRATIONS_DIR))
+    return True
+
+
+try:
+    _aplicar_migrations_uma_vez()
 except Exception as e:
     logger.error(f"❌ Falha ao aplicar migrations: {e}")
     st.error(f"Falha ao aplicar migrations: {e}")
