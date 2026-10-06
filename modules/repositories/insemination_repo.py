@@ -898,7 +898,7 @@ def registrar_inseminacao_multiplas(
                             st.error(f"❌ Lote #{stock_id} não encontrado")
                             return False
                         if int(result[0] or 0) < palhetas:
-                            st.error(f"❌ Estoque insuficiente no lote #{stock_id}! Disponível: {int(result[0] or 0)}")
+                            st.error(f"❌ Stock insuficiente no lote #{stock_id}! Disponível: {int(result[0] or 0)}")
                             return False
                         cur.execute("""
                             INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
@@ -1011,7 +1011,7 @@ def registrar_inseminacao_multiplas(
                         st.error(f"❌ Lote #{stock_id} não encontrado")
                         return False
                     if int(result[0] or 0) < palhetas:
-                        st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
+                        st.error(f"❌ Stock insuficiente! Disponível: {int(result[0] or 0)}")
                         return False
                     cur.execute(
                         "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
@@ -1056,7 +1056,7 @@ def registrar_inseminacao_multiplas(
                     st.error(f"❌ Lote #{stock_id} não encontrado")
                     return False
                 if int(result[0] or 0) < palhetas:
-                    st.error(f"❌ Estoque insuficiente! Disponível: {int(result[0] or 0)}")
+                    st.error(f"❌ Stock insuficiente! Disponível: {int(result[0] or 0)}")
                     return False
 
                 cur.execute("""

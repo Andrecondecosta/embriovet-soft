@@ -15,6 +15,7 @@ from reportlab.platypus import (
 
 from modules.db import to_py
 from modules.i18n import t
+from modules.stock_export import gerar_csv_stock, gerar_excel_stock, gerar_pdf_stock
 from modules.repositories.stock_repo import (
     carregar_contentores, carregar_inseminacoes, carregar_proprietarios,
     carregar_stock, carregar_transferencias, carregar_transferencias_externas,
@@ -253,6 +254,26 @@ def gerar_pdf_garanhao(
         return None
 
 
+def _render_exportar_stock(stock: pd.DataFrame, periodo: str):
+    """Popover "Exportar" do Stock completo: PDF, CSV e Excel com todos
+    os campos dos lotes (+ resumos no PDF/Excel). Respeita o período
+    escolhido nos filtros (o `stock` já vem filtrado). Os ficheiros só
+    são gerados ao clicar (callable no `data`)."""
+    st.caption(t("reports.export_stock_help"))
+    sufixo = dt.datetime.now().strftime("%Y%m%d")
+    nome = f"stock_completo_{sufixo}"
+    for rotulo, gerar, ext, mime, icone in (
+        ("PDF", lambda: gerar_pdf_stock(stock, periodo), "pdf", "application/pdf", ":material/picture_as_pdf:"),
+        ("CSV", lambda: gerar_csv_stock(stock), "csv", "text/csv", ":material/description:"),
+        ("Excel", lambda: gerar_excel_stock(stock), "xlsx",
+         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ":material/table_view:"),
+    ):
+        st.download_button(
+            rotulo, data=gerar, file_name=f"{nome}.{ext}", mime=mime, icon=icone,
+            key=f"rel_stock_export_{ext}", on_click="ignore", width="stretch",
+        )
+
+
 def run_reports_page(ctx: dict):
     # Pedido 9 · Fase 2: `ctx` mantido na assinatura por compatibilidade
     # com o router mas as dependências vêm todas por import explícito no
@@ -450,4 +471,16 @@ def run_reports_page(ctx: dict):
             st.dataframe(safe_pick(d, ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]).sort_values("data_transferencia", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
         else:
             d = stock.copy()
+            periodo = ""
+            if usar_periodo and (data_inicio or data_fim):
+                periodo = t(
+                    "reports.export_period",
+                    ini=data_inicio.strftime("%d/%m/%Y") if data_inicio else "…",
+                    fim=data_fim.strftime("%d/%m/%Y") if data_fim else "…",
+                )
+            _, col_exp = st.columns([6, 2])
+            with col_exp:
+                with st.container(horizontal_alignment="right"):
+                    with st.popover(t("map.export"), icon=":material/download:"):
+                        _render_exportar_stock(d, periodo)
             st.dataframe(safe_pick(d, ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "qualidade", "local_armazenagem"]).sort_values("existencia_atual", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)

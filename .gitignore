@@ -1889,3 +1889,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Cópias de segurança (contêm todos os dados — nunca publicar)
+embriovet_backup_*.zip
+*backup*.zip

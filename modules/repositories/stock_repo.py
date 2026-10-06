@@ -272,6 +272,44 @@ def obter_stock_contentor(contentor_id):
         return pd.DataFrame()
 
 
+def obter_inventario_contentores(contentor_ids=None):
+    """Inventário de todos os contentores activos (ou só `contentor_ids`)
+    para exportar do Mapa — uma linha por lote com existência; um
+    contentor sem lotes aparece numa linha com as colunas do lote a NULL
+    (para constar no papel como vazio).
+
+    Sem `st.error`: é chamado dentro do callable de `st.download_button`,
+    que corre fora do script (comandos Streamlit são ignorados)."""
+    query = """
+        SELECT
+            c.id AS contentor_id,
+            c.codigo AS contentor,
+            e.canister,
+            e.andar,
+            COALESCE(a.nome, e.garanhao) AS garanhao,
+            d.nome AS proprietario,
+            e.existencia_atual AS palhetas,
+            COALESCE(NULLIF(e.data_embriovet, ''), e.origem_externa) AS referencia,
+            e.cor,
+            e.qualidade,
+            e.motilidade,
+            e.concentracao,
+            e.observacoes
+        FROM contentores c
+        LEFT JOIN estoque_dono e
+               ON e.contentor_id = c.id AND e.existencia_atual > 0
+        LEFT JOIN dono d ON d.id = e.dono_id
+        LEFT JOIN animais a ON a.id = e.animal_id
+        WHERE c.ativo = TRUE
+    """
+    params = None
+    if contentor_ids:
+        query += " AND c.id = ANY(%s)"
+        params = ([int(to_py(i)) for i in contentor_ids],)
+    with get_connection() as conn:
+        return pd.read_sql_query(query, conn, params=params)
+
+
 # ============================================================
 # Escritas de stock
 # ============================================================
@@ -432,12 +470,47 @@ def editar_stock(stock_id, dados):
         return False
 
 
+def contar_ligacoes_stock(stock_ids):
+    """Conta, por lote, os registos que o referem — usado no aviso antes
+    de eliminar. Uma query por tabela para todos os lotes de uma vez (a
+    lista renderiza o separador de cada lote, mesmo escondido).
+
+    Devolve `{stock_id: {"inseminacoes": n, "transferencias": n,
+    "transferencias_externas": n}}`; lotes sem ligações não aparecem.
+    """
+    ids = [int(to_py(i)) for i in stock_ids]
+    if not ids:
+        return {}
+    contagens = {}
+    with get_connection() as conn:
+        cur = conn.cursor()
+        for tabela in ("inseminacoes", "transferencias", "transferencias_externas"):
+            cur.execute(
+                f"SELECT estoque_id, COUNT(*) FROM {tabela} "
+                "WHERE estoque_id = ANY(%s) GROUP BY estoque_id",
+                (ids,),
+            )
+            for sid, n in cur.fetchall():
+                contagens.setdefault(int(sid), {})[tabela] = int(n)
+        cur.close()
+    return contagens
+
+
 def deletar_stock(stock_id):
-    """Deleta um lote de stock"""
+    """Elimina definitivamente um lote de stock.
+
+    Os registos ligados mantêm-se, só perdem a ligação ao lote:
+    `transferencias`/`transferencias_externas` têm FK `ON DELETE SET
+    NULL`; `inseminacoes.estoque_id` não tem FK, por isso é posto a NULL
+    aqui, na mesma transacção, para não ficar a apontar para um id
+    inexistente.
+    """
     try:
         with get_connection() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (to_py(stock_id),))
+            sid = to_py(stock_id)
+            cur.execute("UPDATE inseminacoes SET estoque_id = NULL WHERE estoque_id = %s", (sid,))
+            cur.execute("DELETE FROM estoque_dono WHERE id = %s", (sid,))
             conn.commit()
             cur.close()
             logger.info(f"Stock deletado: ID {stock_id}")

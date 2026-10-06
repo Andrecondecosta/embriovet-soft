@@ -11,6 +11,8 @@ from modules.repositories.stock_repo import (
     carregar_stock,
     carregar_transferencias,
     carregar_transferencias_externas,
+    contar_ligacoes_stock,
+    deletar_stock,
     editar_stock,
 )
 from modules.services.auth_service import verificar_permissao
@@ -179,6 +181,12 @@ def run_stock_page(ctx: dict):
 
         proprietarios_dict = dict(zip(proprietarios["id"], proprietarios["nome"]))
 
+        ligacoes_por_lote = (
+            contar_ligacoes_stock(stock_filtrado["id"].tolist())
+            if verificar_permissao('Administrador') and not stock_filtrado.empty
+            else {}
+        )
+
         for _, row in stock_filtrado.iterrows():
             existencia = 0 if pd.isna(row.get("existencia_atual")) else int(to_py(row.get("existencia_atual")) or 0)
             referencia = row.get("origem_externa") or row.get("data_embriovet") or t("common.no_reference")
@@ -224,9 +232,8 @@ def run_stock_page(ctx: dict):
                 # tabs de outras páginas (ver nota em estadias_page.py).
                 with st.container(key=f"stock-lote-tabs-{row['id']}"):
                     if verificar_permissao('Administrador'):
-                        # Admin vê: Detalhes, Editar
-                        tab1, tab2 = st.tabs([t("stock.tab.details"), t("stock.tab.edit")])
-                        tab3 = None
+                        # Admin vê: Detalhes, Editar, Eliminar
+                        tab1, tab2, tab3 = st.tabs([t("stock.tab.details"), t("stock.tab.edit"), t("stock.tab.delete")])
                     else:
                         # Gestor e Visualizador vêem apenas: Detalhes
                         tab1 = st.tabs([t("stock.tab.details")])[0]
@@ -444,6 +451,35 @@ def run_stock_page(ctx: dict):
                                     if 'novo_proprietario_id' in st.session_state:
                                         st.session_state['novo_proprietario_usado'] = True
                                     st.rerun()
+
+                # TAB 3: Eliminar (Apenas Admin)
+                if tab3 is not None:
+                    with tab3:
+                        st.markdown(f"### {t('stock.delete_title')}")
+                        st.error(t("stock.delete_warning", ref=referencia, qtd=existencia))
+
+                        ligacoes = ligacoes_por_lote.get(int(row["id"]), {})
+                        if ligacoes:
+                            st.warning(t(
+                                "stock.delete_links",
+                                insem=ligacoes.get("inseminacoes", 0),
+                                transf=ligacoes.get("transferencias", 0),
+                                ext=ligacoes.get("transferencias_externas", 0),
+                            ))
+                        else:
+                            st.info(t("stock.delete_no_links"))
+
+                        confirmar = st.checkbox(t("stock.delete_confirm"), key=f"del_confirm_{row['id']}")
+                        if st.button(
+                            t("stock.delete_btn"),
+                            key=f"del_btn_{row['id']}",
+                            type="primary",
+                            disabled=not confirmar,
+                        ):
+                            # Revalida no servidor: o botão desactivado é só UI.
+                            if verificar_permissao('Administrador') and deletar_stock(row["id"]):
+                                st.success(t("stock.deleted_success"))
+                                st.rerun()
 
     else:
         st.info(t("stock.none_registered"))
