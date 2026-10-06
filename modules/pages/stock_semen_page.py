@@ -23,6 +23,7 @@ from modules.db import get_connection
 from modules.i18n import t
 from modules.pages.map_page import run_map_page
 from modules.pages.stock_page import run_stock_page
+from modules.url_state import guardar_no_endereco, opcao_do_endereco
 from modules.pages.transfer_page import run_transfer_page
 from modules.ui_kit import inject_reports_css, inject_stock_css, render_zone_title
 
@@ -183,7 +184,9 @@ def _resolver_aba_ativa() -> str:
     if incoming in _TABS:
         st.session_state[_TAB_STATE_KEY] = incoming
     elif _TAB_STATE_KEY not in st.session_state:
-        st.session_state[_TAB_STATE_KEY] = _TABS[0]
+        # Sessão nova (ex.: "Atualizar"): separador que estava no endereço.
+        st.session_state[_TAB_STATE_KEY] = opcao_do_endereco("separador", _TABS) or _TABS[0]
+    guardar_no_endereco("separador", st.session_state[_TAB_STATE_KEY])
     return st.session_state[_TAB_STATE_KEY]
 
 
