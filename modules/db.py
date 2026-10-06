@@ -71,6 +71,11 @@ def is_production_database_url(url: str) -> bool:
     return "render.com" in (urlparse(url).hostname or "")
 
 
+# TCP keepalives: o servidor/rede deixa de fechar tão facilmente ligações
+# paradas no pool (e quando fecha, `_ligacao_valida` substitui-as).
+_KEEPALIVES = dict(keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5)
+
+
 @st.cache_resource(show_spinner=False)
 def build_connection_pool():
     """Constrói (uma única vez) o pool de conexões.
@@ -85,7 +90,8 @@ def build_connection_pool():
         database_url = ensure_sslmode_require(database_url)
         pool_obj = psycopg2.pool.ThreadedConnectionPool(
             1, 10,
-            dsn=database_url
+            dsn=database_url,
+            **_KEEPALIVES,
         )
         logger.info("✅ Pool criado com DATABASE_URL (sslmode=require)")
         return pool_obj
@@ -97,9 +103,38 @@ def build_connection_pool():
         password=os.getenv("DB_PASSWORD", "123"),
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
+        **_KEEPALIVES,
     )
     logger.info("✅ Pool criado localmente")
     return pool_obj
+
+
+def _ligacao_valida(conn) -> bool:
+    """True se a ligação ainda está viva. O pool não sabe quando o
+    servidor fecha uma ligação parada (inactividade, reinício, rede):
+    continuaria a entregá-la e o primeiro uso falhava."""
+    if conn.closed:
+        return False
+    try:
+        if conn.info.transaction_status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
+            conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.rollback()
+        return True
+    except psycopg2.Error:
+        return False
+
+
+def _obter_ligacao_valida(pool, tentativas: int = 3):
+    """Ligação do pool, descartando (e substituindo) as que já morreram."""
+    for _ in range(tentativas):
+        conn = pool.getconn()
+        if _ligacao_valida(conn):
+            return conn
+        logger.warning("Ligação à BD fechada pelo servidor — a abrir uma nova")
+        pool.putconn(conn, close=True)
+    return pool.getconn()
 
 
 @contextmanager
@@ -108,16 +143,22 @@ def get_connection():
     pool = build_connection_pool()
     conn = None
     try:
-        conn = pool.getconn()
+        conn = _obter_ligacao_valida(pool)
         yield conn
     except Exception as e:
-        if conn:
-            conn.rollback()
+        # Se a ligação morreu a meio, o rollback também falha — não pode
+        # esconder o erro original (antes aparecia só "connection already
+        # closed", sem dizer o que tinha falhado).
+        if conn and not conn.closed:
+            try:
+                conn.rollback()
+            except psycopg2.Error:
+                pass
         logger.error(f"Erro na conexão: {e}")
         raise
     finally:
         if conn:
-            pool.putconn(conn)
+            pool.putconn(conn, close=bool(conn.closed))
 
 
 def invalidate_data_cache():
