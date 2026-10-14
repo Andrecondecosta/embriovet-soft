@@ -1,0 +1,31 @@
+:root {
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: var(--mantine-color-gray-0);
+}
+
+/* iOS faz zoom automático ao focar campos com letra < 16px. */
+@media (max-width: 47.99em) {
+  input,
+  textarea,
+  select,
+  .mantine-Input-input,
+  .mantine-Select-input {
+    font-size: 16px !important;
+  }
+}
+
+/* Separadores com muitos itens: deslizam na horizontal em ecrãs estreitos
+   em vez de partirem em várias linhas. */
+.tabs-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+.tabs-scroll > * {
+  flex-shrink: 0;
+}
