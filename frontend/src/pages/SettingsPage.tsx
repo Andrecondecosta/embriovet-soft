@@ -1,5 +1,6 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Tabs, Title } from "@mantine/core";
+import { Tabs } from "@mantine/core";
+import { PageHeader } from "../components/ds";
 
 import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
@@ -27,9 +28,7 @@ export function SettingsPage({ user }: { user: User }) {
 
   return (
     <>
-      <Title order={2} mb="md">
-        {t("web.nav.definicoes")}
-      </Title>
+      <PageHeader titulo={t("web.nav.definicoes")} />
       <Tabs value={tab} onChange={(v) => v && navigate(`/definicoes/${v}`)} keepMounted={false}>
         <Tabs.List mb="lg" className="tabs-scroll">
           {visiveis.map((x) => (

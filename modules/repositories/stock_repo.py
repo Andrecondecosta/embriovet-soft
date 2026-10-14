@@ -538,7 +538,7 @@ def deletar_stock(stock_id):
 # Transferências
 # ============================================================
 
-def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade, operation_id=None):
+def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade, operation_id=None, utilizador=None):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
         with get_connection() as conn:
@@ -625,14 +625,15 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                     quantidade, data_transferencia, utilizador, operation_id
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
             """, (to_py(stock_origem_id), to_py(prop_origem_id), to_py(proprietario_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—'), operation_id))
+                  utilizador or st.session_state.get('user', {}).get('username', '—'), operation_id))
             
             conn.commit()
             cur.close()
             
             # Verificar e desativar proprietários com stock = 0
-            # Lazy import para evitar ciclo com app.py.
-            from app import atualizar_status_proprietarios
+            # Import directo do repositório (antes vinha via `from app
+            # import`, que corria o app.py inteiro de novo).
+            from modules.repositories.owner_repo import atualizar_status_proprietarios
             atualizar_status_proprietarios()
             invalidate_data_cache()
             
@@ -650,7 +651,8 @@ transferir_stock_interno = transferir_palhetas_parcial
 
 
 def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, stock_origem_id, quantidade,
-                                              contentor_id_novo, canister_novo, andar_novo, operation_id=None):
+                                              contentor_id_novo, canister_novo, andar_novo, operation_id=None,
+                                              utilizador=None):
     """Transfere palhetas para outro proprietário e muda a localização"""
     try:
         with get_connection() as conn:
@@ -737,14 +739,15 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                     quantidade, data_transferencia, utilizador, operation_id
                 ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s)
             """, (to_py(stock_origem_id), to_py(prop_origem_db), to_py(prop_destino_id), quantidade_int,
-                  st.session_state.get('user', {}).get('username', '—'), operation_id))
+                  utilizador or st.session_state.get('user', {}).get('username', '—'), operation_id))
             
             conn.commit()
             cur.close()
             
             # Verificar e desativar proprietários com stock = 0
-            # Lazy import para evitar ciclo com app.py.
-            from app import atualizar_status_proprietarios
+            # Import directo do repositório (antes vinha via `from app
+            # import`, que corria o app.py inteiro de novo).
+            from modules.repositories.owner_repo import atualizar_status_proprietarios
             atualizar_status_proprietarios()
             invalidate_data_cache()
             
@@ -903,7 +906,7 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
         return False
 
 
-def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes="", operation_id=None):
+def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidade, tipo="Venda", observacoes="", operation_id=None, utilizador=None):
     """Transfere palhetas para fora do sistema (venda/doação/exportação)"""
     try:
         with get_connection() as conn:
@@ -954,7 +957,7 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 quantidade_int,
                 to_py(tipo),
                 to_py(observacoes),
-                st.session_state.get('user', {}).get('username', '—'),
+                utilizador or st.session_state.get('user', {}).get('username', '—'),
                 operation_id
             ))
             
@@ -962,8 +965,9 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
             cur.close()
             
             # Verificar e desativar proprietários com stock = 0
-            # Lazy import para evitar ciclo com app.py.
-            from app import atualizar_status_proprietarios
+            # Import directo do repositório (antes vinha via `from app
+            # import`, que corria o app.py inteiro de novo).
+            from modules.repositories.owner_repo import atualizar_status_proprietarios
             atualizar_status_proprietarios()
             invalidate_data_cache()
             

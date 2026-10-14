@@ -30,6 +30,7 @@ import { useErrorMessage } from "../../components/errors";
 import { baixarCsv, dataCurta } from "../../components/csv";
 import { useGaranhoesStock, useLotes, useTransferencias, localizacao, referencia, type Lote } from "./api";
 import { LoteDrawer } from "./LoteDrawer";
+import { KpiRow, Pill } from "../../components/ds";
 
 const SEM_DONO = "sem-dono";
 
@@ -228,23 +229,14 @@ export function LotesTab({ onNovoLote }: { onNovoLote: () => void }) {
       ) : (
         <Box style={{ opacity: lotes.isFetching ? 0.7 : 1, transition: "opacity 120ms" }}>
           {/* Indicadores (render_kpi_strip) */}
-          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm" mb="md">
-            {[
+          <KpiRow
+            items={[
               [t("web.stock.kpi.lotes"), k!.lotes],
               [t("web.stock.kpi.palhetas"), k!.palhetas],
               [t("web.stock.kpi.proprietarios"), k!.proprietarios],
               [t("web.stock.kpi.qualidade"), k!.qualidade_media !== null ? `${k!.qualidade_media}%` : "—"],
-            ].map(([label, valor]) => (
-              <Paper key={String(label)} withBorder radius="md" p="sm">
-                <Text size="xs" c="dimmed" fw={500} tt="uppercase">
-                  {label}
-                </Text>
-                <Text fw={700} size="xl">
-                  {valor}
-                </Text>
-              </Paper>
-            ))}
-          </SimpleGrid>
+            ]}
+          />
 
           {/* Palhetas por proprietário + histórico do garanhão, fechados por
               omissão para a lista de lotes ficar logo à vista no telemóvel. */}
@@ -323,9 +315,7 @@ function LoteCartao({ lote: l, onClick }: { lote: Lote; onClick: () => void }) {
               <Text fw={600} truncate>
                 {referencia(l) ?? t("common.no_reference")}
               </Text>
-              <Badge variant="light" color={existencia > 0 ? "brand" : "gray"} style={{ flexShrink: 0 }}>
-                {t("web.stock.straws_count", { count: existencia })}
-              </Badge>
+              <Pill nivel={existencia > 0 ? "aviso" : "ok"}>{t("web.stock.straws_count", { count: existencia })}</Pill>
             </Group>
             <Text size="sm" truncate>
               {l.proprietario_nome ?? t("common.no_owner")}

@@ -1,11 +1,13 @@
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Button, Group, Tabs, Title, Tooltip } from "@mantine/core";
+import { Button, Group, Tabs, Tooltip } from "@mantine/core";
+import { PageHeader } from "../../components/ds";
 import { IconFileImport, IconPlus } from "@tabler/icons-react";
 
 import { useT } from "../../i18n/I18n";
 import { NotMigratedPage } from "../NotMigratedPage";
 import { LotesTab } from "./LotesTab";
 import { GaranhoesTab } from "./GaranhoesTab";
+import { TransferenciasTab } from "./transfer/TransferenciasTab";
 
 // Os mesmos 4 separadores de `stock_semen_page.py`, pela mesma ordem.
 const TABS = [
@@ -30,11 +32,12 @@ export function StockPage() {
 
   return (
     <>
-      <Group justify="space-between" align="center" mb="md" gap="sm">
-        <Title order={2}>{t("web.nav.stock_semen")}</Title>
-        {/* "Adicionar lote"/"Importar" só no separador Lotes, como na app atual. */}
-        {tab === "lotes" && (
-          <Group gap="xs" visibleFrom="sm">
+      <PageHeader
+        titulo={t("web.nav.stock_semen")}
+        acoes={
+          // "Adicionar lote"/"Importar" só no separador Lotes, como na app atual.
+          tab === "lotes" && (
+          <Group gap="xs" visibleFrom="sm" wrap="nowrap">
             <Tooltip label={t("web.not_migrated.title")}>
               <Button variant="default" leftSection={<IconFileImport size={16} />} data-disabled onClick={(e) => e.preventDefault()}>
                 {t("web.stock.import")}
@@ -44,8 +47,9 @@ export function StockPage() {
               {t("web.stock.add")}
             </Button>
           </Group>
-        )}
-      </Group>
+          )
+        }
+      />
 
       <Tabs value={tab} onChange={(v) => v && navigate(`/stock-semen/${v}`)} keepMounted={false}>
         <Tabs.List mb="lg" className="tabs-scroll">
@@ -65,7 +69,7 @@ export function StockPage() {
           <NotMigratedPage />
         </Tabs.Panel>
         <Tabs.Panel value="transferencias">
-          <NotMigratedPage />
+          <TransferenciasTab />
         </Tabs.Panel>
       </Tabs>
     </>

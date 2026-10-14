@@ -160,7 +160,7 @@ export const useApagarLote = () =>
   useStockMutation((id: number) => api<{ ok: boolean }>(`/stock/lotes/${id}`, "DELETE"));
 
 /** "CT1/C3/A2" — como na lista da app atual. */
-export function localizacao(l: Lote): string | null {
+export function localizacao(l: Pick<Lote, "contentor_codigo" | "canister" | "andar" | "local_armazenagem">): string | null {
   if (l.contentor_codigo) {
     return l.canister != null && l.andar != null ? `${l.contentor_codigo}/C${l.canister}/A${l.andar}` : l.contentor_codigo;
   }
@@ -168,4 +168,4 @@ export function localizacao(l: Lote): string | null {
 }
 
 /** Referência do lote: origem externa, ou data de produção. */
-export const referencia = (l: Lote) => l.origem_externa || l.data_embriovet || null;
+export const referencia = (l: Pick<Lote, "origem_externa" | "data_embriovet">) => l.origem_externa || l.data_embriovet || null;

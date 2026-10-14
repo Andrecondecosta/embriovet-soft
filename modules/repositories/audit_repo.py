@@ -17,10 +17,11 @@ from modules.db import get_connection
 logger = logging.getLogger(__name__)
 
 
-def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos):
+def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos, utilizador=None):
     """Regista uma edição no histórico de auditoria."""
     try:
-        utilizador = st.session_state.get("user", {}).get("username", "—")
+        if not utilizador:
+            utilizador = st.session_state.get("user", {}).get("username", "—")
         with get_connection() as conn:
             cur = conn.cursor()
             cur.execute(

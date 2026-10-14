@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Center, Loader, MantineProvider, createTheme } from "@mantine/core";
-import { generateColors } from "@mantine/colors-generator";
+import { Center, Loader, MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { ModalsProvider } from "@mantine/modals";
 
 import { api, setUnauthorizedHandler } from "./api/client";
+import { criarTema } from "./theme";
 import type { PublicSettings, User } from "./api/types";
 import { I18nProvider } from "./i18n/I18n";
 import { BrandContext, PRODUCT_NAME } from "./components/Brand";
@@ -61,17 +61,7 @@ export function App() {
   }, [settings.data, lang]);
 
   const primary = settings.data?.primary_color ?? "#E85D4A";
-  const theme = useMemo(
-    () =>
-      createTheme({
-        colors: { brand: generateColors(primary) },
-        primaryColor: "brand",
-        fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-        defaultRadius: "md",
-        cursorType: "pointer",
-      }),
-    [primary],
-  );
+  const theme = useMemo(() => criarTema(primary), [primary]);
 
   const loading = settings.isPending || messages.isPending || me.isPending;
   const user = me.data ?? null;

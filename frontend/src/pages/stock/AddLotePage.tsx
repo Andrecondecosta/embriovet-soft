@@ -71,7 +71,7 @@ export function AddLotePage() {
 
       <Paper withBorder radius="lg" p={{ base: "md", sm: "xl" }} component="form" onSubmit={submeter}>
         <Stack gap="lg">
-          <Secao titulo={t("web.stock.add.identification")}>
+          <Secao titulo={t("web.stock.add.identification")} primeiro>
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <GaranhaoInput
                 value={dados.garanhao}

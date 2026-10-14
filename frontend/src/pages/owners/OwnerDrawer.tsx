@@ -1,4 +1,4 @@
-import { Badge, Button, Divider, Drawer, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Button, Divider, Drawer, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { IconPencil, IconPlayerPause, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 
@@ -6,17 +6,11 @@ import type { Owner } from "../../api/types";
 import { useT } from "../../i18n/I18n";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { useDeleteOwner, useToggleOwner } from "./api";
+import { StatusPill } from "../../components/ds";
 import { useIsMobile } from "../../components/responsive";
 
 export function StatusBadge({ ativo }: { ativo: boolean | null }) {
-  const t = useT();
-  // `ativo` NULL conta como ativo, como na app atual (`prop.get('ativo', True)`).
-  const on = ativo !== false;
-  return (
-    <Badge color={on ? "teal" : "gray"} variant="light" radius="sm" style={{ flexShrink: 0 }}>
-      {on ? t("web.owners.active") : t("web.owners.inactive")}
-    </Badge>
-  );
+  return <StatusPill ativo={ativo} />;
 }
 
 function Campo({ label, valor }: { label: string; valor: string | number | null }) {

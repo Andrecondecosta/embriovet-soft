@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Accordion,
   Alert,
-  Badge,
   Button,
   Checkbox,
   Divider,
@@ -24,6 +23,7 @@ import { dataHora } from "../../components/csv";
 import { referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
 import { HistoricoTransferencias } from "./LotesTab";
 import { LoteFormModal } from "./LoteForm";
+import { Pill } from "../../components/ds";
 
 function Campo({ label, valor }: { label: string; valor: string | number | null | undefined }) {
   const t = useT();
@@ -90,9 +90,7 @@ export function LoteDrawer({
                 <Title order={3} style={{ wordBreak: "break-word" }}>
                   {referencia(lote) ?? t("common.no_reference")}
                 </Title>
-                <Badge variant="light" size="lg" style={{ flexShrink: 0 }}>
-                  {t("web.stock.straws_count", { count: lote.existencia_atual ?? 0 })}
-                </Badge>
+                <Pill nivel="aviso">{t("web.stock.straws_count", { count: lote.existencia_atual ?? 0 })}</Pill>
               </Group>
               <Text size="sm">{lote.proprietario_nome ?? t("common.no_owner")}</Text>
             </div>

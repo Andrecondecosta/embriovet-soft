@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppShell, Avatar, Box, Burger, Group, NavLink, ScrollArea, Stack, Text, UnstyledButton } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import {
+  IconActivity,
   IconCalendarEvent,
   IconChartBar,
   IconFlask,
@@ -11,7 +12,6 @@ import {
   IconLayoutDashboard,
   IconLogout,
   IconSettings,
-  IconActivity,
 } from "@tabler/icons-react";
 
 import { api } from "../api/client";

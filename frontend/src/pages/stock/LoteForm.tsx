@@ -49,7 +49,7 @@ export function camposVazios(): LoteCampos {
   };
 }
 
-export function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+export function Secao({ titulo, children }: { titulo: string; children: ReactNode; primeiro?: boolean }) {
   return (
     <Stack gap="sm">
       <Title order={5} c="dimmed" tt="uppercase" fz="xs" style={{ letterSpacing: "0.04em" }}>
@@ -103,6 +103,7 @@ export function DonoSelect({
   label,
   error,
   description,
+  dataOverride,
 }: {
   value: number | null;
   onChange: (id: number | null) => void;
@@ -110,6 +111,8 @@ export function DonoSelect({
   label: string;
   error?: string | null;
   description?: string;
+  /** Lista já filtrada (ex.: destinos sem o dono de origem). */
+  dataOverride?: { value: string; label: string }[];
 }) {
   const t = useT();
   const queryClient = useQueryClient();
@@ -121,7 +124,7 @@ export function DonoSelect({
         <Select
           label={label}
           withAsterisk
-          data={(donos.data ?? []).map((d) => ({ value: String(d.id), label: d.nome }))}
+          data={dataOverride ?? (donos.data ?? []).map((d) => ({ value: String(d.id), label: d.nome }))}
           value={value !== null ? String(value) : null}
           onChange={(v) => onChange(v ? Number(v) : null)}
           searchable
@@ -338,7 +341,7 @@ function EditarLoteForm({ lote, onClose }: { lote: Lote; onClose: () => void }) 
   return (
     <form onSubmit={submeter}>
       <Stack gap="lg">
-        <Secao titulo={t("web.stock.add.identification")}>
+        <Secao titulo={t("web.stock.add.identification")} primeiro>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <GaranhaoInput value={dados.garanhao} onChange={(v) => set({ garanhao: v })} error={erros.garanhao} />
             <DonoSelect
