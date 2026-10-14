@@ -244,7 +244,7 @@ export function OwnersTab() {
       )}
 
       {data && totalPaginas > 1 && (
-        <Group justify="center" mt="md" mb={isMobile ? 80 : 0}>
+        <Group justify="center" mt="md">
           <Pagination
             total={totalPaginas}
             value={Math.min(pagina, totalPaginas)}
@@ -258,6 +258,8 @@ export function OwnersTab() {
         </Group>
       )}
 
+      {/* Espaço para o botão "+" flutuante não tapar o último cartão. */}
+      <Box h={80} hiddenFrom="sm" />
       <Affix position={{ bottom: 20, right: 20 }} hiddenFrom="sm" zIndex={150}>
         <ActionIcon size={56} radius="xl" onClick={abrirNovo} aria-label={t("web.owners.new")} style={{ boxShadow: "var(--mantine-shadow-lg)" }}>
           <IconPlus size={26} />

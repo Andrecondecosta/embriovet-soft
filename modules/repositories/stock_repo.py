@@ -314,8 +314,12 @@ def obter_inventario_contentores(contentor_ids=None):
 # Escritas de stock
 # ============================================================
 
-def inserir_stock(dados):
-    """Insere novo stock no banco de dados"""
+def inserir_stock(dados, username=None):
+    """Insere novo stock no banco de dados.
+
+    Devolve o id do lote criado (verdadeiro) ou False. `username` é quem
+    fica em `criado_por`; se omitido, usa o utilizador da sessão
+    Streamlit (a API nova passa-o explicitamente)."""
     try:
         if not dados.get("Garanhão"):
             st.error(t("error.stallion_required"))
@@ -348,7 +352,8 @@ def inserir_stock(dados):
             cur = conn.cursor()
             
             # Obter utilizador atual
-            username = st.session_state.get('user', {}).get('username', 'desconhecido')
+            if not username:
+                username = st.session_state.get('user', {}).get('username', 'desconhecido')
 
             # Resolver animal_id do garanhão (cria em `animais` se necessário)
             animal_id = get_or_create_garanhao(dados.get("Garanhão"))
@@ -405,7 +410,7 @@ def inserir_stock(dados):
             st.session_state['ultimo_garanhao'] = garanhao_nome
             st.session_state['redirecionar_ver_stock'] = True
             
-            return True
+            return stock_id
 
     except Exception as e:
         logger.error(f"Erro ao inserir stock: {e}")
@@ -414,13 +419,19 @@ def inserir_stock(dados):
 
 
 def editar_stock(stock_id, dados):
-    """Edita um lote de stock"""
+    """Edita um lote de stock.
+
+    Se `dados` trouxer `animal_id`, a ligação à ficha do garanhão também
+    muda (é dela que vem o nome mostrado em todo o lado). Sem essa chave,
+    como antes, só o texto `garanhao` é alterado."""
     try:
         with get_connection() as conn:
             cur = conn.cursor()
+            muda_animal = "animal_id" in dados
             cur.execute(
                 """
                 UPDATE estoque_dono SET
+                    """ + ("animal_id = %s," if muda_animal else "") + """
                     garanhao = %s,
                     dono_id = %s,
                     data_embriovet = %s,
@@ -440,6 +451,7 @@ def editar_stock(stock_id, dados):
                 WHERE id = %s
                 """,
                 (
+                    *((to_py(dados.get("animal_id")),) if muda_animal else ()),
                     to_py(dados.get("garanhao")),
                     to_py(dados.get("dono_id")),
                     to_py(dados.get("data")),

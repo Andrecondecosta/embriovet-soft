@@ -11,6 +11,9 @@ import type { PublicSettings, User } from "./api/types";
 import { I18nProvider } from "./i18n/I18n";
 import { BrandContext, PRODUCT_NAME } from "./components/Brand";
 import { NAV, Shell } from "./components/Shell";
+import { UserContext } from "./components/User";
+import { StockPage } from "./pages/stock/StockPage";
+import { AddLotePage } from "./pages/stock/AddLotePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ChangeCredentialsPage } from "./pages/ChangeCredentialsPage";
 import { NotMigratedPage } from "./pages/NotMigratedPage";
@@ -94,9 +97,17 @@ export function App() {
                     <Route path="*" element={<Navigate to="/alterar-credenciais" replace />} />
                   </>
                 ) : (
-                  <Route element={<Shell user={user} />}>
+                  <Route
+                    element={
+                      <UserContext.Provider value={user}>
+                        <Shell user={user} />
+                      </UserContext.Provider>
+                    }
+                  >
                     <Route path="/definicoes/:tab?" element={<SettingsPage user={user} />} />
-                    {NAV.filter((n) => n.path !== "/definicoes").map((n) => (
+                    <Route path="/stock-semen/novo" element={<AddLotePage />} />
+                    <Route path="/stock-semen/:tab?" element={<StockPage />} />
+                    {NAV.filter((n) => !["/definicoes", "/stock-semen"].includes(n.path)).map((n) => (
                       <Route key={n.path} path={n.path} element={<NotMigratedPage />} />
                     ))}
                     <Route path="*" element={<Navigate to="/definicoes/proprietarios" replace />} />

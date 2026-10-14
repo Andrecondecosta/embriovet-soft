@@ -32,7 +32,12 @@ Abrir <http://localhost:5180>. As contas são as mesmas da app Streamlit.
 |---|---|
 | Login + alterar credenciais | ✅ |
 | Definições › Proprietários | ✅ (com paginação e pesquisa) |
+| Stock de sémen › Lotes, Garanhões, Adicionar lote | ✅ |
+| Stock de sémen › Transferências, Mapa, Importar | ⏳ |
 | Restantes | ⏳ ainda na app Streamlit |
+
+Todas as páginas são feitas e verificadas em telemóvel (~375px), tablet
+(~820px) e computador.
 
 ## Produção (mais tarde)
 
