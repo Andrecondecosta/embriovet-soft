@@ -6,7 +6,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
 import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
-import { Cabecalho, DataCampo, abrirAoTocar } from "../../components/mobile";
+import { Cabecalho, DataCampo, abrirAoTocar, semNulos } from "../../components/mobile";
 import {
   useAlertas,
   useEstadiasAnimal,
@@ -241,7 +241,7 @@ export function EstadiasAnimalTab({ animal }: { animal: Animal }) {
               form={mform}
               layout="horizontal"
               style={{ "--prefix-width": "9em" } as React.CSSProperties}
-              initialValues={a}
+              initialValues={semNulos(a)}
               onFinish={submeter}
             >
               <MForm.Item name="garanhao" label={t("web.animal.col.stallion")}>
@@ -268,9 +268,9 @@ export function EstadiasAnimalTab({ animal }: { animal: Animal }) {
       <Table
         size="small"
         bordered
-        rowKey={(_, i) => String(i)}
+        rowKey="__k"
         loading={q.isPending}
-        dataSource={q.data?.estadias ?? []}
+        dataSource={(q.data?.estadias ?? []).map((e, i) => ({ ...e, __k: i }))}
         pagination={false}
         locale={{ emptyText: t("web.animal.no_stays") }}
         columns={[
@@ -372,9 +372,9 @@ export function ProducaoTab({ animal }: { animal: Animal }) {
       <Table
         size="small"
         bordered
-        rowKey={(_, i) => String(i)}
+        rowKey="__k"
         loading={q.isPending}
-        dataSource={lotes}
+        dataSource={lotes.map((l, i) => ({ ...l, __k: i }))}
         pagination={false}
         scroll={{ x: true }}
         locale={{ emptyText: t("web.animal.prod.no_lots") }}
@@ -437,9 +437,9 @@ export function FertilidadeTab({ animal }: { animal: Animal }) {
       <Table<Inseminacao>
         size="small"
         bordered
-        rowKey={(_, i) => String(i)}
+        rowKey="__k"
         loading={q.isPending}
-        dataSource={d?.inseminacoes ?? []}
+        dataSource={(d?.inseminacoes ?? []).map((x, i) => ({ ...x, __k: i }))}
         pagination={false}
         locale={{ emptyText: t("web.animal.no_inseminations") }}
         columns={[

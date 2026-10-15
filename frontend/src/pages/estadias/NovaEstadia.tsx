@@ -1,22 +1,21 @@
 import { useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { Alert, Checkbox, Col, Collapse, DatePicker, Form, Input, InputNumber, Modal, Row, Segmented, Select, Tag, Typography } from "antd";
-import {
-  Checkbox as MCheckbox,
-  DatePicker as MDatePicker,
-  Form as MForm,
-  Input as MInput,
-  List,
-  Popup,
-  SearchBar,
-  Selector,
-  TextArea,
-} from "antd-mobile";
+import { Checkbox as MCheckbox, Form as MForm, Input as MInput, List, Popup, SearchBar, Selector, TextArea } from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile, useDebounced } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
-import { Cabecalho, FolhaEcraInteiro, NumeroCampo, PickerCampo, SeletorPesquisa, abrirAoTocar, irParaErro } from "../../components/mobile";
+import {
+  Cabecalho,
+  DataCampo,
+  FolhaEcraInteiro,
+  NumeroCampo,
+  PickerCampo,
+  SeletorPesquisa,
+  abrirAoTocar,
+  irParaErro,
+} from "../../components/mobile";
 import { DonoSelect } from "../stock/LoteForm";
 import {
   MOTIVOS,
@@ -382,10 +381,8 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
   const tipoRegisto = MForm.useWatch("tipo_registo", form) ?? "estadia";
   const tipoAnimal = MForm.useWatch(["novo", "tipo"], form);
   const aviso = useAvisoNome(MForm.useWatch(["novo", "nome"], form), MForm.useWatch("dono_id", form) ?? null);
-  const [dataAberta, setDataAberta] = useState<"entrada" | "nascimento" | null>(null);
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
   const alojamentos = opcoes.data?.alojamentos ?? [];
-  const dataTexto = (v: Dayjs | Date | null | undefined) => (v ? dayjs(v).format("DD/MM/YYYY") : "—");
 
   return (
     <FolhaEcraInteiro
@@ -400,7 +397,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         form={form}
         layout="horizontal"
         style={{ "--prefix-width": "7.5em" } as React.CSSProperties}
-        initialValues={{ ...INICIAIS, data_entrada: new Date() }}
+        initialValues={{ ...INICIAIS, data_entrada: dayjs().format("YYYY-MM-DD") }}
         onFinish={(v: Valores) => guardar({ ...form.getFieldsValue(true), ...v })}
         onFinishFailed={irParaErro}
       >
@@ -416,6 +413,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         </MForm.Item>
         {modo === "existente" ? (
           <MForm.Item
+            key="animal"
             name="animal"
             label={t("web.stays.form.animal")}
             rules={[{ required: true, message: t("web.stays.error.animal_required") }]}
@@ -426,6 +424,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         ) : (
           <>
             <MForm.Item
+              key="novo-nome"
               name={["novo", "nome"]}
               label={t("web.stays.form.name")}
               rules={[{ required: true, whitespace: true, message: t("web.stays.error.animal_name_required") }]}
@@ -458,8 +457,8 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
                 <MInput clearable />
               </MForm.Item>
             ))}
-            <MForm.Item label={t("web.stays.form.birth")} arrow onClick={() => setDataAberta("nascimento")} shouldUpdate>
-              {() => dataTexto(form.getFieldValue(["novo", "data_nascimento"]))}
+            <MForm.Item name={["novo", "data_nascimento"]} label={t("web.stays.form.birth")} arrow onClick={abrirAoTocar}>
+              <DataCampo limpar max={new Date()} />
             </MForm.Item>
             <MForm.Item name={["novo", "altura"]} label={t("web.stays.form.height")}>
               <NumeroCampo />
@@ -508,20 +507,22 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
           />
         </MForm.Item>
         <MForm.Item
+          name="data_entrada"
           label={tipoRegisto === "externo" ? t("web.stays.form.service_date") : t("web.stays.form.entry_date")}
+          rules={[{ required: true }]}
           arrow
-          onClick={() => setDataAberta("entrada")}
-          shouldUpdate
+          onClick={abrirAoTocar}
         >
-          {() => dataTexto(form.getFieldValue("data_entrada"))}
+          <DataCampo />
         </MForm.Item>
         {tipoRegisto !== "externo" &&
           (opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
-            <MForm.Item>
+            <MForm.Item key="sem-alojamento">
               <span style={{ color: "var(--adm-color-warning)" }}>{t("web.stays.form.no_housing")}</span>
             </MForm.Item>
           ) : (
             <MForm.Item
+              key="alojamento"
               name="alojamento_id"
               label={tipoRegisto === "estadia" ? t("web.stays.form.housing") : t("web.stays.form.housing_optional")}
               rules={tipoRegisto === "estadia" ? [{ required: true, message: t("web.stays.error.housing_required") }] : []}
@@ -537,23 +538,6 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
           <TextArea autoSize={{ minRows: 1, maxRows: 5 }} />
         </MForm.Item>
       </MForm>
-      <MDatePicker
-        visible={dataAberta !== null}
-        onClose={() => setDataAberta(null)}
-        min={dayjs().subtract(40, "year").toDate()}
-        max={dayjs().add(2, "year").toDate()}
-        value={
-          dataAberta === "entrada"
-            ? dayjs(form.getFieldValue("data_entrada")).toDate()
-            : form.getFieldValue(["novo", "data_nascimento"])
-              ? dayjs(form.getFieldValue(["novo", "data_nascimento"])).toDate()
-              : new Date()
-        }
-        onConfirm={(v) => {
-          if (dataAberta === "entrada") form.setFieldValue("data_entrada", v);
-          else form.setFieldValue(["novo", "data_nascimento"], v);
-        }}
-      />
     </FolhaEcraInteiro>
   );
 }

@@ -8,7 +8,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
 import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
-import { DataCampo, FolhaEcraInteiro, NumeroCampo, PickerCampo, abrirAoTocar, irParaErro } from "../../components/mobile";
+import { DataCampo, FolhaEcraInteiro, semNulos, NumeroCampo, PickerCampo, abrirAoTocar, irParaErro } from "../../components/mobile";
 import {
   COMPORTAMENTOS,
   useApagarRegisto,
@@ -232,7 +232,7 @@ function FormRegisto({ x }: { x: X }) {
             form={mform}
             layout="horizontal"
             style={{ "--prefix-width": "8em" } as React.CSSProperties}
-            initialValues={registo}
+            initialValues={semNulos(registo)}
             onFinish={(v) => x.guardar({ ...registo, ...v })}
             onFinishFailed={irParaErro}
           >

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App as AntApp, ConfigProvider, Spin } from "antd";
@@ -17,27 +17,26 @@ import { criarTema } from "./theme";
 import type { PublicSettings, User } from "./api/types";
 import { I18nProvider } from "./i18n/I18n";
 import { BrandContext, PRODUCT_NAME } from "./components/Brand";
-import { NAV, Shell } from "./components/Shell";
+import { Shell } from "./components/Shell";
 import { UserContext } from "./components/User";
 import { ligarFeedback } from "./components/errors";
 import { useIsMobile } from "./components/responsive";
-import { StockPage } from "./pages/stock/StockPage";
-import { AddLotePage } from "./pages/stock/AddLotePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ChangeCredentialsPage } from "./pages/ChangeCredentialsPage";
-import { NotMigratedPage } from "./pages/NotMigratedPage";
-import { AtividadePage } from "./pages/AtividadePage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { RelatoriosPage } from "./pages/RelatoriosPage";
-import { EstadiasPage } from "./pages/estadias/EstadiasPage";
-import { TrabalhoPage } from "./pages/TrabalhoPage";
-import { AnimalPage } from "./pages/animal/AnimalPage";
-import { InseminacaoPage } from "./pages/InseminacaoPage";
-import { ImportarPage } from "./pages/stock/ImportarPage";
-import { SettingsPage } from "./pages/SettingsPage";
 
-// Páginas do menu que já existem na app nova (as outras mostram "ainda não migrado").
-const MIGRADAS = ["/definicoes", "/stock-semen", "/atividade", "/dashboard", "/relatorios", "/estadias", "/trabalho-diario"];
+// Cada página carrega só quando é aberta (o telemóvel não descarrega a app
+// inteira logo no início).
+const StockPage = lazy(() => import("./pages/stock/StockPage").then((m) => ({ default: m.StockPage })));
+const AddLotePage = lazy(() => import("./pages/stock/AddLotePage").then((m) => ({ default: m.AddLotePage })));
+const AtividadePage = lazy(() => import("./pages/AtividadePage").then((m) => ({ default: m.AtividadePage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const RelatoriosPage = lazy(() => import("./pages/RelatoriosPage").then((m) => ({ default: m.RelatoriosPage })));
+const EstadiasPage = lazy(() => import("./pages/estadias/EstadiasPage").then((m) => ({ default: m.EstadiasPage })));
+const TrabalhoPage = lazy(() => import("./pages/TrabalhoPage").then((m) => ({ default: m.TrabalhoPage })));
+const AnimalPage = lazy(() => import("./pages/animal/AnimalPage").then((m) => ({ default: m.AnimalPage })));
+const InseminacaoPage = lazy(() => import("./pages/InseminacaoPage").then((m) => ({ default: m.InseminacaoPage })));
+const ImportarPage = lazy(() => import("./pages/stock/ImportarPage").then((m) => ({ default: m.ImportarPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 
 const LOCALES = { "pt-PT": ptPT, en: enUS, fr: frFR, de: deDE } as const;
 // O Ant Design Mobile não tem português de Portugal; o do Brasil só aparece
@@ -50,6 +49,15 @@ function FullPageLoader() {
       <Spin size="large" />
     </div>
   );
+}
+
+/** Página carregada à parte: enquanto chega, mostra o indicador. */
+function pagina(el: ReactNode) {
+  return <Suspense fallback={<CarregarPagina />}>{el}</Suspense>;
+}
+
+function CarregarPagina() {
+  return <Spin style={{ display: "block", margin: 48 }} />;
 }
 
 /** Entrega ao `errors.ts` os avisos/confirmações do antd com o tema certo. */
@@ -146,20 +154,17 @@ export function App() {
                           </UserContext.Provider>
                         }
                       >
-                        <Route path="/definicoes/:tab?" element={<SettingsPage user={user} />} />
-                        <Route path="/dashboard" element={<DashboardPage />} />
-                        <Route path="/atividade" element={<AtividadePage />} />
-                        <Route path="/relatorios" element={<RelatoriosPage />} />
-                        <Route path="/estadias/:tab?" element={<EstadiasPage />} />
-                        <Route path="/trabalho-diario" element={<TrabalhoPage />} />
-                        <Route path="/animais/:id" element={<AnimalPage />} />
-                        <Route path="/trabalho-diario/inseminacao" element={<InseminacaoPage />} />
-                        <Route path="/stock-semen/novo" element={<AddLotePage />} />
-                        <Route path="/stock-semen/importar" element={<ImportarPage />} />
-                        <Route path="/stock-semen/:tab?" element={<StockPage />} />
-                        {NAV.filter((n) => !MIGRADAS.includes(n.path)).map((n) => (
-                          <Route key={n.path} path={n.path} element={<NotMigratedPage />} />
-                        ))}
+                        <Route path="/definicoes/:tab?" element={pagina(<SettingsPage user={user} />)} />
+                        <Route path="/dashboard" element={pagina(<DashboardPage />)} />
+                        <Route path="/atividade" element={pagina(<AtividadePage />)} />
+                        <Route path="/relatorios" element={pagina(<RelatoriosPage />)} />
+                        <Route path="/estadias/:tab?" element={pagina(<EstadiasPage />)} />
+                        <Route path="/trabalho-diario" element={pagina(<TrabalhoPage />)} />
+                        <Route path="/animais/:id" element={pagina(<AnimalPage />)} />
+                        <Route path="/trabalho-diario/inseminacao" element={pagina(<InseminacaoPage />)} />
+                        <Route path="/stock-semen/novo" element={pagina(<AddLotePage />)} />
+                        <Route path="/stock-semen/importar" element={pagina(<ImportarPage />)} />
+                        <Route path="/stock-semen/:tab?" element={pagina(<StockPage />)} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Route>
                     </>

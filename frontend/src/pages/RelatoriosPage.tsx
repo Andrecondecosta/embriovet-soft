@@ -298,8 +298,8 @@ function RelatoriosDesktop({ r }: { r: R }) {
                 size="small"
                 bordered
                 loading={r.relatorio.isFetching}
-                rowKey={(_, i) => String(i)}
-                dataSource={tab.linhas}
+                rowKey="__k"
+                dataSource={tab.linhas.map((l, i) => ({ ...l, __k: i }))}
                 pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small", showSizeChanger: false }}
                 scroll={{ x: true }}
                 locale={{ emptyText: t("reports.no_data_filters") }}

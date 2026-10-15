@@ -26,7 +26,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
 import { notifySuccess, useNotifyError } from "../../components/errors";
-import { Cabecalho, DataCampo, FolhaEcraInteiro, NumeroCampo, abrirAoTocar, irParaErro } from "../../components/mobile";
+import { Cabecalho, DataCampo, FolhaEcraInteiro, semNulos, NumeroCampo, abrirAoTocar, irParaErro } from "../../components/mobile";
 import { useAgendarColheita, useCancelarColheita, useColheitas, useEditarAnimal, type Animal, type AnimalIn } from "./api";
 
 const TIPOS = ["egua", "garanhao", "receptora"] as const;
@@ -191,7 +191,7 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
           form={mform}
           layout="horizontal"
           style={{ "--prefix-width": "7.5em" } as React.CSSProperties}
-          initialValues={animal}
+          initialValues={semNulos(animal)}
           onFinish={guardar}
           onFinishFailed={irParaErro}
         >

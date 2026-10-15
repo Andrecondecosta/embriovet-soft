@@ -317,3 +317,9 @@ function DataCampoBase(
   );
 }
 export const DataCampo = forwardRef(DataCampoBase);
+
+/** Valores iniciais para formulários do antd-mobile: os campos de texto não
+ *  aceitam `null` (só vazio/undefined). */
+export function semNulos<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === null ? undefined : v])) as T;
+}

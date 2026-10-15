@@ -195,8 +195,8 @@ function DashboardDesktop() {
       >
         <Table
           size="small"
-          rowKey={(r, i) => `${r.ts}-${i}`}
-          dataSource={d.atividade}
+          rowKey="__k"
+          dataSource={d.atividade.map((a, i) => ({ ...a, __k: i }))}
           pagination={false}
           locale={vazio(t("web.dashboard.no_activity"))}
           columns={[
