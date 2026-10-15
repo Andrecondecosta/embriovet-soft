@@ -923,3 +923,64 @@ _DEFINICOES = {
 
 for _lang, _textos in _DEFINICOES.items():
     WEB_TRANSLATIONS[_lang].update(_textos)
+
+# ── Dashboard (na app atual estes textos estavam só em português, no código) ──
+_DASH_CHAVES = [
+    "web.dashboard.clinic", "web.dashboard.active_stays", "web.dashboard.tasks_today", "web.dashboard.urgent",
+    "web.dashboard.today", "web.dashboard.no_tasks", "web.dashboard.open_daily", "web.dashboard.mare",
+    "web.dashboard.owner", "web.dashboard.task_type", "web.dashboard.urgency", "web.dashboard.urg.urgente",
+    "web.dashboard.urg.hoje", "web.dashboard.urg.amanha", "web.dashboard.urg.observacao",
+    "web.task.primeira_observacao", "web.task.verificar_ovulacao", "web.task.diagnostico_gestacao",
+    "web.task.confirmacao_gestacao", "web.task.segunda_confirmacao", "web.task.pre_parto", "web.task.parto_previsto",
+    "web.dashboard.no_activity", "web.dashboard.all_activity", "web.dashboard.col.time", "web.dashboard.col.user",
+    "web.dashboard.col.action", "web.dashboard.col.detail", "web.dashboard.col.lots", "web.dashboard.births",
+    "web.dashboard.no_births", "web.dashboard.expected_date", "web.dashboard.days_left", "web.dashboard.in_days",
+    "web.dashboard.today_lc", "web.dashboard.tomorrow_lc", "web.dashboard.attention", "web.dashboard.no_attention",
+    "web.dashboard.distribution", "web.dashboard.by_container", "web.dashboard.by_owner",
+]
+_DASH = {
+    "pt-PT": [
+        "Clínica", "Estadias ativas", "Tarefas de hoje", "{count} urgente(s)", "Hoje na clínica", "Sem tarefas para hoje.",
+        "Abrir Trabalho diário", "Égua", "Dono", "Tipo", "Urgência", "Urgente", "Hoje", "Amanhã", "Observação",
+        "1.ª observação", "Verificar ovulação", "Diagnóstico de gestação", "Confirmação de gestação", "2.ª confirmação",
+        "Pré-parto", "Parto previsto", "Sem atividade recente registada.", "Ver e editar todas as atividades", "Hora",
+        "Utilizador", "Ação", "Detalhe", "Lotes", "Partos previstos — próximos {dias} dias",
+        "Sem partos previstos neste período.", "Data prevista", "Dias restantes", "em {n} dias", "hoje", "amanhã",
+        "Stock a precisar de atenção (≤ {limite})", "Todos os lotes estão acima do limite.", "Distribuição de stock",
+        "Palhetas por contentor", "Palhetas por proprietário",
+    ],
+    "en": [
+        "Clinic", "Active stays", "Today’s tasks", "{count} urgent", "Today at the clinic", "No tasks for today.",
+        "Open Daily work", "Mare", "Owner", "Type", "Urgency", "Urgent", "Today", "Tomorrow", "Observation",
+        "1st check", "Check ovulation", "Pregnancy diagnosis", "Pregnancy confirmation", "2nd confirmation",
+        "Pre-foaling", "Expected foaling", "No recent activity.", "See and edit all activity", "Time",
+        "User", "Action", "Detail", "Lots", "Expected foalings — next {dias} days",
+        "No expected foalings in this period.", "Expected date", "Days left", "in {n} days", "today", "tomorrow",
+        "Stock needing attention (≤ {limite})", "All lots are above the limit.", "Stock distribution",
+        "Straws per container", "Straws per owner",
+    ],
+    "fr": [
+        "Clinique", "Séjours en cours", "Tâches du jour", "{count} urgente(s)", "Aujourd’hui à la clinique", "Aucune tâche aujourd’hui.",
+        "Ouvrir Travail du jour", "Jument", "Propriétaire", "Type", "Urgence", "Urgent", "Aujourd’hui", "Demain", "Observation",
+        "1re observation", "Vérifier l’ovulation", "Diagnostic de gestation", "Confirmation de gestation", "2e confirmation",
+        "Pré-poulinage", "Poulinage prévu", "Aucune activité récente.", "Voir et modifier toute l’activité", "Heure",
+        "Utilisateur", "Action", "Détail", "Lots", "Poulinages prévus — {dias} prochains jours",
+        "Aucun poulinage prévu sur cette période.", "Date prévue", "Jours restants", "dans {n} jours", "aujourd’hui", "demain",
+        "Stock à surveiller (≤ {limite})", "Tous les lots sont au-dessus du seuil.", "Répartition du stock",
+        "Paillettes par conteneur", "Paillettes par propriétaire",
+    ],
+    "de": [
+        "Klinik", "Aktive Aufenthalte", "Heutige Aufgaben", "{count} dringend", "Heute in der Klinik", "Keine Aufgaben für heute.",
+        "Tagesarbeit öffnen", "Stute", "Besitzer", "Typ", "Dringlichkeit", "Dringend", "Heute", "Morgen", "Beobachtung",
+        "1. Kontrolle", "Ovulation prüfen", "Trächtigkeitsdiagnose", "Trächtigkeitsbestätigung", "2. Bestätigung",
+        "Vor dem Abfohlen", "Erwartetes Abfohlen", "Keine aktuelle Aktivität.", "Alle Aktivitäten ansehen und bearbeiten", "Zeit",
+        "Benutzer", "Aktion", "Detail", "Chargen", "Erwartete Abfohlungen — nächste {dias} Tage",
+        "Keine erwarteten Abfohlungen in diesem Zeitraum.", "Erwartetes Datum", "Verbleibende Tage", "in {n} Tagen", "heute", "morgen",
+        "Bestand mit Handlungsbedarf (≤ {limite})", "Alle Chargen liegen über dem Grenzwert.", "Bestandsverteilung",
+        "Pailletten pro Behälter", "Pailletten pro Besitzer",
+    ],
+}
+
+for _lang, _textos in _DASH.items():
+    assert len(_textos) == len(_DASH_CHAVES), _lang
+    WEB_TRANSLATIONS[_lang].update(dict(zip(_DASH_CHAVES, _textos)))
