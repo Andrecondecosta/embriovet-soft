@@ -29,10 +29,11 @@ import { NotMigratedPage } from "./pages/NotMigratedPage";
 import { AtividadePage } from "./pages/AtividadePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RelatoriosPage } from "./pages/RelatoriosPage";
+import { EstadiasPage } from "./pages/estadias/EstadiasPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 // Páginas do menu que já existem na app nova (as outras mostram "ainda não migrado").
-const MIGRADAS = ["/definicoes", "/stock-semen", "/atividade", "/dashboard", "/relatorios"];
+const MIGRADAS = ["/definicoes", "/stock-semen", "/atividade", "/dashboard", "/relatorios", "/estadias"];
 
 const LOCALES = { "pt-PT": ptPT, en: enUS, fr: frFR, de: deDE } as const;
 // O Ant Design Mobile não tem português de Portugal; o do Brasil só aparece
@@ -145,6 +146,9 @@ export function App() {
                         <Route path="/dashboard" element={<DashboardPage />} />
                         <Route path="/atividade" element={<AtividadePage />} />
                         <Route path="/relatorios" element={<RelatoriosPage />} />
+                        <Route path="/estadias/:tab?" element={<EstadiasPage />} />
+                        {/* Ficha do animal: ainda não migrada. */}
+                        <Route path="/animais/:id" element={<NotMigratedPage />} />
                         <Route path="/stock-semen/novo" element={<AddLotePage />} />
                         <Route path="/stock-semen/:tab?" element={<StockPage />} />
                         {NAV.filter((n) => !MIGRADAS.includes(n.path)).map((n) => (
