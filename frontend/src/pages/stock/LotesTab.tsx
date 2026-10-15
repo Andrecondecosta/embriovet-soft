@@ -37,10 +37,16 @@ import {
   type TransfInterna,
 } from "./api";
 import { LoteDrawer } from "./LoteDrawer";
+import { LotesMobile } from "./LotesMobile";
 
 const SEM_DONO = "sem-dono";
 
 export function LotesTab({ onNovoLote }: { onNovoLote: () => void }) {
+  // Telemóvel: ecrã próprio, com aspeto de app (Ant Design Mobile).
+  return useIsMobile() ? <LotesMobile onNovoLote={onNovoLote} /> : <LotesDesktop onNovoLote={onNovoLote} />;
+}
+
+function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
   const t = useT();
   const errorMessage = useErrorMessage();
   const isMobile = useIsMobile();

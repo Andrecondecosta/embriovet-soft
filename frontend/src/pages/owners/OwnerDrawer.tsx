@@ -21,41 +21,8 @@ export function OwnerDrawer({
 }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const notifyError = useNotifyError();
-  const alternar = useToggleOwner();
-  const apagar = useDeleteOwner();
-  const ativo = owner?.ativo !== false;
+  const { ativo, alternando, alternarEstado, confirmarApagar } = useOwnerAcoes(owner, onChanged, onClose);
   const na = (v: string | null) => v || t("common.na");
-
-  const alternarEstado = async () => {
-    if (!owner) return;
-    try {
-      const atualizado = (await alternar.mutateAsync(owner.id)) as Owner;
-      notifySuccess(atualizado.ativo ? t("web.owners.now_active") : t("web.owners.now_inactive"));
-      onChanged(atualizado);
-    } catch (err) {
-      notifyError(err);
-    }
-  };
-
-  const confirmarApagar = () =>
-    owner &&
-    confirmar({
-      titulo: t("web.owners.delete_title"),
-      texto: t("web.owners.delete_confirm", { name: owner.nome }),
-      ok: t("btn.delete"),
-      cancelar: t("web.common.cancel"),
-      perigo: true,
-      onOk: async () => {
-        try {
-          await apagar.mutateAsync(owner.id);
-          notifySuccess(t("web.owners.deleted"));
-          onClose();
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
 
   return (
     <Drawer
@@ -78,7 +45,7 @@ export function OwnerDrawer({
             <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(owner)}>
               {t("btn.edit")}
             </Button>
-            <Button icon={ativo ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={alternarEstado} loading={alternar.isPending}>
+            <Button icon={ativo ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={alternarEstado} loading={alternando}>
               {ativo ? t("web.owners.deactivate") : t("web.owners.activate")}
             </Button>
             <Button danger type="text" icon={<DeleteOutlined />} onClick={confirmarApagar}>
@@ -106,4 +73,45 @@ export function OwnerDrawer({
       )}
     </Drawer>
   );
+}
+
+/** Ativar/Desativar e Apagar — partilhado pela gaveta (computador) e pela
+ *  folha de baixo do telemóvel. */
+export function useOwnerAcoes(owner: Owner | null, onChanged: (o: Owner) => void, onDeleted: () => void) {
+  const t = useT();
+  const notifyError = useNotifyError();
+  const alternar = useToggleOwner();
+  const apagar = useDeleteOwner();
+
+  const alternarEstado = async () => {
+    if (!owner) return;
+    try {
+      const atualizado = (await alternar.mutateAsync(owner.id)) as Owner;
+      notifySuccess(atualizado.ativo ? t("web.owners.now_active") : t("web.owners.now_inactive"));
+      onChanged(atualizado);
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+
+  const confirmarApagar = () =>
+    owner &&
+    confirmar({
+      titulo: t("web.owners.delete_title"),
+      texto: t("web.owners.delete_confirm", { name: owner.nome }),
+      ok: t("btn.delete"),
+      cancelar: t("web.common.cancel"),
+      perigo: true,
+      onOk: async () => {
+        try {
+          await apagar.mutateAsync(owner.id);
+          notifySuccess(t("web.owners.deleted"));
+          onDeleted();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+
+  return { ativo: owner?.ativo !== false, alternando: alternar.isPending, alternarEstado, confirmarApagar };
 }

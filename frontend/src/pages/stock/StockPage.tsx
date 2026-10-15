@@ -1,5 +1,6 @@
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Card, Space, Tabs, Tooltip } from "antd";
+import { CapsuleTabs } from "antd-mobile";
 import { ImportOutlined, PlusOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
@@ -41,6 +42,19 @@ export function StockPage() {
       <MapaTab />
     ) : (
       <TransferenciasTab />
+    );
+
+  if (isMobile)
+    // Telemóvel: o título está na barra de cima; separadores em "cápsula".
+    return (
+      <>
+        <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/stock-semen/${v}`)} style={{ background: "#fff" }}>
+          {TABS.map((x) => (
+            <CapsuleTabs.Tab key={x.id} title={t(x.label)} />
+          ))}
+        </CapsuleTabs>
+        <div style={{ padding: tab === "lotes" || tab === "garanhoes" ? 0 : 8 }}>{conteudo(tab)}</div>
+      </>
     );
 
   return (

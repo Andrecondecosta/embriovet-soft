@@ -19,6 +19,7 @@ import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
 import { BrandMark, ProductSignature, useBrand } from "./Brand";
 import { useIsMobile } from "./responsive";
+import { MobileShell } from "./MobileShell";
 
 // Os mesmos 7 sítios do menu da app atual (Pedido 7), pela mesma ordem.
 export const NAV = [
@@ -32,6 +33,11 @@ export const NAV = [
 ];
 
 export function Shell({ user }: { user: User }) {
+  // No telemóvel, moldura de app (Ant Design Mobile); no resto, a de computador.
+  return useIsMobile() ? <MobileShell user={user} /> : <DesktopShell user={user} />;
+}
+
+function DesktopShell({ user }: { user: User }) {
   const t = useT();
   const { company_name } = useBrand();
   const navigate = useNavigate();

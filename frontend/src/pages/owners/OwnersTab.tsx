@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Button, Flex, FloatButton, Input, Segmented, Select, Table, Typography } from "antd";
-import { PlusOutlined, RightOutlined, SearchOutlined } from "@ant-design/icons";
+import { Alert, Button, Flex, Input, Segmented, Select, Table, Typography } from "antd";
+import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 
 import type { Owner } from "../../api/types";
 import { useT } from "../../i18n/I18n";
 import { useErrorMessage } from "../../components/errors";
 import { useDebounced, useIsMobile } from "../../components/responsive";
 import { StatusPill } from "../../components/ds";
-import { Lista } from "../../components/Lista";
 import { POR_PAGINA, useOwners, type Estado, type Ordem } from "./api";
 import { OwnerDrawer } from "./OwnerDrawer";
 import { OwnerFormModal } from "./OwnerFormModal";
+import { OwnersMobile } from "./OwnersMobile";
 
 const ESTADOS: Estado[] = ["todos", "ativos", "inativos"];
 const ORDENS: Ordem[] = ["nome", "id", "status"];
@@ -75,6 +75,42 @@ export function OwnersTab() {
     size: "small" as const,
   };
 
+  const formulario = (
+    <OwnerFormModal
+      opened={form.aberto}
+      owner={form.owner}
+      onClose={() => setForm((f) => ({ ...f, aberto: false }))}
+      onSaved={(o) => {
+        if (selecionado) setSelecionado(o);
+      }}
+    />
+  );
+
+  if (isError) return <Alert type="error" title={errorMessage(error)} showIcon />;
+
+  if (isMobile)
+    // Telemóvel: ecrã próprio, com aspeto de app (Ant Design Mobile).
+    return (
+      <>
+        <OwnersMobile
+          pesquisa={pesquisa}
+          setPesquisa={setPesquisa}
+          estado={estado}
+          ordem={ordem}
+          pagina={pagina}
+          totalPaginas={totalPaginas}
+          atualizar={atualizar}
+          data={data}
+          carregando={isPending || isFetching}
+          selecionado={selecionado}
+          setSelecionado={setSelecionado}
+          onNovo={abrirNovo}
+          onEditar={(o) => setForm({ aberto: true, owner: o })}
+        />
+        {formulario}
+      </>
+    );
+
   return (
     <>
       <Flex gap={8} wrap align="center" justify="space-between" style={{ marginBottom: 12 }}>
@@ -85,7 +121,7 @@ export function OwnersTab() {
             placeholder={t("web.owners.search")}
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            style={{ width: isMobile ? "100%" : 320 }}
+            style={{ width: 320 }}
           />
           <Segmented
             value={estado}
@@ -95,13 +131,11 @@ export function OwnersTab() {
               { value: "ativos", label: t("owners.filter.active") },
               { value: "inativos", label: t("owners.filter.inactive") },
             ]}
-            block={isMobile}
-            style={isMobile ? { width: "100%" } : undefined}
           />
           <Select
             value={ordem}
             onChange={(v) => atualizar({ ordem: v === "nome" ? null : v, pagina: 1 })}
-            style={{ width: isMobile ? "100%" : 180 }}
+            style={{ width: 180 }}
             options={[
               { value: "nome", label: `${t("owners.sort_by")} ${t("owners.sort.name")}` },
               { value: "id", label: `${t("owners.sort_by")} ${t("owners.sort.id")}` },
@@ -109,38 +143,12 @@ export function OwnersTab() {
             ]}
           />
         </Flex>
-        {!isMobile && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNovo}>
-            {t("web.owners.new")}
-          </Button>
-        )}
+        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNovo}>
+          {t("web.owners.new")}
+        </Button>
       </Flex>
 
-      {isError ? (
-        <Alert type="error" title={errorMessage(error)} showIcon />
-      ) : isMobile ? (
-        <Lista
-          itens={data?.items ?? []}
-          chave={(o) => o.id}
-          carregando={isPending || isFetching}
-          cabecalho={data && <Typography.Text type="secondary">{t("web.owners.count", { count: data.total })}</Typography.Text>}
-          vazio={t("web.owners.empty")}
-          paginacao={data && data.total > POR_PAGINA ? paginacao : false}
-          onClick={setSelecionado}
-          render={(o) => ({
-            titulo: (
-              <Flex gap={8} align="center">
-                <Typography.Text strong ellipsis>
-                  {o.nome}
-                </Typography.Text>
-                <StatusPill ativo={o.ativo} />
-              </Flex>
-            ),
-            descricao: [o.cidade, o.telemovel, o.email].filter(Boolean).join(" · ") || `#${o.id}`,
-            extra: <RightOutlined style={{ color: "#bfbfbf" }} />,
-          })}
-        />
-      ) : (
+      {
         <Table<Owner>
           size="small"
           bordered
@@ -175,9 +183,7 @@ export function OwnersTab() {
             { title: t("web.owners.status"), dataIndex: "ativo", width: 100, render: (v) => <StatusPill ativo={v} /> },
           ]}
         />
-      )}
-
-      {isMobile && <FloatButton type="primary" icon={<PlusOutlined />} onClick={abrirNovo} tooltip={t("web.owners.new")} />}
+      }
 
       <OwnerDrawer
         owner={selecionado}
@@ -185,14 +191,7 @@ export function OwnersTab() {
         onEdit={(o) => setForm({ aberto: true, owner: o })}
         onChanged={setSelecionado}
       />
-      <OwnerFormModal
-        opened={form.aberto}
-        owner={form.owner}
-        onClose={() => setForm((f) => ({ ...f, aberto: false }))}
-        onSaved={(o) => {
-          if (selecionado) setSelecionado(o);
-        }}
-      />
+      {formulario}
     </>
   );
 }

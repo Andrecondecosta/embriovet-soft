@@ -35,11 +35,16 @@ export function AddLotePage() {
   };
 
   return (
-    <Card size="small" style={{ maxWidth: 1000 }}>
-      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
-        {t("web.stock.back")}
-      </Button>
-      <PageHeader titulo={t("web.stock.add")} />
+    <Card size="small" variant={isMobile ? "borderless" : "outlined"} style={{ maxWidth: 1000, borderRadius: isMobile ? 0 : undefined }}>
+      {/* No telemóvel o título e o "voltar" já estão na barra de cima. */}
+      {!isMobile && (
+        <>
+          <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
+            {t("web.stock.back")}
+          </Button>
+          <PageHeader titulo={t("web.stock.add")} />
+        </>
+      )}
 
       <Form
         form={form}

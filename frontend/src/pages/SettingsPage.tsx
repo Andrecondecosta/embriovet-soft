@@ -1,9 +1,11 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Card, Tabs } from "antd";
+import { CapsuleTabs } from "antd-mobile";
 
 import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
 import { PageHeader } from "../components/ds";
+import { useIsMobile } from "../components/responsive";
 import { OwnersTab } from "./owners/OwnersTab";
 import { NotMigratedPage } from "./NotMigratedPage";
 
@@ -21,10 +23,26 @@ const TABS = [
 export function SettingsPage({ user }: { user: User }) {
   const t = useT();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { tab } = useParams();
   const visiveis = TABS.filter((x) => !x.admin || user.nivel === "Administrador");
 
   if (!tab || !visiveis.some((x) => x.id === tab)) return <Navigate to="/definicoes/proprietarios" replace />;
+
+  const conteudo = (id: string) => (id === "proprietarios" ? <OwnersTab /> : <NotMigratedPage />);
+
+  if (isMobile)
+    // Telemóvel: o título está na barra de cima; separadores em "cápsula".
+    return (
+      <>
+        <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/definicoes/${v}`)} style={{ background: "#fff" }}>
+          {visiveis.map((x) => (
+            <CapsuleTabs.Tab key={x.id} title={t(x.label)} />
+          ))}
+        </CapsuleTabs>
+        <div style={{ padding: tab === "proprietarios" ? 0 : 8 }}>{conteudo(tab)}</div>
+      </>
+    );
 
   return (
     <Card size="small">
@@ -36,7 +54,7 @@ export function SettingsPage({ user }: { user: User }) {
         items={visiveis.map((x) => ({
           key: x.id,
           label: t(x.label),
-          children: x.id === "proprietarios" ? <OwnersTab /> : <NotMigratedPage />,
+          children: conteudo(x.id),
         }))}
       />
     </Card>

@@ -140,7 +140,7 @@ export function LoteDrawer({
   );
 }
 
-function ApagarLoteModal({
+export function ApagarLoteModal({
   opened,
   lote,
   ligacoes,
