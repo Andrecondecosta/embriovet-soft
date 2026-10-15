@@ -733,6 +733,7 @@ _DEFINICOES = {
         "web.users.level_desc.admin": "Acesso total. É o único que pode editar e apagar lotes, gerir utilizadores e descarregar a cópia de segurança.",
         "web.users.level_desc.other": "Usa todas as páginas, exceto editar ou apagar lotes, Utilizadores e Cópia de segurança.",
         "web.mobile.swipe_hint_housing": "Deslize um alojamento para a esquerda para o ativar ou desativar; toque para editar.",
+        "web.activity.title": "Operações do dia",
         "web.backup.preparing": "A preparar a cópia de segurança…",
     },
     "en": {
@@ -793,6 +794,7 @@ _DEFINICOES = {
         "web.users.level_desc.admin": "Full access. The only level that can edit and delete lots, manage users and download the backup.",
         "web.users.level_desc.other": "Uses every page except editing or deleting lots, Users and Backup.",
         "web.mobile.swipe_hint_housing": "Swipe a housing left to activate or deactivate it; tap to edit.",
+        "web.activity.title": "Operations of the day",
         "web.backup.preparing": "Preparing the backup…",
     },
     "fr": {
@@ -853,6 +855,7 @@ _DEFINICOES = {
         "web.users.level_desc.admin": "Accès complet. Seul niveau qui peut modifier et supprimer des lots, gérer les utilisateurs et télécharger la sauvegarde.",
         "web.users.level_desc.other": "Utilise toutes les pages, sauf modifier ou supprimer des lots, Utilisateurs et Sauvegarde.",
         "web.mobile.swipe_hint_housing": "Faites glisser un hébergement vers la gauche pour l’activer ou le désactiver ; touchez pour modifier.",
+        "web.activity.title": "Opérations du jour",
         "web.backup.preparing": "Préparation de la sauvegarde…",
     },
     "de": {
@@ -913,6 +916,7 @@ _DEFINICOES = {
         "web.users.level_desc.admin": "Voller Zugriff. Nur diese Stufe kann Chargen bearbeiten und löschen, Benutzer verwalten und die Sicherung herunterladen.",
         "web.users.level_desc.other": "Nutzt alle Seiten außer Chargen bearbeiten oder löschen, Benutzer und Sicherung.",
         "web.mobile.swipe_hint_housing": "Unterkunft nach links wischen, um sie zu (de)aktivieren; antippen zum Bearbeiten.",
+        "web.activity.title": "Vorgänge des Tages",
         "web.backup.preparing": "Sicherung wird vorbereitet…",
     },
 }

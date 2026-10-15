@@ -26,7 +26,11 @@ import { AddLotePage } from "./pages/stock/AddLotePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ChangeCredentialsPage } from "./pages/ChangeCredentialsPage";
 import { NotMigratedPage } from "./pages/NotMigratedPage";
+import { AtividadePage } from "./pages/AtividadePage";
 import { SettingsPage } from "./pages/SettingsPage";
+
+// Páginas do menu que já existem na app nova (as outras mostram "ainda não migrado").
+const MIGRADAS = ["/definicoes", "/stock-semen", "/atividade"];
 
 const LOCALES = { "pt-PT": ptPT, en: enUS, fr: frFR, de: deDE } as const;
 // O Ant Design Mobile não tem português de Portugal; o do Brasil só aparece
@@ -136,9 +140,10 @@ export function App() {
                         }
                       >
                         <Route path="/definicoes/:tab?" element={<SettingsPage user={user} />} />
+                        <Route path="/atividade" element={<AtividadePage />} />
                         <Route path="/stock-semen/novo" element={<AddLotePage />} />
                         <Route path="/stock-semen/:tab?" element={<StockPage />} />
-                        {NAV.filter((n) => !["/definicoes", "/stock-semen"].includes(n.path)).map((n) => (
+                        {NAV.filter((n) => !MIGRADAS.includes(n.path)).map((n) => (
                           <Route key={n.path} path={n.path} element={<NotMigratedPage />} />
                         ))}
                         <Route path="*" element={<Navigate to="/definicoes/proprietarios" replace />} />

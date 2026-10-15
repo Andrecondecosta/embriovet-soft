@@ -36,7 +36,16 @@ export function useDiaHistorico() {
   return { dia, ehHoje, irPara, historico };
 }
 
-export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) => void }) {
+export function HistoricoOperacoes({
+  onEditar,
+  comUtilizador = false,
+  titulo,
+}: {
+  onEditar: (op: OpHistorico) => void;
+  /** Mostra quem fez cada operação (página Atividade). */
+  comUtilizador?: boolean;
+  titulo?: string;
+}) {
   const t = useT();
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
@@ -45,7 +54,7 @@ export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) =
   const [anular, setAnular] = useState<OpHistorico | null>(null);
 
   return (
-    <Card size="small" title={t("web.transfer.history")}>
+    <Card size="small" title={titulo ?? t("web.transfer.history")}>
       <Flex gap={6} align="center" style={{ marginBottom: 12 }}>
         <Button icon={<LeftOutlined />} onClick={() => irPara(dia.subtract(1, "day"))} aria-label="◀" />
         <DatePicker
@@ -76,7 +85,8 @@ export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) =
           render={(op) => ({
             corpo: (
               <Typography.Text>
-                <b>{hora(op.ts)}</b> · <Typography.Text type="secondary">{op.acao}</Typography.Text> — {op.detalhe}
+                <b>{hora(op.ts)}</b> · {comUtilizador && <Typography.Text type="secondary">{op.usuario ?? "—"} · </Typography.Text>}
+                <Typography.Text type="secondary">{op.acao}</Typography.Text> — {op.detalhe}
               </Typography.Text>
             ),
             acoes: (

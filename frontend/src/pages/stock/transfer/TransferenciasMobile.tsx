@@ -373,7 +373,15 @@ function SelecionarLotesMobile({
 }
 
 /** Histórico do dia: ‹ data › em cima; deslizar uma operação para Editar/Anular. */
-function HistoricoMobile({ onEditar }: { onEditar: (op: OpHistorico) => void }) {
+export function HistoricoMobile({
+  onEditar,
+  comUtilizador = false,
+  titulo,
+}: {
+  onEditar: (op: OpHistorico) => void;
+  comUtilizador?: boolean;
+  titulo?: string;
+}) {
   const t = useT();
   const errorMessage = useErrorMessage();
   const notifyError = useNotifyError();
@@ -409,7 +417,7 @@ function HistoricoMobile({ onEditar }: { onEditar: (op: OpHistorico) => void }) 
 
   return (
     <>
-      <Cabecalho>{t("web.transfer.history")}</Cabecalho>
+      <Cabecalho>{titulo ?? t("web.transfer.history")}</Cabecalho>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#fff" }}>
         <Button size="small" onClick={() => irPara(dia.subtract(1, "day"))} aria-label="◀">
           <LeftOutline />
@@ -458,7 +466,10 @@ function HistoricoMobile({ onEditar }: { onEditar: (op: OpHistorico) => void }) 
                   { key: "a", text: t("web.transfer.undo"), color: "danger" as const, onClick: () => confirmarAnular(op) },
                 ]}
               >
-                <List.Item description={op.detalhe} extra={<span style={{ fontSize: 12 }}>{hora(op.ts)}</span>}>
+                <List.Item
+                  description={comUtilizador ? `${op.usuario ?? "—"} · ${op.detalhe ?? ""}` : op.detalhe}
+                  extra={<span style={{ fontSize: 12 }}>{hora(op.ts)}</span>}
+                >
                   {op.acao}
                 </List.Item>
               </SwipeAction>
