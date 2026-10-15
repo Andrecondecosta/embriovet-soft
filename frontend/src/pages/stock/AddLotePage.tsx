@@ -1,13 +1,13 @@
-import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Anchor, NumberInput, Paper, SimpleGrid, Stack, TextInput, Title } from "@mantine/core";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { Button, Card, Col, Flex, Form, Input, InputNumber, Row } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
-import { useCriarLote, type LoteCampos, type LoteNovo } from "./api";
-import { BotoesForm, CamposLote, DonoSelect, GaranhaoInput, Secao, camposVazios } from "./LoteForm";
+import { PageHeader } from "../../components/ds";
+import { useCriarLote, type LoteNovo } from "./api";
+import { CamposLote, DonoSelect, GaranhaoInput, Secao, camposVazios, useAjudaGaranhao } from "./LoteForm";
 
 /** "Adicionar lote" — equivalente a `add_stock_view.py`. O garanhão pode
  *  ser escolhido da lista ou escrito de novo: o servidor cria-o em
@@ -19,100 +19,111 @@ export function AddLotePage() {
   const notifyError = useNotifyError();
   const [params] = useSearchParams();
   const criar = useCriarLote();
+  const [form] = Form.useForm<LoteNovo>();
+  const ajuda = useAjudaGaranhao(Form.useWatch("garanhao", form));
 
-  const [dados, setDados] = useState<LoteNovo>(() => ({
-    ...camposVazios(),
-    garanhao: params.get("garanhao") ?? "",
-    palhetas: 0,
-  }));
-  const [erros, setErros] = useState<Partial<Record<keyof LoteCampos | "palhetas", string>>>({});
-  const set = (patch: Partial<LoteNovo>) => {
-    setDados((d) => ({ ...d, ...patch }));
-    // O erro de um campo desaparece logo que o campo é alterado.
-    setErros((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !(k in patch))));
-  };
-
-
-  const voltar = () => navigate(-1);
-
-  const submeter = async (e: FormEvent) => {
-    e.preventDefault();
-    const novos: typeof erros = {};
-    if (!dados.garanhao.trim()) novos.garanhao = t("error.stallion_required");
-    if (!dados.dono_id) novos.dono_id = t("web.stock.error.owner_required");
-    if (!dados.contentor_id) novos.contentor_id = t("error.container_required");
-    if (!(dados.palhetas > 0)) novos.palhetas = t("error.straws_positive");
-    setErros(novos);
-    if (Object.keys(novos).length) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
+  const guardar = async (dados: LoteNovo) => {
     try {
-      const lote = await criar.mutateAsync(dados);
+      const lote = await criar.mutateAsync({ ...camposVazios(), ...dados });
       notifySuccess(t("web.stock.added"));
       // Como na app atual: volta aos Lotes, no garanhão do lote novo, com
       // o lote aberto.
-      navigate(
-        `/stock-semen/lotes?garanhao=${encodeURIComponent(lote.garanhao_nome)}&lote=${lote.id}`,
-        { replace: true },
-      );
+      navigate(`/stock-semen/lotes?garanhao=${encodeURIComponent(lote.garanhao_nome)}&lote=${lote.id}`, { replace: true });
     } catch (err) {
       notifyError(err);
     }
   };
 
   return (
-    <Stack gap="md" maw={960}>
-      <Anchor component="button" type="button" onClick={voltar} size="sm" c="dimmed" style={{ alignSelf: "flex-start" }}>
-        <IconArrowLeft size={14} style={{ verticalAlign: -2, marginRight: 4 }} />
+    <Card size="small" style={{ maxWidth: 1000 }}>
+      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
         {t("web.stock.back")}
-      </Anchor>
-      <Title order={2}>{t("web.stock.add")}</Title>
+      </Button>
+      <PageHeader titulo={t("web.stock.add")} />
 
-      <Paper withBorder radius="lg" p={{ base: "md", sm: "xl" }} component="form" onSubmit={submeter}>
-        <Stack gap="lg">
-          <Secao titulo={t("web.stock.add.identification")} primeiro>
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <GaranhaoInput
-                value={dados.garanhao}
-                onChange={(v) => set({ garanhao: v })}
-                error={erros.garanhao}
-                autoFocus={!isMobile}
-              />
-              <DonoSelect
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={guardar}
+        onFinishFailed={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        initialValues={{ ...camposVazios(), garanhao: params.get("garanhao") ?? "", palhetas: 0 }}
+        scrollToFirstError
+      >
+        <Secao titulo={t("web.stock.add.identification")} primeiro>
+          <Row gutter={12}>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="garanhao"
+                label={t("label.garanhao")}
+                extra={ajuda}
+                rules={[{ required: true, whitespace: true, message: t("error.stallion_required") }]}
+              >
+                <GaranhaoInput />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="dono_id"
                 label={t("add_stock.owner_semen").replace(" *", "")}
-                apenasAtivos={false}
-                value={dados.dono_id}
-                onChange={(id) => set({ dono_id: id })}
-                error={erros.dono_id}
-              />
-            </SimpleGrid>
-          </Secao>
+                rules={[{ required: true, message: t("web.stock.error.owner_required") }]}
+              >
+                <DonoSelect apenasAtivos={false} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Secao>
 
-          <CamposLote
-            dados={dados}
-            set={set}
-            erros={erros}
-            producao={
-              <SimpleGrid cols={{ base: 1, xs: 3 }}>
-                <TextInput label={t("stock.prod_date")} value={dados.data_embriovet} onChange={(e) => set({ data_embriovet: e.currentTarget.value })} />
-                <NumberInput
+        <CamposLote
+          producao={
+            <Row gutter={12}>
+              <Col xs={24} sm={8}>
+                <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item
+                  name="palhetas"
                   label={t("stock.straws_produced")}
-                  withAsterisk
-                  min={0}
-                  value={dados.palhetas}
-                  onChange={(v) => set({ palhetas: Number(v) || 0 })}
-                  error={erros.palhetas}
-                  inputMode="numeric"
-                />
-                <TextInput label={t("stock.external_origin")} value={dados.origem_externa} onChange={(e) => set({ origem_externa: e.currentTarget.value })} />
-              </SimpleGrid>
-            }
-          />
+                  rules={[{ required: true, type: "number", min: 1, message: t("error.straws_positive") }]}
+                >
+                  <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item name="origem_externa" label={t("stock.external_origin")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+          }
+        />
 
-          <BotoesForm isMobile={isMobile} onCancel={voltar} loading={criar.isPending} label={t("btn.save")} />
-        </Stack>
-      </Paper>
-    </Stack>
+        {/* No telemóvel os botões ficam presos ao fundo do ecrã. */}
+        <Flex
+          gap={8}
+          justify="flex-end"
+          style={
+            isMobile
+              ? {
+                  position: "sticky",
+                  bottom: 0,
+                  background: "#fff",
+                  padding: "12px 0 calc(12px + env(safe-area-inset-bottom))",
+                  borderTop: "1px solid #f0f0f0",
+                  zIndex: 2,
+                }
+              : undefined
+          }
+        >
+          <Button onClick={() => navigate(-1)} block={isMobile}>
+            {t("web.common.cancel")}
+          </Button>
+          <Button type="primary" htmlType="submit" loading={criar.isPending} block={isMobile}>
+            {t("btn.save")}
+          </Button>
+        </Flex>
+      </Form>
+    </Card>
   );
 }

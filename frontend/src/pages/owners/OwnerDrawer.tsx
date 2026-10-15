@@ -1,31 +1,12 @@
-import { Button, Divider, Drawer, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
-import { modals } from "@mantine/modals";
-import { IconPencil, IconPlayerPause, IconPlayerPlay, IconTrash } from "@tabler/icons-react";
+import { Button, Descriptions, Drawer, Flex, Space, Typography } from "antd";
+import { DeleteOutlined, EditOutlined, PauseCircleOutlined, PlayCircleOutlined } from "@ant-design/icons";
 
 import type { Owner } from "../../api/types";
 import { useT } from "../../i18n/I18n";
-import { notifySuccess, useNotifyError } from "../../components/errors";
-import { useDeleteOwner, useToggleOwner } from "./api";
-import { StatusPill } from "../../components/ds";
+import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
 import { useIsMobile } from "../../components/responsive";
-
-export function StatusBadge({ ativo }: { ativo: boolean | null }) {
-  return <StatusPill ativo={ativo} />;
-}
-
-function Campo({ label, valor }: { label: string; valor: string | number | null }) {
-  const t = useT();
-  return (
-    <div>
-      <Text size="xs" c="dimmed" fw={500}>
-        {label}
-      </Text>
-      <Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {valor === null || valor === "" ? t("common.na") : valor}
-      </Text>
-    </div>
-  );
-}
+import { StatusPill } from "../../components/ds";
+import { useDeleteOwner, useToggleOwner } from "./api";
 
 export function OwnerDrawer({
   owner,
@@ -39,12 +20,12 @@ export function OwnerDrawer({
   onChanged: (o: Owner) => void;
 }) {
   const t = useT();
-  const notifyError = useNotifyError();
   const isMobile = useIsMobile();
+  const notifyError = useNotifyError();
   const alternar = useToggleOwner();
   const apagar = useDeleteOwner();
-
   const ativo = owner?.ativo !== false;
+  const na = (v: string | null) => v || t("common.na");
 
   const alternarEstado = async () => {
     if (!owner) return;
@@ -57,14 +38,15 @@ export function OwnerDrawer({
     }
   };
 
-  const confirmarApagar = () => {
-    if (!owner) return;
-    modals.openConfirmModal({
-      title: t("web.owners.delete_title"),
-      children: <Text size="sm">{t("web.owners.delete_confirm", { name: owner.nome })}</Text>,
-      labels: { confirm: t("btn.delete"), cancel: t("web.common.cancel") },
-      confirmProps: { color: "red" },
-      onConfirm: async () => {
+  const confirmarApagar = () =>
+    owner &&
+    confirmar({
+      titulo: t("web.owners.delete_title"),
+      texto: t("web.owners.delete_confirm", { name: owner.nome }),
+      ok: t("btn.delete"),
+      cancelar: t("web.common.cancel"),
+      perigo: true,
+      onOk: async () => {
         try {
           await apagar.mutateAsync(owner.id);
           notifySuccess(t("web.owners.deleted"));
@@ -74,54 +56,53 @@ export function OwnerDrawer({
         }
       },
     });
-  };
 
   return (
-    <Drawer opened={owner !== null} onClose={onClose} position={isMobile ? "bottom" : "right"} size={isMobile ? "100%" : "md"} padding="lg" title={null} radius={isMobile ? "lg" : 0}>
-      {owner && (
-        <Stack gap="lg">
-          <div>
-            <Text size="xs" c="dimmed">
-              #{owner.id}
-            </Text>
-            <Group gap="sm" align="center" wrap="nowrap">
-              <Title order={3} style={{ wordBreak: "break-word" }}>
-                {owner.nome}
-              </Title>
-              <StatusBadge ativo={owner.ativo} />
-            </Group>
-          </div>
-
-          <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="md" verticalSpacing="md">
-            <Campo label={t("label.full_name")} valor={owner.nome_completo} />
-            <Campo label={t("label.nif")} valor={owner.nif} />
-            <Campo label={t("label.email")} valor={owner.email} />
-            <Campo label={t("label.phone")} valor={owner.telemovel} />
-            <Campo label={t("label.address")} valor={owner.morada} />
-            <Campo label={t("label.postal_code")} valor={owner.codigo_postal} />
-            <Campo label={t("label.city")} valor={owner.cidade} />
-          </SimpleGrid>
-
-          <Divider />
-
-          <Stack gap="xs">
-            <Button size={isMobile ? "md" : "sm"} leftSection={<IconPencil size={16} />} onClick={() => onEdit(owner)}>
+    <Drawer
+      open={owner !== null}
+      onClose={onClose}
+      placement={isMobile ? "bottom" : "right"}
+      size={isMobile ? "85%" : 440}
+      title={
+        owner && (
+          <Flex gap={8} align="center" wrap>
+            <Typography.Text type="secondary">#{owner.id}</Typography.Text>
+            <span>{owner.nome}</span>
+            <StatusPill ativo={owner.ativo} />
+          </Flex>
+        )
+      }
+      footer={
+        owner && (
+          <Space wrap>
+            <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(owner)}>
               {t("btn.edit")}
             </Button>
-            <Button
-              size={isMobile ? "md" : "sm"}
-              variant="default"
-              leftSection={ativo ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />}
-              onClick={alternarEstado}
-              loading={alternar.isPending}
-            >
+            <Button icon={ativo ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={alternarEstado} loading={alternar.isPending}>
               {ativo ? t("web.owners.deactivate") : t("web.owners.activate")}
             </Button>
-            <Button size={isMobile ? "md" : "sm"} variant="subtle" color="red" leftSection={<IconTrash size={16} />} onClick={confirmarApagar}>
+            <Button danger type="text" icon={<DeleteOutlined />} onClick={confirmarApagar}>
               {t("btn.delete")}
             </Button>
-          </Stack>
-        </Stack>
+          </Space>
+        )
+      }
+    >
+      {owner && (
+        <Descriptions
+          size="small"
+          bordered
+          column={1}
+          items={[
+            { label: t("label.full_name"), children: na(owner.nome_completo) },
+            { label: t("label.nif"), children: na(owner.nif) },
+            { label: t("label.email"), children: na(owner.email) },
+            { label: t("label.phone"), children: na(owner.telemovel) },
+            { label: t("label.address"), children: <span style={{ whiteSpace: "pre-wrap" }}>{na(owner.morada)}</span> },
+            { label: t("label.postal_code"), children: na(owner.codigo_postal) },
+            { label: t("label.city"), children: na(owner.cidade) },
+          ]}
+        />
       )}
     </Drawer>
   );

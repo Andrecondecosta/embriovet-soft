@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
-import { IconLock } from "@tabler/icons-react";
+import { Alert, Button, Card, Flex, Form, Input, Typography } from "antd";
+import { LockOutlined, UserOutlined } from "@ant-design/icons";
 
 import { api } from "../api/client";
 import type { User } from "../api/types";
@@ -14,14 +14,11 @@ export function LoginPage() {
   const { company_name } = useBrand();
   const queryClient = useQueryClient();
   const errorMessage = useErrorMessage();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [aEntrar, setAEntrar] = useState(false);
 
-  const submeter = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password) {
+  const submeter = async ({ username, password }: { username?: string; password?: string }) => {
+    if (!username?.trim() || !password) {
       setErro(t("login.missing"));
       return;
     }
@@ -37,55 +34,39 @@ export function LoginPage() {
   };
 
   return (
-    <Center mih="100vh" bg="gray.1" p="md">
-      <Stack w="100%" maw={400} gap="lg">
-        <Stack align="center" gap={6}>
-          <BrandMark size={56} />
-          <Title order={2} ta="center" mt={8}>
-            {company_name}
-          </Title>
-          <Text c="dimmed" size="sm">
-            {t("login.subtitle")}
-          </Text>
-        </Stack>
+    <Flex vertical align="center" justify="center" gap={16} style={{ minHeight: "100vh", padding: 16, background: "#f0f2f5" }}>
+      <Flex vertical align="center" gap={4}>
+        <BrandMark size={52} />
+        <Typography.Title level={3} style={{ margin: "8px 0 0" }}>
+          {company_name}
+        </Typography.Title>
+        <Typography.Text type="secondary">{t("login.subtitle")}</Typography.Text>
+      </Flex>
 
-        <Paper component="form" onSubmit={submeter} p="xl" radius="lg" shadow="md" withBorder>
-          <Stack>
-            <TextInput
-              label={t("auth.username")}
-              placeholder={t("auth.username_placeholder")}
-              value={username}
-              onChange={(e) => setUsername(e.currentTarget.value)}
-              autoComplete="username"
-              autoFocus
-              size="md"
-            />
-            <PasswordInput
-              label={t("auth.password")}
+      <Card style={{ width: "100%", maxWidth: 380 }}>
+        <Form layout="vertical" onFinish={submeter} requiredMark={false}>
+          <Form.Item name="username" label={t("auth.username")}>
+            <Input prefix={<UserOutlined />} placeholder={t("auth.username_placeholder")} autoComplete="username" autoFocus size="large" />
+          </Form.Item>
+          <Form.Item name="password" label={t("auth.password")}>
+            <Input.Password
+              prefix={<LockOutlined />}
               placeholder={t("auth.password_placeholder")}
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
               autoComplete="current-password"
-              size="md"
+              size="large"
             />
-            {erro && (
-              <Alert color="red" variant="light" py="xs">
-                {erro}
-              </Alert>
-            )}
-            <Button type="submit" size="md" loading={aEntrar} fullWidth mt={4}>
-              {t("auth.login")}
-            </Button>
-          </Stack>
-        </Paper>
+          </Form.Item>
+          {erro && <Alert type="error" title={erro} showIcon style={{ marginBottom: 16 }} />}
+          <Button type="primary" htmlType="submit" block size="large" loading={aEntrar}>
+            {t("auth.login")}
+          </Button>
+        </Form>
+      </Card>
 
-        <Text c="dimmed" size="xs" ta="center">
-          <IconLock size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-          {t("login.secure")}
-        </Text>
-
-        <ProductSignature />
-      </Stack>
-    </Center>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <LockOutlined /> {t("login.secure")}
+      </Typography.Text>
+      <ProductSignature />
+    </Flex>
   );
 }

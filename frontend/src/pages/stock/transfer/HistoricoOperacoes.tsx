@@ -1,39 +1,17 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  ActionIcon,
-  Alert,
-  Button,
-  Center,
-  Group,
-  Loader,
-  Modal,
-  Paper,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
-import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import dayjs, { type Dayjs } from "dayjs";
+import { Alert, Button, Card, DatePicker, Flex, Modal, Space, Typography } from "antd";
+import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 
 import { useT } from "../../../i18n/I18n";
 import { useIsMobile } from "../../../components/responsive";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../../components/errors";
+import { Lista } from "../../../components/Lista";
 import { useAnular, useHistorico, type OpHistorico } from "./api";
-import { ZoneTitle } from "../../../components/ds";
 
-const hojeIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-function somarDias(iso: string, n: number) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, m - 1, d + n);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-}
-
-const hora = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "—";
+const FMT = "YYYY-MM-DD";
+const hora = (iso: string | null) => (iso ? dayjs(iso).format("HH:mm") : "—");
 
 /** Histórico de operações do dia (transferências e inseminações), com
  *  Editar (só transferências — as inseminações editam-se na sua página)
@@ -43,92 +21,70 @@ export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) =
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
   const [params, setParams] = useSearchParams();
-  const dia = /^\d{4}-\d{2}-\d{2}$/.test(params.get("dia") ?? "") ? params.get("dia")! : hojeIso();
-  const ehHoje = dia === hojeIso();
-  const { data, isPending, isError, error } = useHistorico(dia);
+  const pedido = params.get("dia") ?? "";
+  const dia: Dayjs = /^\d{4}-\d{2}-\d{2}$/.test(pedido) && dayjs(pedido).isValid() ? dayjs(pedido) : dayjs();
+  const ehHoje = dia.isSame(dayjs(), "day");
+  const { data, isPending, isError, error } = useHistorico(dia.format(FMT));
   const [anular, setAnular] = useState<OpHistorico | null>(null);
 
-  const irPara = (d: string) =>
+  const irPara = (d: Dayjs) =>
     setParams(
       (p) => {
         const r = new URLSearchParams(p);
-        if (d === hojeIso()) r.delete("dia");
-        else r.set("dia", d);
+        if (d.isSame(dayjs(), "day")) r.delete("dia");
+        else r.set("dia", d.format(FMT));
         return r;
       },
       { replace: true },
     );
 
   return (
-    <Paper withBorder radius="lg" p={{ base: "md", sm: "lg" }}>
-      <Stack gap="sm">
-        <ZoneTitle primeiro>{t("web.transfer.history")}</ZoneTitle>
+    <Card size="small" title={t("web.transfer.history")}>
+      <Flex gap={6} align="center" style={{ marginBottom: 12 }}>
+        <Button icon={<LeftOutlined />} onClick={() => irPara(dia.subtract(1, "day"))} aria-label="◀" />
+        <DatePicker value={dia} onChange={(d) => d && irPara(d)} allowClear={false} format="DD/MM/YYYY" style={{ flex: isMobile ? 1 : undefined }} />
+        <Button icon={<RightOutlined />} onClick={() => irPara(dia.add(1, "day"))} aria-label="▶" />
+        {!ehHoje && (
+          <Button type="link" onClick={() => irPara(dayjs())}>
+            {t("web.transfer.today")}
+          </Button>
+        )}
+      </Flex>
 
-        <Group gap="xs" wrap="nowrap">
-          <ActionIcon variant="default" size={36} onClick={() => irPara(somarDias(dia, -1))} aria-label="◀">
-            <IconChevronLeft size={18} />
-          </ActionIcon>
-          <TextInput
-            type="date"
-            value={dia}
-            onChange={(e) => e.currentTarget.value && irPara(e.currentTarget.value)}
-            style={{ flex: isMobile ? 1 : undefined }}
-            w={isMobile ? undefined : 170}
-            aria-label={t("label.date")}
-          />
-          <ActionIcon variant="default" size={36} onClick={() => irPara(somarDias(dia, 1))} aria-label="▶">
-            <IconChevronRight size={18} />
-          </ActionIcon>
-          {!ehHoje && (
-            <Button variant="subtle" onClick={() => irPara(hojeIso())}>
-              {t("web.transfer.today")}
-            </Button>
-          )}
-        </Group>
-
-        {isError ? (
-          <Alert color="red">{errorMessage(error)}</Alert>
-        ) : isPending ? (
-          <Center py="md">
-            <Loader size="sm" />
-          </Center>
-        ) : !data.length ? (
-          <Text size="sm" c="dimmed">
-            {t("web.transfer.history.empty")}
-          </Text>
-        ) : (
-          <Stack gap={0} mah={460} style={{ overflowY: "auto" }}>
-            {data.map((op, i) => (
-              <Group
-                key={`${op.tipo}-${op.operation_id ?? op.action_id}`}
-                wrap={isMobile ? "wrap" : "nowrap"}
-                gap="xs"
-                py={8}
-                px="xs"
-                bg={i % 2 ? "gray.0" : undefined}
-                style={{ borderRadius: 6 }}
-              >
-                <div style={{ flex: 1, minWidth: isMobile ? "100%" : 0 }}>
-                  <Text size="sm" truncate={!isMobile}>
-                    <b>{hora(op.ts)}</b> · <Text span c="dimmed">{op.acao}</Text> — {op.detalhe}
-                  </Text>
-                </div>
+      {isError ? (
+        <Alert type="error" showIcon title={errorMessage(error)} />
+      ) : (
+        <Lista
+          itens={data ?? []}
+          chave={(op) => `${op.tipo}-${op.operation_id ?? op.action_id}`}
+          carregando={isPending}
+          vazio={t("web.transfer.history.empty")}
+          semContorno
+          alturaMax={460}
+          render={(op) => ({
+            corpo: (
+              <Typography.Text>
+                <b>{hora(op.ts)}</b> · <Typography.Text type="secondary">{op.acao}</Typography.Text> — {op.detalhe}
+              </Typography.Text>
+            ),
+            acoes: (
+              <>
                 {op.tipo !== "insemination" && (
-                  <Button size="compact-sm" variant="subtle" onClick={() => onEditar(op)}>
+                  <Button size="small" type="link" onClick={() => onEditar(op)}>
                     {t("btn.edit")}
                   </Button>
                 )}
-                <Button size="compact-sm" variant="default" onClick={() => setAnular(op)}>
+                <Button size="small" onClick={() => setAnular(op)}>
                   {t("web.transfer.undo")}
                 </Button>
-              </Group>
-            ))}
-          </Stack>
-        )}
-      </Stack>
+              </>
+            ),
+          })}
+        />
+      )}
 
       <AnularModal op={anular} onClose={() => setAnular(null)} />
-    </Paper>
+    </Card>
   );
 }
 
@@ -149,26 +105,32 @@ function AnularModal({ op, onClose }: { op: OpHistorico | null; onClose: () => v
   };
 
   return (
-    <Modal opened={op !== null} onClose={onClose} title={t("web.transfer.undo.title")} radius="lg">
+    <Modal
+      open={op !== null}
+      onCancel={onClose}
+      title={t("web.transfer.undo.title")}
+      okText={t("web.transfer.undo.confirm_btn")}
+      cancelText={t("web.common.cancel")}
+      okButtonProps={{ danger: true }}
+      confirmLoading={anular.isPending}
+      onOk={confirmar}
+    >
       {op && (
-        <Stack>
-          <Text size="sm">
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Typography.Text>
             {op.acao} — {op.detalhe}
-          </Text>
-          <Alert color="red" variant="light">
-            {t("web.transfer.undo.confirm", { qty: op.quantidade })}{" "}
-            {op.num_lotes > 1 && t("web.transfer.undo.multi", { n: op.num_lotes })}{" "}
-            <b>{t("web.transfer.undo.irreversible")}</b>
-          </Alert>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
-              {t("web.common.cancel")}
-            </Button>
-            <Button color="red" onClick={confirmar} loading={anular.isPending}>
-              {t("web.transfer.undo.confirm_btn")}
-            </Button>
-          </Group>
-        </Stack>
+          </Typography.Text>
+          <Alert
+            type="error"
+            showIcon
+            title={
+              <>
+                {t("web.transfer.undo.confirm", { qty: op.quantidade })}{" "}
+                {op.num_lotes > 1 && t("web.transfer.undo.multi", { n: op.num_lotes })} <b>{t("web.transfer.undo.irreversible")}</b>
+              </>
+            }
+          />
+        </Space>
       )}
     </Modal>
   );

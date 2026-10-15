@@ -1,34 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  ActionIcon,
   Alert,
-  Box,
   Button,
-  Center,
+  Card,
   Checkbox,
-  Group,
+  Col,
+  Empty,
+  Flex,
   Input,
-  Loader,
+  InputNumber,
   Modal,
-  NumberInput,
-  Paper,
-  SegmentedControl,
+  Row,
+  Segmented,
   Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-} from "@mantine/core";
-import { IconMinus, IconPlus, IconX } from "@tabler/icons-react";
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
+import { CloseOutlined, MinusOutlined, PlusOutlined } from "@ant-design/icons";
 
 import { useT } from "../../../i18n/I18n";
 import { useIsMobile } from "../../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../../components/errors";
+import { ZoneTitle } from "../../../components/ds";
 import { useGaranhoesStock, useLotes, useOpcoes, referencia, localizacao, type Lote } from "../api";
 import { DonoSelect } from "../LoteForm";
-import { ZoneTitle } from "../../../components/ds";
 import { HistoricoOperacoes } from "./HistoricoOperacoes";
 import {
   MOTIVOS,
@@ -191,12 +189,10 @@ export function TransferenciasTab() {
   const origens = new Set(linhas.map((l) => l.dono_id).filter((x) => x !== null));
   const destinos = (donosAtivos.data ?? []).filter((d) => !(origens.size === 1 && origens.has(d.id)));
   const contentores = useOpcoes("contentores");
-
   const total = linhas.reduce((s, l) => s + l.qty, 0);
 
   const criar = useCriarOperacao();
   const editar = useEditarOperacao();
-  const aGravar = criar.isPending || editar.isPending;
 
   const executar = async () => {
     setErro(null);
@@ -209,18 +205,12 @@ export function TransferenciasTab() {
       tipo,
       linhas: finais.map((l) => ({ stock_id: l.stock_id, quantidade: l.qty })),
       ...(tipo === "interna"
-        ? {
-            destino_id: destino,
-            nova_localizacao: mudaLocal && contentor ? { contentor_id: contentor, canister, andar } : null,
-          }
+        ? { destino_id: destino, nova_localizacao: mudaLocal && contentor ? { contentor_id: contentor, canister, andar } : null }
         : { destinatario, motivo, observacoes }),
     };
     try {
-      if (edicao) {
-        await editar.mutateAsync({ ...body, tipoOp: edicao.tipo, id: edicao.id });
-      } else {
-        await criar.mutateAsync(body);
-      }
+      if (edicao) await editar.mutateAsync({ ...body, tipoOp: edicao.tipo, id: edicao.id });
+      else await criar.mutateAsync(body);
       notifySuccess(edicao ? t("web.transfer.updated") : t("web.transfer.done"));
       if (edicao) sairEdicao();
       else limpar();
@@ -229,212 +219,209 @@ export function TransferenciasTab() {
     }
   };
 
-  if (garanhoes.isPending || (edicao && operacao.isPending))
-    return (
-      <Center py="xl">
-        <Loader />
-      </Center>
-    );
+  if (garanhoes.isPending || (edicao && operacao.isPending)) return <Spin style={{ display: "block", margin: 32 }} />;
 
   return (
-    <Stack gap="md">
+    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
       {edicao && (
-        <Alert color="yellow" variant="light">
-          <Group justify="space-between" gap="sm">
-            <Text size="sm">{t("web.transfer.edit_mode")}</Text>
-            <Button size="xs" variant="default" onClick={sairEdicao}>
+        <Alert
+          type="warning"
+          showIcon
+          title={t("web.transfer.edit_mode")}
+          action={
+            <Button size="small" onClick={sairEdicao}>
               {t("web.transfer.cancel_edit")}
             </Button>
-          </Group>
-        </Alert>
+          }
+        />
       )}
-      {edicao && operacao.isError && <Alert color="red">{t("web.transfer.error.not_found")}</Alert>}
+      {edicao && operacao.isError && <Alert type="error" showIcon title={t("web.transfer.error.not_found")} />}
 
       {!opcoesGaranhao.length && !edicao ? (
-        <Text c="dimmed">{t("transfer.no_stock_available")}</Text>
+        <Empty description={t("transfer.no_stock_available")} />
       ) : (
-        <Paper withBorder radius="lg" p={{ base: "md", sm: "lg" }}>
-          <Stack gap="xs">
-            {/* 1. Seleção */}
-            <Stack gap="sm">
-              <ZoneTitle primeiro>{t("transfer.zone_selection")}</ZoneTitle>
-              <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                <Select
-                  label={t("label.garanhao")}
-                  data={garanhaoAtual && !opcoesGaranhao.includes(garanhaoAtual) ? [garanhaoAtual, ...opcoesGaranhao] : opcoesGaranhao}
-                  value={garanhaoAtual}
-                  onChange={(v) => v && mudarGaranhao(v)}
-                  searchable
-                  allowDeselect={false}
-                  nothingFoundMessage={t("web.common.no_results")}
-                />
-                <Select
-                  label={t("label.owner")}
-                  data={[
-                    { value: TODOS, label: t("common.all") },
-                    ...(lotesGaranhao.data?.donos_disponiveis ?? [])
-                      .filter((d) => d.id !== null)
-                      .map((d) => ({ value: String(d.id), label: d.nome ?? "" })),
-                  ]}
-                  value={dono}
-                  onChange={(v) => v && mudarDono(v)}
-                  allowDeselect={false}
-                />
-              </SimpleGrid>
-              <Button variant="default" onClick={() => setModalLotes(true)} disabled={!garanhaoAtual}>
+        <Card size="small">
+          {/* 1. Seleção */}
+          <ZoneTitle primeiro>{t("transfer.zone_selection")}</ZoneTitle>
+          <Row gutter={[12, 8]}>
+            <Col xs={24} md={12}>
+              <Typography.Text type="secondary">{t("label.garanhao")}</Typography.Text>
+              <Select
+                showSearch
+                style={{ width: "100%" }}
+                value={garanhaoAtual ?? undefined}
+                onChange={mudarGaranhao}
+                options={(garanhaoAtual && !opcoesGaranhao.includes(garanhaoAtual) ? [garanhaoAtual, ...opcoesGaranhao] : opcoesGaranhao).map((g) => ({
+                  value: g,
+                  label: g,
+                }))}
+                notFoundContent={t("web.common.no_results")}
+              />
+            </Col>
+            <Col xs={24} md={12}>
+              <Typography.Text type="secondary">{t("label.owner")}</Typography.Text>
+              <Select
+                style={{ width: "100%" }}
+                value={dono}
+                onChange={mudarDono}
+                options={[
+                  { value: TODOS, label: t("common.all") },
+                  ...(lotesGaranhao.data?.donos_disponiveis ?? [])
+                    .filter((d) => d.id !== null)
+                    .map((d) => ({ value: String(d.id), label: d.nome ?? "" })),
+                ]}
+              />
+            </Col>
+            <Col span={24}>
+              <Button block onClick={() => setModalLotes(true)} disabled={!garanhaoAtual}>
                 {t("btn.select_lots")}
               </Button>
-            </Stack>
+            </Col>
+          </Row>
 
-            {/* 2. Lotes selecionados */}
-            <Stack gap="sm">
-              <ZoneTitle>{t("transfer.selected_lots")}</ZoneTitle>
-              {!linhas.length ? (
-                <Text size="sm" c="dimmed">
-                  {t("transfer.no_lotes_selected_hint")}
-                </Text>
-              ) : (
-                <>
-                  {linhas.map((l) => (
-                    <Paper key={l.stock_id} withBorder radius="md" p="sm" bg="gray.0">
-                      <Group wrap={isMobile ? "wrap" : "nowrap"} gap="sm" align="center">
-                        <div style={{ flex: 1, minWidth: isMobile ? "calc(100% - 40px)" : 0 }}>
-                          {dono === TODOS && (
-                            <Text size="sm" fw={600} truncate>
-                              {l.proprietario_nome ?? t("common.no_owner")}
-                            </Text>
-                          )}
-                          <Text size="sm" fw={dono === TODOS ? 400 : 600} truncate>
-                            {l.ref} · {l.local}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {t("web.transfer.available", { count: l.max })}
-                            {l.carac && ` · ${l.carac}`}
-                          </Text>
-                        </div>
-                        <QtdPalhetas
-                          valor={l.qty}
-                          max={l.max}
-                          onChange={(n) => setLinhas((ls) => ls.map((x) => (x.stock_id === l.stock_id ? { ...x, qty: n } : x)))}
-                        />
-                        <ActionIcon
-                          variant="subtle"
-                          color="gray"
-                          onClick={() => setLinhas((ls) => ls.filter((x) => x.stock_id !== l.stock_id))}
-                          aria-label={t("btn.remove")}
-                        >
-                          <IconX size={16} />
-                        </ActionIcon>
-                      </Group>
-                    </Paper>
-                  ))}
-                  <Group justify="space-between">
-                    <Button variant="subtle" size="xs" leftSection={<IconPlus size={14} />} onClick={() => setModalLotes(true)}>
-                      {t("btn.add_line")}
-                    </Button>
-                    <Text fw={600}>{t("web.transfer.total", { count: total })}</Text>
-                  </Group>
-                </>
-              )}
-            </Stack>
-
-            {/* 3. Destino */}
-            {linhas.length > 0 && (
-              <>
-                <Stack gap="sm">
-                  <ZoneTitle>{t("transfer.destination")}</ZoneTitle>
-                  {/* No telemóvel as opções ficam empilhadas — lado a lado os
-                      textos não cabem. */}
-                  <SegmentedControl
-                    fullWidth={isMobile}
-                    orientation={isMobile ? "vertical" : "horizontal"}
-                    value={tipo}
-                    onChange={(v) => setTipo(v as "interna" | "externa")}
-                    data={[
-                      { value: "interna", label: t("transfer.internal") },
-                      { value: "externa", label: t("transfer.external") },
-                    ]}
-                    style={{ alignSelf: isMobile ? "stretch" : "flex-start" }}
-                  />
-
-                  {tipo === "interna" ? (
-                    <>
-                      {destinos.length === 0 && donosAtivos.data && (
-                        <Alert color="yellow" variant="light">
-                          {t("web.transfer.no_other_owners")}
-                        </Alert>
+          {/* 2. Lotes selecionados */}
+          <ZoneTitle>{t("transfer.selected_lots")}</ZoneTitle>
+          {!linhas.length ? (
+            <Typography.Text type="secondary">{t("transfer.no_lotes_selected_hint")}</Typography.Text>
+          ) : (
+            <Space orientation="vertical" size={6} style={{ width: "100%" }}>
+              {linhas.map((l) => (
+                <Card key={l.stock_id} size="small" styles={{ body: { padding: "8px 12px", background: "#fafafa" } }}>
+                  <Flex gap={12} align="center" wrap={isMobile}>
+                    <div style={{ flex: 1, minWidth: isMobile ? "calc(100% - 40px)" : 0 }}>
+                      {dono === TODOS && (
+                        <Typography.Text strong ellipsis style={{ display: "block" }}>
+                          {l.proprietario_nome ?? t("common.no_owner")}
+                        </Typography.Text>
                       )}
-                      <DestinoSelect
-                        opcoes={destinos.map((d) => ({ value: String(d.id), label: d.nome }))}
+                      <Typography.Text strong={dono !== TODOS} ellipsis style={{ display: "block" }}>
+                        {l.ref} · {l.local}
+                      </Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {t("web.transfer.available", { count: l.max })}
+                        {l.carac && ` · ${l.carac}`}
+                      </Typography.Text>
+                    </div>
+                    <QtdPalhetas
+                      valor={l.qty}
+                      max={l.max}
+                      onChange={(n) => setLinhas((ls) => ls.map((x) => (x.stock_id === l.stock_id ? { ...x, qty: n } : x)))}
+                    />
+                    <Button
+                      type="text"
+                      icon={<CloseOutlined />}
+                      onClick={() => setLinhas((ls) => ls.filter((x) => x.stock_id !== l.stock_id))}
+                      aria-label={t("btn.remove")}
+                    />
+                  </Flex>
+                </Card>
+              ))}
+              <Flex justify="space-between" align="center">
+                <Button type="link" icon={<PlusOutlined />} onClick={() => setModalLotes(true)} style={{ paddingInline: 0 }}>
+                  {t("btn.add_line")}
+                </Button>
+                <Typography.Text strong>{t("web.transfer.total", { count: total })}</Typography.Text>
+              </Flex>
+            </Space>
+          )}
+
+          {/* 3. Destino */}
+          {linhas.length > 0 && (
+            <>
+              <ZoneTitle>{t("transfer.destination")}</ZoneTitle>
+              <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                <Segmented
+                  vertical={isMobile}
+                  block={isMobile}
+                  value={tipo}
+                  onChange={(v) => setTipo(v as "interna" | "externa")}
+                  options={[
+                    { value: "interna", label: t("transfer.internal") },
+                    { value: "externa", label: t("transfer.external") },
+                  ]}
+                />
+
+                {tipo === "interna" ? (
+                  <>
+                    {destinos.length === 0 && donosAtivos.data && <Alert type="warning" showIcon title={t("web.transfer.no_other_owners")} />}
+                    <div>
+                      <Typography.Text type="secondary">{t("transfer.destination_owner")} *</Typography.Text>
+                      <DonoSelect
+                        apenasAtivos
                         value={destino}
                         onChange={setDestino}
+                        dataOverride={destinos.map((d) => ({ value: String(d.id), label: d.nome }))}
                       />
-                      <Input.Wrapper label={t("transfer.change_location")}>
-                        <SegmentedControl
-                          fullWidth
-                          orientation={isMobile ? "vertical" : "horizontal"}
-                          value={mudaLocal ? "nova" : "manter"}
-                          onChange={(v) => setMudaLocal(v === "nova")}
-                          data={[
-                            { value: "manter", label: t("transfer.keep_location") },
-                            { value: "nova", label: t("transfer.new_location") },
-                          ]}
-                        />
-                      </Input.Wrapper>
-                      {mudaLocal && (
-                        <SimpleGrid cols={{ base: 1, xs: 3 }}>
+                    </div>
+                    <div>
+                      <Typography.Text type="secondary">{t("transfer.change_location")}</Typography.Text>
+                      <Segmented
+                        block
+                        vertical={isMobile}
+                        value={mudaLocal ? "nova" : "manter"}
+                        onChange={(v) => setMudaLocal(v === "nova")}
+                        options={[
+                          { value: "manter", label: t("transfer.keep_location") },
+                          { value: "nova", label: t("transfer.new_location") },
+                        ]}
+                      />
+                    </div>
+                    {mudaLocal && (
+                      <Row gutter={12}>
+                        <Col xs={24} sm={8}>
+                          <Typography.Text type="secondary">{t("label.container")} *</Typography.Text>
                           <Select
-                            label={t("label.container")}
-                            withAsterisk
-                            data={(contentores.data ?? []).map((c) => ({ value: String(c.id), label: c.nome }))}
-                            value={contentor !== null ? String(contentor) : null}
-                            onChange={(v) => setContentor(v ? Number(v) : null)}
-                            searchable
+                            showSearch
+                            optionFilterProp="label"
+                            style={{ width: "100%" }}
+                            value={contentor ?? undefined}
+                            onChange={(v) => setContentor(v)}
+                            options={(contentores.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
                           />
-                          <NumberInput label={t("label.canister")} min={1} max={20} value={canister} onChange={(v) => setCanister(Number(v) || 1)} />
-                          <NumberInput label={t("label.floor")} min={1} max={20} value={andar} onChange={(v) => setAndar(Number(v) || 1)} />
-                        </SimpleGrid>
-                      )}
-                    </>
-                  ) : (
-                    <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                      <TextInput
-                        label={t("transfer.external_recipient")}
-                        withAsterisk
-                        value={destinatario}
-                        onChange={(e) => setDestinatario(e.currentTarget.value)}
-                      />
+                        </Col>
+                        <Col xs={12} sm={8}>
+                          <Typography.Text type="secondary">{t("label.canister")}</Typography.Text>
+                          <InputNumber min={1} max={20} style={{ width: "100%" }} value={canister} onChange={(v) => setCanister(Number(v) || 1)} />
+                        </Col>
+                        <Col xs={12} sm={8}>
+                          <Typography.Text type="secondary">{t("label.floor")}</Typography.Text>
+                          <InputNumber min={1} max={20} style={{ width: "100%" }} value={andar} onChange={(v) => setAndar(Number(v) || 1)} />
+                        </Col>
+                      </Row>
+                    )}
+                  </>
+                ) : (
+                  <Row gutter={[12, 8]}>
+                    <Col xs={24} sm={12}>
+                      <Typography.Text type="secondary">{t("transfer.external_recipient")} *</Typography.Text>
+                      <Input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} />
+                    </Col>
+                    <Col xs={24} sm={12}>
+                      <Typography.Text type="secondary">{t("transfer.reason")}</Typography.Text>
                       <Select
-                        label={t("transfer.reason")}
-                        data={MOTIVOS.map((m) => ({ value: m.value, label: t(m.label) }))}
+                        style={{ width: "100%" }}
                         value={motivo}
-                        onChange={(v) => v && setMotivo(v as Motivo)}
-                        allowDeselect={false}
+                        onChange={(v) => setMotivo(v)}
+                        options={MOTIVOS.map((m) => ({ value: m.value, label: t(m.label) }))}
                       />
-                      <Textarea
-                        label={t("label.notes")}
-                        autosize
-                        minRows={2}
-                        value={observacoes}
-                        onChange={(e) => setObservacoes(e.currentTarget.value)}
-                        style={{ gridColumn: "1 / -1" }}
-                      />
-                    </SimpleGrid>
-                  )}
+                    </Col>
+                    <Col span={24}>
+                      <Typography.Text type="secondary">{t("label.notes")}</Typography.Text>
+                      <Input.TextArea autoSize={{ minRows: 2 }} value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+                    </Col>
+                  </Row>
+                )}
 
-                  {erro && (
-                    <Alert color="red" variant="light">
-                      {erro}
-                    </Alert>
-                  )}
-                  <Button size="md" onClick={executar} loading={aGravar} fullWidth={isMobile} style={{ alignSelf: "flex-end" }}>
+                {erro && <Alert type="error" showIcon title={erro} />}
+                <Flex justify="flex-end">
+                  <Button type="primary" onClick={executar} loading={criar.isPending || editar.isPending} block={isMobile}>
                     {edicao ? t("web.transfer.update_btn") : t("btn.execute_transfer")}
                   </Button>
-                </Stack>
-              </>
-            )}
-          </Stack>
-        </Paper>
+                </Flex>
+              </Space>
+            </>
+          )}
+        </Card>
       )}
 
       {/* Escondido durante a edição, como na app atual. */}
@@ -459,14 +446,12 @@ export function TransferenciasTab() {
         onConfirmar={(novos) => {
           setLinhas((ls) => [
             ...ls,
-            ...novos
-              .filter((n) => !ls.some((l) => l.stock_id === n.lote.id))
-              .map((n) => paraLinha({ ...n.lote, stock_id: n.lote.id }, n.qty)),
+            ...novos.filter((n) => !ls.some((l) => l.stock_id === n.lote.id)).map((n) => paraLinha({ ...n.lote, stock_id: n.lote.id }, n.qty)),
           ]);
           setModalLotes(false);
         }}
       />
-    </Stack>
+    </Space>
   );
 }
 
@@ -476,55 +461,27 @@ function QtdPalhetas({ valor, max, onChange }: { valor: number; max: number; onC
   const definir = (n: number) => onChange(Math.max(1, Math.min(max, n || 1)));
   return (
     <div onClick={(e) => e.stopPropagation()}>
-      <Text size="xs" c="dimmed" mb={2}>
+      <Typography.Text type="secondary" style={{ fontSize: 12, display: "block" }}>
         {t("web.transfer.qty_to_send")}
-      </Text>
-      <Group gap={6} wrap="nowrap">
-        <ActionIcon variant="default" size={34} onClick={() => definir(valor - 1)} disabled={valor <= 1} aria-label="−">
-          <IconMinus size={16} />
-        </ActionIcon>
-        <NumberInput
+      </Typography.Text>
+      <Space.Compact>
+        <Button icon={<MinusOutlined />} onClick={() => definir(valor - 1)} disabled={valor <= 1} aria-label="−" />
+        <InputNumber
           aria-label={t("web.transfer.qty_to_send")}
           value={valor}
           onChange={(v) => definir(Number(v))}
           min={1}
           max={max}
-          clampBehavior="strict"
-          hideControls
-          w={64}
-          styles={{ input: { textAlign: "center", fontWeight: 700 } }}
+          controls={false}
+          style={{ width: 64, textAlign: "center" }}
           inputMode="numeric"
         />
-        <ActionIcon variant="default" size={34} onClick={() => definir(valor + 1)} disabled={valor >= max} aria-label="+">
-          <IconPlus size={16} />
-        </ActionIcon>
-        <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-          {t("web.transfer.of_max", { max })}
-        </Text>
-      </Group>
+        <Button icon={<PlusOutlined />} onClick={() => definir(valor + 1)} disabled={valor >= max} aria-label="+" />
+      </Space.Compact>
+      <Typography.Text type="secondary" style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
+        {t("web.transfer.of_max", { max })}
+      </Typography.Text>
     </div>
-  );
-}
-
-function DestinoSelect({
-  opcoes,
-  value,
-  onChange,
-}: {
-  opcoes: { value: string; label: string }[];
-  value: number | null;
-  onChange: (v: number | null) => void;
-}) {
-  const t = useT();
-  // O "+" cria um proprietário novo e escolhe-o logo como destino.
-  return (
-    <DonoSelect
-      label={t("transfer.destination_owner")}
-      apenasAtivos
-      value={value}
-      onChange={onChange}
-      dataOverride={opcoes}
-    />
   );
 }
 
@@ -555,76 +512,69 @@ function SelecionarLotesModal({
   const ordenados = [...lotes].sort((a, b) => (b.data_embriovet ?? "").localeCompare(a.data_embriovet ?? ""));
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t("transfer.select_lots_title")} size="lg" radius="lg" fullScreen={isMobile}>
+    <Modal
+      open={opened}
+      onCancel={onClose}
+      title={t("transfer.select_lots_title")}
+      width={isMobile ? "100%" : 680}
+      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
+      okText={t("btn.confirm_selection")}
+      cancelText={t("btn.close")}
+      okButtonProps={{ disabled: !sel.size }}
+      onOk={() => onConfirmar(ordenados.filter((l) => sel.has(l.id)).map((l) => ({ lote: l, qty: sel.get(l.id)! })))}
+    >
       {carregando ? (
-        <Center py="xl">
-          <Loader />
-        </Center>
+        <Spin style={{ display: "block", margin: 24 }} />
       ) : !ordenados.length ? (
-        <Text c="dimmed">{t("transfer.no_lotes_for_filters")}</Text>
+        <Empty description={t("transfer.no_lotes_for_filters")} />
       ) : (
-        <Stack gap="xs">
+        <Space orientation="vertical" size={6} style={{ width: "100%" }}>
           {ordenados.map((l) => {
             const ja = jaSelecionados.has(l.id);
             const marcado = ja || sel.has(l.id);
+            const alternar = () =>
+              !ja &&
+              setSel((s) => {
+                const n = new Map(s);
+                if (n.has(l.id)) n.delete(l.id);
+                else n.set(l.id, l.existencia_atual ?? 0);
+                return n;
+              });
             return (
-              <Paper
+              <Card
                 key={l.id}
-                withBorder
-                radius="md"
-                p="sm"
-                style={{ cursor: ja ? "default" : "pointer", opacity: ja ? 0.6 : 1 }}
-                onClick={() =>
-                  !ja &&
-                  setSel((s) => {
-                    const n = new Map(s);
-                    if (n.has(l.id)) n.delete(l.id);
-                    else n.set(l.id, l.existencia_atual ?? 0);
-                    return n;
-                  })
-                }
+                size="small"
+                hoverable={!ja}
+                onClick={alternar}
+                style={{ opacity: ja ? 0.55 : 1, borderColor: sel.has(l.id) ? undefined : undefined }}
+                styles={{ body: { padding: "8px 12px" } }}
               >
-                <Group wrap="nowrap" gap="sm">
-                  <Checkbox checked={marcado} disabled={ja} readOnly aria-label={t("btn.select")} />
+                <Flex gap={10} align="center">
+                  <Checkbox checked={marcado} disabled={ja} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text size="sm" fw={600} truncate>
+                    <Typography.Text strong ellipsis style={{ display: "block" }}>
                       {referencia(l) ?? `#${l.id}`} · {localizacao(l) ?? "—"}
-                    </Text>
-                    <Text size="xs" c="dimmed" truncate>
+                    </Typography.Text>
+                    <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
                       {l.proprietario_nome ?? t("common.no_owner")}
                       {l.qualidade ? ` · Q: ${l.qualidade}` : ""}
                       {l.concentracao ? ` · C: ${l.concentracao}` : ""}
                       {l.motilidade ? ` · M: ${l.motilidade}%` : ""}
-                    </Text>
+                    </Typography.Text>
                   </div>
-                  <Text size="sm" fw={600} style={{ flexShrink: 0 }}>
+                  <Tag color="red" style={{ marginInlineEnd: 0 }}>
                     {t("web.stock.straws_count", { count: l.existencia_atual ?? 0 })}
-                  </Text>
-                </Group>
+                  </Tag>
+                </Flex>
                 {sel.has(l.id) && (
-                  <Box mt="sm" pl={34}>
-                    <QtdPalhetas
-                      valor={sel.get(l.id)!}
-                      max={l.existencia_atual ?? 0}
-                      onChange={(n) => setSel((s) => new Map(s).set(l.id, n))}
-                    />
-                  </Box>
+                  <div style={{ marginTop: 8, paddingLeft: 26 }}>
+                    <QtdPalhetas valor={sel.get(l.id)!} max={l.existencia_atual ?? 0} onChange={(n) => setSel((s) => new Map(s).set(l.id, n))} />
+                  </div>
                 )}
-              </Paper>
+              </Card>
             );
           })}
-          <Group justify="flex-end" mt="sm" grow={isMobile}>
-            <Button variant="default" onClick={onClose}>
-              {t("btn.close")}
-            </Button>
-            <Button
-              disabled={!sel.size}
-              onClick={() => onConfirmar(ordenados.filter((l) => sel.has(l.id)).map((l) => ({ lote: l, qty: sel.get(l.id)! })))}
-            >
-              {t("btn.confirm_selection")}
-            </Button>
-          </Group>
-        </Stack>
+        </Space>
       )}
     </Modal>
   );

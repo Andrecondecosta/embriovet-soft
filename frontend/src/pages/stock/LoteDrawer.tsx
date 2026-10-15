@@ -1,19 +1,6 @@
 import { useState } from "react";
-import {
-  Accordion,
-  Alert,
-  Button,
-  Checkbox,
-  Divider,
-  Drawer,
-  Group,
-  Modal,
-  SimpleGrid,
-  Stack,
-  Text,
-  Title,
-} from "@mantine/core";
-import { IconPencil, IconTrash } from "@tabler/icons-react";
+import { Alert, Button, Checkbox, Collapse, Descriptions, Drawer, Flex, Modal, Space, Tag, Typography } from "antd";
+import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
 import { useIsAdmin } from "../../components/User";
@@ -23,21 +10,6 @@ import { dataHora } from "../../components/csv";
 import { referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
 import { HistoricoTransferencias } from "./LotesTab";
 import { LoteFormModal } from "./LoteForm";
-import { Pill } from "../../components/ds";
-
-function Campo({ label, valor }: { label: string; valor: string | number | null | undefined }) {
-  const t = useT();
-  return (
-    <div>
-      <Text size="xs" c="dimmed" fw={500}>
-        {label}
-      </Text>
-      <Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {valor === null || valor === undefined || valor === "" ? t("common.na") : valor}
-      </Text>
-    </div>
-  );
-}
 
 export function LoteDrawer({
   lote,
@@ -64,100 +36,88 @@ export function LoteDrawer({
   const internasLote = internas.filter((x) => x.origem_id === dono || x.destino_id === dono);
   const externasLote = externas.filter((x) => x.origem_id === dono);
 
+  const na = (v: string | number | null | undefined) => (v === null || v === undefined || v === "" ? t("common.na") : v);
   const local = lote?.contentor_codigo
     ? `${lote.contentor_codigo} · ${t("label.canister")} ${lote.canister ?? "—"} · ${lote.andar ?? "—"}º`
     : lote?.local_armazenagem || null;
-
   const certificado = lote?.certificado === "Sim" ? t("common.yes") : lote?.certificado === "Não" ? t("common.no") : lote?.certificado;
 
   return (
     <>
       <Drawer
-        opened={lote !== null}
+        open={lote !== null}
         onClose={onClose}
-        position={isMobile ? "bottom" : "right"}
-        size={isMobile ? "100%" : "lg"}
-        padding="lg"
-        title={null}
+        placement={isMobile ? "bottom" : "right"}
+        size={isMobile ? "90%" : 520}
+        title={
+          lote && (
+            <Flex gap={8} align="center" wrap>
+              <span>{referencia(lote) ?? t("common.no_reference")}</span>
+              <Tag color="red" style={{ marginInlineEnd: 0 }}>
+                {t("web.stock.straws_count", { count: lote.existencia_atual ?? 0 })}
+              </Tag>
+            </Flex>
+          )
+        }
+        footer={
+          lote &&
+          isAdmin && (
+            // Editar/Eliminar só para Administrador, como na app atual.
+            <Space>
+              <Button type="primary" icon={<EditOutlined />} onClick={() => setEditar(true)}>
+                {t("btn.edit")}
+              </Button>
+              <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setApagar(true)}>
+                {t("stock.tab.delete")}
+              </Button>
+            </Space>
+          )
+        }
       >
         {lote && (
-          <Stack gap="lg">
-            <div>
-              <Text size="xs" c="dimmed">
-                {lote.garanhao_nome} · #{lote.id}
-              </Text>
-              <Group gap="sm" wrap="nowrap" align="center">
-                <Title order={3} style={{ wordBreak: "break-word" }}>
-                  {referencia(lote) ?? t("common.no_reference")}
-                </Title>
-                <Pill nivel="aviso">{t("web.stock.straws_count", { count: lote.existencia_atual ?? 0 })}</Pill>
-              </Group>
-              <Text size="sm">{lote.proprietario_nome ?? t("common.no_owner")}</Text>
-            </div>
-
-            <SimpleGrid cols={{ base: 2 }} spacing="md" verticalSpacing="md">
-              <Campo label={t("label.location")} valor={local} />
-              <Campo label={t("stock.certificate_label")} valor={certificado} />
-              <Campo label={t("stock.quality_label")} valor={lote.qualidade} />
-              <Campo label={t("stock.color")} valor={lote.cor} />
-              <Campo label={t("stock.concentration_label")} valor={`${lote.concentracao ?? 0} ${t("stock.million_ml")}`} />
-              <Campo label={t("stock.motility_label")} valor={`${lote.motilidade ?? 0}%`} />
-              <Campo label={t("stock.dose_label")} valor={lote.dose} />
-              <Campo label={t("stock.straws_produced_label")} valor={lote.palhetas_produzidas} />
-              <Campo label={t("stock.prod_date_label")} valor={lote.data_embriovet} />
-              <Campo label={t("stock.external_origin_label")} valor={lote.origem_externa} />
-            </SimpleGrid>
-            {lote.observacoes && <Campo label={t("label.notes")} valor={lote.observacoes} />}
-
-            <Group gap="lg">
-              {lote.data_criacao && (
-                <Text size="xs" c="dimmed">
-                  {t("stock.created_at_label")}: {dataHora(lote.data_criacao)}
-                </Text>
-              )}
-              {lote.criado_por && (
-                <Text size="xs" c="dimmed">
-                  {t("stock.created_by_label")}: {lote.criado_por}
-                </Text>
-              )}
-            </Group>
-
-            <Accordion variant="contained" radius="md">
-              <Accordion.Item value="hist">
-                <Accordion.Control>{t("stock.lot_history")}</Accordion.Control>
-                <Accordion.Panel>
-                  {internasLote.length || externasLote.length ? (
-                    <HistoricoTransferencias garanhao={lote.garanhao_nome} internas={internasLote} externas={externasLote} />
-                  ) : (
-                    <Text size="sm" c="dimmed">
-                      {t("stock.no_transfer_history_lot")}
-                    </Text>
-                  )}
-                </Accordion.Panel>
-              </Accordion.Item>
-            </Accordion>
-
-            {/* Editar/Eliminar só para Administrador, como na app atual. */}
-            {isAdmin && (
-              <>
-                <Divider />
-                <Stack gap="xs">
-                  <Button size={isMobile ? "md" : "sm"} leftSection={<IconPencil size={16} />} onClick={() => setEditar(true)}>
-                    {t("btn.edit")}
-                  </Button>
-                  <Button
-                    size={isMobile ? "md" : "sm"}
-                    variant="subtle"
-                    color="red"
-                    leftSection={<IconTrash size={16} />}
-                    onClick={() => setApagar(true)}
-                  >
-                    {t("stock.tab.delete")}
-                  </Button>
-                </Stack>
-              </>
-            )}
-          </Stack>
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+            <Typography.Text type="secondary">
+              {lote.garanhao_nome} · #{lote.id}
+            </Typography.Text>
+            <Descriptions
+              size="small"
+              bordered
+              column={1}
+              items={[
+                { label: t("label.owner"), children: lote.proprietario_nome ?? t("common.no_owner") },
+                { label: t("label.location"), children: na(local) },
+                { label: t("stock.certificate_label"), children: na(certificado) },
+                { label: t("stock.quality_label"), children: na(lote.qualidade) },
+                { label: t("stock.color"), children: na(lote.cor) },
+                { label: t("stock.concentration_label"), children: `${lote.concentracao ?? 0} ${t("stock.million_ml")}` },
+                { label: t("stock.motility_label"), children: `${lote.motilidade ?? 0}%` },
+                { label: t("stock.dose_label"), children: na(lote.dose) },
+                { label: t("stock.straws_produced_label"), children: na(lote.palhetas_produzidas) },
+                { label: t("stock.prod_date_label"), children: na(lote.data_embriovet) },
+                { label: t("stock.external_origin_label"), children: na(lote.origem_externa) },
+                ...(lote.observacoes
+                  ? [{ label: t("label.notes"), children: <span style={{ whiteSpace: "pre-wrap" }}>{lote.observacoes}</span> }]
+                  : []),
+                { label: t("stock.created_at_label"), children: dataHora(lote.data_criacao) },
+                { label: t("stock.created_by_label"), children: na(lote.criado_por) },
+              ]}
+            />
+            <Collapse
+              size="small"
+              items={[
+                {
+                  key: "hist",
+                  label: t("stock.lot_history"),
+                  children:
+                    internasLote.length || externasLote.length ? (
+                      <HistoricoTransferencias garanhao={lote.garanhao_nome} internas={internasLote} externas={externasLote} />
+                    ) : (
+                      <Typography.Text type="secondary">{t("stock.no_transfer_history_lot")}</Typography.Text>
+                    ),
+                },
+              ]}
+            />
+          </Space>
         )}
       </Drawer>
 
@@ -197,7 +157,6 @@ function ApagarLoteModal({
   const notifyError = useNotifyError();
   const apagar = useApagarLote();
   const [confirmo, setConfirmo] = useState(false);
-
   const temLigacoes = !!ligacoes && Object.values(ligacoes).some((n) => n);
 
   const confirmar = async () => {
@@ -212,39 +171,39 @@ function ApagarLoteModal({
 
   return (
     <Modal
-      opened={opened}
-      onClose={onClose}
+      open={opened}
+      onCancel={onClose}
       title={t("stock.delete_title")}
-      radius="lg"
-      onExitTransitionEnd={() => setConfirmo(false)}
+      okText={t("stock.delete_btn")}
+      cancelText={t("web.common.cancel")}
+      okButtonProps={{ danger: true, disabled: !confirmo }}
+      confirmLoading={apagar.isPending}
+      onOk={confirmar}
+      afterClose={() => setConfirmo(false)}
     >
-      <Stack>
-        <Alert color="red" variant="light">
-          {t("stock.delete_warning", { ref: referencia(lote) ?? t("common.no_reference"), qtd: lote.existencia_atual ?? 0 })}
-        </Alert>
+      <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+        <Alert
+          type="error"
+          showIcon
+          title={t("stock.delete_warning", { ref: referencia(lote) ?? t("common.no_reference"), qtd: lote.existencia_atual ?? 0 })}
+        />
         {temLigacoes ? (
-          <Alert color="yellow" variant="light">
-            {t("stock.delete_links", {
+          <Alert
+            type="warning"
+            showIcon
+            title={t("stock.delete_links", {
               insem: ligacoes?.inseminacoes ?? 0,
               transf: ligacoes?.transferencias ?? 0,
               ext: ligacoes?.transferencias_externas ?? 0,
             })}
-          </Alert>
+          />
         ) : (
-          <Text size="sm" c="dimmed">
-            {t("stock.delete_no_links")}
-          </Text>
+          <Typography.Text type="secondary">{t("stock.delete_no_links")}</Typography.Text>
         )}
-        <Checkbox label={t("stock.delete_confirm")} checked={confirmo} onChange={(e) => setConfirmo(e.currentTarget.checked)} />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            {t("web.common.cancel")}
-          </Button>
-          <Button color="red" disabled={!confirmo} loading={apagar.isPending} onClick={confirmar}>
-            {t("stock.delete_btn")}
-          </Button>
-        </Group>
-      </Stack>
+        <Checkbox checked={confirmo} onChange={(e) => setConfirmo(e.target.checked)}>
+          {t("stock.delete_confirm")}
+        </Checkbox>
+      </Space>
     </Modal>
   );
 }

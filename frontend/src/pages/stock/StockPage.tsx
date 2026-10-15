@@ -1,13 +1,14 @@
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Button, Group, Tabs, Tooltip } from "@mantine/core";
-import { PageHeader } from "../../components/ds";
-import { IconFileImport, IconPlus } from "@tabler/icons-react";
+import { Button, Card, Space, Tabs, Tooltip } from "antd";
+import { ImportOutlined, PlusOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
-import { NotMigratedPage } from "../NotMigratedPage";
+import { PageHeader } from "../../components/ds";
+import { useIsMobile } from "../../components/responsive";
 import { LotesTab } from "./LotesTab";
 import { GaranhoesTab } from "./GaranhoesTab";
 import { TransferenciasTab } from "./transfer/TransferenciasTab";
+import { MapaTab } from "./mapa/MapaTab";
 
 // Os mesmos 4 separadores de `stock_semen_page.py`, pela mesma ordem.
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
 export function StockPage() {
   const t = useT();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { tab } = useParams();
   const [params] = useSearchParams();
 
@@ -30,48 +32,44 @@ export function StockPage() {
     navigate(`/stock-semen/novo${g ? `?garanhao=${encodeURIComponent(g)}` : ""}`);
   };
 
+  const conteudo = (id: string) =>
+    id === "lotes" ? (
+      <LotesTab onNovoLote={novoLote} />
+    ) : id === "garanhoes" ? (
+      <GaranhoesTab />
+    ) : id === "mapa" ? (
+      <MapaTab />
+    ) : (
+      <TransferenciasTab />
+    );
+
   return (
-    <>
+    <Card size="small">
       <PageHeader
         titulo={t("web.nav.stock_semen")}
         acoes={
           // "Adicionar lote"/"Importar" só no separador Lotes, como na app atual.
-          tab === "lotes" && (
-          <Group gap="xs" visibleFrom="sm" wrap="nowrap">
-            <Tooltip label={t("web.not_migrated.title")}>
-              <Button variant="default" leftSection={<IconFileImport size={16} />} data-disabled onClick={(e) => e.preventDefault()}>
-                {t("web.stock.import")}
+          tab === "lotes" &&
+          !isMobile && (
+            <Space>
+              <Tooltip title={t("web.not_migrated.title")}>
+                <Button icon={<ImportOutlined />} disabled>
+                  {t("web.stock.import")}
+                </Button>
+              </Tooltip>
+              <Button type="primary" icon={<PlusOutlined />} onClick={novoLote}>
+                {t("web.stock.add")}
               </Button>
-            </Tooltip>
-            <Button leftSection={<IconPlus size={16} />} onClick={novoLote}>
-              {t("web.stock.add")}
-            </Button>
-          </Group>
+            </Space>
           )
         }
       />
-
-      <Tabs value={tab} onChange={(v) => v && navigate(`/stock-semen/${v}`)} keepMounted={false}>
-        <Tabs.List mb="lg" className="tabs-scroll">
-          {TABS.map((x) => (
-            <Tabs.Tab key={x.id} value={x.id}>
-              {t(x.label)}
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-        <Tabs.Panel value="lotes">
-          <LotesTab onNovoLote={novoLote} />
-        </Tabs.Panel>
-        <Tabs.Panel value="garanhoes">
-          <GaranhoesTab />
-        </Tabs.Panel>
-        <Tabs.Panel value="mapa">
-          <NotMigratedPage />
-        </Tabs.Panel>
-        <Tabs.Panel value="transferencias">
-          <TransferenciasTab />
-        </Tabs.Panel>
-      </Tabs>
-    </>
+      <Tabs
+        activeKey={tab}
+        onChange={(v) => navigate(`/stock-semen/${v}`)}
+        destroyOnHidden
+        items={TABS.map((x) => ({ key: x.id, label: t(x.label), children: conteudo(x.id) }))}
+      />
+    </Card>
   );
 }

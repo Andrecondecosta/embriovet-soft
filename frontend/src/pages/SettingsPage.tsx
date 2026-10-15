@@ -1,9 +1,9 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Tabs } from "@mantine/core";
-import { PageHeader } from "../components/ds";
+import { Card, Tabs } from "antd";
 
 import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
+import { PageHeader } from "../components/ds";
 import { OwnersTab } from "./owners/OwnersTab";
 import { NotMigratedPage } from "./NotMigratedPage";
 
@@ -27,22 +27,18 @@ export function SettingsPage({ user }: { user: User }) {
   if (!tab || !visiveis.some((x) => x.id === tab)) return <Navigate to="/definicoes/proprietarios" replace />;
 
   return (
-    <>
+    <Card size="small">
       <PageHeader titulo={t("web.nav.definicoes")} />
-      <Tabs value={tab} onChange={(v) => v && navigate(`/definicoes/${v}`)} keepMounted={false}>
-        <Tabs.List mb="lg" className="tabs-scroll">
-          {visiveis.map((x) => (
-            <Tabs.Tab key={x.id} value={x.id}>
-              {t(x.label)}
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-        {visiveis.map((x) => (
-          <Tabs.Panel key={x.id} value={x.id}>
-            {x.id === "proprietarios" ? <OwnersTab /> : <NotMigratedPage />}
-          </Tabs.Panel>
-        ))}
-      </Tabs>
-    </>
+      <Tabs
+        activeKey={tab}
+        onChange={(v) => navigate(`/definicoes/${v}`)}
+        destroyOnHidden
+        items={visiveis.map((x) => ({
+          key: x.id,
+          label: t(x.label),
+          children: x.id === "proprietarios" ? <OwnersTab /> : <NotMigratedPage />,
+        }))}
+      />
+    </Card>
   );
 }

@@ -1,25 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import {
-  ActionIcon,
-  Autocomplete,
-  Button,
-  Group,
-  Input,
-  Modal,
-  NumberInput,
-  SegmentedControl,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-  Title,
-  Tooltip,
-} from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
+import { AutoComplete, Button, Col, Divider, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Tooltip, Typography } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 
 import type { Owner } from "../../api/types";
 import { useT } from "../../i18n/I18n";
@@ -49,68 +32,57 @@ export function camposVazios(): LoteCampos {
   };
 }
 
-export function Secao({ titulo, children }: { titulo: string; children: ReactNode; primeiro?: boolean }) {
+export function Secao({ titulo, children, primeiro = false }: { titulo: string; children: ReactNode; primeiro?: boolean }) {
   return (
-    <Stack gap="sm">
-      <Title order={5} c="dimmed" tt="uppercase" fz="xs" style={{ letterSpacing: "0.04em" }}>
-        {titulo}
-      </Title>
+    <>
+      <Divider titlePlacement="start" plain style={{ margin: primeiro ? "0 0 8px" : "8px 0" }}>
+        <Typography.Text type="secondary" strong style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {titulo}
+        </Typography.Text>
+      </Divider>
       {children}
-    </Stack>
+    </>
   );
 }
 
 /** Garanhão: escolher da lista ou escrever um nome novo (o servidor cria-o
- *  em `animais`, sem duplicar "Falcao"/"Falcão"). */
-export function GaranhaoInput({
-  value,
-  onChange,
-  error,
-  autoFocus,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  error?: string;
-  autoFocus?: boolean;
-}) {
+ *  em `animais`, sem duplicar "Falcao"/"Falcão"). Controlado — funciona
+ *  dentro de um `Form.Item`. */
+export function GaranhaoInput({ value = "", onChange }: { value?: string; onChange?: (v: string) => void }) {
   const t = useT();
   const garanhoes = useOpcoes("garanhoes");
   const nomes = (garanhoes.data ?? []).map((g) => g.nome);
-  const nomeNovo =
-    value.trim() && !nomes.some((n) => n.toLowerCase() === value.trim().toLowerCase()) ? value.trim() : null;
+  const q = value.trim().toLowerCase();
   return (
-    <Autocomplete
-      label={t("label.garanhao")}
-      withAsterisk
-      data={nomes}
+    <AutoComplete
       value={value}
       onChange={onChange}
-      error={error}
-      description={nomeNovo ? t("web.stock.add.new_stallion", { name: nomeNovo }) : t("web.stock.add.stallion_hint")}
-      inputWrapperOrder={["label", "input", "description", "error"]}
-      limit={50}
-      maxDropdownHeight={280}
-      autoFocus={autoFocus}
+      options={nomes.filter((n) => !q || n.toLowerCase().includes(q)).slice(0, 50).map((n) => ({ value: n }))}
+      placeholder={t("add_stock.stallion_placeholder")}
     />
   );
 }
 
-/** Seletor de proprietário com "+" para criar um novo sem sair do formulário. */
+/** Texto de ajuda por baixo do garanhão: diz se o nome é novo. */
+export function useAjudaGaranhao(valor: string | undefined) {
+  const t = useT();
+  const garanhoes = useOpcoes("garanhoes");
+  const v = (valor ?? "").trim();
+  const novo = v && !(garanhoes.data ?? []).some((g) => g.nome.toLowerCase() === v.toLowerCase());
+  return novo ? t("web.stock.add.new_stallion", { name: v }) : t("web.stock.add.stallion_hint");
+}
+
+/** Seletor de proprietário com "+" para criar um novo sem sair do formulário.
+ *  Controlado — funciona dentro de um `Form.Item`. */
 export function DonoSelect({
   value,
   onChange,
   apenasAtivos,
-  label,
-  error,
-  description,
   dataOverride,
 }: {
-  value: number | null;
-  onChange: (id: number | null) => void;
+  value?: number | null;
+  onChange?: (id: number | null) => void;
   apenasAtivos: boolean;
-  label: string;
-  error?: string | null;
-  description?: string;
   /** Lista já filtrada (ex.: destinos sem o dono de origem). */
   dataOverride?: { value: string; label: string }[];
 }) {
@@ -118,41 +90,30 @@ export function DonoSelect({
   const queryClient = useQueryClient();
   const donos = useOpcoes("proprietarios", apenasAtivos);
   const [novo, setNovo] = useState(false);
+  const opcoes = dataOverride ?? (donos.data ?? []).map((d) => ({ value: String(d.id), label: d.nome }));
   return (
     <>
-      <Group gap="xs" wrap="nowrap" align="flex-start">
+      <Flex gap={6}>
         <Select
-          label={label}
-          withAsterisk
-          data={dataOverride ?? (donos.data ?? []).map((d) => ({ value: String(d.id), label: d.nome }))}
-          value={value !== null ? String(value) : null}
-          onChange={(v) => onChange(v ? Number(v) : null)}
-          searchable
-          nothingFoundMessage={t("web.common.no_results")}
-          error={error}
-          description={description}
-          inputWrapperOrder={["label", "input", "description", "error"]}
-          style={{ flex: 1 }}
+          showSearch
+          optionFilterProp="label"
+          value={value != null ? String(value) : undefined}
+          onChange={(v) => onChange?.(v ? Number(v) : null)}
+          options={opcoes}
+          notFoundContent={t("web.common.no_results")}
+          style={{ flex: 1, minWidth: 0 }}
         />
-        <Tooltip label={t("web.owners.new")}>
-          <ActionIcon
-            variant="default"
-            size={36}
-            onClick={() => setNovo(true)}
-            aria-label={t("web.owners.new")}
-            style={{ marginTop: 25 }}
-          >
-            <IconPlus size={18} />
-          </ActionIcon>
+        <Tooltip title={t("web.owners.new")}>
+          <Button icon={<PlusOutlined />} onClick={() => setNovo(true)} aria-label={t("web.owners.new")} />
         </Tooltip>
-      </Group>
+      </Flex>
       <OwnerFormModal
         opened={novo}
         owner={null}
         onClose={() => setNovo(false)}
         onSaved={async (o: Owner) => {
           await queryClient.invalidateQueries({ queryKey: ["opcoes", "proprietarios"] });
-          onChange(o.id);
+          onChange?.(o.id);
         }}
       />
     </>
@@ -160,107 +121,94 @@ export function DonoSelect({
 }
 
 /** Campos técnicos, de produção e de localização — comuns a "Adicionar
- *  lote" e "Editar lote" (mesmos campos que os dois formulários da app atual). */
-export function CamposLote<T extends LoteCampos>({
-  dados,
-  set,
-  producao,
-  erros,
-}: {
-  dados: T;
-  set: (patch: Partial<T>) => void;
-  producao: ReactNode;
-  erros: Partial<Record<keyof LoteCampos, string>>;
-}) {
+ *  lote" e "Editar lote" (mesmos campos que os dois formulários da app atual).
+ *  Tem de estar dentro de um `<Form>`. */
+export function CamposLote({ producao }: { producao: ReactNode }) {
   const t = useT();
   const contentores = useOpcoes("contentores");
-  const txt = (k: keyof LoteCampos) => ({
-    value: (dados[k] as string) ?? "",
-    onChange: (e: { currentTarget: { value: string } }) => set({ [k]: e.currentTarget.value } as Partial<T>),
-  });
-
   return (
     <>
       <Secao titulo={t("add_stock.section.technical")}>
-        <SimpleGrid cols={{ base: 2, sm: 4 }}>
-          <NumberInput
-            label={t("stock.motility_pct")}
-            min={0}
-            max={100}
-            clampBehavior="strict"
-            value={dados.motilidade}
-            onChange={(v) => set({ motilidade: Number(v) || 0 } as Partial<T>)}
-            inputMode="numeric"
-          />
-          <NumberInput
-            label={t("stock.concentration")}
-            min={0}
-            value={dados.concentracao}
-            onChange={(v) => set({ concentracao: Number(v) || 0 } as Partial<T>)}
-            inputMode="numeric"
-          />
-          <TextInput label={t("stock.quality_text")} {...txt("qualidade")} />
-          <TextInput label={t("stock.color")} {...txt("cor")} />
-        </SimpleGrid>
-        <SimpleGrid cols={{ base: 1, xs: 2 }}>
-          <Input.Wrapper label={t("stock.certificate")}>
-            <SegmentedControl
-              fullWidth
-              data={[
-                { value: "Sim", label: t("common.yes") },
-                { value: "Não", label: t("common.no") },
-              ]}
-              value={dados.certificado}
-              onChange={(v) => set({ certificado: v as "Sim" | "Não" } as Partial<T>)}
-            />
-          </Input.Wrapper>
-          <TextInput label={t("stock.dose")} {...txt("dose")} />
-        </SimpleGrid>
+        <Row gutter={12}>
+          <Col xs={12} md={6}>
+            <Form.Item name="motilidade" label={t("stock.motility_pct")}>
+              <InputNumber min={0} max={100} style={{ width: "100%" }} inputMode="numeric" />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="concentracao" label={t("stock.concentration")}>
+              <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="qualidade" label={t("stock.quality_text")}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="cor" label={t("stock.color")}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="certificado" label={t("stock.certificate")}>
+              <Segmented
+                block
+                options={[
+                  { value: "Sim", label: t("common.yes") },
+                  { value: "Não", label: t("common.no") },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="dose" label={t("stock.dose")}>
+              <Input />
+            </Form.Item>
+          </Col>
+        </Row>
       </Secao>
 
       <Secao titulo={t("add_stock.section.production")}>{producao}</Secao>
 
       <Secao titulo={t("web.stock.add.location")}>
         {contentores.data && contentores.data.length === 0 ? (
-          <Text c="red" size="sm">
-            {t("add_stock.no_containers")}
-          </Text>
+          <Typography.Text type="danger">{t("add_stock.no_containers")}</Typography.Text>
         ) : (
-          <SimpleGrid cols={{ base: 1, xs: 3 }}>
-            <Select
-              label={t("label.container")}
-              withAsterisk
-              data={(contentores.data ?? []).map((c) => ({ value: String(c.id), label: c.nome }))}
-              value={dados.contentor_id !== null ? String(dados.contentor_id) : null}
-              onChange={(v) => set({ contentor_id: v ? Number(v) : null } as Partial<T>)}
-              searchable
-              error={erros.contentor_id}
-            />
-            <Select
-              label={t("label.canister")}
-              withAsterisk
-              data={CANISTERS}
-              value={String(dados.canister)}
-              onChange={(v) => v && set({ canister: Number(v) } as Partial<T>)}
-              allowDeselect={false}
-            />
-            <Input.Wrapper label={t("label.floor_required").replace(" *", "")} withAsterisk>
-              <SegmentedControl
-                fullWidth
-                data={[
-                  { value: "1", label: t("web.stock.floor", { n: 1 }) },
-                  { value: "2", label: t("web.stock.floor", { n: 2 }) },
-                ]}
-                value={String(dados.andar)}
-                onChange={(v) => set({ andar: Number(v) as 1 | 2 } as Partial<T>)}
-              />
-            </Input.Wrapper>
-          </SimpleGrid>
+          <Row gutter={12}>
+            <Col xs={24} sm={8}>
+              <Form.Item name="contentor_id" label={t("label.container")} rules={[{ required: true, message: t("error.container_required") }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={(contentores.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={8}>
+              <Form.Item name="canister" label={t("label.canister")} rules={[{ required: true }]}>
+                <Select options={CANISTERS.map((c) => ({ value: Number(c), label: c }))} />
+              </Form.Item>
+            </Col>
+            <Col xs={12} sm={8}>
+              <Form.Item name="andar" label={t("label.floor_required").replace(" *", "")} rules={[{ required: true }]}>
+                <Segmented
+                  block
+                  options={[
+                    { value: 1, label: t("web.stock.floor", { n: 1 }) },
+                    { value: 2, label: t("web.stock.floor", { n: 2 }) },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
         )}
       </Secao>
 
       <Secao titulo={t("label.notes")}>
-        <Textarea autosize minRows={2} {...txt("observacoes")} aria-label={t("label.notes")} />
+        <Form.Item name="observacoes">
+          <Input.TextArea autoSize={{ minRows: 2 }} aria-label={t("label.notes")} />
+        </Form.Item>
       </Secao>
     </>
   );
@@ -270,20 +218,14 @@ export function CamposLote<T extends LoteCampos>({
 export function LoteFormModal({ opened, lote, onClose }: { opened: boolean; lote: Lote; onClose: () => void }) {
   const t = useT();
   const isMobile = useIsMobile();
-  return (
-    <Modal opened={opened} onClose={onClose} title={t("stock.edit_title")} size="xl" radius="lg" fullScreen={isMobile}>
-      <EditarLoteForm lote={lote} onClose={onClose} />
-    </Modal>
-  );
-}
-
-function EditarLoteForm({ lote, onClose }: { lote: Lote; onClose: () => void }) {
-  const t = useT();
-  const isMobile = useIsMobile();
   const notifyError = useNotifyError();
   const editar = useEditarLote();
   const [, setParams] = useSearchParams();
-  const [dados, setDados] = useState<LoteEdicao>(() => ({
+  const [form] = Form.useForm<LoteEdicao>();
+  const garanhaoAtual = Form.useWatch("garanhao", form);
+  const ajuda = useAjudaGaranhao(garanhaoAtual);
+
+  const inicial: LoteEdicao = {
     ...camposVazios(),
     garanhao: lote.garanhao_nome ?? "",
     dono_id: lote.dono_id,
@@ -301,23 +243,11 @@ function EditarLoteForm({ lote, onClose }: { lote: Lote; onClose: () => void }) 
     observacoes: lote.observacoes ?? "",
     palhetas_produzidas: lote.palhetas_produzidas ?? 0,
     existencia_atual: lote.existencia_atual ?? 0,
-  }));
-  const [erros, setErros] = useState<Partial<Record<keyof LoteCampos, string>>>({});
-  const set = (patch: Partial<LoteEdicao>) => {
-    setDados((d) => ({ ...d, ...patch }));
-    setErros((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !(k in patch))));
   };
 
-  const submeter = async (e: FormEvent) => {
-    e.preventDefault();
-    const novos: typeof erros = {};
-    if (!dados.garanhao.trim()) novos.garanhao = t("error.stallion_required");
-    if (!dados.dono_id) novos.dono_id = t("web.stock.error.owner_required");
-    if (!dados.contentor_id) novos.contentor_id = t("error.container_required");
-    setErros(novos);
-    if (Object.keys(novos).length) return;
+  const guardar = async (dados: LoteEdicao) => {
     try {
-      const atualizado = await editar.mutateAsync({ id: lote.id, ...dados });
+      const atualizado = await editar.mutateAsync({ id: lote.id, ...inicial, ...dados });
       notifySuccess(t("web.stock.updated"));
       onClose();
       // Mudou de garanhão: a lista passa para o garanhão novo, com o lote aberto.
@@ -339,88 +269,70 @@ function EditarLoteForm({ lote, onClose }: { lote: Lote; onClose: () => void }) 
   };
 
   return (
-    <form onSubmit={submeter}>
-      <Stack gap="lg">
+    <Modal
+      open={opened}
+      onCancel={onClose}
+      title={t("stock.edit_title")}
+      okText={t("btn.save_changes")}
+      cancelText={t("web.common.cancel")}
+      onOk={() => form.submit()}
+      confirmLoading={editar.isPending}
+      width={isMobile ? "100%" : 860}
+      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
+      destroyOnHidden
+    >
+      <Form form={form} layout="vertical" onFinish={guardar} initialValues={inicial} preserve={false}>
         <Secao titulo={t("web.stock.add.identification")} primeiro>
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <GaranhaoInput value={dados.garanhao} onChange={(v) => set({ garanhao: v })} error={erros.garanhao} />
-            <DonoSelect
-              label={t("label.owner")}
-              apenasAtivos
-              value={dados.dono_id}
-              onChange={(id) => set({ dono_id: id })}
-              error={erros.dono_id}
-              description={t("web.stock.edit_owner_only_active")}
-            />
-          </SimpleGrid>
+          <Row gutter={12}>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="garanhao"
+                label={t("label.garanhao")}
+                extra={ajuda}
+                rules={[{ required: true, whitespace: true, message: t("error.stallion_required") }]}
+              >
+                <GaranhaoInput />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="dono_id"
+                label={t("label.owner")}
+                extra={t("web.stock.edit_owner_only_active")}
+                rules={[{ required: true, message: t("web.stock.error.owner_required") }]}
+              >
+                <DonoSelect apenasAtivos />
+              </Form.Item>
+            </Col>
+          </Row>
         </Secao>
         <CamposLote
-          dados={dados}
-          set={set}
-          erros={erros}
           producao={
-            <SimpleGrid cols={{ base: 2, sm: 4 }}>
-              <TextInput label={t("stock.prod_date")} value={dados.data_embriovet} onChange={(e) => set({ data_embriovet: e.currentTarget.value })} />
-              <TextInput label={t("stock.external_origin")} value={dados.origem_externa} onChange={(e) => set({ origem_externa: e.currentTarget.value })} />
-              <NumberInput
-                label={t("stock.straws_produced")}
-                min={0}
-                value={dados.palhetas_produzidas}
-                onChange={(v) => set({ palhetas_produzidas: Number(v) || 0 })}
-                inputMode="numeric"
-              />
-              <NumberInput
-                label={t("stock.current_stock")}
-                min={0}
-                value={dados.existencia_atual}
-                onChange={(v) => set({ existencia_atual: Number(v) || 0 })}
-                inputMode="numeric"
-              />
-            </SimpleGrid>
+            <Row gutter={12}>
+              <Col xs={12} md={6}>
+                <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Item name="origem_externa" label={t("stock.external_origin")}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Item name="palhetas_produzidas" label={t("stock.straws_produced")}>
+                  <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" />
+                </Form.Item>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Item name="existencia_atual" label={t("stock.current_stock")}>
+                  <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" />
+                </Form.Item>
+              </Col>
+            </Row>
           }
         />
-        <BotoesForm isMobile={isMobile} onCancel={onClose} loading={editar.isPending} label={t("btn.save_changes")} />
-      </Stack>
-    </form>
+      </Form>
+    </Modal>
   );
 }
-
-export function BotoesForm({
-  isMobile,
-  onCancel,
-  loading,
-  label,
-}: {
-  isMobile: boolean;
-  onCancel: () => void;
-  loading: boolean;
-  label: string;
-}) {
-  const t = useT();
-  return (
-    <Group
-      justify="flex-end"
-      grow={isMobile}
-      style={
-        isMobile
-          ? {
-              position: "sticky",
-              bottom: 0,
-              background: "var(--mantine-color-body)",
-              padding: "12px 0 calc(12px + env(safe-area-inset-bottom))",
-              borderTop: "1px solid var(--mantine-color-gray-2)",
-              zIndex: 2,
-            }
-          : undefined
-      }
-    >
-      <Button variant="default" onClick={onCancel}>
-        {t("web.common.cancel")}
-      </Button>
-      <Button type="submit" loading={loading}>
-        {label}
-      </Button>
-    </Group>
-  );
-}
-

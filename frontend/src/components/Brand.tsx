@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { Box, Image, Text } from "@mantine/core";
+import { Typography } from "antd";
 import type { PublicSettings } from "../api/types";
 
 export const BrandContext = createContext<PublicSettings>({
@@ -15,14 +15,14 @@ export const useBrand = () => useContext(BrandContext);
 export const PRODUCT_NAME = "EquiCore";
 
 /** Assinatura do programa, discreta, por baixo da marca da clínica. */
-export function ProductSignature() {
+export function ProductSignature({ escuro = false }: { escuro?: boolean }) {
   return (
-    <Text size="xs" c="dimmed" ta="center">
-      <Text span fw={700} c="gray.7" style={{ letterSpacing: "0.02em" }}>
+    <Typography.Text style={{ fontSize: 11, color: escuro ? "rgba(255,255,255,.45)" : "rgba(0,0,0,.45)" }}>
+      <b style={{ color: escuro ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.65)", letterSpacing: "0.02em" }}>
         {PRODUCT_NAME}
-      </Text>
+      </b>
       {" · Gestor v3.0"}
-    </Text>
+    </Typography.Text>
   );
 }
 
@@ -32,7 +32,15 @@ export function BrandMark({ size = 40 }: { size?: number }) {
   const { company_name, logo_base64, primary_color } = useBrand();
   if (logo_base64) {
     const src = logo_base64.startsWith("data:") ? logo_base64 : `data:image/png;base64,${logo_base64}`;
-    return <Image src={src} alt={company_name} w={size} h={size} fit="contain" radius="md" />;
+    return (
+      <img
+        src={src}
+        alt={company_name}
+        width={size}
+        height={size}
+        style={{ objectFit: "contain", borderRadius: 6, flexShrink: 0 }}
+      />
+    );
   }
   const iniciais =
     company_name
@@ -41,12 +49,12 @@ export function BrandMark({ size = 40 }: { size?: number }) {
       .map((p) => p[0]?.toUpperCase() ?? "")
       .join("") || "S";
   return (
-    <Box
-      w={size}
-      h={size}
+    <div
       style={{
+        width: size,
+        height: size,
         background: primary_color,
-        borderRadius: size * 0.24,
+        borderRadius: size * 0.2,
         color: "#fff",
         fontWeight: 700,
         fontSize: size * 0.4,
@@ -57,6 +65,6 @@ export function BrandMark({ size = 40 }: { size?: number }) {
       }}
     >
       {iniciais}
-    </Box>
+    </div>
   );
 }

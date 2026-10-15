@@ -1,43 +1,48 @@
-import { useEffect } from "react";
-import { NavLink as RouterLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppShell, Avatar, Box, Burger, Group, NavLink, ScrollArea, Stack, Text, UnstyledButton } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { Avatar, Button, Drawer, Dropdown, Flex, Layout, Menu, Typography, theme } from "antd";
 import {
-  IconActivity,
-  IconCalendarEvent,
-  IconChartBar,
-  IconFlask,
-  IconHome,
-  IconLayoutDashboard,
-  IconLogout,
-  IconSettings,
-} from "@tabler/icons-react";
+  AppstoreOutlined,
+  BarChartOutlined,
+  CalendarOutlined,
+  ExperimentOutlined,
+  HomeOutlined,
+  LineChartOutlined,
+  LogoutOutlined,
+  MenuOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 
 import { api } from "../api/client";
 import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
 import { BrandMark, ProductSignature, useBrand } from "./Brand";
+import { useIsMobile } from "./responsive";
 
 // Os mesmos 7 sítios do menu da app atual (Pedido 7), pela mesma ordem.
 export const NAV = [
-  { path: "/dashboard", label: "web.nav.dashboard", icon: IconLayoutDashboard },
-  { path: "/estadias", label: "web.nav.estadias", icon: IconHome },
-  { path: "/trabalho-diario", label: "web.nav.trabalho_diario", icon: IconCalendarEvent },
-  { path: "/stock-semen", label: "web.nav.stock_semen", icon: IconFlask },
-  { path: "/atividade", label: "web.nav.atividade", icon: IconActivity },
-  { path: "/relatorios", label: "web.nav.relatorios", icon: IconChartBar },
-  { path: "/definicoes", label: "web.nav.definicoes", icon: IconSettings },
-] as const;
+  { path: "/dashboard", label: "web.nav.dashboard", icon: <AppstoreOutlined /> },
+  { path: "/estadias", label: "web.nav.estadias", icon: <HomeOutlined /> },
+  { path: "/trabalho-diario", label: "web.nav.trabalho_diario", icon: <CalendarOutlined /> },
+  { path: "/stock-semen", label: "web.nav.stock_semen", icon: <ExperimentOutlined /> },
+  { path: "/atividade", label: "web.nav.atividade", icon: <LineChartOutlined /> },
+  { path: "/relatorios", label: "web.nav.relatorios", icon: <BarChartOutlined /> },
+  { path: "/definicoes", label: "web.nav.definicoes", icon: <SettingOutlined /> },
+];
 
 export function Shell({ user }: { user: User }) {
   const t = useT();
   const { company_name } = useBrand();
-  const [opened, { toggle, close }] = useDisclosure();
+  const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { token } = theme.useToken();
+  const [recolhido, setRecolhido] = useState(false);
+  const [menuMovel, setMenuMovel] = useState(false);
 
-  useEffect(close, [location.pathname, close]);
+  useEffect(() => setMenuMovel(false), [location.pathname]);
 
   const logout = async () => {
     try {
@@ -48,73 +53,125 @@ export function Shell({ user }: { user: User }) {
     }
   };
 
-  return (
-    <AppShell
-      header={{ height: { base: 56, md: 0 } }}
-      // Telemóvel e tablet ao alto (< 992px): menu escondido atrás do botão ☰,
-      // para o conteúdo ter a largura toda.
-      navbar={{ width: 248, breakpoint: "md", collapsed: { mobile: !opened } }}
-      padding={{ base: "sm", sm: "lg" }}
+  const ativo = NAV.find((n) => location.pathname.startsWith(n.path))?.path;
+  const menu = (
+    <Menu
+      theme="dark"
+      mode="inline"
+      selectedKeys={ativo ? [ativo] : []}
+      items={NAV.map((n) => ({ key: n.path, icon: n.icon, label: t(n.label) }))}
+      onClick={({ key }) => navigate(key)}
+    />
+  );
+
+  const marca = (comNome: boolean) => (
+    <Flex align="center" gap={10} style={{ height: 48, padding: "0 16px", overflow: "hidden" }}>
+      <BrandMark size={28} />
+      {comNome && (
+        <Typography.Text strong style={{ color: "#fff", whiteSpace: "nowrap" }} ellipsis>
+          {company_name}
+        </Typography.Text>
+      )}
+    </Flex>
+  );
+
+  const utilizador = (
+    <Dropdown
+      trigger={["click"]}
+      menu={{
+        items: [
+          { key: "quem", label: `${user.nome || user.username} · ${user.nivel}`, disabled: true },
+          { type: "divider" },
+          { key: "sair", icon: <LogoutOutlined />, label: t("header.logout"), onClick: logout },
+        ],
+      }}
     >
-      <AppShell.Header hiddenFrom="md">
-        <Group h="100%" px="md" gap="sm">
-          <Burger opened={opened} onClick={toggle} size="sm" aria-label="Menu" />
-          <BrandMark size={28} />
-          <Text fw={700}>{company_name}</Text>
-        </Group>
-      </AppShell.Header>
+      <Button type="text" style={{ paddingInline: 6, height: 40 }}>
+        <Avatar size="small" style={{ background: token.colorPrimary }}>
+          {(user.nome || user.username)[0]?.toUpperCase()}
+        </Avatar>
+        {!isMobile && (
+          <span>
+            <Typography.Text>{user.nome || user.username}</Typography.Text>{" "}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              ({user.nivel})
+            </Typography.Text>
+          </span>
+        )}
+      </Button>
+    </Dropdown>
+  );
 
-      <AppShell.Navbar p="md">
-        <Group gap="sm" mb="lg" visibleFrom="md">
-          <BrandMark size={36} />
-          <Text fw={700} size="lg" lineClamp={1}>
-            {company_name}
-          </Text>
-        </Group>
-
-        <AppShell.Section grow component={ScrollArea}>
-          <Stack gap={2}>
-            {NAV.map(({ path, label, icon: Icon }) => (
-              <NavLink
-                key={path}
-                component={RouterLink}
-                to={path}
-                label={t(label)}
-                leftSection={<Icon size={18} stroke={1.6} />}
-                active={location.pathname.startsWith(path)}
-                variant="light"
-                style={{ borderRadius: "var(--mantine-radius-md)" }}
-              />
-            ))}
-          </Stack>
-        </AppShell.Section>
-
-        <AppShell.Section pt="md" style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
-          <Group gap="sm" wrap="nowrap">
-            <Avatar color="brand" radius="xl" size={34}>
-              {user.nome?.[0]?.toUpperCase() ?? user.username[0]?.toUpperCase()}
-            </Avatar>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text size="sm" fw={600} truncate>
-                {user.nome || user.username}
-              </Text>
-              <Text size="xs" c="dimmed" truncate>
-                {user.nivel}
-              </Text>
+  return (
+    <Layout style={{ minHeight: "100vh" }}>
+      {!isMobile && (
+        <Layout.Sider
+          width={220}
+          collapsible
+          collapsed={recolhido}
+          onCollapse={setRecolhido}
+          collapsedWidth={56}
+          style={{ position: "sticky", top: 0, height: "100vh", overflow: "auto" }}
+        >
+          {marca(!recolhido)}
+          {menu}
+          {!recolhido && (
+            <div style={{ position: "absolute", bottom: 60, left: 16 }}>
+              <ProductSignature escuro />
             </div>
-            <UnstyledButton onClick={logout} aria-label={t("web.nav.logout")} title={t("web.nav.logout")} p={6}>
-              <IconLogout size={18} stroke={1.6} />
-            </UnstyledButton>
-          </Group>
-          <Box mt="sm">
-            <ProductSignature />
-          </Box>
-        </AppShell.Section>
-      </AppShell.Navbar>
+          )}
+        </Layout.Sider>
+      )}
 
-      <AppShell.Main bg="gray.0" style={{ minHeight: "100vh" }}>
-        <Outlet />
-      </AppShell.Main>
-    </AppShell>
+      <Layout>
+        <Layout.Header
+          style={{
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          <Flex align="center" gap={8} style={{ minWidth: 0 }}>
+            {isMobile && (
+              <>
+                <Button type="text" icon={<MenuOutlined />} onClick={() => setMenuMovel(true)} aria-label="Menu" />
+                <BrandMark size={24} />
+                <Typography.Text strong ellipsis>
+                  {company_name}
+                </Typography.Text>
+              </>
+            )}
+          </Flex>
+          {/* À direita mesmo quando o bloco da esquerda está vazio (computador). */}
+          <div style={{ marginLeft: "auto" }}>{utilizador}</div>
+        </Layout.Header>
+
+        <Layout.Content style={{ padding: isMobile ? 8 : 16 }}>
+          <Outlet />
+        </Layout.Content>
+      </Layout>
+
+      {/* Telemóvel: o menu entra pela esquerda. */}
+      <Drawer
+        open={menuMovel}
+        onClose={() => setMenuMovel(false)}
+        placement="left"
+        size={240}
+        closable={false}
+        styles={{ body: { padding: 0, background: "#001529", display: "flex", flexDirection: "column" } }}
+      >
+        {marca(true)}
+        {menu}
+        <div style={{ marginTop: "auto", padding: 16 }}>
+          <ProductSignature escuro />
+        </div>
+      </Drawer>
+    </Layout>
   );
 }

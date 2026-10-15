@@ -1,29 +1,12 @@
-import { useState, type FormEvent } from "react";
-import { Button, Group, Modal, SimpleGrid, Stack, TextInput, Textarea } from "@mantine/core";
+import { Col, Form, Input, Modal, Row } from "antd";
 
 import type { Owner, OwnerInput } from "../../api/types";
 import { useT } from "../../i18n/I18n";
 import { notifySuccess, useNotifyError } from "../../components/errors";
-import { useCreateOwner, useUpdateOwner } from "./api";
 import { useIsMobile } from "../../components/responsive";
+import { useCreateOwner, useUpdateOwner } from "./api";
 
-const VAZIO: OwnerInput = {
-  nome: "",
-  email: "",
-  telemovel: "",
-  nome_completo: "",
-  nif: "",
-  morada: "",
-  codigo_postal: "",
-  cidade: "",
-};
-
-function paraForm(o: Owner | null): OwnerInput {
-  if (!o) return VAZIO;
-  const r = { ...VAZIO };
-  for (const k of Object.keys(VAZIO) as (keyof OwnerInput)[]) r[k] = o[k] ?? "";
-  return r;
-}
+const CAMPOS: (keyof OwnerInput)[] = ["nome", "email", "telemovel", "nome_completo", "nif", "morada", "codigo_postal", "cidade"];
 
 /** Criar (owner = null) ou editar um proprietário. O formulário só existe
  *  enquanto o modal está aberto, por isso começa sempre com os dados certos. */
@@ -40,50 +23,12 @@ export function OwnerFormModal({
 }) {
   const t = useT();
   const isMobile = useIsMobile();
-  return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={owner ? t("web.owners.edit") : t("web.owners.new")}
-      size="lg"
-      radius="lg"
-      fullScreen={isMobile}
-    >
-      <OwnerForm owner={owner} onClose={onClose} onSaved={onSaved} />
-    </Modal>
-  );
-}
-
-function OwnerForm({
-  owner,
-  onClose,
-  onSaved,
-}: {
-  owner: Owner | null;
-  onClose: () => void;
-  onSaved?: (o: Owner) => void;
-}) {
-  const t = useT();
   const notifyError = useNotifyError();
   const criar = useCreateOwner();
   const editar = useUpdateOwner();
-  const [dados, setDados] = useState<OwnerInput>(() => paraForm(owner));
-  const [erroNome, setErroNome] = useState<string | null>(null);
-  const isMobile = useIsMobile();
-  const campo = (k: keyof OwnerInput) => ({
-    value: dados[k] ?? "",
-    onChange: (e: { currentTarget: { value: string } }) => {
-      const v = e.currentTarget.value;
-      setDados((d) => ({ ...d, [k]: v }));
-    },
-  });
+  const [form] = Form.useForm<OwnerInput>();
 
-  const submeter = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!dados.nome?.trim()) {
-      setErroNome(t("error.name_required"));
-      return;
-    }
+  const guardar = async (dados: OwnerInput) => {
     try {
       const guardado = owner ? await editar.mutateAsync({ id: owner.id, ...dados }) : await criar.mutateAsync(dados);
       notifySuccess(owner ? t("web.owners.updated") : t("web.owners.added", { name: (guardado as Owner).nome }));
@@ -95,45 +40,68 @@ function OwnerForm({
   };
 
   return (
-      <form onSubmit={submeter}>
-        <Stack>
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput label={t("label.name")} withAsterisk data-autofocus error={erroNome} {...campo("nome")} />
-            <TextInput label={t("label.full_name")} {...campo("nome_completo")} />
-            <TextInput label={t("label.email")} type="email" inputMode="email" autoComplete="email" {...campo("email")} />
-            <TextInput label={t("label.phone")} type="tel" inputMode="tel" autoComplete="tel" {...campo("telemovel")} />
-            <TextInput label={t("label.nif")} inputMode="numeric" {...campo("nif")} />
-            <TextInput label={t("label.city")} {...campo("cidade")} />
-            <Textarea label={t("label.address")} autosize minRows={2} {...campo("morada")} />
-            <TextInput label={t("label.postal_code")} {...campo("codigo_postal")} />
-          </SimpleGrid>
-          {/* No telemóvel os botões ficam presos ao fundo do ecrã,
-              sempre visíveis enquanto se preenche o formulário. */}
-          <Group
-            justify="flex-end"
-            mt="sm"
-            grow={isMobile}
-            style={
-              isMobile
-                ? {
-                    position: "sticky",
-                    bottom: 0,
-                    background: "var(--mantine-color-body)",
-                    padding: "12px 0 calc(12px + env(safe-area-inset-bottom))",
-                    borderTop: "1px solid var(--mantine-color-gray-2)",
-                    zIndex: 1,
-                  }
-                : undefined
-            }
-          >
-            <Button variant="default" onClick={onClose}>
-              {t("web.common.cancel")}
-            </Button>
-            <Button type="submit" loading={criar.isPending || editar.isPending}>
-              {owner ? t("btn.save_changes") : t("btn.add")}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
+    <Modal
+      open={opened}
+      onCancel={onClose}
+      title={owner ? t("web.owners.edit") : t("web.owners.new")}
+      okText={owner ? t("btn.save_changes") : t("btn.add")}
+      cancelText={t("web.common.cancel")}
+      onOk={() => form.submit()}
+      confirmLoading={criar.isPending || editar.isPending}
+      width={isMobile ? "100%" : 640}
+      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
+      destroyOnHidden
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={guardar}
+        preserve={false}
+        initialValues={Object.fromEntries(CAMPOS.map((k) => [k, owner?.[k] ?? ""]))}
+      >
+        <Row gutter={12}>
+          <Col xs={24} sm={12}>
+            <Form.Item name="nome" label={t("label.name")} rules={[{ required: true, whitespace: true, message: t("error.name_required") }]}>
+              <Input autoFocus />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="nome_completo" label={t("label.full_name")}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="email" label={t("label.email")}>
+              <Input type="email" inputMode="email" autoComplete="email" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="telemovel" label={t("label.phone")}>
+              <Input type="tel" inputMode="tel" autoComplete="tel" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="nif" label={t("label.nif")}>
+              <Input inputMode="numeric" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="cidade" label={t("label.city")}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="morada" label={t("label.address")}>
+              <Input.TextArea autoSize={{ minRows: 2 }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item name="codigo_postal" label={t("label.postal_code")}>
+              <Input />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
+    </Modal>
   );
 }

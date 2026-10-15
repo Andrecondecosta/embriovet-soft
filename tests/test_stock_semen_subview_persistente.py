@@ -178,8 +178,8 @@ def test_guardar_lote_grava_na_bd_e_sai_da_subvista(seed, db):
     dispara um rerun que, com o bug original, também perdia a flag
     antes de o código de gravação chegar a correr."""
     cur = db.cursor()
-    cur.execute("SELECT count(*) FROM estoque_dono")
-    antes = cur.fetchone()[0]
+    cur.execute("SELECT count(*), COALESCE(MAX(id), 0) FROM estoque_dono")
+    antes, ultimo_id = cur.fetchone()
     cur.close()
 
     at = AppTest.from_function(_run_stock_semen_page_script)
@@ -207,6 +207,10 @@ def test_guardar_lote_grava_na_bd_e_sai_da_subvista(seed, db):
     cur = db.cursor()
     cur.execute("SELECT count(*) FROM estoque_dono")
     depois = cur.fetchone()[0]
+    # Não deixar o lote criado na base de teste (antes ficava um lote de
+    # 12 palhetas no contentor "1" a cada execução).
+    cur.execute("DELETE FROM estoque_dono WHERE id > %s", (ultimo_id,))
+    db.commit()
     cur.close()
 
     assert depois == antes + 1, (

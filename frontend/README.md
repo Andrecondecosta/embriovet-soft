@@ -21,6 +21,8 @@ Abrir <http://localhost:5180>. As contas são as mesmas da app Streamlit.
 
 ## Estrutura
 
+- Interface: **Ant Design** (antd v6) — modo compacto no computador, normal no telemóvel (`src/theme.ts`).
+
 - `backend/` — FastAPI. Reutiliza `modules/repositories` e
   `modules/services`, por isso a lógica é a mesma das duas apps.
 - `frontend/src/pages/` — uma pasta/ficheiro por página.
@@ -34,7 +36,8 @@ Abrir <http://localhost:5180>. As contas são as mesmas da app Streamlit.
 | Definições › Proprietários | ✅ (com paginação e pesquisa) |
 | Stock de sémen › Lotes, Garanhões, Adicionar lote | ✅ |
 | Stock de sémen › Transferências (criar, editar, anular, histórico) | ✅ |
-| Stock de sémen › Mapa, Importar | ⏳ |
+| Stock de sémen › Mapa dos contentores (arrastar, organizar, exportar PDF/Excel, interior, mover palhetas, inverter andares) | ✅ |
+| Stock de sémen › Importar | ⏳ |
 | Restantes | ⏳ ainda na app Streamlit |
 
 Todas as páginas são feitas e verificadas em telemóvel (~375px), tablet
