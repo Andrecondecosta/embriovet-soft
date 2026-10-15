@@ -1157,3 +1157,31 @@ WEB_TRANSLATIONS["pt-PT"]["web.mobile.swipe_hint_stays"] = "Deslize uma linha pa
 WEB_TRANSLATIONS["en"]["web.mobile.swipe_hint_stays"] = "Swipe a row left to register the exit; tap to see the record."
 WEB_TRANSLATIONS["fr"]["web.mobile.swipe_hint_stays"] = "Faites glisser une ligne vers la gauche pour enregistrer la sortie ; touchez pour voir la fiche."
 WEB_TRANSLATIONS["de"]["web.mobile.swipe_hint_stays"] = "Zeile nach links wischen, um den Ausgang zu erfassen; antippen für die Akte."
+
+# ── Trabalho diário (na app atual estes textos estavam só em português) ──
+_TRABALHO = [
+    ("kpi.todo", "Por fazer", "To do", "À faire", "Offen"),
+    ("kpi.tasks", "Tarefas", "Tasks", "Tâches", "Aufgaben"),
+    ("kpi.done", "Feitas", "Done", "Faites", "Erledigt"),
+    ("overdue_banner", "{n} em atraso", "{n} overdue", "{n} en retard", "{n} überfällig"),
+    ("today_title", "Tarefas de hoje", "Today’s tasks", "Tâches du jour", "Heutige Aufgaben"),
+    ("day_title", "Tarefas — {dia}", "Tasks — {dia}", "Tâches — {dia}", "Aufgaben — {dia}"),
+    ("overdue", "Em atraso", "Overdue", "En retard", "Überfällig"),
+    ("done_today", "Feitas hoje", "Done today", "Faites aujourd’hui", "Heute erledigt"),
+    ("none_today", "Sem tarefas por fazer hoje.", "No tasks to do today.", "Aucune tâche à faire aujourd’hui.", "Heute keine offenen Aufgaben."),
+    ("none_day", "Sem tarefas por fazer neste dia.", "No tasks to do on this day.", "Aucune tâche à faire ce jour-là.", "An diesem Tag keine offenen Aufgaben."),
+    ("none_filters", "Sem tarefas por fazer com estes filtros.", "No tasks with these filters.", "Aucune tâche avec ces filtres.", "Keine Aufgaben mit diesen Filtern."),
+    ("no_overdue", "Sem tarefas em atraso.", "No overdue tasks.", "Aucune tâche en retard.", "Keine überfälligen Aufgaben."),
+    ("none_done", "Nenhuma tarefa feita ainda hoje.", "No tasks done yet today.", "Aucune tâche faite aujourd’hui.", "Heute noch keine Aufgabe erledigt."),
+    ("ago_one", "há 1 dia", "1 day ago", "il y a 1 jour", "vor 1 Tag"),
+    ("ago", "há {n} dias", "{n} days ago", "il y a {n} jours", "vor {n} Tagen"),
+    ("mine", "As minhas tarefas", "My tasks", "Mes tâches", "Meine Aufgaben"),
+    ("collection_of", "Colheita — {name}", "Collection — {name}", "Récolte — {name}", "Absamung — {name}"),
+    ("created_auto", "Criadas {n} tarefas automáticas de 1.ª observação.", "{n} automatic 1st-check tasks created.",
+     "{n} tâches automatiques de 1re observation créées.", "{n} automatische Aufgaben „1. Kontrolle“ erstellt."),
+]
+for _k, *_txt in _TRABALHO:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.daily.{_k}"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Colheita", "Collection", "Récolte", "Absamung")):
+    WEB_TRANSLATIONS[_lang]["web.task.colheita"] = _v
