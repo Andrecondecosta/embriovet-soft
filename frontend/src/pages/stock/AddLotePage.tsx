@@ -7,21 +7,18 @@ import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { PageHeader } from "../../components/ds";
 import { useCriarLote, type LoteNovo } from "./api";
+import { NovoLoteMobile } from "./LoteFormMobile";
 import { CamposLote, DonoSelect, GaranhaoInput, Secao, camposVazios, useAjudaGaranhao } from "./LoteForm";
 
 /** "Adicionar lote" — equivalente a `add_stock_view.py`. O garanhão pode
  *  ser escolhido da lista ou escrito de novo: o servidor cria-o em
  *  `animais` (`get_or_create_garanhao`), sem duplicar "Falcao"/"Falcão". */
-export function AddLotePage() {
+/** Guardar "Adicionar lote" — partilhado pelo computador e pelo telemóvel. */
+export function useGuardarNovo() {
   const t = useT();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const notifyError = useNotifyError();
-  const [params] = useSearchParams();
   const criar = useCriarLote();
-  const [form] = Form.useForm<LoteNovo>();
-  const ajuda = useAjudaGaranhao(Form.useWatch("garanhao", form));
-
   const guardar = async (dados: LoteNovo) => {
     try {
       const lote = await criar.mutateAsync({ ...camposVazios(), ...dados });
@@ -33,18 +30,27 @@ export function AddLotePage() {
       notifyError(err);
     }
   };
+  return { guardar, aGuardar: criar.isPending };
+}
+
+export function AddLotePage() {
+  return useIsMobile() ? <NovoLoteMobile /> : <AddLoteDesktop />;
+}
+
+function AddLoteDesktop() {
+  const t = useT();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const { guardar, aGuardar } = useGuardarNovo();
+  const [form] = Form.useForm<LoteNovo>();
+  const ajuda = useAjudaGaranhao(Form.useWatch("garanhao", form));
 
   return (
-    <Card size="small" variant={isMobile ? "borderless" : "outlined"} style={{ maxWidth: 1000, borderRadius: isMobile ? 0 : undefined }}>
-      {/* No telemóvel o título e o "voltar" já estão na barra de cima. */}
-      {!isMobile && (
-        <>
-          <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
-            {t("web.stock.back")}
-          </Button>
-          <PageHeader titulo={t("web.stock.add")} />
-        </>
-      )}
+    <Card size="small" style={{ maxWidth: 1000 }}>
+      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
+        {t("web.stock.back")}
+      </Button>
+      <PageHeader titulo={t("web.stock.add")} />
 
       <Form
         form={form}
@@ -104,27 +110,9 @@ export function AddLotePage() {
           }
         />
 
-        {/* No telemóvel os botões ficam presos ao fundo do ecrã. */}
-        <Flex
-          gap={8}
-          justify="flex-end"
-          style={
-            isMobile
-              ? {
-                  position: "sticky",
-                  bottom: 0,
-                  background: "#fff",
-                  padding: "12px 0 calc(12px + env(safe-area-inset-bottom))",
-                  borderTop: "1px solid #f0f0f0",
-                  zIndex: 2,
-                }
-              : undefined
-          }
-        >
-          <Button onClick={() => navigate(-1)} block={isMobile}>
-            {t("web.common.cancel")}
-          </Button>
-          <Button type="primary" htmlType="submit" loading={criar.isPending} block={isMobile}>
+        <Flex gap={8} justify="flex-end">
+          <Button onClick={() => navigate(-1)}>{t("web.common.cancel")}</Button>
+          <Button type="primary" htmlType="submit" loading={aGuardar}>
             {t("btn.save")}
           </Button>
         </Flex>

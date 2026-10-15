@@ -11,22 +11,18 @@ import { Lista } from "../../../components/Lista";
 import { useAnular, useHistorico, type OpHistorico } from "./api";
 
 const FMT = "YYYY-MM-DD";
-const hora = (iso: string | null) => (iso ? dayjs(iso).format("HH:mm") : "—");
+export const hora = (iso: string | null) => (iso ? dayjs(iso).format("HH:mm") : "—");
 
 /** Histórico de operações do dia (transferências e inseminações), com
  *  Editar (só transferências — as inseminações editam-se na sua página)
  *  e Anular. Igual a `_render_historico_operacoes` da app atual. */
-export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) => void }) {
-  const t = useT();
-  const isMobile = useIsMobile();
-  const errorMessage = useErrorMessage();
+/** Dia do histórico (no endereço, `?dia=AAAA-MM-DD`; hoje por omissão). */
+export function useDiaHistorico() {
   const [params, setParams] = useSearchParams();
   const pedido = params.get("dia") ?? "";
   const dia: Dayjs = /^\d{4}-\d{2}-\d{2}$/.test(pedido) && dayjs(pedido).isValid() ? dayjs(pedido) : dayjs();
   const ehHoje = dia.isSame(dayjs(), "day");
-  const { data, isPending, isError, error } = useHistorico(dia.format(FMT));
-  const [anular, setAnular] = useState<OpHistorico | null>(null);
-
+  const historico = useHistorico(dia.format(FMT));
   const irPara = (d: Dayjs) =>
     setParams(
       (p) => {
@@ -37,12 +33,28 @@ export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) =
       },
       { replace: true },
     );
+  return { dia, ehHoje, irPara, historico };
+}
+
+export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) => void }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const errorMessage = useErrorMessage();
+  const { dia, ehHoje, irPara, historico } = useDiaHistorico();
+  const { data, isPending, isError, error } = historico;
+  const [anular, setAnular] = useState<OpHistorico | null>(null);
 
   return (
     <Card size="small" title={t("web.transfer.history")}>
       <Flex gap={6} align="center" style={{ marginBottom: 12 }}>
         <Button icon={<LeftOutlined />} onClick={() => irPara(dia.subtract(1, "day"))} aria-label="◀" />
-        <DatePicker value={dia} onChange={(d) => d && irPara(d)} allowClear={false} format="DD/MM/YYYY" style={{ flex: isMobile ? 1 : undefined }} />
+        <DatePicker
+          value={dia}
+          onChange={(d) => d && irPara(d)}
+          allowClear={false}
+          format="DD/MM/YYYY"
+          style={{ flex: isMobile ? 1 : undefined }}
+        />
         <Button icon={<RightOutlined />} onClick={() => irPara(dia.add(1, "day"))} aria-label="▶" />
         {!ehHoje && (
           <Button type="link" onClick={() => irPara(dayjs())}>
@@ -88,7 +100,7 @@ export function HistoricoOperacoes({ onEditar }: { onEditar: (op: OpHistorico) =
   );
 }
 
-function AnularModal({ op, onClose }: { op: OpHistorico | null; onClose: () => void }) {
+export function AnularModal({ op, onClose }: { op: OpHistorico | null; onClose: () => void }) {
   const t = useT();
   const notifyError = useNotifyError();
   const anular = useAnular();

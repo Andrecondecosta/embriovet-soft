@@ -108,8 +108,7 @@ export function MapaCanvas({
             position: "relative",
             width: Math.floor(canvasW * scale),
             height: Math.floor(canvasH * scale),
-            backgroundImage:
-              "linear-gradient(#f0f0f0 1px, transparent 1px), linear-gradient(90deg, #f0f0f0 1px, transparent 1px)",
+            backgroundImage: "linear-gradient(#f0f0f0 1px, transparent 1px), linear-gradient(90deg, #f0f0f0 1px, transparent 1px)",
             backgroundSize: "32px 32px",
           }}
         >

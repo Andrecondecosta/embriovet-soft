@@ -53,7 +53,7 @@ export function StockPage() {
             <CapsuleTabs.Tab key={x.id} title={t(x.label)} />
           ))}
         </CapsuleTabs>
-        <div style={{ padding: tab === "lotes" || tab === "garanhoes" ? 0 : 8 }}>{conteudo(tab)}</div>
+        <div style={{ padding: tab === "mapa" ? 8 : 0 }}>{conteudo(tab)}</div>
       </>
     );
 

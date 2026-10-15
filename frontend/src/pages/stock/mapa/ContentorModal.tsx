@@ -35,33 +35,19 @@ import {
   type Contentor,
   type LoteContentor,
 } from "./api";
+import { ContentorMobile } from "./MapaMobile";
 
-const valido = (l: LoteContentor) => !!l.canister && !!l.andar;
+export const valido = (l: LoteContentor) => !!l.canister && !!l.andar;
 
 /** Interior de um contentor — equivalente ao diálogo "Ver interior" da app atual. */
-export function ContentorModal({
-  contentor,
-  todos,
-  onClose,
-}: {
-  contentor: Contentor | null;
-  todos: Contentor[];
-  onClose: () => void;
-}) {
+export function ContentorModal({ contentor, todos, onClose }: { contentor: Contentor | null; todos: Contentor[]; onClose: () => void }) {
   const isMobile = useIsMobile();
   const { data } = useStockContentor(contentor?.id ?? null);
+  if (isMobile) return <ContentorMobile contentor={contentor} todos={todos} onClose={onClose} />;
   // Título com o código atual (depois de editar, muda logo).
   const titulo = data?.contentor.codigo ?? contentor?.codigo;
   return (
-    <Modal
-      open={contentor !== null}
-      onCancel={onClose}
-      title={titulo}
-      footer={null}
-      width={isMobile ? "100%" : 760}
-      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
-      destroyOnHidden
-    >
+    <Modal open={contentor !== null} onCancel={onClose} title={titulo} footer={null} width={760} destroyOnHidden>
       {contentor && <Interior contentor={contentor} todos={todos} onClose={onClose} />}
     </Modal>
   );
@@ -164,7 +150,7 @@ function Interior({ contentor, todos, onClose }: { contentor: Contentor; todos: 
 
 /** Vista redonda do contentor: os canisters com sémen (em qualquer andar)
  *  em círculo; cheios no andar escolhido aparecem na cor da marca. */
-function Tanque({
+export function Tanque({
   lotes,
   andar,
   selecionado,
@@ -295,11 +281,29 @@ function Tanque({
       </Typography.Text>
       <Space size="middle">
         <Space size={6}>
-          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 6, background: `${primary_color}29`, border: `1.5px solid ${primary_color}8c` }} />
+          <span
+            style={{
+              display: "inline-block",
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              background: `${primary_color}29`,
+              border: `1.5px solid ${primary_color}8c`,
+            }}
+          />
           <Typography.Text style={{ fontSize: 12 }}>{t("web.map.legend_full")}</Typography.Text>
         </Space>
         <Space size={6}>
-          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 6, background: "#f5f5f5", border: "1.5px solid #d9d9d9" }} />
+          <span
+            style={{
+              display: "inline-block",
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              background: "#f5f5f5",
+              border: "1.5px solid #d9d9d9",
+            }}
+          />
           <Typography.Text style={{ fontSize: 12 }}>{t("web.map.legend_empty")}</Typography.Text>
         </Space>
       </Space>
@@ -332,8 +336,8 @@ function BlocoCanister({ titulo, lotes, onMover }: { titulo: string; lotes: Lote
             children: (
               <Flex justify="space-between" align="flex-start" gap={8}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {t("web.map.harvest")}: {l.data_embriovet || "—"} · {t("stock.quality_label")}: {l.qualidade || "—"} · {t("stock.motility_label")}:{" "}
-                  {l.motilidade ?? 0}% · {t("stock.concentration_label")}: {l.concentracao ?? 0}M/ml
+                  {t("web.map.harvest")}: {l.data_embriovet || "—"} · {t("stock.quality_label")}: {l.qualidade || "—"} ·{" "}
+                  {t("stock.motility_label")}: {l.motilidade ?? 0}% · {t("stock.concentration_label")}: {l.concentracao ?? 0}M/ml
                 </Typography.Text>
                 <Button size="small" icon={<SwapOutlined />} onClick={() => onMover(l)} style={{ flexShrink: 0 }}>
                   {t("web.map.move")}
@@ -508,7 +512,11 @@ function EditarContentor({
             <Form layout="vertical" onFinish={guardar} initialValues={{ codigo: contentor.codigo, descricao: contentor.descricao ?? "" }}>
               <Row gutter={12}>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="codigo" label={t("label.code")} rules={[{ required: true, whitespace: true, message: t("map.container_code_required_error") }]}>
+                  <Form.Item
+                    name="codigo"
+                    label={t("label.code")}
+                    rules={[{ required: true, whitespace: true, message: t("map.container_code_required_error") }]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>

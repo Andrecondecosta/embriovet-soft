@@ -8,6 +8,8 @@ import { notifySuccess, useErrorMessage, useNotifyError } from "../../../compone
 import { MapaCanvas } from "./MapaCanvas";
 import { ContentorModal } from "./ContentorModal";
 import { ListaContentores } from "./ListaContentores";
+import { BarraMapaMobile, NovoContentorMobile } from "./MapaMobile";
+import { Selector } from "antd-mobile";
 import { useCriarContentor, useGravarPosicao, useMapa, useOrganizar, type Contentor } from "./api";
 
 /** Abaixo desta escala as caixas do mapa (70 × escala px) ficam pequenas
@@ -70,29 +72,52 @@ function MapaConteudo({ areaW }: { areaW: number }) {
   return (
     <>
       {contentores.length === 0 ? (
-        <Empty description={<><b>{t("web.map.empty.title")}</b><br />{t("web.map.empty.text")}</>}>
+        <Empty
+          description={
+            <>
+              <b>{t("web.map.empty.title")}</b>
+              <br />
+              {t("web.map.empty.text")}
+            </>
+          }
+        >
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setNovo(true)}>
             {t("web.map.empty.add")}
           </Button>
         </Empty>
       ) : (
         <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-          <Flex justify="space-between" align="center" wrap gap={8}>
-            <Space wrap>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setNovo(true)}>
-                {t("map.add")}
-              </Button>
-              <Organizar onFeito={() => setVersao((v) => v + 1)} />
-              <Exportar contentores={contentores} />
-            </Space>
-            <Typography.Text type="secondary">
-              <b>{contentores.length}</b> {t("web.map.containers")} · <b>{total}</b> {t("label.straws")}
-            </Typography.Text>
-          </Flex>
+          {isMobile ? (
+            <BarraMapaMobile contentores={contentores} onOrganizado={() => setVersao((v) => v + 1)} />
+          ) : (
+            <Flex justify="space-between" align="center" wrap gap={8}>
+              <Space wrap>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setNovo(true)}>
+                  {t("map.add")}
+                </Button>
+                <Organizar onFeito={() => setVersao((v) => v + 1)} />
+                <Exportar contentores={contentores} />
+              </Space>
+              <Typography.Text type="secondary">
+                <b>{contentores.length}</b> {t("web.map.containers")} · <b>{total}</b> {t("label.straws")}
+              </Typography.Text>
+            </Flex>
+          )}
 
-          {areaW > 0 && !mapaCabe && (
+          {areaW > 0 && !mapaCabe && isMobile && (
+            <Selector
+              columns={2}
+              showCheckMark={false}
+              value={[vista]}
+              onChange={(v) => v[0] && mudarVista(v[0])}
+              options={[
+                { value: "lista" as const, label: t("web.map.view_list") },
+                { value: "mapa" as const, label: t("web.map.view_map") },
+              ]}
+            />
+          )}
+          {areaW > 0 && !mapaCabe && !isMobile && (
             <Segmented
-              block={isMobile}
               value={vista}
               onChange={(v) => mudarVista(v as "mapa" | "lista")}
               options={[
@@ -135,7 +160,11 @@ function MapaConteudo({ areaW }: { areaW: number }) {
         </Space>
       )}
 
-      <NovoContentorModal opened={novo} onClose={() => setNovo(false)} />
+      {isMobile ? (
+        <NovoContentorMobile visible={novo} onClose={() => setNovo(false)} />
+      ) : (
+        <NovoContentorModal opened={novo} onClose={() => setNovo(false)} />
+      )}
       <ContentorModal contentor={aberto} todos={contentores} onClose={() => setAberto(null)} />
     </>
   );
@@ -181,6 +210,21 @@ function Organizar({ onFeito }: { onFeito: () => void }) {
   );
 }
 
+/** Descarrega o inventário (PDF/Excel) dos contentores escolhidos (todos se vazio). */
+export async function baixarInventario(formato: "pdf" | "xlsx", ids: number[]) {
+  const p = new URLSearchParams({ formato });
+  ids.forEach((i) => p.append("ids", String(i)));
+  const res = await fetch(`/api/mapa/exportar?${p}`, { credentials: "same-origin" });
+  if (!res.ok) throw new Error(String(res.status));
+  const nome = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `inventario.${formato}`;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function Exportar({ contentores }: { contentores: Contentor[] }) {
   const t = useT();
   const notifyError = useNotifyError();
@@ -190,17 +234,7 @@ function Exportar({ contentores }: { contentores: Contentor[] }) {
   const baixar = async (formato: "pdf" | "xlsx") => {
     setAGerar(formato);
     try {
-      const p = new URLSearchParams({ formato });
-      ids.forEach((i) => p.append("ids", String(i)));
-      const res = await fetch(`/api/mapa/exportar?${p}`, { credentials: "same-origin" });
-      if (!res.ok) throw new Error(String(res.status));
-      const nome = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `inventario.${formato}`;
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = nome;
-      a.click();
-      URL.revokeObjectURL(url);
+      await baixarInventario(formato, ids);
     } catch (err) {
       notifyError(err);
     } finally {

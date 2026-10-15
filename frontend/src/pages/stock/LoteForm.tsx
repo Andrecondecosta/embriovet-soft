@@ -1,7 +1,22 @@
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { AutoComplete, Button, Col, Divider, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Tooltip, Typography } from "antd";
+import {
+  AutoComplete,
+  Button,
+  Col,
+  Divider,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Segmented,
+  Select,
+  Tooltip,
+  Typography,
+} from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 
 import type { Owner } from "../../api/types";
@@ -9,6 +24,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { OwnerFormModal } from "../owners/OwnerFormModal";
+import { EditarLoteMobile } from "./LoteFormMobile";
 import { useEditarLote, useOpcoes, type Lote, type LoteCampos, type LoteEdicao } from "./api";
 
 export const CANISTERS = Array.from({ length: 10 }, (_, i) => String(i + 1));
@@ -57,7 +73,10 @@ export function GaranhaoInput({ value = "", onChange }: { value?: string; onChan
     <AutoComplete
       value={value}
       onChange={onChange}
-      options={nomes.filter((n) => !q || n.toLowerCase().includes(q)).slice(0, 50).map((n) => ({ value: n }))}
+      options={nomes
+        .filter((n) => !q || n.toLowerCase().includes(q))
+        .slice(0, 50)
+        .map((n) => ({ value: n }))}
       placeholder={t("add_stock.stallion_placeholder")}
     />
   );
@@ -177,7 +196,11 @@ export function CamposLote({ producao }: { producao: ReactNode }) {
         ) : (
           <Row gutter={12}>
             <Col xs={24} sm={8}>
-              <Form.Item name="contentor_id" label={t("label.container")} rules={[{ required: true, message: t("error.container_required") }]}>
+              <Form.Item
+                name="contentor_id"
+                label={t("label.container")}
+                rules={[{ required: true, message: t("error.container_required") }]}
+              >
                 <Select
                   showSearch
                   optionFilterProp="label"
@@ -214,18 +237,9 @@ export function CamposLote({ producao }: { producao: ReactNode }) {
   );
 }
 
-/** Editar lote (só Administrador). */
-export function LoteFormModal({ opened, lote, onClose }: { opened: boolean; lote: Lote; onClose: () => void }) {
-  const t = useT();
-  const isMobile = useIsMobile();
-  const notifyError = useNotifyError();
-  const editar = useEditarLote();
-  const [, setParams] = useSearchParams();
-  const [form] = Form.useForm<LoteEdicao>();
-  const garanhaoAtual = Form.useWatch("garanhao", form);
-  const ajuda = useAjudaGaranhao(garanhaoAtual);
-
-  const inicial: LoteEdicao = {
+/** Valores iniciais de "Editar lote". */
+export function inicialEdicao(lote: Lote): LoteEdicao {
+  return {
     ...camposVazios(),
     garanhao: lote.garanhao_nome ?? "",
     dono_id: lote.dono_id,
@@ -244,10 +258,17 @@ export function LoteFormModal({ opened, lote, onClose }: { opened: boolean; lote
     palhetas_produzidas: lote.palhetas_produzidas ?? 0,
     existencia_atual: lote.existencia_atual ?? 0,
   };
+}
 
+/** Guardar "Editar lote" — partilhado pelo computador e pelo telemóvel. */
+export function useGuardarEdicao(lote: Lote, onClose: () => void) {
+  const t = useT();
+  const notifyError = useNotifyError();
+  const editar = useEditarLote();
+  const [, setParams] = useSearchParams();
   const guardar = async (dados: LoteEdicao) => {
     try {
-      const atualizado = await editar.mutateAsync({ id: lote.id, ...inicial, ...dados });
+      const atualizado = await editar.mutateAsync({ id: lote.id, ...inicialEdicao(lote), ...dados });
       notifySuccess(t("web.stock.updated"));
       onClose();
       // Mudou de garanhão: a lista passa para o garanhão novo, com o lote aberto.
@@ -267,6 +288,21 @@ export function LoteFormModal({ opened, lote, onClose }: { opened: boolean; lote
       notifyError(err);
     }
   };
+  return { guardar, aGuardar: editar.isPending };
+}
+
+/** Editar lote (só Administrador). */
+export function LoteFormModal(props: { opened: boolean; lote: Lote; onClose: () => void }) {
+  return useIsMobile() ? <EditarLoteMobile {...props} /> : <LoteFormModalDesktop {...props} />;
+}
+
+function LoteFormModalDesktop({ opened, lote, onClose }: { opened: boolean; lote: Lote; onClose: () => void }) {
+  const t = useT();
+  const { guardar, aGuardar } = useGuardarEdicao(lote, onClose);
+  const [form] = Form.useForm<LoteEdicao>();
+  const garanhaoAtual = Form.useWatch("garanhao", form);
+  const ajuda = useAjudaGaranhao(garanhaoAtual);
+  const inicial = inicialEdicao(lote);
 
   return (
     <Modal
@@ -276,9 +312,8 @@ export function LoteFormModal({ opened, lote, onClose }: { opened: boolean; lote
       okText={t("btn.save_changes")}
       cancelText={t("web.common.cancel")}
       onOk={() => form.submit()}
-      confirmLoading={editar.isPending}
-      width={isMobile ? "100%" : 860}
-      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
+      confirmLoading={aGuardar}
+      width={860}
       destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={guardar} initialValues={inicial} preserve={false}>

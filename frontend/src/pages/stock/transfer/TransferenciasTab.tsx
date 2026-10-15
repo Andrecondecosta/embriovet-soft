@@ -28,15 +28,8 @@ import { ZoneTitle } from "../../../components/ds";
 import { useGaranhoesStock, useLotes, useOpcoes, referencia, localizacao, type Lote } from "../api";
 import { DonoSelect } from "../LoteForm";
 import { HistoricoOperacoes } from "./HistoricoOperacoes";
-import {
-  MOTIVOS,
-  useCriarOperacao,
-  useEditarOperacao,
-  useOperacao,
-  type LinhaOperacao,
-  type Motivo,
-  type OperacaoIn,
-} from "./api";
+import { TransferenciasMobile } from "./TransferenciasMobile";
+import { MOTIVOS, useCriarOperacao, useEditarOperacao, useOperacao, type LinhaOperacao, type Motivo, type OperacaoIn } from "./api";
 
 /** Uma linha da operação: um lote e quantas palhetas saem dele. */
 interface LinhaSel {
@@ -86,9 +79,10 @@ function paraLinha(l: LoteLike & { stock_id: number; existencia_atual: number | 
 
 const TODOS = "__todos__";
 
-export function TransferenciasTab() {
+/** Estado e regras de uma transferência (nova ou a editar) — partilhado
+ *  pelo ecrã do computador e pelo do telemóvel. */
+export function useTransferencia() {
   const t = useT();
-  const isMobile = useIsMobile();
   const notifyError = useNotifyError();
   const [params, setParams] = useSearchParams();
 
@@ -135,7 +129,7 @@ export function TransferenciasTab() {
   };
 
   // Garanhão por omissão: o primeiro com stock (como a app atual).
-  const garanhaoAtual = garanhao && opcoesGaranhao.includes(garanhao) ? garanhao : opcoesGaranhao[0] ?? null;
+  const garanhaoAtual = garanhao && opcoesGaranhao.includes(garanhao) ? garanhao : (opcoesGaranhao[0] ?? null);
   const lotesGaranhao = useLotes(
     garanhaoAtual ? { garanhao: garanhaoAtual, donos: [], semDono: false, minPalhetas: 0, incluirVazios: false } : null,
   );
@@ -219,7 +213,134 @@ export function TransferenciasTab() {
     }
   };
 
-  if (garanhoes.isPending || (edicao && operacao.isPending)) return <Spin style={{ display: "block", margin: 32 }} />;
+  const editarOperacao = (op: { tipo: string; action_id: number }) =>
+    setParams((p) => {
+      const r = new URLSearchParams(p);
+      r.set("editar", `${op.tipo}-${op.action_id}`);
+      return r;
+    });
+  const adicionarLotes = (novos: { lote: Lote; qty: number }[]) =>
+    setLinhas((ls) => [
+      ...ls,
+      ...novos.filter((n) => !ls.some((l) => l.stock_id === n.lote.id)).map((n) => paraLinha({ ...n.lote, stock_id: n.lote.id }, n.qty)),
+    ]);
+  const mudarQtd = (stockId: number, n: number) => setLinhas((ls) => ls.map((x) => (x.stock_id === stockId ? { ...x, qty: n } : x)));
+  const removerLinha = (stockId: number) => setLinhas((ls) => ls.filter((x) => x.stock_id !== stockId));
+  const lotesDisponiveis = (lotesGaranhao.data?.items ?? []).filter((l) => dono === TODOS || String(l.dono_id) === dono);
+  const opcoesDono = [
+    { value: TODOS, label: t("common.all") },
+    ...(lotesGaranhao.data?.donos_disponiveis ?? [])
+      .filter((d) => d.id !== null)
+      .map((d) => ({ value: String(d.id), label: d.nome ?? "" })),
+  ];
+  const listaGaranhoes = garanhaoAtual && !opcoesGaranhao.includes(garanhaoAtual) ? [garanhaoAtual, ...opcoesGaranhao] : opcoesGaranhao;
+  const aCarregar = garanhoes.isPending || (!!edicao && operacao.isPending);
+  const aGuardar = criar.isPending || editar.isPending;
+
+  return {
+    edicao,
+    operacao,
+    opcoesGaranhao,
+    listaGaranhoes,
+    garanhaoAtual,
+    mudarGaranhao,
+    dono,
+    mudarDono,
+    opcoesDono,
+    linhas,
+    mudarQtd,
+    removerLinha,
+    adicionarLotes,
+    lotesDisponiveis,
+    lotesACarregar: lotesGaranhao.isPending,
+    modalLotes,
+    setModalLotes,
+    tipo,
+    setTipo,
+    destino,
+    setDestino,
+    destinos,
+    donosAtivos,
+    mudaLocal,
+    setMudaLocal,
+    contentor,
+    setContentor,
+    contentores,
+    canister,
+    setCanister,
+    andar,
+    setAndar,
+    destinatario,
+    setDestinatario,
+    motivo,
+    setMotivo,
+    observacoes,
+    setObservacoes,
+    erro,
+    total,
+    executar,
+    aGuardar,
+    aCarregar,
+    sairEdicao,
+    editarOperacao,
+  };
+}
+
+export function TransferenciasTab() {
+  return useIsMobile() ? <TransferenciasMobile /> : <TransferenciasDesktop />;
+}
+
+function TransferenciasDesktop() {
+  const t = useT();
+  const {
+    edicao,
+    operacao,
+    opcoesGaranhao,
+    listaGaranhoes,
+    garanhaoAtual,
+    mudarGaranhao,
+    dono,
+    mudarDono,
+    opcoesDono,
+    linhas,
+    mudarQtd,
+    removerLinha,
+    adicionarLotes,
+    lotesDisponiveis,
+    lotesACarregar,
+    modalLotes,
+    setModalLotes,
+    tipo,
+    setTipo,
+    destino,
+    setDestino,
+    destinos,
+    donosAtivos,
+    mudaLocal,
+    setMudaLocal,
+    contentor,
+    setContentor,
+    contentores,
+    canister,
+    setCanister,
+    andar,
+    setAndar,
+    destinatario,
+    setDestinatario,
+    motivo,
+    setMotivo,
+    observacoes,
+    setObservacoes,
+    erro,
+    total,
+    executar,
+    aGuardar,
+    aCarregar,
+    sairEdicao,
+    editarOperacao,
+  } = useTransferencia();
+
+  if (aCarregar) return <Spin style={{ display: "block", margin: 32 }} />;
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -251,26 +372,13 @@ export function TransferenciasTab() {
                 style={{ width: "100%" }}
                 value={garanhaoAtual ?? undefined}
                 onChange={mudarGaranhao}
-                options={(garanhaoAtual && !opcoesGaranhao.includes(garanhaoAtual) ? [garanhaoAtual, ...opcoesGaranhao] : opcoesGaranhao).map((g) => ({
-                  value: g,
-                  label: g,
-                }))}
+                options={listaGaranhoes.map((g) => ({ value: g, label: g }))}
                 notFoundContent={t("web.common.no_results")}
               />
             </Col>
             <Col xs={24} md={12}>
               <Typography.Text type="secondary">{t("label.owner")}</Typography.Text>
-              <Select
-                style={{ width: "100%" }}
-                value={dono}
-                onChange={mudarDono}
-                options={[
-                  { value: TODOS, label: t("common.all") },
-                  ...(lotesGaranhao.data?.donos_disponiveis ?? [])
-                    .filter((d) => d.id !== null)
-                    .map((d) => ({ value: String(d.id), label: d.nome ?? "" })),
-                ]}
-              />
+              <Select style={{ width: "100%" }} value={dono} onChange={mudarDono} options={opcoesDono} />
             </Col>
             <Col span={24}>
               <Button block onClick={() => setModalLotes(true)} disabled={!garanhaoAtual}>
@@ -287,8 +395,8 @@ export function TransferenciasTab() {
             <Space orientation="vertical" size={6} style={{ width: "100%" }}>
               {linhas.map((l) => (
                 <Card key={l.stock_id} size="small" styles={{ body: { padding: "8px 12px", background: "#fafafa" } }}>
-                  <Flex gap={12} align="center" wrap={isMobile}>
-                    <div style={{ flex: 1, minWidth: isMobile ? "calc(100% - 40px)" : 0 }}>
+                  <Flex gap={12} align="center">
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       {dono === TODOS && (
                         <Typography.Text strong ellipsis style={{ display: "block" }}>
                           {l.proprietario_nome ?? t("common.no_owner")}
@@ -302,17 +410,8 @@ export function TransferenciasTab() {
                         {l.carac && ` · ${l.carac}`}
                       </Typography.Text>
                     </div>
-                    <QtdPalhetas
-                      valor={l.qty}
-                      max={l.max}
-                      onChange={(n) => setLinhas((ls) => ls.map((x) => (x.stock_id === l.stock_id ? { ...x, qty: n } : x)))}
-                    />
-                    <Button
-                      type="text"
-                      icon={<CloseOutlined />}
-                      onClick={() => setLinhas((ls) => ls.filter((x) => x.stock_id !== l.stock_id))}
-                      aria-label={t("btn.remove")}
-                    />
+                    <QtdPalhetas valor={l.qty} max={l.max} onChange={(n) => mudarQtd(l.stock_id, n)} />
+                    <Button type="text" icon={<CloseOutlined />} onClick={() => removerLinha(l.stock_id)} aria-label={t("btn.remove")} />
                   </Flex>
                 </Card>
               ))}
@@ -331,8 +430,6 @@ export function TransferenciasTab() {
               <ZoneTitle>{t("transfer.destination")}</ZoneTitle>
               <Space orientation="vertical" size={12} style={{ width: "100%" }}>
                 <Segmented
-                  vertical={isMobile}
-                  block={isMobile}
                   value={tipo}
                   onChange={(v) => setTipo(v as "interna" | "externa")}
                   options={[
@@ -343,7 +440,9 @@ export function TransferenciasTab() {
 
                 {tipo === "interna" ? (
                   <>
-                    {destinos.length === 0 && donosAtivos.data && <Alert type="warning" showIcon title={t("web.transfer.no_other_owners")} />}
+                    {destinos.length === 0 && donosAtivos.data && (
+                      <Alert type="warning" showIcon title={t("web.transfer.no_other_owners")} />
+                    )}
                     <div>
                       <Typography.Text type="secondary">{t("transfer.destination_owner")} *</Typography.Text>
                       <DonoSelect
@@ -357,7 +456,6 @@ export function TransferenciasTab() {
                       <Typography.Text type="secondary">{t("transfer.change_location")}</Typography.Text>
                       <Segmented
                         block
-                        vertical={isMobile}
                         value={mudaLocal ? "nova" : "manter"}
                         onChange={(v) => setMudaLocal(v === "nova")}
                         options={[
@@ -381,11 +479,23 @@ export function TransferenciasTab() {
                         </Col>
                         <Col xs={12} sm={8}>
                           <Typography.Text type="secondary">{t("label.canister")}</Typography.Text>
-                          <InputNumber min={1} max={20} style={{ width: "100%" }} value={canister} onChange={(v) => setCanister(Number(v) || 1)} />
+                          <InputNumber
+                            min={1}
+                            max={20}
+                            style={{ width: "100%" }}
+                            value={canister}
+                            onChange={(v) => setCanister(Number(v) || 1)}
+                          />
                         </Col>
                         <Col xs={12} sm={8}>
                           <Typography.Text type="secondary">{t("label.floor")}</Typography.Text>
-                          <InputNumber min={1} max={20} style={{ width: "100%" }} value={andar} onChange={(v) => setAndar(Number(v) || 1)} />
+                          <InputNumber
+                            min={1}
+                            max={20}
+                            style={{ width: "100%" }}
+                            value={andar}
+                            onChange={(v) => setAndar(Number(v) || 1)}
+                          />
                         </Col>
                       </Row>
                     )}
@@ -414,7 +524,7 @@ export function TransferenciasTab() {
 
                 {erro && <Alert type="error" showIcon title={erro} />}
                 <Flex justify="flex-end">
-                  <Button type="primary" onClick={executar} loading={criar.isPending || editar.isPending} block={isMobile}>
+                  <Button type="primary" onClick={executar} loading={aGuardar}>
                     {edicao ? t("web.transfer.update_btn") : t("btn.execute_transfer")}
                   </Button>
                 </Flex>
@@ -425,29 +535,16 @@ export function TransferenciasTab() {
       )}
 
       {/* Escondido durante a edição, como na app atual. */}
-      {!edicao && (
-        <HistoricoOperacoes
-          onEditar={(op) =>
-            setParams((p) => {
-              const r = new URLSearchParams(p);
-              r.set("editar", `${op.tipo}-${op.action_id}`);
-              return r;
-            })
-          }
-        />
-      )}
+      {!edicao && <HistoricoOperacoes onEditar={editarOperacao} />}
 
       <SelecionarLotesModal
         opened={modalLotes}
         onClose={() => setModalLotes(false)}
-        lotes={(lotesGaranhao.data?.items ?? []).filter((l) => dono === TODOS || String(l.dono_id) === dono)}
-        carregando={lotesGaranhao.isPending}
+        lotes={lotesDisponiveis}
+        carregando={lotesACarregar}
         jaSelecionados={new Set(linhas.map((l) => l.stock_id))}
         onConfirmar={(novos) => {
-          setLinhas((ls) => [
-            ...ls,
-            ...novos.filter((n) => !ls.some((l) => l.stock_id === n.lote.id)).map((n) => paraLinha({ ...n.lote, stock_id: n.lote.id }, n.qty)),
-          ]);
+          adicionarLotes(novos);
           setModalLotes(false);
         }}
       />
@@ -456,7 +553,7 @@ export function TransferenciasTab() {
 }
 
 /** Quantas palhetas saem de um lote: − [n] + "de N". */
-function QtdPalhetas({ valor, max, onChange }: { valor: number; max: number; onChange: (n: number) => void }) {
+export function QtdPalhetas({ valor, max, onChange }: { valor: number; max: number; onChange: (n: number) => void }) {
   const t = useT();
   const definir = (n: number) => onChange(Math.max(1, Math.min(max, n || 1)));
   return (
@@ -501,7 +598,6 @@ function SelecionarLotesModal({
   onConfirmar: (l: { lote: Lote; qty: number }[]) => void;
 }) {
   const t = useT();
-  const isMobile = useIsMobile();
   // Lotes marcados → palhetas a enviar de cada um (começa no total do lote).
   const [sel, setSel] = useState<Map<number, number>>(new Map());
   useEffect(() => {
@@ -516,8 +612,7 @@ function SelecionarLotesModal({
       open={opened}
       onCancel={onClose}
       title={t("transfer.select_lots_title")}
-      width={isMobile ? "100%" : 680}
-      style={isMobile ? { top: 0, maxWidth: "100%", margin: 0, paddingBottom: 0 } : undefined}
+      width={680}
       okText={t("btn.confirm_selection")}
       cancelText={t("btn.close")}
       okButtonProps={{ disabled: !sel.size }}
@@ -568,7 +663,11 @@ function SelecionarLotesModal({
                 </Flex>
                 {sel.has(l.id) && (
                   <div style={{ marginTop: 8, paddingLeft: 26 }}>
-                    <QtdPalhetas valor={sel.get(l.id)!} max={l.existencia_atual ?? 0} onChange={(n) => setSel((s) => new Map(s).set(l.id, n))} />
+                    <QtdPalhetas
+                      valor={sel.get(l.id)!}
+                      max={l.existencia_atual ?? 0}
+                      onChange={(n) => setSel((s) => new Map(s).set(l.id, n))}
+                    />
                   </div>
                 )}
               </Card>
