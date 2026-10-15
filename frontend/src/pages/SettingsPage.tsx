@@ -7,7 +7,10 @@ import { useT } from "../i18n/I18n";
 import { PageHeader } from "../components/ds";
 import { useIsMobile } from "../components/responsive";
 import { OwnersTab } from "./owners/OwnersTab";
-import { NotMigratedPage } from "./NotMigratedPage";
+import { MarcaTab, IdiomaTab } from "./settings/MarcaTab";
+import { AlojamentosTab } from "./settings/AlojamentosTab";
+import { UtilizadoresTab } from "./settings/UtilizadoresTab";
+import { BackupTab } from "./settings/BackupTab";
 
 // Mesmos separadores e permissões que `definicoes_page.py`: Utilizadores e
 // Cópia de segurança só para Administrador.
@@ -29,7 +32,15 @@ export function SettingsPage({ user }: { user: User }) {
 
   if (!tab || !visiveis.some((x) => x.id === tab)) return <Navigate to="/definicoes/proprietarios" replace />;
 
-  const conteudo = (id: string) => (id === "proprietarios" ? <OwnersTab /> : <NotMigratedPage />);
+  const conteudo = (id: string) =>
+    ({
+      marca: <MarcaTab />,
+      alojamentos: <AlojamentosTab />,
+      proprietarios: <OwnersTab />,
+      utilizadores: <UtilizadoresTab />,
+      backup: <BackupTab />,
+      idioma: <IdiomaTab />,
+    })[id];
 
   if (isMobile)
     // Telemóvel: o título está na barra de cima; separadores em "cápsula".
@@ -40,7 +51,7 @@ export function SettingsPage({ user }: { user: User }) {
             <CapsuleTabs.Tab key={x.id} title={t(x.label)} />
           ))}
         </CapsuleTabs>
-        <div style={{ padding: tab === "proprietarios" ? 0 : 8 }}>{conteudo(tab)}</div>
+        <div>{conteudo(tab)}</div>
       </>
     );
 
