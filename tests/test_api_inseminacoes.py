@@ -131,3 +131,10 @@ def test_validacoes(ctx):
     assert c.post("/api/inseminacoes", json=_corpo(ctx, 1)).json()["detail"]["code"] == "web.insem.error.mare_no_stay"
     assert _stock(ctx["lote"]) == 10
     assert c.get("/api/inseminacoes/operacao/nao-e-uuid").status_code == 404
+
+
+def test_receptora_nao_e_inseminada(ctx):
+    _um("UPDATE animais SET tipo = 'receptora' WHERE id = %s", (ctx["egua"],))
+    assert not any(e["animal_id"] == ctx["egua"] for e in ctx["c"].get("/api/inseminacoes/eguas").json())
+    r = ctx["c"].post("/api/inseminacoes", json=_corpo(ctx, 1))
+    assert r.json()["detail"]["code"] == "web.insem.error.recipient"

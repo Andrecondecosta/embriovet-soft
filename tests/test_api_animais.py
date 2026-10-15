@@ -80,6 +80,15 @@ def _animal(tipo="egua", estadia=True):
     return aid
 
 
+def _um_dono():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id", (f"{PREFIXO}d{uuid.uuid4().hex[:6]}",))
+            did = cur.fetchone()[0]
+        conn.commit()
+    return did
+
+
 def _tarefas(aid):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -95,6 +104,16 @@ def test_ficha_e_editar(client):
     assert r.json()["raca"] == "Lusitano" and r.json()["altura"] is None
     assert client.put(f"/api/animais/{aid}", json={"nome": " "}).json()["detail"]["code"] == "web.stays.error.animal_name_required"
     assert client.get("/api/animais/999999999").status_code == 404
+
+    # Sem "dono_id" no pedido, o proprietário não muda.
+    assert client.get(f"/api/animais/{aid}").json()["dono_id"] == f["dono_id"]
+    # Com "dono_id", muda (e o nome aparece na ficha).
+    novo = _um_dono()
+    r = client.put(f"/api/animais/{aid}", json={"nome": f["nome"], "tipo": "receptora", "dono_id": novo})
+    assert r.json()["dono_id"] == novo and r.json()["proprietario"].startswith(PREFIXO)
+    assert r.json()["is_receptora"] is True
+    r = client.put(f"/api/animais/{aid}", json={"nome": f["nome"], "dono_id": 999999999})
+    assert r.json()["detail"]["code"] == "web.animal.error.owner_not_found"
 
 
 def test_diario_conclui_tarefas_e_agenda_proxima(client):

@@ -134,3 +134,31 @@ def test_pesquisa_animais(client, base):
     _nova(client, base, animal={"nome": nome})
     r = client.get("/api/animais/pesquisa", params={"q": nome.lower()}).json()
     assert len(r) == 1 and r[0]["em_aberto"] == "estadia" and r[0]["dono_id"] == base["dono"]
+
+
+@pytest.mark.parametrize(
+    "tipo, motivo, ok",
+    [
+        ("egua", "colheita", False),  # a égua não faz colheita
+        ("egua", "embriao", True),
+        ("receptora", "inseminacao", False),  # a receptora só recebe embriões
+        ("receptora", "colheita", False),
+        ("receptora", "embriao", True),
+        ("receptora", "diagnostico", True),
+        ("garanhao", "colheita", True),
+    ],
+)
+def test_motivo_conforme_o_tipo(client, base, tipo, motivo, ok):
+    r = _nova(client, base, animal={"nome": f"{PREFIXO}{uuid.uuid4().hex[:6]}", "tipo": tipo}, motivo=motivo)
+    if ok:
+        assert r.status_code == 201
+    else:
+        assert r.json()["detail"]["code"] == "web.stays.error.reason_not_allowed"
+
+
+def test_receptora_fica_marcada_pelo_tipo(client, base):
+    r = _nova(client, base, animal={"nome": f"{PREFIXO}{uuid.uuid4().hex[:6]}", "tipo": "receptora"}, motivo="embriao")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT is_receptora FROM animais WHERE id = %s", (r.json()["animal_id"],))
+            assert cur.fetchone()[0] is True

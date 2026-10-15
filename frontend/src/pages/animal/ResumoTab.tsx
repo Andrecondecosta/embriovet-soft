@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import {
   Button,
   Card,
-  Checkbox,
   Col,
   DatePicker,
   Descriptions,
@@ -20,13 +20,26 @@ import {
   Typography,
 } from "antd";
 import { EditOutlined } from "@ant-design/icons";
-import { Button as MButton, Checkbox as MCheckbox, Dialog, Form as MForm, Input as MInput, List, Selector, TextArea } from "antd-mobile";
+import { Button as MButton, Dialog, Form as MForm, Input as MInput, List, Selector, TextArea } from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
 import { notifySuccess, useNotifyError } from "../../components/errors";
-import { Cabecalho, DataCampo, FolhaEcraInteiro, semNulos, NumeroCampo, abrirAoTocar, irParaErro } from "../../components/mobile";
+import {
+  Cabecalho,
+  DataCampo,
+  FolhaEcraInteiro,
+  SeletorPesquisa,
+  semNulos,
+  NumeroCampo,
+  abrirAoTocar,
+  irParaErro,
+} from "../../components/mobile";
+import type { Owner } from "../../api/types";
+import { DonoSelect } from "../stock/LoteForm";
+import { useOpcoes } from "../stock/api";
+import { OwnerFormModal } from "../owners/OwnerFormModal";
 import { useAgendarColheita, useCancelarColheita, useColheitas, useEditarAnimal, type Animal, type AnimalIn } from "./api";
 
 const TIPOS = ["egua", "garanhao", "receptora"] as const;
@@ -65,6 +78,7 @@ export function ResumoTab({ animal }: { animal: Animal }) {
   const campos: [string, string][] = [
     [t("web.stays.form.name"), animal.nome],
     [t("web.stays.col.type"), t(`web.stays.animal.${animal.tipo}`)],
+    [t("web.animal.owner"), animal.proprietario ?? t("web.animal.no_owner")],
     ...TEXTOS.map(([k, l]) => [t(l), na(animal[k] as string | null)] as [string, string]),
     [t("web.stays.form.height"), na(animal.altura)],
     [t("web.stays.form.weight"), na(animal.peso)],
@@ -162,11 +176,15 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
   const [form] = Form.useForm();
   const [mform] = MForm.useForm();
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
+  const queryClient = useQueryClient();
+  const donos = useOpcoes("proprietarios", false);
+  const [novoDono, setNovoDono] = useState(false);
 
   const guardar = async (v: AnimalIn & { data_nascimento: unknown }) => {
     try {
       await editar.mutateAsync({
         ...v,
+        dono_id: v.dono_id ?? null,
         data_nascimento: v.data_nascimento ? dayjs(v.data_nascimento as string).format("YYYY-MM-DD") : null,
       });
       notifySuccess(t("web.animal.saved"));
@@ -201,8 +219,13 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
           <MForm.Item name="tipo" label={t("web.stays.col.type")} {...umSo}>
             <Selector showCheckMark={false} columns={3} options={TIPOS.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))} />
           </MForm.Item>
-          <MForm.Item name="is_receptora" valuePropName="checked">
-            <MCheckbox>{t("web.stays.form.is_recipient")}</MCheckbox>
+          <MForm.Item name="dono_id" label={t("web.animal.owner")} arrow onClick={abrirAoTocar}>
+            <SeletorPesquisa<number>
+              titulo={t("web.animal.owner")}
+              placeholder={t("web.animal.no_owner")}
+              opcoes={(donos.data ?? []).map((d) => ({ value: d.id, label: d.nome }))}
+              acao={{ texto: t("web.owners.new"), onClick: () => setNovoDono(true) }}
+            />
           </MForm.Item>
           <Cabecalho>{t("web.stays.form.identification")}</Cabecalho>
           {TEXTOS.map(([k, l]) => (
@@ -229,6 +252,15 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
             <TextArea autoSize={{ minRows: 1, maxRows: 6 }} />
           </MForm.Item>
         </MForm>
+        <OwnerFormModal
+          opened={novoDono}
+          owner={null}
+          onClose={() => setNovoDono(false)}
+          onSaved={async (o: Owner) => {
+            await queryClient.invalidateQueries({ queryKey: ["opcoes", "proprietarios"] });
+            mform.setFieldValue("dono_id", o.id);
+          }}
+        />
       </FolhaEcraInteiro>
     );
 
@@ -296,9 +328,9 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
               <Input.TextArea autoSize={{ minRows: 2 }} />
             </Form.Item>
           </Col>
-          <Col span={24}>
-            <Form.Item name="is_receptora" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Checkbox>{t("web.stays.form.is_recipient")}</Checkbox>
+          <Col xs={24} sm={12}>
+            <Form.Item name="dono_id" label={t("web.animal.owner")} style={{ marginBottom: 0 }}>
+              <DonoSelect apenasAtivos={false} />
             </Form.Item>
           </Col>
         </Row>

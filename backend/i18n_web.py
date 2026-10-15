@@ -1386,3 +1386,23 @@ _IMPORT = [
 for _k, *_txt in _IMPORT:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.import.{_k}"] = _v
+WEB_TRANSLATIONS["pt-PT"]["web.insem.error.recipient"] = "Uma receptora não é inseminada (só recebe embriões)."
+WEB_TRANSLATIONS["en"]["web.insem.error.recipient"] = "A recipient mare is not inseminated (she only receives embryos)."
+WEB_TRANSLATIONS["fr"]["web.insem.error.recipient"] = "Une receveuse n’est pas inséminée (elle reçoit seulement des embryons)."
+WEB_TRANSLATIONS["de"]["web.insem.error.recipient"] = "Eine Empfängerstute wird nicht besamt (sie erhält nur Embryonen)."
+WEB_TRANSLATIONS["pt-PT"]["web.stays.error.reason_not_allowed"] = "Este motivo não se aplica a este tipo de animal."
+WEB_TRANSLATIONS["en"]["web.stays.error.reason_not_allowed"] = "This reason does not apply to this type of animal."
+WEB_TRANSLATIONS["fr"]["web.stays.error.reason_not_allowed"] = "Ce motif ne s’applique pas à ce type d’animal."
+WEB_TRANSLATIONS["de"]["web.stays.error.reason_not_allowed"] = "Dieser Grund passt nicht zu dieser Tierart."
+WEB_TRANSLATIONS["pt-PT"]["web.animal.error.owner_not_found"] = "Proprietário não encontrado."
+WEB_TRANSLATIONS["en"]["web.animal.error.owner_not_found"] = "Owner not found."
+WEB_TRANSLATIONS["fr"]["web.animal.error.owner_not_found"] = "Propriétaire introuvable."
+WEB_TRANSLATIONS["de"]["web.animal.error.owner_not_found"] = "Besitzer nicht gefunden."
+WEB_TRANSLATIONS["pt-PT"]["web.animal.owner"] = "Proprietário"
+WEB_TRANSLATIONS["en"]["web.animal.owner"] = "Owner"
+WEB_TRANSLATIONS["fr"]["web.animal.owner"] = "Propriétaire"
+WEB_TRANSLATIONS["de"]["web.animal.owner"] = "Besitzer"
+WEB_TRANSLATIONS["pt-PT"]["web.animal.no_owner"] = "Sem proprietário"
+WEB_TRANSLATIONS["en"]["web.animal.no_owner"] = "No owner"
+WEB_TRANSLATIONS["fr"]["web.animal.no_owner"] = "Sans propriétaire"
+WEB_TRANSLATIONS["de"]["web.animal.no_owner"] = "Ohne Besitzer"

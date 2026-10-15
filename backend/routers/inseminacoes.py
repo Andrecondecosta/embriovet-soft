@@ -41,10 +41,20 @@ def lotes(_user: dict = Depends(get_current_user)):
     return registos(carregar_stock(apenas_ativos=True), COLS_LOTE)
 
 
+def _eguas() -> list[dict]:
+    """Éguas com estadia ou visita aberta. As receptoras ficam de fora: só
+    recebem embriões, não são inseminadas."""
+    lista = listar_eguas_com_estadia_ativa()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM animais WHERE tipo = 'receptora' AND id = ANY(%s)", ([e["animal_id"] for e in lista],))
+            receptoras = {r[0] for r in cur.fetchall()}
+    return [e for e in lista if e["animal_id"] not in receptoras]
+
+
 @router.get("/eguas")
 def eguas(_user: dict = Depends(get_current_user)):
-    """Éguas/receptoras com estadia ou visita aberta (só essas podem ser inseminadas)."""
-    return [{k: valor(v) for k, v in e.items()} for e in listar_eguas_com_estadia_ativa()]
+    return [{k: valor(v) for k, v in e.items()} for e in _eguas()]
 
 
 class Linha(BaseModel):
@@ -89,7 +99,13 @@ def _validar_linhas(linhas: list[Linha], extra: dict[int, int] | None = None):
 
 @router.post("", status_code=201)
 def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
-    egua = next((e for e in listar_eguas_com_estadia_ativa() if e["animal_id"] == d.animal_id_egua), None)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tipo FROM animais WHERE id = %s", (d.animal_id_egua,))
+            row = cur.fetchone()
+    if row and row[0] == "receptora":
+        raise _erro(409, "web.insem.error.recipient")
+    egua = next((e for e in _eguas() if e["animal_id"] == d.animal_id_egua), None)
     if not egua:
         raise _erro(409, "web.insem.error.mare_no_stay")
     if not d.garanhao:

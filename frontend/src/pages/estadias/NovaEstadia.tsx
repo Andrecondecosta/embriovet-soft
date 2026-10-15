@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
-import { Alert, Checkbox, Col, Collapse, DatePicker, Form, Input, InputNumber, Modal, Row, Segmented, Select, Tag, Typography } from "antd";
-import { Checkbox as MCheckbox, Form as MForm, Input as MInput, List, Popup, SearchBar, Selector, TextArea } from "antd-mobile";
+import { Alert, Col, Collapse, DatePicker, Form, Input, InputNumber, Modal, Row, Segmented, Select, Tag, Typography } from "antd";
+import { Form as MForm, Input as MInput, List, Popup, SearchBar, Selector, TextArea } from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile, useDebounced } from "../../components/responsive";
@@ -17,8 +18,11 @@ import {
   irParaErro,
 } from "../../components/mobile";
 import { DonoSelect } from "../stock/LoteForm";
+import { OwnerFormModal } from "../owners/OwnerFormModal";
+import type { Owner } from "../../api/types";
 import {
   MOTIVOS,
+  MOTIVOS_POR_TIPO,
   TIPOS_ANIMAL,
   TIPOS_REGISTO,
   useCriarEstadia,
@@ -28,6 +32,7 @@ import {
   type AnimalPesquisa,
   type EstadiaIn,
   type Motivo,
+  type TipoAnimal,
   type TipoRegisto,
 } from "./api";
 
@@ -87,6 +92,17 @@ function useGuardar(onClose: () => void) {
   return { guardar, aGuardar: criar.isPending };
 }
 
+/** Motivos permitidos para o animal escolhido; se o motivo atual deixar de
+ *  servir (ex.: passou para receptora), muda para o primeiro permitido. */
+function useMotivos(tipo: TipoAnimal | undefined, atual: Motivo | undefined, definir: (m: Motivo) => void) {
+  const permitidos = tipo ? MOTIVOS_POR_TIPO[tipo] : MOTIVOS;
+  useEffect(() => {
+    if (atual && !permitidos.includes(atual)) definir(permitidos[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo]);
+  return permitidos;
+}
+
 /** Aviso (não bloqueia): o mesmo nome já existe noutro proprietário. */
 function useAvisoNome(nome: string | undefined, donoId: number | null) {
   const n = (nome ?? "").trim();
@@ -144,7 +160,11 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = Form.useWatch("modo", form) ?? "existente";
   const tipoRegisto = Form.useWatch("tipo_registo", form) ?? "estadia";
-  const tipoAnimal = Form.useWatch(["novo", "tipo"], form);
+  const tipoNovo = Form.useWatch(["novo", "tipo"], form);
+  const animalSel = Form.useWatch("animal", form) as AnimalPesquisa | null | undefined;
+  const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, Form.useWatch("motivo", form), (m) =>
+    form.setFieldValue("motivo", m),
+  );
   const aviso = useAvisoNome(Form.useWatch(["novo", "nome"], form), Form.useWatch("dono_id", form) ?? null);
   const alojamentos = opcoes.data?.alojamentos ?? [];
   const r = (msg: string) => [{ required: true, message: t(msg) }];
@@ -237,13 +257,6 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
                           <InputNumber min={0} style={{ width: "100%" }} />
                         </Form.Item>
                       </Col>
-                      {tipoAnimal === "egua" && (
-                        <Col span={24}>
-                          <Form.Item name={["novo", "is_receptora"]} valuePropName="checked" style={{ marginBottom: 0 }}>
-                            <Checkbox>{t("web.stays.form.is_recipient")}</Checkbox>
-                          </Form.Item>
-                        </Col>
-                      )}
                     </Row>
                   ),
                 },
@@ -280,7 +293,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
         <Row gutter={12}>
           <Col xs={24} sm={12}>
             <Form.Item name="motivo" label={tipoRegisto === "externo" ? t("web.stays.form.reason_optional") : t("web.stays.col.reason")}>
-              <Select options={MOTIVOS.map((m) => ({ value: m, label: t(`web.stays.reason.${m}`) }))} />
+              <Select options={motivos.map((m) => ({ value: m, label: t(`web.stays.reason.${m}`) }))} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
@@ -379,8 +392,14 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = MForm.useWatch("modo", form) ?? "existente";
   const tipoRegisto = MForm.useWatch("tipo_registo", form) ?? "estadia";
-  const tipoAnimal = MForm.useWatch(["novo", "tipo"], form);
+  const tipoNovo = MForm.useWatch(["novo", "tipo"], form);
+  const animalSel = MForm.useWatch("animal", form) as AnimalPesquisa | null | undefined;
+  const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, MForm.useWatch("motivo", form), (m) =>
+    form.setFieldValue("motivo", m),
+  );
   const aviso = useAvisoNome(MForm.useWatch(["novo", "nome"], form), MForm.useWatch("dono_id", form) ?? null);
+  const queryClient = useQueryClient();
+  const [novoDono, setNovoDono] = useState(false);
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
   const alojamentos = opcoes.data?.alojamentos ?? [];
 
@@ -439,11 +458,6 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
                 options={TIPOS_ANIMAL.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))}
               />
             </MForm.Item>
-            {tipoAnimal === "egua" && (
-              <MForm.Item name={["novo", "is_receptora"]} valuePropName="checked">
-                <MCheckbox>{t("web.stays.form.is_recipient")}</MCheckbox>
-              </MForm.Item>
-            )}
             <Cabecalho>{t("web.stays.form.identification")}</Cabecalho>
             {(
               [
@@ -492,7 +506,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
           arrow
           onClick={abrirAoTocar}
         >
-          <PickerCampo<Motivo> opcoes={MOTIVOS.map((m) => ({ value: m, label: t(`web.stays.reason.${m}`) }))} />
+          <PickerCampo<Motivo> opcoes={motivos.map((m) => ({ value: m, label: t(`web.stays.reason.${m}`) }))} />
         </MForm.Item>
         <MForm.Item
           name="dono_id"
@@ -504,6 +518,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
           <SeletorPesquisa<number>
             titulo={t("label.owner")}
             opcoes={(opcoes.data?.donos ?? []).map((d) => ({ value: d.id, label: d.nome }))}
+            acao={{ texto: t("web.owners.new"), onClick: () => setNovoDono(true) }}
           />
         </MForm.Item>
         <MForm.Item
@@ -538,6 +553,15 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
           <TextArea autoSize={{ minRows: 1, maxRows: 5 }} />
         </MForm.Item>
       </MForm>
+      <OwnerFormModal
+        opened={novoDono}
+        owner={null}
+        onClose={() => setNovoDono(false)}
+        onSaved={async (o: Owner) => {
+          await queryClient.invalidateQueries({ queryKey: ["estadias", "opcoes"] });
+          form.setFieldValue("dono_id", o.id);
+        }}
+      />
     </FolhaEcraInteiro>
   );
 }

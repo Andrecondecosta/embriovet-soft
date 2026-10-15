@@ -60,7 +60,6 @@ export function AnimalPage() {
   const etiquetas = (
     <>
       <Tag>{t(`web.stays.animal.${animal.tipo}`)}</Tag>
-      {animal.is_receptora && <Tag>{t("web.stays.animal.receptora")}</Tag>}
       {animal.estadia_ativa !== null && <Tag color="blue">{t("web.stays.in_progress")}</Tag>}
     </>
   );

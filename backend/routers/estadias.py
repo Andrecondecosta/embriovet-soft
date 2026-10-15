@@ -138,7 +138,7 @@ def opcoes(_user: dict = Depends(get_current_user)):
             donos = [{"id": r[0], "nome": r[1]} for r in cur.fetchall()]
             cur.execute("SELECT id, nome, tipo, capacidade FROM alojamentos WHERE ativo = TRUE ORDER BY tipo, LOWER(nome)")
             aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3]} for r in cur.fetchall()]
-    return {"donos": donos, "alojamentos": aloj}
+    return {"donos": donos, "alojamentos": aloj, "motivos_por_tipo": MOTIVOS_POR_TIPO}
 
 
 # ── Nova estadia / visita / externo ───────────────────────────────────────
@@ -159,7 +159,6 @@ class AnimalNovo(BaseModel):
     mae: str | None = None
     avo_paterno: str | None = None
     avo_materno: str | None = None
-    is_receptora: bool = False
 
     @field_validator("*", mode="before")
     @classmethod
@@ -185,6 +184,19 @@ class EstadiaIn(BaseModel):
 
 ESTADO_INICIAL = {"estadia": "internado", "visita": "visitante", "externo": "externo"}
 
+# Motivos possíveis por tipo de animal: a égua não faz colheita; a receptora
+# só recebe embriões (e pode ter diagnóstico). O garanhão fica como estava.
+MOTIVOS_POR_TIPO = {
+    "egua": ("inseminacao", "diagnostico", "tratamento", "embriao"),
+    "receptora": ("embriao", "diagnostico"),
+    "garanhao": ("inseminacao", "colheita", "diagnostico", "tratamento", "embriao"),
+}
+
+
+def _validar_motivo(tipo_animal: str, motivo: str):
+    if motivo not in MOTIVOS_POR_TIPO.get(tipo_animal, MOTIVOS_POR_TIPO["garanhao"]):
+        raise _erro(422, "web.stays.error.reason_not_allowed")
+
 
 @router.post("/estadias", status_code=201)
 def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
@@ -204,6 +216,7 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
                     a = d.animal
                     if not a.nome:
                         raise _erro(422, "web.stays.error.animal_name_required")
+                    _validar_motivo(a.tipo, d.motivo)
                     # Só bloqueia o mesmo nome com o MESMO dono (como a app atual).
                     cur.execute(
                         "SELECT 1 FROM animais WHERE LOWER(nome) = LOWER(%s) AND dono_id = %s LIMIT 1",
@@ -225,15 +238,17 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
                             a.altura if a.altura and a.altura > 0 else None,
                             a.peso if a.peso and a.peso > 0 else None,
                             d.dono_id, a.pai, a.mae, a.avo_paterno, a.avo_materno,
-                            d.observacoes, bool(a.is_receptora and a.tipo == "egua"),
+                            d.observacoes, a.tipo == "receptora",
                         ),
                     )
                     animal_id = cur.fetchone()[0]
                 else:
                     animal_id = d.animal_id
-                    cur.execute("SELECT 1 FROM animais WHERE id = %s", (animal_id,))
-                    if not cur.fetchone():
+                    cur.execute("SELECT tipo FROM animais WHERE id = %s", (animal_id,))
+                    row = cur.fetchone()
+                    if not row:
                         raise _erro(404, "web.stays.error.animal_not_found")
+                    _validar_motivo(row[0], d.motivo)
                     # Uma só estadia em aberto por animal (a BD também o impede).
                     cur.execute("SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL LIMIT 1", (animal_id,))
                     if cur.fetchone():

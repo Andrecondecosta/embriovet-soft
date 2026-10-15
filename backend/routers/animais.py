@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.deps import get_current_user
 from backend.serial import registos, valor
+from modules.db import get_connection
 from modules.pages.animal_page import (
     _apagar_diario_clinico,
     _atualizar_animal,
@@ -77,8 +78,16 @@ def _animal(animal_id: int) -> dict:
 def ficha(animal_id: int, _user: dict = Depends(get_current_user)):
     a = _animal(animal_id)
     with_ins = _obter_estadia_activa_inseminacao(animal_id)
+    proprietario = None
+    if a.get("dono_id"):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT nome FROM dono WHERE id = %s", (a["dono_id"],))
+                row = cur.fetchone()
+                proprietario = row[0] if row else None
     return {
         **a,
+        "proprietario": proprietario,
         "estadia_ativa": _obter_estadia_activa(animal_id),
         "estadia_inseminacao": {k: valor(v) for k, v in with_ins.items()} if with_ins else None,
     }
@@ -99,7 +108,8 @@ class AnimalIn(BaseModel):
     avo_paterno: str | None = None
     avo_materno: str | None = None
     observacoes: str | None = None
-    is_receptora: bool = False
+    # Proprietário do animal (pode ser escolhido ou criado na ficha).
+    dono_id: int | None = None
 
     @field_validator("*", mode="before")
     @classmethod
@@ -112,11 +122,25 @@ def editar(animal_id: int, d: AnimalIn, _user: dict = Depends(get_current_user))
     _animal(animal_id)
     if not d.nome:
         raise _erro(422, "web.stays.error.animal_name_required")
-    dados = d.model_dump()
+    if "dono_id" in d.model_fields_set and d.dono_id is not None:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM dono WHERE id = %s", (d.dono_id,))
+                if not cur.fetchone():
+                    raise _erro(404, "web.animal.error.owner_not_found")
+    dados = d.model_dump(exclude={"dono_id"})
     # 0 conta como "não indicado", como na app atual.
     dados["altura"] = d.altura or None
     dados["peso"] = d.peso or None
+    # A receptora é um tipo próprio: a marca acompanha sempre o tipo.
+    dados["is_receptora"] = d.tipo == "receptora"
     _atualizar_animal(animal_id, dados)
+    # Só mexe no proprietário quando o pedido o traz.
+    if "dono_id" in d.model_fields_set:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE animais SET dono_id = %s, updated_at = NOW() WHERE id = %s", (d.dono_id, animal_id))
+            conn.commit()
     return ficha(animal_id)
 
 

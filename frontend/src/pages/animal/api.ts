@@ -20,10 +20,11 @@ export interface Animal {
   observacoes: string | null;
   is_receptora: boolean;
   ativo: boolean;
+  proprietario: string | null;
   estadia_ativa: number | null;
   estadia_inseminacao: { id: number; garanhao: string | null; data_entrada: string | null } | null;
 }
-export type AnimalIn = Omit<Animal, "id" | "dono_id" | "ativo" | "estadia_ativa" | "estadia_inseminacao">;
+export type AnimalIn = Omit<Animal, "id" | "ativo" | "estadia_ativa" | "estadia_inseminacao" | "proprietario" | "is_receptora">;
 
 export const COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"] as const;
 export interface Registo {
