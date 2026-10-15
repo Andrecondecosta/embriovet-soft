@@ -984,3 +984,43 @@ _DASH = {
 for _lang, _textos in _DASH.items():
     assert len(_textos) == len(_DASH_CHAVES), _lang
     WEB_TRANSLATIONS[_lang].update(dict(zip(_DASH_CHAVES, _textos)))
+
+# ── Relatórios: nomes das colunas (a app atual mostrava os nomes técnicos) ──
+_REL_CHAVES = [
+    "proprietario_nome", "data_embriovet", "existencia_atual", "qualidade", "data_inseminacao", "egua_nome",
+    "palhetas_gastas", "data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade",
+    "destinatario_externo", "tipo", "observacoes", "garanhao_nome", "garanhao", "canister", "andar",
+    "data_criacao", "local_armazenagem",
+]
+_REL = {
+    "pt-PT": [
+        "Proprietário", "Data de produção", "Palhetas", "Qualidade", "Data", "Égua", "Palhetas", "Data", "De", "Para",
+        "Palhetas", "Destinatário", "Tipo", "Observações", "Garanhão", "Garanhão", "Canister", "Andar",
+        "Criado em", "Localização",
+    ],
+    "en": [
+        "Owner", "Production date", "Straws", "Quality", "Date", "Mare", "Straws", "Date", "From", "To",
+        "Straws", "Recipient", "Type", "Notes", "Stallion", "Stallion", "Canister", "Floor",
+        "Created", "Location",
+    ],
+    "fr": [
+        "Propriétaire", "Date de production", "Paillettes", "Qualité", "Date", "Jument", "Paillettes", "Date", "De", "À",
+        "Paillettes", "Destinataire", "Type", "Remarques", "Étalon", "Étalon", "Canister", "Étage",
+        "Créé le", "Emplacement",
+    ],
+    "de": [
+        "Besitzer", "Produktionsdatum", "Pailletten", "Qualität", "Datum", "Stute", "Pailletten", "Datum", "Von", "An",
+        "Pailletten", "Empfänger", "Typ", "Bemerkungen", "Hengst", "Hengst", "Canister", "Etage",
+        "Erstellt am", "Lagerort",
+    ],
+}
+_REL_EXTRA = {
+    "pt-PT": {"web.reports.error.export_unavailable": "Este relatório não tem esse formato de exportação.", "web.reports.all": "Todos", "web.reports.period": "Período"},
+    "en": {"web.reports.error.export_unavailable": "This report is not available in that format.", "web.reports.all": "All", "web.reports.period": "Period"},
+    "fr": {"web.reports.error.export_unavailable": "Ce rapport n’est pas disponible dans ce format.", "web.reports.all": "Tous", "web.reports.period": "Période"},
+    "de": {"web.reports.error.export_unavailable": "Dieser Bericht ist in diesem Format nicht verfügbar.", "web.reports.all": "Alle", "web.reports.period": "Zeitraum"},
+}
+for _lang, _textos in _REL.items():
+    assert len(_textos) == len(_REL_CHAVES), _lang
+    WEB_TRANSLATIONS[_lang].update({f"web.reports.col.{k}": v for k, v in zip(_REL_CHAVES, _textos)})
+    WEB_TRANSLATIONS[_lang].update(_REL_EXTRA[_lang])

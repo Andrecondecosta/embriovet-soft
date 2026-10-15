@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { descarregar } from "../../components/download";
 import type { PublicSettings } from "../../api/types";
 
 // ── Marca e idioma ──────────────────────────────────────────────────────────
@@ -118,14 +119,4 @@ export const useResumoBackup = () =>
   useQuery({ queryKey: ["definicoes", "backup"], queryFn: () => api<ResumoBackup>("/definicoes/backup") });
 
 /** Descarrega o ZIP (pode demorar: é gerado na hora). */
-export async function baixarBackup() {
-  const res = await fetch("/api/definicoes/backup/zip", { credentials: "same-origin" });
-  if (!res.ok) throw new Error(String(res.status));
-  const nome = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "backup.zip";
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+export const baixarBackup = () => descarregar("/definicoes/backup/zip", "backup.zip");

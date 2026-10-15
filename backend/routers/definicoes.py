@@ -17,6 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, field_validator
 
+from backend.serial import anexo
 from backend.deps import get_current_user, require_nivel
 from modules.db import get_connection
 from modules.repositories.settings_repo import get_app_settings, update_branding_settings
@@ -304,4 +305,4 @@ def descarregar_backup(user: dict = Depends(require_nivel("Administrador"))):
     with get_connection() as conn:
         dados = gerar_backup_zip(conn, criado_por=user["username"])
     nome = f"embriovet_backup_{datetime.now():%Y%m%d_%H%M}.zip"
-    return Response(dados, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+    return Response(dados, media_type="application/zip", headers=anexo(nome))

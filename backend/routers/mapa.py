@@ -20,6 +20,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
+from backend.serial import anexo
 from backend.deps import get_current_user
 from modules.db import get_connection
 from modules.mapa_export import gerar_excel_inventario, gerar_pdf_inventario
@@ -296,4 +297,4 @@ def exportar(
         conteudo = gerar_excel_inventario(df)
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     nome = f"inventario_contentores_{data}.{formato}"
-    return Response(conteudo, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+    return Response(conteudo, media_type=mime, headers=anexo(nome))

@@ -3,6 +3,7 @@ import { Alert, Button, Empty, Flex, Form, Input, Modal, Popover, Segmented, Sel
 import { AppstoreOutlined, DownloadOutlined, PlusOutlined } from "@ant-design/icons";
 
 import { useT } from "../../../i18n/I18n";
+import { descarregar } from "../../../components/download";
 import { useElementWidth, useIsMobile } from "../../../components/responsive";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../../components/errors";
 import { MapaCanvas } from "./MapaCanvas";
@@ -214,15 +215,7 @@ function Organizar({ onFeito }: { onFeito: () => void }) {
 export async function baixarInventario(formato: "pdf" | "xlsx", ids: number[]) {
   const p = new URLSearchParams({ formato });
   ids.forEach((i) => p.append("ids", String(i)));
-  const res = await fetch(`/api/mapa/exportar?${p}`, { credentials: "same-origin" });
-  if (!res.ok) throw new Error(String(res.status));
-  const nome = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `inventario.${formato}`;
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  URL.revokeObjectURL(url);
+  await descarregar(`/mapa/exportar?${p}`, `inventario.${formato}`);
 }
 
 function Exportar({ contentores }: { contentores: Contentor[] }) {
