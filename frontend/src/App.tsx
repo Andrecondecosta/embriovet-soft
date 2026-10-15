@@ -31,6 +31,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { RelatoriosPage } from "./pages/RelatoriosPage";
 import { EstadiasPage } from "./pages/estadias/EstadiasPage";
 import { TrabalhoPage } from "./pages/TrabalhoPage";
+import { AnimalPage } from "./pages/animal/AnimalPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 // Páginas do menu que já existem na app nova (as outras mostram "ainda não migrado").
@@ -149,8 +150,9 @@ export function App() {
                         <Route path="/relatorios" element={<RelatoriosPage />} />
                         <Route path="/estadias/:tab?" element={<EstadiasPage />} />
                         <Route path="/trabalho-diario" element={<TrabalhoPage />} />
-                        {/* Ficha do animal: ainda não migrada. */}
-                        <Route path="/animais/:id" element={<NotMigratedPage />} />
+                        <Route path="/animais/:id" element={<AnimalPage />} />
+                        {/* Registar inseminação: ainda não migrado. */}
+                        <Route path="/trabalho-diario/inseminacao" element={<NotMigratedPage />} />
                         <Route path="/stock-semen/novo" element={<AddLotePage />} />
                         <Route path="/stock-semen/:tab?" element={<StockPage />} />
                         {NAV.filter((n) => !MIGRADAS.includes(n.path)).map((n) => (

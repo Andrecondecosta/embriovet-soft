@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useState, type ReactElement, type ReactNode, type Ref } from "react";
-import { Button, CheckList, List, NavBar, Picker, Popup, SearchBar } from "antd-mobile";
+import { Button, CheckList, DatePicker, List, NavBar, Picker, Popup, SearchBar } from "antd-mobile";
 import { AddOutline } from "antd-mobile-icons";
 
 import { useT } from "../i18n/I18n";
@@ -262,3 +262,58 @@ export function irParaErro() {
       ?.scrollIntoView({ behavior: "smooth", block: "center" }),
   );
 }
+
+/** Data numa roda; guarda "AAAA-MM-DD" (ou null). `limpar` permite apagar. */
+function DataCampoBase(
+  {
+    value,
+    onChange,
+    placeholder,
+    min,
+    max,
+    limpar,
+  }: {
+    value?: string | null;
+    onChange?: (v: string | null) => void;
+    placeholder?: string;
+    min?: Date;
+    max?: Date;
+    limpar?: boolean;
+  },
+  ref: Ref<Abrivel>,
+) {
+  const t = useT();
+  const [aberto, setAberto] = useState(false);
+  useImperativeHandle(ref, () => ({ open: () => setAberto(true) }));
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const texto = value ? value.split("-").reverse().join("/") : undefined;
+  return (
+    <>
+      <div onClick={() => setAberto(true)} style={{ cursor: "pointer", minHeight: 22, display: "flex", gap: 8, alignItems: "center" }}>
+        <Valor texto={texto} placeholder={placeholder} />
+        {limpar && value && (
+          <a
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange?.(null);
+            }}
+            style={{ fontSize: 12 }}
+          >
+            ✕
+          </a>
+        )}
+      </div>
+      <DatePicker
+        visible={aberto}
+        onClose={() => setAberto(false)}
+        value={value ? new Date(`${value}T12:00:00`) : new Date()}
+        min={min ?? new Date(new Date().getFullYear() - 40, 0, 1)}
+        max={max ?? new Date(new Date().getFullYear() + 2, 11, 31)}
+        confirmText={t("btn.confirm")}
+        cancelText={t("web.common.cancel")}
+        onConfirm={(d) => onChange?.(iso(d))}
+      />
+    </>
+  );
+}
+export const DataCampo = forwardRef(DataCampoBase);
