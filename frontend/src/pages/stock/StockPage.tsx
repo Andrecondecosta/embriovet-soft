@@ -1,5 +1,5 @@
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Button, Card, Space, Tabs, Tooltip } from "antd";
+import { Button, Card, Space, Tabs } from "antd";
 import { CapsuleTabs } from "antd-mobile";
 import { ImportOutlined, PlusOutlined } from "@ant-design/icons";
 
@@ -66,11 +66,9 @@ export function StockPage() {
           tab === "lotes" &&
           !isMobile && (
             <Space>
-              <Tooltip title={t("web.not_migrated.title")}>
-                <Button icon={<ImportOutlined />} disabled>
-                  {t("web.stock.import")}
-                </Button>
-              </Tooltip>
+              <Button icon={<ImportOutlined />} onClick={() => navigate("/stock-semen/importar")}>
+                {t("web.stock.import")}
+              </Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={novoLote}>
                 {t("web.stock.add")}
               </Button>

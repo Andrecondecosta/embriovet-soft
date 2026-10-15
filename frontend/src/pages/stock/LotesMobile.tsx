@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
   Collapse,
@@ -16,7 +16,7 @@ import {
   Switch,
   Tag,
 } from "antd-mobile";
-import { AddOutline, FilterOutline } from "antd-mobile-icons";
+import { AddOutline, DownlandOutline, FilterOutline } from "antd-mobile-icons";
 
 import { useT } from "../../i18n/I18n";
 import { useIsAdmin } from "../../components/User";
@@ -32,6 +32,7 @@ const SEM_DONO = "sem-dono";
 export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
   const t = useT();
   const isAdmin = useIsAdmin();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [roda, setRoda] = useState(false);
   const [filtros, setFiltros] = useState(false);
@@ -123,6 +124,9 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
           onClick={() => setFiltros(true)}
         >
           {t("common.filters")}
+        </List.Item>
+        <List.Item prefix={<DownlandOutline />} arrow onClick={() => navigate("/stock-semen/importar")}>
+          {t("web.stock.import")}
         </List.Item>
       </List>
       <Picker

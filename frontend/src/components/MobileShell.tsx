@@ -2,14 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { List, NavBar, Popup, TabBar } from "antd-mobile";
-import {
-  AppstoreOutlined,
-  CalendarOutlined,
-  EllipsisOutlined,
-  ExperimentOutlined,
-  HomeOutlined,
-  LogoutOutlined,
-} from "@ant-design/icons";
+import { AppstoreOutlined, CalendarOutlined, EllipsisOutlined, ExperimentOutlined, HomeOutlined, LogoutOutlined } from "@ant-design/icons";
 
 import { api } from "../api/client";
 import type { User } from "../api/types";
@@ -24,6 +17,7 @@ const CURTOS: Record<string, string> = { "/stock-semen": "Stock" };
 /** Título da barra de cima e se tem botão "voltar" (páginas dentro de páginas). */
 function tituloDaRota(pathname: string, t: (k: string) => string): { titulo: string; voltar: boolean } {
   if (pathname === "/stock-semen/novo") return { titulo: t("web.stock.add"), voltar: true };
+  if (pathname === "/stock-semen/importar") return { titulo: t("import.title"), voltar: true };
   if (pathname === "/trabalho-diario/inseminacao") return { titulo: t("web.insem.title"), voltar: true };
   if (pathname.startsWith("/animais/")) return { titulo: t("web.stays.form.animal"), voltar: true };
   const n = NAV.find((x) => pathname.startsWith(x.path));

@@ -1363,3 +1363,26 @@ WEB_TRANSLATIONS["pt-PT"]["web.insem.qty"] = "Palhetas a usar"
 WEB_TRANSLATIONS["en"]["web.insem.qty"] = "Straws to use"
 WEB_TRANSLATIONS["fr"]["web.insem.qty"] = "Paillettes à utiliser"
 WEB_TRANSLATIONS["de"]["web.insem.qty"] = "Zu verwendende Pailletten"
+
+# ── Importar sémen ──
+_IMPORT = [
+    ("create_new", "Criar como novo", "Create as new", "Créer comme nouveau", "Neu anlegen"),
+    ("map_to", "Usar existente", "Use existing", "Utiliser un existant", "Vorhandenen verwenden"),
+    ("choose_file", "Escolher ficheiro", "Choose file", "Choisir un fichier", "Datei wählen"),
+    ("errors_title", "Erros a corrigir", "Errors to fix", "Erreurs à corriger", "Zu behebende Fehler"),
+    ("row", "Linha {n}", "Row {n}", "Ligne {n}", "Zeile {n}"),
+    ("edit_row", "Corrigir linha {n}", "Fix row {n}", "Corriger la ligne {n}", "Zeile {n} korrigieren"),
+    ("revalidate", "Validar outra vez", "Validate again", "Valider à nouveau", "Erneut prüfen"),
+    ("importing", "A importar…", "Importing…", "Importation…", "Import läuft…"),
+    ("adjusted", "Data ajustada", "Adjusted date", "Date ajustée", "Angepasstes Datum"),
+    ("error.bad_file", "O ficheiro não pôde ser lido.", "The file could not be read.", "Le fichier n’a pas pu être lu.", "Die Datei konnte nicht gelesen werden."),
+    ("error.bad_type", "Use um ficheiro CSV ou Excel (.xlsx).", "Use a CSV or Excel (.xlsx) file.", "Utilisez un fichier CSV ou Excel (.xlsx).", "Verwenden Sie eine CSV- oder Excel-Datei (.xlsx)."),
+    ("error.too_big", "O ficheiro é grande demais (máximo {mb} MB).", "The file is too large ({mb} MB max).", "Fichier trop volumineux ({mb} Mo max).", "Datei zu groß (max. {mb} MB)."),
+    ("error.owner_create", "Não foi possível criar o proprietário (já existe?).", "Could not create the owner (already exists?).",
+     "Impossible de créer le propriétaire (existe déjà ?).", "Besitzer konnte nicht angelegt werden (existiert bereits?)."),
+    ("error.container_create", "Não foi possível criar o contentor (já existe?).", "Could not create the container (already exists?).",
+     "Impossible de créer le conteneur (existe déjà ?).", "Behälter konnte nicht angelegt werden (existiert bereits?)."),
+]
+for _k, *_txt in _IMPORT:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.import.{_k}"] = _v
