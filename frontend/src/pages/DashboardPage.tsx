@@ -54,7 +54,7 @@ function useDashboard() {
     abrirLote: (a: Dashboard["atencao"]["itens"][number]) =>
       a.garanhao && navigate(`/stock-semen/lotes?garanhao=${encodeURIComponent(a.garanhao)}&lote=${a.id}`),
     acoes: [
-      { label: t("dashboard.action.new_insem"), path: "/trabalho-diario" },
+      { label: t("dashboard.action.new_insem"), path: "/trabalho-diario/inseminacao" },
       { label: t("dashboard.action.new_transfer"), path: "/stock-semen/transferencias" },
       { label: t("dashboard.action.import"), path: "/stock-semen/importar" },
       { label: t("dashboard.action.map"), path: "/stock-semen/mapa" },

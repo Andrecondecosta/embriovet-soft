@@ -8,18 +8,23 @@ import type { OpHistorico } from "./stock/transfer/api";
 
 /** Atividade — histórico único de operações do dia (inseminações e
  *  transferências), com quem as fez, Editar e Anular. Igual a
- *  `atividade_page.py`. Editar uma transferência abre-a no separador
- *  Transferências; as inseminações editam-se no Trabalho diário. */
+ *  `atividade_page.py`. Editar abre a transferência no separador
+ *  Transferências ou a inseminação no seu ecrã de registo. */
 export function AtividadePage() {
   const t = useT();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const editar = (op: OpHistorico) => navigate(`/stock-semen/transferencias?editar=${op.tipo}-${op.action_id}`);
+  const editar = (op: OpHistorico) =>
+    navigate(
+      op.tipo === "insemination"
+        ? `/trabalho-diario/inseminacao?editar=${op.operation_id ?? `id-${op.action_id}`}`
+        : `/stock-semen/transferencias?editar=${op.tipo}-${op.action_id}`,
+    );
   const titulo = t("web.activity.title");
 
   return isMobile ? (
-    <HistoricoMobile onEditar={editar} comUtilizador titulo={titulo} />
+    <HistoricoMobile onEditar={editar} comUtilizador editarInseminacoes titulo={titulo} />
   ) : (
-    <HistoricoOperacoes onEditar={editar} comUtilizador titulo={titulo} />
+    <HistoricoOperacoes onEditar={editar} comUtilizador editarInseminacoes titulo={titulo} />
   );
 }

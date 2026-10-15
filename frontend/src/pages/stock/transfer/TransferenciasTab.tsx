@@ -553,18 +553,28 @@ function TransferenciasDesktop() {
 }
 
 /** Quantas palhetas saem de um lote: − [n] + "de N". */
-export function QtdPalhetas({ valor, max, onChange }: { valor: number; max: number; onChange: (n: number) => void }) {
+export function QtdPalhetas({
+  valor,
+  max,
+  onChange,
+  rotulo,
+}: {
+  valor: number;
+  max: number;
+  onChange: (n: number) => void;
+  rotulo?: string;
+}) {
   const t = useT();
   const definir = (n: number) => onChange(Math.max(1, Math.min(max, n || 1)));
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <Typography.Text type="secondary" style={{ fontSize: 12, display: "block" }}>
-        {t("web.transfer.qty_to_send")}
+        {rotulo ?? t("web.transfer.qty_to_send")}
       </Typography.Text>
       <Space.Compact>
         <Button icon={<MinusOutlined />} onClick={() => definir(valor - 1)} disabled={valor <= 1} aria-label="−" />
         <InputNumber
-          aria-label={t("web.transfer.qty_to_send")}
+          aria-label={rotulo ?? t("web.transfer.qty_to_send")}
           value={valor}
           onChange={(v) => definir(Number(v))}
           min={1}
@@ -582,13 +592,15 @@ export function QtdPalhetas({ valor, max, onChange }: { valor: number; max: numb
   );
 }
 
-function SelecionarLotesModal({
+export function SelecionarLotesModal({
   opened,
   onClose,
   lotes,
   carregando,
   jaSelecionados,
   onConfirmar,
+  qtdInicial,
+  rotuloQtd,
 }: {
   opened: boolean;
   onClose: () => void;
@@ -596,6 +608,9 @@ function SelecionarLotesModal({
   carregando: boolean;
   jaSelecionados: Set<number>;
   onConfirmar: (l: { lote: Lote; qty: number }[]) => void;
+  /** Palhetas ao marcar um lote (por omissão, o lote todo). */
+  qtdInicial?: (l: Lote) => number;
+  rotuloQtd?: string;
 }) {
   const t = useT();
   // Lotes marcados → palhetas a enviar de cada um (começa no total do lote).
@@ -632,7 +647,7 @@ function SelecionarLotesModal({
               setSel((s) => {
                 const n = new Map(s);
                 if (n.has(l.id)) n.delete(l.id);
-                else n.set(l.id, l.existencia_atual ?? 0);
+                else n.set(l.id, qtdInicial ? qtdInicial(l) : (l.existencia_atual ?? 0));
                 return n;
               });
             return (
@@ -663,7 +678,7 @@ function SelecionarLotesModal({
                 </Flex>
                 {sel.has(l.id) && (
                   <div style={{ marginTop: 8, paddingLeft: 26 }}>
-                    <QtdPalhetas
+                    <QtdPalhetas rotulo={rotuloQtd}
                       valor={sel.get(l.id)!}
                       max={l.existencia_atual ?? 0}
                       onChange={(n) => setSel((s) => new Map(s).set(l.id, n))}

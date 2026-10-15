@@ -111,6 +111,7 @@ function useTrabalho() {
     mudarDono: (v: string | null) => atualizar("dono", v),
     // Tocar numa tarefa abre a ficha do animal (onde se faz o trabalho).
     abrir: (x: Tarefa) => navigate(`/animais/${x.animal_id}`),
+    inseminar: () => navigate("/trabalho-diario/inseminacao"),
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
@@ -175,6 +176,9 @@ function TrabalhoDesktop({ x }: { x: T }) {
               {t("web.daily.overdue_banner", { n: r.atrasadas })}
             </Tag>
           )}
+          <Button type="primary" style={{ marginLeft: "auto" }} onClick={x.inseminar}>
+            {t("web.insem.title")}
+          </Button>
         </Flex>
       </Card>
       <Row gutter={[12, 12]}>
@@ -352,7 +356,12 @@ function TrabalhoMobile({ x }: { x: T }) {
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#fff", marginTop: 8 }}>
+      <div style={{ padding: "8px 12px 0", background: "#fff", marginTop: 8 }}>
+        <MButton block color="primary" onClick={x.inseminar}>
+          {t("web.insem.title")}
+        </MButton>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#fff" }}>
         <MButton size="small" onClick={() => x.irPara(x.dia.subtract(1, "day"))}>
           ‹
         </MButton>

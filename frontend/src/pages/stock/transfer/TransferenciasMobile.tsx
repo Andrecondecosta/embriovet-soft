@@ -256,13 +256,15 @@ function Obrigatorio({ children }: { children: string }) {
 }
 
 /** Escolher lotes: folha de baixo; os marcados mostram quantas palhetas enviar. */
-function SelecionarLotesMobile({
+export function SelecionarLotesMobile({
   visible,
   onClose,
   lotes,
   carregando,
   jaSelecionados,
   onConfirmar,
+  qtdInicial,
+  rotuloQtd,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -270,6 +272,9 @@ function SelecionarLotesMobile({
   carregando: boolean;
   jaSelecionados: Set<number>;
   onConfirmar: (l: { lote: Lote; qty: number }[]) => void;
+  /** Palhetas ao marcar um lote (por omissão, o lote todo). */
+  qtdInicial?: (l: Lote) => number;
+  rotuloQtd?: string;
 }) {
   const t = useT();
   const [sel, setSel] = useState<Map<number, number>>(new Map());
@@ -304,7 +309,7 @@ function SelecionarLotesMobile({
                 setSel((s) => {
                   const n = new Map(s);
                   if (n.has(l.id)) n.delete(l.id);
-                  else n.set(l.id, l.existencia_atual ?? 0);
+                  else n.set(l.id, qtdInicial ? qtdInicial(l) : (l.existencia_atual ?? 0));
                   return n;
                 });
               return (
@@ -322,7 +327,7 @@ function SelecionarLotesMobile({
                       {l.motilidade ? ` · M: ${l.motilidade}%` : ""}
                       {qty !== undefined && (
                         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
-                          <span>{t("web.transfer.qty_to_send")}</span>
+                          <span>{rotuloQtd ?? t("web.transfer.qty_to_send")}</span>
                           <Stepper
                             min={1}
                             max={l.existencia_atual ?? 0}
@@ -377,10 +382,12 @@ export function HistoricoMobile({
   onEditar,
   comUtilizador = false,
   titulo,
+  editarInseminacoes = false,
 }: {
   onEditar: (op: OpHistorico) => void;
   comUtilizador?: boolean;
   titulo?: string;
+  editarInseminacoes?: boolean;
 }) {
   const t = useT();
   const errorMessage = useErrorMessage();
@@ -460,7 +467,7 @@ export function HistoricoMobile({
                 key={`${op.tipo}-${op.operation_id ?? op.action_id}`}
                 rightActions={[
                   // Inseminações editam-se na sua página, como na app atual.
-                  ...(op.tipo !== "insemination"
+                  ...(editarInseminacoes || op.tipo !== "insemination"
                     ? [{ key: "e", text: t("btn.edit"), color: "primary" as const, onClick: () => onEditar(op) }]
                     : []),
                   { key: "a", text: t("web.transfer.undo"), color: "danger" as const, onClick: () => confirmarAnular(op) },

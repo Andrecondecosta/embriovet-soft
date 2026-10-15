@@ -24,6 +24,7 @@ const CURTOS: Record<string, string> = { "/stock-semen": "Stock" };
 /** Título da barra de cima e se tem botão "voltar" (páginas dentro de páginas). */
 function tituloDaRota(pathname: string, t: (k: string) => string): { titulo: string; voltar: boolean } {
   if (pathname === "/stock-semen/novo") return { titulo: t("web.stock.add"), voltar: true };
+  if (pathname === "/trabalho-diario/inseminacao") return { titulo: t("web.insem.title"), voltar: true };
   if (pathname.startsWith("/animais/")) return { titulo: t("web.stays.form.animal"), voltar: true };
   const n = NAV.find((x) => pathname.startsWith(x.path));
   return { titulo: n ? t(n.label) : "", voltar: false };

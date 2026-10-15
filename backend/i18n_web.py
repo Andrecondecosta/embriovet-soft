@@ -1316,3 +1316,50 @@ WEB_TRANSLATIONS["pt-PT"]["web.common.back"] = "Voltar"
 WEB_TRANSLATIONS["en"]["web.common.back"] = "Back"
 WEB_TRANSLATIONS["fr"]["web.common.back"] = "Retour"
 WEB_TRANSLATIONS["de"]["web.common.back"] = "Zurück"
+
+# ── Registar inseminação ──
+_INSEM = [
+    ("title", "Registar inseminação", "Register insemination", "Enregistrer une insémination", "Besamung erfassen"),
+    ("edit_title", "Editar inseminação", "Edit insemination", "Modifier l’insémination", "Besamung bearbeiten"),
+    ("update", "Atualizar inseminação", "Update insemination", "Mettre à jour l’insémination", "Besamung aktualisieren"),
+    ("mare", "Égua", "Mare", "Jument", "Stute"),
+    ("mare_help", "Só aparecem éguas com estadia ou visita aberta.", "Only mares with an open stay or visit are listed.",
+     "Seules les juments avec un séjour ou une visite en cours apparaissent.", "Nur Stuten mit laufendem Aufenthalt oder Besuch."),
+    ("no_mares", "Não há éguas com estadia ativa. Registe primeiro uma estadia em Estadias.", "No mares with an active stay. Register a stay in Stays first.",
+     "Aucune jument avec un séjour en cours. Enregistrez d’abord un séjour.", "Keine Stute mit laufendem Aufenthalt. Erfassen Sie zuerst einen Aufenthalt."),
+    ("no_housing", "sem alojamento", "no housing", "sans hébergement", "ohne Unterkunft"),
+    ("notes_placeholder", "O que aconteceu? Reflexo, edema uterino, hora exata, reação da égua, protocolo hormonal…",
+     "What happened? Reflex, uterine oedema, exact time, mare’s reaction, hormonal protocol…",
+     "Que s’est-il passé ? Réflexe, œdème utérin, heure exacte, réaction de la jument, protocole hormonal…",
+     "Was ist passiert? Reflex, Uterusödem, genaue Uhrzeit, Reaktion der Stute, Hormonprotokoll…"),
+    ("d1", "Criar tarefa D+1 (verificar ovulação no dia seguinte)", "Create a D+1 task (check ovulation the next day)",
+     "Créer une tâche J+1 (vérifier l’ovulation le lendemain)", "Aufgabe T+1 anlegen (Ovulation am nächsten Tag prüfen)"),
+    ("d1_help", "A tarefa D+14 (1.º diagnóstico de gestação) é criada sempre.", "The D+14 task (1st pregnancy diagnosis) is always created.",
+     "La tâche J+14 (1er diagnostic de gestation) est toujours créée.", "Die Aufgabe T+14 (1. Trächtigkeitsdiagnose) wird immer angelegt."),
+    ("total", "Total: {n} palhetas em {l} lotes", "Total: {n} straws in {l} lots", "Total : {n} paillettes en {l} lots", "Gesamt: {n} Pailletten in {l} Chargen"),
+    ("done", "Inseminação registada", "Insemination registered", "Insémination enregistrée", "Besamung erfasst"),
+    ("done_summary", "{n} palheta(s) em {l} lote(s) · {data}", "{n} straw(s) in {l} lot(s) · {data}", "{n} paillette(s) en {l} lot(s) · {data}", "{n} Paillette(n) in {l} Charge(n) · {data}"),
+    ("tasks_created", "Tarefas criadas", "Tasks created", "Tâches créées", "Angelegte Aufgaben"),
+    ("task_d1", "Verificar ovulação (D+1)", "Check ovulation (D+1)", "Vérifier l’ovulation (J+1)", "Ovulation prüfen (T+1)"),
+    ("task_d14", "1.º diagnóstico de gestação (D+14)", "1st pregnancy diagnosis (D+14)", "1er diagnostic de gestation (J+14)", "1. Trächtigkeitsdiagnose (T+14)"),
+    ("go_daily", "Trabalho diário", "Daily work", "Travail du jour", "Tagesarbeit"),
+    ("go_mare", "Ver ficha da égua", "View mare’s record", "Voir la fiche de la jument", "Akte der Stute"),
+    ("another", "Registar outra", "Register another", "En enregistrer une autre", "Weitere erfassen"),
+    ("updated", "Inseminação atualizada.", "Insemination updated.", "Insémination mise à jour.", "Besamung aktualisiert."),
+    ("error.duplicate_lot", "O mesmo lote está em duas linhas.", "The same lot is on two lines.", "Le même lot figure sur deux lignes.", "Dieselbe Charge steht in zwei Zeilen."),
+    ("error.lot_not_found", "Lote #{id} não encontrado.", "Lot #{id} not found.", "Lot #{id} introuvable.", "Charge #{id} nicht gefunden."),
+    ("error.not_enough", "O lote #{id} só tem {max} palhetas disponíveis.", "Lot #{id} only has {max} straws available.",
+     "Le lot #{id} n’a que {max} paillettes disponibles.", "Charge #{id} hat nur {max} Pailletten verfügbar."),
+    ("error.mare_no_stay", "Esta égua não tem estadia ou visita aberta.", "This mare has no open stay or visit.",
+     "Cette jument n’a pas de séjour ou de visite en cours.", "Diese Stute hat keinen laufenden Aufenthalt oder Besuch."),
+    ("error.failed", "Não foi possível registar: {detalhe}", "Could not register: {detalhe}", "Enregistrement impossible : {detalhe}", "Erfassung nicht möglich: {detalhe}"),
+    ("error.not_found", "Inseminação não encontrada.", "Insemination not found.", "Insémination introuvable.", "Besamung nicht gefunden."),
+    ("error.edit_failed", "Não foi possível atualizar a inseminação.", "Could not update the insemination.", "Impossible de mettre à jour l’insémination.", "Besamung konnte nicht aktualisiert werden."),
+]
+for _k, *_txt in _INSEM:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.insem.{_k}"] = _v
+WEB_TRANSLATIONS["pt-PT"]["web.insem.qty"] = "Palhetas a usar"
+WEB_TRANSLATIONS["en"]["web.insem.qty"] = "Straws to use"
+WEB_TRANSLATIONS["fr"]["web.insem.qty"] = "Paillettes à utiliser"
+WEB_TRANSLATIONS["de"]["web.insem.qty"] = "Zu verwendende Pailletten"

@@ -40,11 +40,14 @@ export function HistoricoOperacoes({
   onEditar,
   comUtilizador = false,
   titulo,
+  editarInseminacoes = false,
 }: {
   onEditar: (op: OpHistorico) => void;
   /** Mostra quem fez cada operação (página Atividade). */
   comUtilizador?: boolean;
   titulo?: string;
+  /** A Atividade também edita inseminações; as Transferências não. */
+  editarInseminacoes?: boolean;
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -91,7 +94,7 @@ export function HistoricoOperacoes({
             ),
             acoes: (
               <>
-                {op.tipo !== "insemination" && (
+                {(editarInseminacoes || op.tipo !== "insemination") && (
                   <Button size="small" type="link" onClick={() => onEditar(op)}>
                     {t("btn.edit")}
                   </Button>
