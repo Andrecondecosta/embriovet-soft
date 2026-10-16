@@ -1511,3 +1511,9 @@ _REGISTO2 = [
 for _k, *_txt in _REGISTO2:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.registo.{_k}"] = _v
+for _k, *_txt in [
+    ("web.registo.user", "Utilizador", "User", "Utilisateur", "Benutzer"),
+    ("web.common.none", "—", "—", "—", "—"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang].setdefault(_k, _v)
