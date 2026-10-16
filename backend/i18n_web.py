@@ -1517,3 +1517,5 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang].setdefault(_k, _v)
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Pesquisar animal", "Search animal", "Rechercher un animal", "Tier suchen")):
+    WEB_TRANSLATIONS[_lang]["web.daily.search_animal"] = _v

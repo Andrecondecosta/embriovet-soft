@@ -12,6 +12,7 @@ import {
   Grid,
   List,
   Popup,
+  SearchBar,
   Selector,
   Switch as MSwitch,
 } from "antd-mobile";
@@ -20,9 +21,10 @@ import { api } from "../api/client";
 import { useT } from "../i18n/I18n";
 import { useUser } from "../components/User";
 import { useBrand } from "../components/Brand";
-import { useIsMobile } from "../components/responsive";
+import { useDebounced, useIsMobile } from "../components/responsive";
 import { notifySuccess, useErrorMessage } from "../components/errors";
 import { Cabecalho } from "../components/mobile";
+import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 
 interface Tarefa {
   tarefa_id: number;
@@ -112,7 +114,6 @@ function useTrabalho() {
     // Tocar numa tarefa abre a ficha do animal logo no Diário clínico (onde
     // se faz o registo do dia). Nos garanhões, que não têm diário, abre o resumo.
     abrir: (x: Tarefa) => navigate(`/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`),
-    inseminar: () => navigate("/trabalho-diario/inseminacao"),
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
@@ -177,9 +178,9 @@ function TrabalhoDesktop({ x }: { x: T }) {
               {t("web.daily.overdue_banner", { n: r.atrasadas })}
             </Tag>
           )}
-          <Button type="primary" style={{ marginLeft: "auto" }} onClick={x.inseminar}>
-            {t("web.insem.title")}
-          </Button>
+          <div style={{ marginLeft: "auto" }}>
+            <PesquisaAnimal />
+          </div>
         </Flex>
       </Card>
       <Row gutter={[12, 12]}>
@@ -358,9 +359,7 @@ function TrabalhoMobile({ x }: { x: T }) {
       )}
 
       <div style={{ padding: "8px 12px 0", background: "#fff", marginTop: 8 }}>
-        <MButton block color="primary" onClick={x.inseminar}>
-          {t("web.insem.title")}
-        </MButton>
+        <PesquisaAnimal />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#fff" }}>
         <MButton size="small" onClick={() => x.irPara(x.dia.subtract(1, "day"))}>
@@ -462,6 +461,88 @@ function TrabalhoMobile({ x }: { x: T }) {
         <MButton block color="primary" style={{ marginTop: 14 }} onClick={() => setFiltros(false)}>
           OK
         </MButton>
+      </Popup>
+    </>
+  );
+}
+
+// ── Pesquisar animal (para ver um que não está na lista do dia) ─────────────
+
+/** Abre a ficha; éguas e receptoras logo no Diário clínico. */
+function useAbrirAnimal() {
+  const navigate = useNavigate();
+  return (a: AnimalPesquisa) => navigate(`/animais/${a.id}${a.tipo === "garanhao" ? "" : "?tab=diario"}`);
+}
+
+function PesquisaAnimal() {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const abrir = useAbrirAnimal();
+  const [q, setQ] = useState("");
+  const [aberto, setAberto] = useState(false);
+  const pesquisa = usePesquisaAnimais(useDebounced(q, 250));
+  const lista = pesquisa.data ?? [];
+  const detalhe = (a: AnimalPesquisa) => `${t(`web.stays.animal.${a.tipo}`)} · ${a.proprietario ?? "—"}`;
+
+  if (!isMobile)
+    return (
+      <Select
+        showSearch
+        filterOption={false}
+        onSearch={setQ}
+        loading={pesquisa.isFetching}
+        placeholder={t("web.daily.search_animal")}
+        value={null}
+        style={{ width: 300 }}
+        notFoundContent={t("web.common.no_results")}
+        onChange={(id) => {
+          const a = lista.find((x) => x.id === id);
+          if (a) abrir(a);
+        }}
+        options={lista.map((a) => ({
+          value: a.id,
+          label: (
+            <span>
+              {a.nome} <Typography.Text type="secondary">· {detalhe(a)}</Typography.Text>
+            </span>
+          ),
+        }))}
+      />
+    );
+
+  return (
+    <>
+      <div onClick={() => setAberto(true)}>
+        <SearchBar placeholder={t("web.daily.search_animal")} style={{ pointerEvents: "none" }} />
+      </div>
+      <Popup
+        visible={aberto}
+        onMaskClick={() => setAberto(false)}
+        onClose={() => setAberto(false)}
+        bodyStyle={{ borderTopLeftRadius: 8, borderTopRightRadius: 8, height: "80dvh", display: "flex", flexDirection: "column" }}
+      >
+        <div style={{ padding: "12px 12px 8px" }}>
+          <SearchBar autoFocus value={q} onChange={setQ} placeholder={t("web.daily.search_animal")} />
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <List>
+            {lista.map((a) => (
+              <List.Item
+                key={a.id}
+                description={detalhe(a)}
+                onClick={() => {
+                  setAberto(false);
+                  abrir(a);
+                }}
+              >
+                {a.nome}
+              </List.Item>
+            ))}
+          </List>
+          {!lista.length && !pesquisa.isFetching && (
+            <div style={{ padding: 24, textAlign: "center", color: "#999" }}>{t("web.common.no_results")}</div>
+          )}
+        </div>
       </Popup>
     </>
   );
