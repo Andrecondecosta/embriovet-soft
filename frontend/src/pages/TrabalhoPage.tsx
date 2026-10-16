@@ -109,8 +109,9 @@ function useTrabalho() {
     irPara: (d: Dayjs) => atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
     mudarMinhas: (v: boolean) => atualizar("minhas", v ? "1" : null),
     mudarDono: (v: string | null) => atualizar("dono", v),
-    // Tocar numa tarefa abre a ficha do animal (onde se faz o trabalho).
-    abrir: (x: Tarefa) => navigate(`/animais/${x.animal_id}`),
+    // Tocar numa tarefa abre a ficha do animal logo no Diário clínico (onde
+    // se faz o registo do dia). Nos garanhões, que não têm diário, abre o resumo.
+    abrir: (x: Tarefa) => navigate(`/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`),
     inseminar: () => navigate("/trabalho-diario/inseminacao"),
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
