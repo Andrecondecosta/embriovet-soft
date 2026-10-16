@@ -571,7 +571,7 @@ export default function AmostraRegisto() {
         <div style={{ fontSize: 11, color: "#999" }}>Amostra — nada é gravado</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 18, fontWeight: 700 }}>Estrela</span>
-          <span style={{ color: "#666" }}>Coudelaria Vale · Box 4</span>
+          <span style={{ color: "#666" }}>Coudelaria Vale · Box 4 · Garanhão Falcão</span>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, color: "#666" }}>
@@ -584,9 +584,40 @@ export default function AmostraRegisto() {
         <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>A data e a hora entram sozinhas e podem ser alteradas.</div>
       </div>
 
+      {/* Últimos registos */}
+      <div style={{ padding: "12px 12px 4px", fontSize: 12, color: "#999" }}>Últimos {isMobile ? 5 : 10} registos</div>
+      <div style={{ background: "#fff", borderRadius: isMobile ? 0 : 8, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ color: "#999", textAlign: "left" }}>
+              {["Data/Hora", "OE", "OD", "UT", "CER", "TX"].map((h) => (
+                <th key={h} style={{ padding: "6px 8px", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap" }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {anteriores.slice(0, isMobile ? 5 : 10).map((r) => (
+              <tr key={r.data}>
+                <td style={td}>
+                  <b>{dayjs(r.data).format("DD/MM HH:mm")}</b>
+                  <div style={{ color: "#999" }}>{r.equipa}</div>
+                </td>
+                {(["OE", "OD", "UT", "CER", "TX"] as Ficha[]).map((f) => (
+                  <td key={f} style={td}>
+                    {resumo(r, f) || "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {/* Desenho + DG · TX · ! · INS */}
       <div style={{ background: "#fff", marginTop: 8, padding: "8px 0", borderRadius: isMobile ? 0 : 8 }}>
-        <div style={{ padding: "0 12px 4px", fontSize: 12, color: "#999" }}>Toque numa parte para registar</div>
+        <div style={{ padding: "0 12px 4px", fontSize: 12, color: "#999" }}>Novo registo — toque numa parte para registar</div>
         <Desenho registo={novo} onTocar={setAberto} />
         <div style={{ display: "flex", gap: 8, padding: "8px 12px" }}>
           {acao("DG", () => setAberto("DG"), !!novo.DG)}
@@ -623,37 +654,6 @@ export default function AmostraRegisto() {
             Guardar registo
           </Button>
         </div>
-      </div>
-
-      {/* Últimos registos */}
-      <div style={{ padding: "12px 12px 4px", fontSize: 12, color: "#999" }}>Últimos registos</div>
-      <div style={{ background: "#fff", borderRadius: isMobile ? 0 : 8, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ color: "#999", textAlign: "left" }}>
-              {["Data/Hora", "OE", "OD", "UT", "CER", "TX"].map((h) => (
-                <th key={h} style={{ padding: "6px 8px", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {anteriores.map((r) => (
-              <tr key={r.data}>
-                <td style={td}>
-                  <b>{dayjs(r.data).format("DD/MM HH:mm")}</b>
-                  <div style={{ color: "#999" }}>{r.equipa}</div>
-                </td>
-                {(["OE", "OD", "UT", "CER", "TX"] as Ficha[]).map((f) => (
-                  <td key={f} style={td}>
-                    {resumo(r, f) || "—"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
 
       {/* Fichas: folha de baixo no telemóvel, gaveta à direita no computador */}
