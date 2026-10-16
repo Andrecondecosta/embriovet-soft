@@ -38,9 +38,6 @@ const InseminacaoPage = lazy(() => import("./pages/InseminacaoPage").then((m) =>
 const ImportarPage = lazy(() => import("./pages/stock/ImportarPage").then((m) => ({ default: m.ImportarPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 
-// Amostra do novo "Registo de hoje" das éguas (só para ver e opinar).
-const AmostraRegisto = lazy(() => import("./pages/amostra/AmostraRegisto"));
-
 const LOCALES = { "pt-PT": ptPT, en: enUS, fr: frFR, de: deDE } as const;
 // O Ant Design Mobile não tem português de Portugal; o do Brasil só aparece
 // nos botões internos das janelas (Confirmar/Cancelar).
@@ -158,7 +155,6 @@ export function App() {
                         }
                       >
                         <Route path="/definicoes/:tab?" element={pagina(<SettingsPage user={user} />)} />
-                        <Route path="/amostra/registo" element={pagina(<AmostraRegisto />)} />
                         <Route path="/dashboard" element={pagina(<DashboardPage />)} />
                         <Route path="/atividade" element={pagina(<AtividadePage />)} />
                         <Route path="/relatorios" element={pagina(<RelatoriosPage />)} />

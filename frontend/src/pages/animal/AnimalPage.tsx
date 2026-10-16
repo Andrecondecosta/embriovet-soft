@@ -8,7 +8,7 @@ import { useIsMobile } from "../../components/responsive";
 import { useErrorMessage } from "../../components/errors";
 import { useAnimal, type Animal } from "./api";
 import { ResumoTab } from "./ResumoTab";
-import { DiarioTab } from "./DiarioTab";
+import { RegistoClinico } from "./RegistoClinico";
 import { AlertasTab, EstadiasAnimalTab, FertilidadeTab, ProducaoTab, ReprodutivoTab } from "./OutrosTabs";
 
 /** Separadores da ficha — como a app atual, variam com o tipo do animal. */
@@ -22,7 +22,7 @@ function separadores(animal: Animal) {
     ];
   return [
     { id: "resumo", label: "web.animal.tab.summary", el: <ResumoTab animal={animal} /> },
-    { id: "diario", label: "web.animal.tab.clinical", el: <DiarioTab animal={animal} /> },
+    { id: "diario", label: "web.animal.tab.clinical", el: <RegistoClinico animal={animal} /> },
     { id: "reprodutivo", label: "web.animal.tab.reproductive", el: <ReprodutivoTab animal={animal} /> },
     { id: "estadias", label: "web.animal.tab.stays", el: <EstadiasAnimalTab animal={animal} /> },
   ];

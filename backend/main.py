@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import FRONTEND_DIST
-from backend.routers import animais, auth, dashboard, definicoes, estadias, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
+from backend.routers import animais, auth, registo_clinico, dashboard, definicoes, estadias, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
 
 app = FastAPI(title="EquiCore API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
@@ -33,6 +33,7 @@ app.include_router(relatorios.router)
 app.include_router(estadias.router)
 app.include_router(trabalho.router)
 app.include_router(animais.router)
+app.include_router(registo_clinico.router)
 app.include_router(inseminacoes.router)
 app.include_router(importar.router)
 
