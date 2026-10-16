@@ -169,3 +169,9 @@ def test_garanhao_alertas_e_colheitas(client):
     assert [c["id"] for c in client.get(f"/api/animais/{gid}/colheitas").json()] == [tid]
     assert client.delete(f"/api/animais/{gid}/colheitas/{tid}").status_code == 200
     assert client.get(f"/api/animais/{gid}/colheitas").json() == []
+
+
+def test_garanhao_nao_tem_diario(client):
+    gid = _animal(tipo="garanhao")
+    r = client.post(f"/api/animais/{gid}/diario", json={"data_registo": date.today().isoformat()})
+    assert r.json()["detail"]["code"] == "web.animal.error.no_diary_stallion"

@@ -186,7 +186,9 @@ def diario(animal_id: int, _user: dict = Depends(get_current_user)):
 
 @router.post("/{animal_id:int}/diario", status_code=201)
 def novo_registo(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
-    _animal(animal_id)
+    # O diário clínico (e o novo registo do dia) é só para éguas e receptoras.
+    if _animal(animal_id)["tipo"] == "garanhao":
+        raise _erro(409, "web.animal.error.no_diary_stallion")
     estadia_id = _obter_estadia_activa(animal_id)
     if estadia_id is None:
         raise _erro(409, "web.animal.error.no_active_stay")
