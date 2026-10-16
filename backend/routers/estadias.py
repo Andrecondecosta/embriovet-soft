@@ -185,16 +185,17 @@ class EstadiaIn(BaseModel):
 ESTADO_INICIAL = {"estadia": "internado", "visita": "visitante", "externo": "externo"}
 
 # Motivos possíveis por tipo de animal: a égua não faz colheita; a receptora
-# só recebe embriões (e pode ter diagnóstico). O garanhão fica como estava.
+# só recebe embriões (e pode ter diagnóstico); o garanhão só faz colheita e
+# tratamento.
 MOTIVOS_POR_TIPO = {
     "egua": ("inseminacao", "diagnostico", "tratamento", "embriao"),
     "receptora": ("embriao", "diagnostico"),
-    "garanhao": ("inseminacao", "colheita", "diagnostico", "tratamento", "embriao"),
+    "garanhao": ("colheita", "tratamento"),
 }
 
 
 def _validar_motivo(tipo_animal: str, motivo: str):
-    if motivo not in MOTIVOS_POR_TIPO.get(tipo_animal, MOTIVOS_POR_TIPO["garanhao"]):
+    if motivo not in MOTIVOS_POR_TIPO.get(tipo_animal, ()):
         raise _erro(422, "web.stays.error.reason_not_allowed")
 
 

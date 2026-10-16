@@ -146,6 +146,9 @@ def test_pesquisa_animais(client, base):
         ("receptora", "embriao", True),
         ("receptora", "diagnostico", True),
         ("garanhao", "colheita", True),
+        ("garanhao", "tratamento", True),
+        ("garanhao", "inseminacao", False),
+        ("garanhao", "diagnostico", False),
     ],
 )
 def test_motivo_conforme_o_tipo(client, base, tipo, motivo, ok):

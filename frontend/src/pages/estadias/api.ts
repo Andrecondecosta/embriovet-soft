@@ -12,11 +12,12 @@ export type TipoAnimal = (typeof TIPOS_ANIMAL)[number];
 export type EstadoSaida = (typeof ESTADOS_SAIDA)[number];
 
 /** Motivos por tipo de animal (as mesmas regras do servidor): a égua não faz
- *  colheita; a receptora só recebe embriões e pode ter diagnóstico. */
+ *  colheita; a receptora só recebe embriões e pode ter diagnóstico; o
+ *  garanhão só faz colheita e tratamento. */
 export const MOTIVOS_POR_TIPO: Record<TipoAnimal, readonly Motivo[]> = {
   egua: ["inseminacao", "diagnostico", "tratamento", "embriao"],
   receptora: ["embriao", "diagnostico"],
-  garanhao: MOTIVOS,
+  garanhao: ["colheita", "tratamento"],
 };
 
 export interface Estadia {
