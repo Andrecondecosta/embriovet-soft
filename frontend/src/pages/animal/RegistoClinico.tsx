@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { Drawer } from "antd";
+import { Drawer, Modal } from "antd";
 import { Button, Checkbox, DatePicker, Dialog, DotLoading, Input, Popup, Selector, TextArea } from "antd-mobile";
 
 import { api } from "../../api/client";
@@ -512,9 +512,95 @@ function Desenho({ dados, onTocar }: { dados: Dados; onTocar: (p: Parte) => void
   );
 }
 
-// ── Diário clínico ──────────────────────────────────────────────────────────
+// ── Detalhe completo de um registo (com comentários) ────────────────────────
 
-const td: React.CSSProperties = { padding: "6px 8px", borderBottom: "1px solid #f5f5f5", verticalAlign: "top" };
+function Detalhe({ h }: { h: Historico }) {
+  const t = useT();
+  const resumo = useResumo();
+  const { primary_color } = useBrand();
+  const linha = (titulo: string, corpo: ReactNode, comentario?: string) => (
+    <div key={titulo} style={{ padding: "8px 0", borderBottom: "1px solid #f5f5f5" }}>
+      <div style={{ fontSize: 12, color: "#999" }}>{titulo}</div>
+      <div style={{ fontSize: 14 }}>{corpo}</div>
+      {comentario && <div style={{ fontSize: 13, color: "#555", fontStyle: "italic", marginTop: 2 }}>“{comentario}”</div>}
+    </div>
+  );
+  const d = h.dados;
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>
+        <b>{dayjs(h.data_registo).format("DD/MM/YYYY HH:mm")}</b> · {h.utilizador ?? "—"}
+        {h.prioritario && <span style={{ color: primary_color, fontWeight: 800 }}> · ! {t("web.registo.priority")}</span>}
+      </div>
+      {h.antigo ? (
+        linha(t("web.registo.old"), h.texto || "—")
+      ) : (
+        <>
+          {(["OE", "OD"] as const).map(
+            (p) =>
+              d[p] &&
+              linha(
+                t(`web.registo.part.${p}`),
+                d[p]!.foliculos.map((f, i) => (
+                  <div key={i}>
+                    {t("web.registo.follicle", { n: i + 1 })}: <b>{mm(f.tamanho)}</b>
+                    {f.achados.length > 0 && ` · ${f.achados.join(", ")}`}
+                  </div>
+                )),
+                d[p]!.comentario,
+              ),
+          )}
+          {d.UT && linha(t("web.registo.part.UT"), resumo(d, "UT"), d.UT.comentario)}
+          {d.CER && linha(t("web.registo.part.CER"), resumo(d, "CER"), d.CER.comentario)}
+          {d.DG && linha(t("web.registo.part.DG"), resumo(d, "DG"))}
+          {d.TX &&
+            linha(
+              t("web.registo.part.TX"),
+              <>
+                {resumo(d, "TX") || "—"}
+                {d.TX.marcar && (
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    {t("web.registo.mark_tx")}:{" "}
+                    {d.TX.marcar.dias === "agenda"
+                      ? dayjs(d.TX.marcar.data).format("DD/MM/YYYY")
+                      : t("web.registo.days", { n: d.TX.marcar.dias })}
+                  </div>
+                )}
+              </>,
+            )}
+          {!d.OE && !d.OD && !d.UT && !d.CER && !d.DG && !d.TX && linha("", "—")}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Uma linha de resumo (lista do diário e "último registo"). */
+function LinhaResumo({ h }: { h: Historico }) {
+  const t = useT();
+  const resumo = useResumo();
+  const { primary_color } = useBrand();
+  const partes = h.antigo
+    ? [h.texto || "—"]
+    : (["OE", "OD", "UT", "CER", "TX", "DG"] as Ficha[]).map((f) => resumo(h.dados, f) && `${f}: ${resumo(h.dados, f)}`).filter(Boolean);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <b>
+          {dayjs(h.data_registo).format("DD/MM HH:mm")}
+          {h.prioritario && <span style={{ color: primary_color }}> !</span>}
+        </b>
+        <span style={{ color: "#999", fontSize: 12 }}>
+          {h.antigo ? `${t("web.registo.old")} · ` : ""}
+          {h.utilizador ?? "—"}
+        </span>
+      </div>
+      <div style={{ color: "#555", fontSize: 13 }}>{partes.join(" · ") || "—"}</div>
+    </div>
+  );
+}
+
+// ── Diário clínico ──────────────────────────────────────────────────────────
 
 export function RegistoClinico({ animal }: { animal: Animal }) {
   const t = useT();
@@ -527,18 +613,21 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   const resumo = useResumo();
   const q = useQuery({ queryKey: ["animal", animal.id, "registos"], queryFn: () => api<Resposta>(`/animais/${animal.id}/registos`) });
   const vazio = (): Novo => ({ data: dayjs().format("YYYY-MM-DDTHH:mm:ss"), dados: {}, prioritario: false });
-  const [novo, setNovo] = useState<Novo>(vazio);
+  // null = lista do diário; Novo = ecrã do registo (novo ou a corrigir).
+  const [novo, setNovo] = useState<Novo | null>(null);
   const [aberto, setAberto] = useState<Ficha | null>(null);
+  const [detalhe, setDetalhe] = useState<Historico | null>(null);
+  const [ultimoAberto, setUltimoAberto] = useState(false);
   const [calendario, setCalendario] = useState(false);
 
   const invalidar = () => {
     for (const k of [["animal", animal.id], ["trabalho"], ["dashboard"]]) queryClient.invalidateQueries({ queryKey: k });
   };
   const gravar = useMutation({
-    mutationFn: () => {
-      const corpo = { data_registo: novo.data, dados: novo.dados, prioritario: novo.prioritario };
-      return novo.id
-        ? api(`/animais/${animal.id}/registos/${novo.id}`, "PUT", corpo)
+    mutationFn: (n: Novo) => {
+      const corpo = { data_registo: n.data, dados: n.dados, prioritario: n.prioritario };
+      return n.id
+        ? api(`/animais/${animal.id}/registos/${n.id}`, "PUT", corpo)
         : api<{ tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null }>(
             `/animais/${animal.id}/registos`,
             "POST",
@@ -556,16 +645,129 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
       </div>
     );
   const r = q.data;
+  const ultimo = r.historico[0];
+  const bloco: React.CSSProperties = {
+    background: "#fff",
+    borderRadius: isMobile ? 0 : 8,
+    border: isMobile ? undefined : "1px solid #f0f0f0",
+  };
+  const identificacao = (
+    <div style={{ ...bloco, padding: "10px 12px" }}>
+      <div style={{ color: "#666" }}>
+        {[r.cliente, r.local, r.garanhao && `${t("web.animal.col.stallion")} ${r.garanhao}`].filter(Boolean).join(" · ") || "—"}
+      </div>
+    </div>
+  );
+  const abrirNovo = () => {
+    setUltimoAberto(false);
+    setNovo(vazio());
+  };
+  const perguntarApagar = (h: Historico) =>
+    void Dialog.confirm({
+      content: t("web.animal.delete_record", { data: dayjs(h.data_registo).format("DD/MM/YYYY") }),
+      confirmText: <span style={{ color: "var(--adm-color-danger)" }}>{t("btn.delete")}</span>,
+      cancelText: t("web.common.cancel"),
+      onConfirm: async () => {
+        try {
+          await apagar.mutateAsync(h.id);
+          notifySuccess(t("web.animal.record_deleted"));
+          setDetalhe(null);
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+
+  // Detalhe de um registo (tocar na lista): tudo, com comentários.
+  const conteudoDetalhe = (
+    <>
+      {detalhe && (
+        <>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>{t("web.registo.detail")}</div>
+          <Detalhe h={detalhe} />
+          {!detalhe.antigo && (
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <Button style={{ flex: 1 }} color="danger" fill="outline" onClick={() => perguntarApagar(detalhe)}>
+                {t("btn.delete")}
+              </Button>
+              <Button
+                style={{ flex: 1 }}
+                color="primary"
+                onClick={() => {
+                  setNovo({ id: detalhe.id, data: detalhe.data_registo, dados: detalhe.dados, prioritario: detalhe.prioritario });
+                  setDetalhe(null);
+                }}
+              >
+                {t("web.registo.correct")}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+  const fecharDetalhe = () => setDetalhe(null);
+  const folhaDetalhe = isMobile ? (
+    <Popup
+      visible={detalhe !== null}
+      onMaskClick={fecharDetalhe}
+      onClose={fecharDetalhe}
+      showCloseButton
+      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, padding: 16, maxHeight: "85dvh", overflowY: "auto" }}
+    >
+      {conteudoDetalhe}
+    </Popup>
+  ) : (
+    <Modal open={detalhe !== null} onCancel={fecharDetalhe} footer={null} width={520}>
+      {conteudoDetalhe}
+    </Modal>
+  );
+
+  // ── 1) Diário clínico: últimos 5 em resumo + "Novo registo" ──
+  if (!novo)
+    return (
+      <div style={{ maxWidth: 960 }}>
+        {identificacao}
+        <div style={{ padding: "12px 12px 4px", fontSize: 12, color: "#999" }}>{t("web.registo.last_n", { n: 5 })}</div>
+        <div style={bloco}>
+          {!r.historico.length ? (
+            <div style={{ padding: 12, color: "#999" }}>{t("web.animal.no_records")}</div>
+          ) : (
+            r.historico.slice(0, 5).map((h) => (
+              <div
+                key={`${h.antigo ? "a" : "n"}${h.id}`}
+                onClick={() => setDetalhe(h)}
+                style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}
+              >
+                <LinhaResumo h={h} />
+              </div>
+            ))
+          )}
+        </div>
+        {r.historico.length > 0 && <div style={{ padding: "4px 12px", fontSize: 11, color: "#999" }}>{t("web.registo.tap_to_see")}</div>}
+        <div style={{ padding: 12 }}>
+          {r.estadia_ativa ? (
+            <Button block color="primary" size="large" onClick={abrirNovo} style={{ maxWidth: isMobile ? undefined : 320 }}>
+              + {t("web.registo.new_button")}
+            </Button>
+          ) : (
+            <div style={{ color: "var(--adm-color-warning)" }}>{t("web.animal.error.no_active_stay")}</div>
+          )}
+        </div>
+        {folhaDetalhe}
+      </div>
+    );
+
+  // ── 2) Novo registo (ou correção): último registo em cima + desenho ──
   const dados = novo.dados;
   const temAlgo = !!(dados.OE || dados.OD || dados.UT || dados.CER || dados.TX || dados.DG);
   const guardarParte = (f: Ficha, v: unknown) => {
-    setNovo((n) => ({ ...n, dados: { ...n.dados, [f]: v } }));
+    setNovo((n) => n && { ...n, dados: { ...n.dados, [f]: v } });
     setAberto(null);
   };
-
   const submeter = async () => {
     try {
-      const res = await gravar.mutateAsync();
+      const res = await gravar.mutateAsync(novo);
       if (novo.id) notifySuccess(t("web.animal.record_updated"));
       else {
         const x = res as { tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null };
@@ -581,32 +783,11 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
             .join(" "),
         );
       }
-      setNovo(vazio());
+      setNovo(null);
     } catch (err) {
       notifyError(err);
     }
   };
-  const editar = (h: Historico) => {
-    if (h.antigo) return;
-    setNovo({ id: h.id, data: h.data_registo, dados: h.dados, prioritario: h.prioritario });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  const perguntarApagar = () =>
-    void Dialog.confirm({
-      content: t("web.animal.delete_record", { data: dayjs(novo.data).format("DD/MM/YYYY") }),
-      confirmText: <span style={{ color: "var(--adm-color-danger)" }}>{t("btn.delete")}</span>,
-      cancelText: t("web.common.cancel"),
-      onConfirm: async () => {
-        try {
-          await apagar.mutateAsync(novo.id!);
-          notifySuccess(t("web.animal.record_deleted"));
-          setNovo(vazio());
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
-
   const ficha =
     aberto === "OE" || aberto === "OD" ? (
       <FichaOvario inicial={r.tamanho_inicial[aberto]} atual={dados[aberto]} onGuardar={(v) => guardarParte(aberto, v)} />
@@ -619,7 +800,6 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
     ) : aberto === "DG" ? (
       <FichaDG atual={dados.DG} onGuardar={(v) => guardarParte("DG", v)} />
     ) : null;
-
   const acao = (rotulo: string, onClick: () => void, ativo: boolean) => (
     <button
       type="button"
@@ -639,122 +819,66 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
       {rotulo}
     </button>
   );
-  const nLinhas = isMobile ? 5 : 10;
-  const bloco: React.CSSProperties = {
-    background: "#fff",
-    borderRadius: isMobile ? 0 : 8,
-    border: isMobile ? undefined : "1px solid #f0f0f0",
-  };
+  // Ao corrigir, o "último registo" de referência é o anterior a este.
+  const referencia = novo.id ? r.historico.find((h) => h.antigo || h.id !== novo.id) : ultimo;
 
   return (
     <div style={{ maxWidth: 960 }}>
-      {/* Identificação */}
-      <div style={{ ...bloco, padding: "10px 12px" }}>
-        <div style={{ color: "#666" }}>
-          {[r.cliente, r.local, r.garanhao && `${t("web.animal.col.stallion")} ${r.garanhao}`].filter(Boolean).join(" · ") || "—"}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
+        <Button size="small" fill="none" onClick={() => setNovo(null)}>
+          ‹ {t("web.registo.back")}
+        </Button>
+        <span style={{ fontWeight: 700, color: novo.id ? primary_color : undefined }}>
+          {novo.id ? t("web.registo.editing") : t("web.registo.new_button")}
+        </span>
       </div>
+      {identificacao}
 
-      {/* Últimos registos */}
-      <div style={{ padding: "12px 12px 4px", fontSize: 12, color: "#999" }}>{t("web.registo.last_n", { n: nLinhas })}</div>
-      <div style={{ ...bloco, overflowX: "auto" }}>
-        {!r.historico.length ? (
-          <div style={{ padding: 12, color: "#999" }}>{t("web.animal.no_records")}</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: "#999", textAlign: "left" }}>
-                {[t("web.registo.col.datetime"), "OE", "OD", "UT", "CER", "TX"].map((h) => (
-                  <th key={h} style={{ padding: "6px 8px", borderBottom: "1px solid #f0f0f0", whiteSpace: "nowrap" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {r.historico.slice(0, nLinhas).map((h) => (
-                <tr
-                  key={`${h.antigo ? "a" : "n"}${h.id}`}
-                  onClick={() => editar(h)}
-                  style={{
-                    cursor: h.antigo ? "default" : "pointer",
-                    background: novo.id === h.id && !h.antigo ? `${primary_color}12` : undefined,
-                  }}
-                >
-                  <td style={td}>
-                    <b>{dayjs(h.data_registo).format("DD/MM HH:mm")}</b>
-                    {h.prioritario && <span style={{ color: primary_color, fontWeight: 800 }}> !</span>}
-                    <div style={{ color: "#999" }}>{h.utilizador ?? "—"}</div>
-                  </td>
-                  {h.antigo ? (
-                    <td style={{ ...td, color: "#666" }} colSpan={5}>
-                      <span style={{ fontSize: 10, color: "#999" }}>{t("web.registo.old")} · </span>
-                      {h.texto || "—"}
-                    </td>
-                  ) : (
-                    (["OE", "OD", "UT", "CER", "TX"] as Ficha[]).map((f) => (
-                      <td key={f} style={td}>
-                        {resumo(h.dados, f) || "—"}
-                        {f === "TX" && h.dados.DG && <div style={{ color: "#999" }}>DG {resumo(h.dados, "DG")}</div>}
-                      </td>
-                    ))
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      {r.historico.some((h) => !h.antigo) && (
-        <div style={{ padding: "4px 12px", fontSize: 11, color: "#999" }}>{t("web.registo.tap_to_edit")}</div>
-      )}
-
-      {/* Novo registo (ou correção) */}
-      {!r.estadia_ativa && !novo.id ? (
-        <div style={{ ...bloco, marginTop: 8, padding: 12, color: "var(--adm-color-warning)" }}>{t("web.animal.error.no_active_stay")}</div>
-      ) : (
-        <div style={{ ...bloco, marginTop: 8, padding: "8px 0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 12px 4px", gap: 8 }}>
-            <span style={{ fontSize: 12, color: novo.id ? primary_color : "#999", fontWeight: novo.id ? 700 : 400 }}>
-              {novo.id ? t("web.registo.editing") : t("web.registo.new_hint")}
-            </span>
-            <Button size="mini" onClick={() => setCalendario(true)}>
-              {dayjs(novo.data).format("DD/MM HH:mm")}
-            </Button>
-          </div>
-          <div style={{ padding: "0 12px", fontSize: 11, color: "#999" }}>{t("web.registo.by", { name: user.nome || user.username })}</div>
-          <Desenho dados={dados} onTocar={setAberto} />
-          <div style={{ display: "flex", gap: 8, padding: "8px 12px" }}>
-            {acao("DG", () => setAberto("DG"), !!dados.DG)}
-            {acao("TX", () => setAberto("TX"), !!dados.TX)}
-            {acao("!", () => setNovo({ ...novo, prioritario: !novo.prioritario }), novo.prioritario)}
-            {animal.tipo === "egua" && acao("INS", () => navigate(`/trabalho-diario/inseminacao?egua=${animal.id}`), false)}
-          </div>
-          <div style={{ padding: "0 12px", fontSize: 11, color: "#999" }}>
-            {t(animal.tipo === "egua" ? "web.registo.buttons_help" : "web.registo.buttons_help_recipient")}
-          </div>
-          {(dados.TX || dados.DG || novo.prioritario) && (
-            <div style={{ padding: "8px 12px", fontSize: 12 }}>
-              {novo.prioritario && <div style={{ color: primary_color, fontWeight: 700 }}>! {t("web.registo.priority_help")}</div>}
-              {dados.DG && <div>DG: {resumo(dados, "DG")}</div>}
-              {dados.TX && <div>TX: {resumo(dados, "TX") || "—"}</div>}
+      {/* Último registo: em resumo; ao tocar mostra tudo, com comentários. */}
+      {referencia && (
+        <>
+          <div style={{ padding: "12px 12px 4px", fontSize: 12, color: "#999" }}>{t("web.registo.last_record")}</div>
+          <div style={{ ...bloco, padding: "10px 12px", cursor: "pointer" }} onClick={() => setUltimoAberto((v) => !v)}>
+            {ultimoAberto ? <Detalhe h={referencia} /> : <LinhaResumo h={referencia} />}
+            <div style={{ fontSize: 11, color: primary_color, marginTop: 4 }}>
+              {ultimoAberto ? t("web.registo.show_less") : t("web.registo.show_all")}
             </div>
-          )}
-          <div style={{ display: "flex", gap: 8, padding: "8px 12px" }}>
-            {novo.id && (
-              <>
-                <Button onClick={() => setNovo(vazio())}>{t("web.common.cancel")}</Button>
-                <Button color="danger" fill="outline" onClick={perguntarApagar}>
-                  {t("btn.delete")}
-                </Button>
-              </>
-            )}
-            <Button block color="primary" disabled={!temAlgo} loading={gravar.isPending} onClick={submeter}>
-              {novo.id ? t("btn.save_changes") : t("web.registo.save")}
-            </Button>
           </div>
-        </div>
+        </>
       )}
+
+      <div style={{ ...bloco, marginTop: 8, padding: "8px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 12px 4px", gap: 8 }}>
+          <span style={{ fontSize: 12, color: "#999" }}>{t("web.registo.new_hint")}</span>
+          <Button size="mini" onClick={() => setCalendario(true)}>
+            {dayjs(novo.data).format("DD/MM HH:mm")}
+          </Button>
+        </div>
+        <div style={{ padding: "0 12px", fontSize: 11, color: "#999" }}>{t("web.registo.by", { name: user.nome || user.username })}</div>
+        <Desenho dados={dados} onTocar={setAberto} />
+        <div style={{ display: "flex", gap: 8, padding: "8px 12px" }}>
+          {acao("DG", () => setAberto("DG"), !!dados.DG)}
+          {acao("TX", () => setAberto("TX"), !!dados.TX)}
+          {acao("!", () => setNovo({ ...novo, prioritario: !novo.prioritario }), novo.prioritario)}
+          {animal.tipo === "egua" && acao("INS", () => navigate(`/trabalho-diario/inseminacao?egua=${animal.id}`), false)}
+        </div>
+        <div style={{ padding: "0 12px", fontSize: 11, color: "#999" }}>
+          {t(animal.tipo === "egua" ? "web.registo.buttons_help" : "web.registo.buttons_help_recipient")}
+        </div>
+        {(dados.TX || dados.DG || novo.prioritario) && (
+          <div style={{ padding: "8px 12px", fontSize: 12 }}>
+            {novo.prioritario && <div style={{ color: primary_color, fontWeight: 700 }}>! {t("web.registo.priority_help")}</div>}
+            {dados.DG && <div>DG: {resumo(dados, "DG")}</div>}
+            {dados.TX && <div>TX: {resumo(dados, "TX") || "—"}</div>}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, padding: "8px 12px" }}>
+          <Button onClick={() => setNovo(null)}>{t("web.common.cancel")}</Button>
+          <Button block color="primary" disabled={!temAlgo} loading={gravar.isPending} onClick={submeter}>
+            {novo.id ? t("btn.save_changes") : t("web.registo.save")}
+          </Button>
+        </div>
+      </div>
 
       {/* Fichas: folha de baixo no telemóvel, gaveta à direita no computador */}
       {isMobile ? (

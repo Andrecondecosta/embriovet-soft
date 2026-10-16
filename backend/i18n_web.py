@@ -1494,3 +1494,20 @@ _REGISTO = [
 for _k, *_txt in _REGISTO:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.registo.{_k}"] = _v
+
+# ── Registo clínico: lista + novo registo ──
+_REGISTO2 = [
+    ("new_button", "Novo registo", "New record", "Nouvel enregistrement", "Neuer Eintrag"),
+    ("last_record", "Último registo", "Last record", "Dernier enregistrement", "Letzter Eintrag"),
+    ("show_all", "Ver tudo", "Show all", "Tout voir", "Alles anzeigen"),
+    ("show_less", "Ver menos", "Show less", "Voir moins", "Weniger anzeigen"),
+    ("detail", "Registo", "Record", "Enregistrement", "Eintrag"),
+    ("correct", "Corrigir", "Correct", "Corriger", "Korrigieren"),
+    ("back", "Diário clínico", "Clinical log", "Journal clinique", "Klinisches Journal"),
+    ("priority", "prioritária", "priority", "prioritaire", "Priorität"),
+    ("tap_to_see", "Toque num registo para ver tudo (com comentários).", "Tap a record to see everything (with comments).",
+     "Touchez un enregistrement pour tout voir (avec commentaires).", "Eintrag antippen, um alles zu sehen (mit Kommentaren)."),
+]
+for _k, *_txt in _REGISTO2:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.registo.{_k}"] = _v
