@@ -23,6 +23,20 @@ fi
 # (nunca impede o arranque — o script devolve sempre 0)
 python scripts/personalizar_carregamento.py || true
 
+# App nova (FastAPI + React) — é a principal. Volta à antiga (Streamlit) se
+# EQUICORE_APP=streamlit nas variáveis do Render, ou se o frontend não foi
+# compilado (build command antigo, sem `bash render-build.sh`).
+if [ "${EQUICORE_APP:-}" != "streamlit" ] && [ -f frontend/dist/index.html ]; then
+    echo "📦 A aplicar migrations..."
+    python scripts/aplicar_migracoes.py
+    echo "🎯 Iniciando EquiCore (app nova)..."
+    exec uvicorn backend.main:app \
+        --host 0.0.0.0 \
+        --port "${PORT:-8000}" \
+        --proxy-headers \
+        --forwarded-allow-ips="*"
+fi
+
 # Iniciar Streamlit
 echo "🎯 Iniciando Streamlit..."
 streamlit run app.py \

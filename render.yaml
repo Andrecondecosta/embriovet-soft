@@ -9,16 +9,18 @@ services:
     plan: free
     ipAllowList: []
 
-  # Aplicação Streamlit
+  # Aplicação: app nova (FastAPI + React); EQUICORE_APP=streamlit volta à antiga
   - type: web
     name: embriovet-app
     env: python
     plan: free
-    buildCommand: pip install -r requirements_streamlit.txt
+    buildCommand: bash render-build.sh
     startCommand: bash start.sh
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: NODE_VERSION
+        value: 20.17.0
       - key: DB_HOST
         fromDatabase:
           name: embriovet-db
