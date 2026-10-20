@@ -169,7 +169,7 @@ class AnimalNovo(BaseModel):
 class EstadiaIn(BaseModel):
     animal_id: int | None = None
     animal: AnimalNovo | None = None
-    tipo_registo: TipoRegisto = "estadia"
+    tipo_registo: TipoRegisto | None = None  # obrigatório (validado em `criar`)
     motivo: Motivo = "inseminacao"
     dono_id: int | None = None
     data_entrada: date
@@ -203,6 +203,8 @@ def _validar_motivo(tipo_animal: str, motivo: str):
 def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
     if (d.animal_id is None) == (d.animal is None):
         raise _erro(422, "web.stays.error.animal_required")
+    if not d.tipo_registo:
+        raise _erro(422, "web.stays.error.kind_required")
     if not d.dono_id:
         raise _erro(422, "web.stays.error.owner_required")
     if d.tipo_registo == "estadia" and not d.alojamento_id:

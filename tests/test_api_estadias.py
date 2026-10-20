@@ -107,6 +107,8 @@ def test_nova_estadia_com_animal_novo_e_saida(client, base):
 def test_validacoes_nova(client, base):
     assert _nova(client, base, alojamento_id=None).json()["detail"]["code"] == "web.stays.error.housing_required"
     assert _nova(client, base, dono_id=None).json()["detail"]["code"] == "web.stays.error.owner_required"
+    # O tipo (estadia/visita/externo) tem de vir sempre — nos garanhões o ecrã não o pré-escolhe.
+    assert _nova(client, base, tipo_registo=None).json()["detail"]["code"] == "web.stays.error.kind_required"
     assert _nova(client, base, animal={"nome": " "}).json()["detail"]["code"] == "web.stays.error.animal_name_required"
     r = _nova(client, base, animal=None)
     assert r.json()["detail"]["code"] == "web.stays.error.animal_required"

@@ -43,7 +43,7 @@ interface Valores {
   modo: "existente" | "novo";
   animal?: AnimalPesquisa | null;
   novo?: Partial<AnimalNovo> & { data_nascimento?: Dayjs | Date | null };
-  tipo_registo: TipoRegisto;
+  tipo_registo?: TipoRegisto;
   motivo: Motivo;
   dono_id: number | null;
   data_entrada: Dayjs | Date;
@@ -71,7 +71,7 @@ function useGuardar(onClose: () => void) {
   const criar = useCriarEstadia();
   const guardar = async (v: Valores) => {
     const corpo: EstadiaIn = {
-      tipo_registo: v.tipo_registo,
+      tipo_registo: v.tipo_registo!, // obrigatório no formulário
       motivo: v.motivo,
       dono_id: v.dono_id,
       data_entrada: data(v.data_entrada)!,
@@ -101,6 +101,17 @@ function useMotivos(tipo: TipoAnimal | undefined, atual: Motivo | undefined, def
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo]);
   return permitidos;
+}
+
+/** Tipo de entrada: nas éguas/receptoras vem "Estadia" por defeito; nos
+ *  garanhões fica por escolher, para não ficarem internados sem querer
+ *  (internados, ganhavam tarefas no Trabalho diário). */
+function useTipoRegisto(tipo: TipoAnimal | undefined, atual: TipoRegisto | undefined, definir: (v: TipoRegisto | undefined) => void) {
+  useEffect(() => {
+    if (tipo === "garanhao") definir(undefined);
+    else if (tipo && !atual) definir("estadia");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo]);
 }
 
 /** Aviso (não bloqueia): o mesmo nome já existe noutro proprietário. */
@@ -159,11 +170,14 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
   const opcoes = useOpcoesEstadia();
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = Form.useWatch("modo", form) ?? "existente";
-  const tipoRegisto = Form.useWatch("tipo_registo", form) ?? "estadia";
+  const tipoRegisto = Form.useWatch("tipo_registo", form) as TipoRegisto | undefined;
   const tipoNovo = Form.useWatch(["novo", "tipo"], form);
   const animalSel = Form.useWatch("animal", form) as AnimalPesquisa | null | undefined;
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, Form.useWatch("motivo", form), (m) =>
     form.setFieldValue("motivo", m),
+  );
+  useTipoRegisto(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, tipoRegisto, (v) =>
+    form.setFields([{ name: "tipo_registo", value: v, errors: [] }]),
   );
   const aviso = useAvisoNome(Form.useWatch(["novo", "nome"], form), Form.useWatch("dono_id", form) ?? null);
   const alojamentos = opcoes.data?.alojamentos ?? [];
@@ -287,7 +301,12 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
           </>
         )}
 
-        <Form.Item name="tipo_registo" label={t("web.stays.form.kind")} extra={t(`web.stays.kind_help.${tipoRegisto}`)}>
+        <Form.Item
+          name="tipo_registo"
+          label={t("web.stays.form.kind")}
+          extra={tipoRegisto && t(`web.stays.kind_help.${tipoRegisto}`)}
+          rules={r("web.stays.error.kind_required")}
+        >
           <Segmented block options={TIPOS_REGISTO.map((x) => ({ value: x, label: t(`web.stays.kind.${x}`) }))} />
         </Form.Item>
         <Row gutter={12}>
@@ -310,7 +329,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
               <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          {tipoRegisto !== "externo" && (
+          {tipoRegisto && tipoRegisto !== "externo" && (
             <Col xs={24} sm={12}>
               {opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
                 <Alert type="warning" showIcon title={t("web.stays.form.no_housing")} style={{ marginTop: 22 }} />
@@ -391,11 +410,14 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
   const opcoes = useOpcoesEstadia();
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = MForm.useWatch("modo", form) ?? "existente";
-  const tipoRegisto = MForm.useWatch("tipo_registo", form) ?? "estadia";
+  const tipoRegisto = MForm.useWatch("tipo_registo", form) as TipoRegisto | undefined;
   const tipoNovo = MForm.useWatch(["novo", "tipo"], form);
   const animalSel = MForm.useWatch("animal", form) as AnimalPesquisa | null | undefined;
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, MForm.useWatch("motivo", form), (m) =>
     form.setFieldValue("motivo", m),
+  );
+  useTipoRegisto(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, tipoRegisto, (v) =>
+    form.setFields([{ name: "tipo_registo", value: v, errors: [] }]),
   );
   const aviso = useAvisoNome(MForm.useWatch(["novo", "nome"], form), MForm.useWatch("dono_id", form) ?? null);
   const queryClient = useQueryClient();
@@ -497,7 +519,13 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         )}
 
         <Cabecalho>{t("web.stays.form.stay")}</Cabecalho>
-        <MForm.Item name="tipo_registo" label={t("web.stays.form.kind")} description={t(`web.stays.kind_help.${tipoRegisto}`)} {...umSo}>
+        <MForm.Item
+          name="tipo_registo"
+          label={t("web.stays.form.kind")}
+          description={tipoRegisto && t(`web.stays.kind_help.${tipoRegisto}`)}
+          rules={[{ required: true, message: t("web.stays.error.kind_required") }]}
+          {...umSo}
+        >
           <Selector showCheckMark={false} columns={3} options={TIPOS_REGISTO.map((x) => ({ value: x, label: t(`web.stays.kind.${x}`) }))} />
         </MForm.Item>
         <MForm.Item
@@ -530,7 +558,8 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         >
           <DataCampo />
         </MForm.Item>
-        {tipoRegisto !== "externo" &&
+        {tipoRegisto &&
+          tipoRegisto !== "externo" &&
           (opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
             <MForm.Item key="sem-alojamento">
               <span style={{ color: "var(--adm-color-warning)" }}>{t("web.stays.form.no_housing")}</span>

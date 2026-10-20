@@ -1519,3 +1519,10 @@ for _k, *_txt in [
         WEB_TRANSLATIONS[_lang].setdefault(_k, _v)
 for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Pesquisar animal", "Search animal", "Rechercher un animal", "Tier suchen")):
     WEB_TRANSLATIONS[_lang]["web.daily.search_animal"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), (
+    "Escolha se fica internado, se é visita ou se é externo",
+    "Choose whether it stays, visits or is external",
+    "Choisissez séjour, visite ou externe",
+    "Wählen Sie Aufenthalt, Besuch oder extern",
+)):
+    WEB_TRANSLATIONS[_lang]["web.stays.error.kind_required"] = _v
