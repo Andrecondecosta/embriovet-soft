@@ -124,8 +124,10 @@ def _titulo_tarefas_dia(dia: date, total: int) -> str:
 # ────────────────────────────────────────────────────────────────────────────
 def _gerar_tarefas_primeira_observacao() -> int:
     """Cria automaticamente tarefas 'primeira_observacao' para animais em
-    estadias activas que ainda não têm registo no diário clínico —
-    apenas se ainda não existir uma tarefa do mesmo tipo para hoje.
+    estadias activas que ainda não têm registo clínico (no diário antigo
+    nem no registo novo) — apenas se ainda não existir uma tarefa do mesmo
+    tipo para hoje. Os garanhões ficam de fora: não têm diário clínico, o
+    trabalho deles é a colheita (senão ganhavam uma tarefa nova por dia).
     """
     from modules.db import get_connection
 
@@ -138,10 +140,16 @@ def _gerar_tarefas_primeira_observacao() -> int:
             e.animal_id, e.id, CURRENT_DATE, 'primeira_observacao',
             '1ª observação — sem registo clínico ainda', 'hoje', TRUE
         FROM estadias e
+        JOIN animais a ON a.id = e.animal_id
         WHERE e.data_saida IS NULL
+          AND a.tipo <> 'garanhao'
           AND NOT EXISTS (
               SELECT 1 FROM diario_clinico dc
               WHERE dc.animal_id = e.animal_id
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM registo_clinico rc
+              WHERE rc.animal_id = e.animal_id
           )
           AND NOT EXISTS (
               SELECT 1 FROM trabalho_diario td
