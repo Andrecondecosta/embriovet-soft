@@ -1526,3 +1526,7 @@ for _lang, _v in zip(("pt-PT", "en", "fr", "de"), (
     "Wählen Sie Aufenthalt, Besuch oder extern",
 )):
     WEB_TRANSLATIONS[_lang]["web.stays.error.kind_required"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), (
+    "Pesquisar animal ou proprietário", "Search animal or owner", "Rechercher animal ou propriétaire", "Tier oder Besitzer suchen",
+)):
+    WEB_TRANSLATIONS[_lang]["web.stays.search"] = _v

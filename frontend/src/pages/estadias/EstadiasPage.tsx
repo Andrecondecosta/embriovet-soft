@@ -15,6 +15,7 @@ import {
   Selector,
   SwipeAction,
   Tag as MTag,
+  SearchBar,
   TextArea,
 } from "antd-mobile";
 import { AddOutline } from "antd-mobile-icons";
@@ -66,7 +67,16 @@ function useEstadias() {
     );
   const [nova, setNova] = useState(false);
   const [saida, setSaida] = useState<Estadia | null>(null);
+  // Pesquisa por nome do animal ou do proprietário — vale para os três separadores.
+  const [pesquisa, setPesquisa] = useState("");
+  const termo = normalizar(pesquisa.trim());
   return {
+    pesquisa,
+    setPesquisa,
+    filtrar: (itens: Estadia[]) =>
+      termo ? itens.filter((x) => normalizar(x.animal).includes(termo) || normalizar(x.proprietario).includes(termo)) : itens,
+    /** Mensagem de lista vazia: "sem resultados" quando há pesquisa. */
+    vazio: (padrao: string) => (termo ? t("web.common.no_results") : padrao),
     t,
     tab,
     tipo,
@@ -88,6 +98,13 @@ function useEstadias() {
   };
 }
 type E = ReturnType<typeof useEstadias>;
+
+/** Sem acentos nem maiúsculas, para a pesquisa ("joao" encontra "João"). */
+const normalizar = (s: string | null | undefined) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
 const ORDENAR: Record<Ordem, (a: Estadia, b: Estadia) => number> = {
   dias: (a, b) => (b.dias_internado ?? -1) - (a.dias_internado ?? -1),
@@ -133,9 +150,18 @@ function EstadiasDesktop({ e }: { e: E }) {
         <Typography.Title level={4} style={{ margin: 0 }}>
           {t("web.nav.estadias")}
         </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => e.setNova(true)}>
-          {t("web.stays.new")}
-        </Button>
+        <Flex gap={8}>
+          <Input.Search
+            allowClear
+            placeholder={t("web.stays.search")}
+            value={e.pesquisa}
+            onChange={(ev) => e.setPesquisa(ev.target.value)}
+            style={{ width: 280 }}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => e.setNova(true)}>
+            {t("web.stays.new")}
+          </Button>
+        </Flex>
       </Flex>
       <Tabs
         activeKey={e.tab}
@@ -177,7 +203,7 @@ function InternadasDesktop({ e }: { e: E }) {
   const errorMessage = useErrorMessage();
   const q = useInternadas(e.tipo);
   if (q.isError) return <Alert type="error" showIcon title={errorMessage(q.error)} />;
-  const itens = [...(q.data?.itens ?? [])].sort(ORDENAR[e.ordem]);
+  const itens = e.filtrar(q.data?.itens ?? []).sort(ORDENAR[e.ordem]);
   const total = q.data?.total ?? 0;
   return (
     <>
@@ -206,7 +232,7 @@ function InternadasDesktop({ e }: { e: E }) {
         loading={q.isFetching}
         dataSource={itens}
         pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small" }}
-        locale={{ emptyText: total ? t("web.stays.empty_type") : t("web.stays.empty_internal") }}
+        locale={{ emptyText: e.vazio(total ? t("web.stays.empty_type") : t("web.stays.empty_internal")) }}
         columns={[
           ...colunasBase(e),
           {
@@ -240,6 +266,8 @@ function InternadasDesktop({ e }: { e: E }) {
 function MovimentosDesktop({ e }: { e: E }) {
   const { t } = e;
   const q = useMovimentos();
+  const entram = e.filtrar(q.data?.entram ?? []);
+  const saem = e.filtrar(q.data?.saem ?? []);
   const tabela = (itens: Estadia[], campo: "data_entrada" | "data_saida", titulo: string, vazio: string) => (
     <Col xs={24} xl={12}>
       <Typography.Text strong style={{ display: "block", marginBottom: 6 }}>
@@ -253,7 +281,7 @@ function MovimentosDesktop({ e }: { e: E }) {
         dataSource={itens}
         pagination={false}
         scroll={{ y: 340 }}
-        locale={{ emptyText: vazio }}
+        locale={{ emptyText: e.vazio(vazio) }}
         onRow={(x) => ({ onClick: () => e.verFicha(x), style: { cursor: "pointer" } })}
         columns={[
           ...colunasBase(e),
@@ -270,12 +298,12 @@ function MovimentosDesktop({ e }: { e: E }) {
   return (
     <>
       <Flex gap={48} style={{ marginBottom: 12 }}>
-        <Statistic title={t("web.stays.kpi.enter")} value={q.data?.entram.length ?? 0} />
-        <Statistic title={t("web.stays.kpi.exit")} value={q.data?.saem.length ?? 0} />
+        <Statistic title={t("web.stays.kpi.enter")} value={entram.length} />
+        <Statistic title={t("web.stays.kpi.exit")} value={saem.length} />
       </Flex>
       <Row gutter={[16, 16]}>
-        {tabela(q.data?.entram ?? [], "data_entrada", t("web.stays.enter_week"), t("web.stays.no_entries"))}
-        {tabela(q.data?.saem ?? [], "data_saida", t("web.stays.exit_week"), t("web.stays.no_exits"))}
+        {tabela(entram, "data_entrada", t("web.stays.enter_week"), t("web.stays.no_entries"))}
+        {tabela(saem, "data_saida", t("web.stays.exit_week"), t("web.stays.no_exits"))}
       </Row>
     </>
   );
@@ -284,7 +312,7 @@ function MovimentosDesktop({ e }: { e: E }) {
 function HistoricoDesktop({ e }: { e: E }) {
   const { t } = e;
   const q = useHistoricoEstadias(e.mes.year(), e.mes.month() + 1, e.tipo);
-  const itens = q.data?.itens ?? [];
+  const itens = e.filtrar(q.data?.itens ?? []);
   const total = q.data?.total ?? 0;
   return (
     <>
@@ -309,7 +337,7 @@ function HistoricoDesktop({ e }: { e: E }) {
         loading={q.isFetching}
         dataSource={itens}
         pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small" }}
-        locale={{ emptyText: total ? t("web.stays.empty_type") : t("web.stays.no_month") }}
+        locale={{ emptyText: e.vazio(total ? t("web.stays.empty_type") : t("web.stays.no_month")) }}
         onRow={(x) => ({ onClick: () => e.verFicha(x), style: { cursor: "pointer" } })}
         columns={[
           colunasBase(e)[0],
@@ -484,6 +512,9 @@ function EstadiasMobile({ e }: { e: E }) {
           <CapsuleTabs.Tab key={x.id} title={t(x.label)} />
         ))}
       </CapsuleTabs>
+      <div style={{ padding: "8px 12px 0", background: "#fff" }}>
+        <SearchBar placeholder={t("web.stays.search")} value={e.pesquisa} onChange={e.setPesquisa} />
+      </div>
       {e.tab === "internadas" ? (
         <InternadasMobile e={e} />
       ) : e.tab === "movimentos" ? (
@@ -546,7 +577,7 @@ function InternadasMobile({ e }: { e: E }) {
   const errorMessage = useErrorMessage();
   const q = useInternadas(e.tipo);
   if (q.isError) return <ErrorBlock status="default" title={errorMessage(q.error)} description="" />;
-  const itens = [...(q.data?.itens ?? [])].sort(ORDENAR[e.ordem]);
+  const itens = e.filtrar(q.data?.itens ?? []).sort(ORDENAR[e.ordem]);
   const total = q.data?.total ?? 0;
   return (
     <>
@@ -560,7 +591,7 @@ function InternadasMobile({ e }: { e: E }) {
           </List.Item>
         ) : !itens.length ? (
           <List.Item>
-            <span style={{ color: "#999" }}>{total ? t("web.stays.empty_type") : t("web.stays.empty_internal")}</span>
+            <span style={{ color: "#999" }}>{e.vazio(total ? t("web.stays.empty_type") : t("web.stays.empty_internal"))}</span>
           </List.Item>
         ) : (
           itens.map((x) => (
@@ -600,7 +631,7 @@ function MovimentosMobile({ e }: { e: E }) {
       <List>
         {!itens.length ? (
           <List.Item>
-            <span style={{ color: "#999" }}>{vazio}</span>
+            <span style={{ color: "#999" }}>{e.vazio(vazio)}</span>
           </List.Item>
         ) : (
           itens.map((x) => <LinhaMobile key={x.id} e={e} x={x} extra={<span style={{ fontSize: 12 }}>{dataCurta(x[campo])}</span>} />)
@@ -610,8 +641,8 @@ function MovimentosMobile({ e }: { e: E }) {
   );
   return (
     <>
-      {bloco(t("web.stays.enter_week"), q.data?.entram ?? [], "data_entrada", t("web.stays.no_entries"))}
-      {bloco(t("web.stays.exit_week"), q.data?.saem ?? [], "data_saida", t("web.stays.no_exits"))}
+      {bloco(t("web.stays.enter_week"), e.filtrar(q.data?.entram ?? []), "data_entrada", t("web.stays.no_entries"))}
+      {bloco(t("web.stays.exit_week"), e.filtrar(q.data?.saem ?? []), "data_saida", t("web.stays.no_exits"))}
     </>
   );
 }
@@ -620,7 +651,7 @@ function HistoricoMobile({ e }: { e: E }) {
   const { t } = e;
   const q = useHistoricoEstadias(e.mes.year(), e.mes.month() + 1, e.tipo);
   const [calendario, setCalendario] = useState(false);
-  const itens = q.data?.itens ?? [];
+  const itens = e.filtrar(q.data?.itens ?? []);
   const total = q.data?.total ?? 0;
   return (
     <>
@@ -654,7 +685,7 @@ function HistoricoMobile({ e }: { e: E }) {
           </List.Item>
         ) : !itens.length ? (
           <List.Item>
-            <span style={{ color: "#999" }}>{total ? t("web.stays.empty_type") : t("web.stays.no_month")}</span>
+            <span style={{ color: "#999" }}>{e.vazio(total ? t("web.stays.empty_type") : t("web.stays.no_month"))}</span>
           </List.Item>
         ) : (
           itens.map((x) => (
