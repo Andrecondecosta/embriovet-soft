@@ -54,7 +54,7 @@ def test_garanhao_kpi_bate_com_a_tabela(client, opcoes):
     stock = r["tabelas"][0]
     assert stock["titulo"] == "reports.section.stock"
     assert r["kpis"][0] == ["reports.kpi.straws_stock", sum(l["existencia_atual"] for l in stock["linhas"])]
-    assert r["exportar"] == ["csv", "pdf"]
+    assert r["exportar"] == ["pdf", "xlsx", "csv"]
 
 
 def test_filtro_proprietario_no_garanhao(client, opcoes):
@@ -97,6 +97,46 @@ def test_exportar_nome_com_acentos(client):
     assert unquote(cd.split("filename*=UTF-8''")[1]) == "garanhao_Falcão Ñ.csv"
 
 
-def test_exportar_combinacao_que_nao_existe(client):
-    r = client.get("/api/relatorios/exportar", params={"modo": "contentor", "contentor": 1, "formato": "pdf"})
+def test_exportar_sem_escolha(client):
+    # Sem garanhão escolhido não há relatório, logo não há ficheiro.
+    r = client.get("/api/relatorios/exportar", params={"modo": "garanhao", "formato": "xlsx"})
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize("formato, tipo", [("pdf", "application/pdf"), ("csv", "text/csv"), ("xlsx", "spreadsheetml")])
+@pytest.mark.parametrize("modo", ["garanhao", "proprietario", "contentor", "insem", "transf_int", "transf_ext"])
+def test_exportar_todos_os_relatorios(client, opcoes, modo, formato, tipo):
+    params = {"formato": formato}
+    if modo == "garanhao":
+        if not opcoes["garanhoes"]:
+            pytest.skip("sem stock na base de teste")
+        params |= {"modo": "garanhao", "garanhao": opcoes["garanhoes"][0]}
+    elif modo == "proprietario":
+        params |= {"modo": "proprietario", "proprietario": opcoes["proprietarios"][0]["id"]}
+    elif modo == "contentor":
+        if not opcoes["contentores"]:
+            pytest.skip("sem contentores na base de teste")
+        params |= {"modo": "contentor", "contentor": opcoes["contentores"][0]["id"]}
+    else:
+        params |= {"modo": "historico", "hist": modo, "inicio": "2020-01-01"}
+    r = client.get("/api/relatorios/exportar", params=params)
+    assert r.status_code == 200, r.text
+    assert tipo in r.headers["content-type"]
+    assert r.content
+
+
+def test_grafico_por_mes_cobre_os_ultimos_12_meses(client):
+    r = client.get("/api/relatorios", params={"modo": "historico", "hist": "insem"}).json()
+    meses = [g for g in r["graficos"] if g["tipo"] == "colunas"]
+    if not meses:
+        pytest.skip("sem inseminações no último ano na base de teste")
+    assert len(meses[0]["dados"]) == 12
+    tabela = r["tabelas"][0]["linhas"]
+    assert sum(d["y"] for d in meses[0]["dados"]) <= sum(l["palhetas_gastas"] or 0 for l in tabela)
+
+
+def test_grafico_respeita_o_periodo(client):
+    r = client.get("/api/relatorios", params={"modo": "historico", "hist": "insem", "inicio": "2025-01-01", "fim": "2025-06-30"}).json()
+    for g in r["graficos"]:
+        if g["tipo"] == "colunas":
+            assert [d["x"] for d in g["dados"]] == [f"{m:02d}/2025" for m in range(1, 7)]

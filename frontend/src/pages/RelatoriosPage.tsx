@@ -1,8 +1,26 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import dayjs from "dayjs";
-import { Alert, Button, Card, DatePicker, Empty, Flex, Popover, Segmented, Select, Space, Spin, Statistic, Table, Typography } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Empty,
+  Flex,
+  Input,
+  Popover,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Spin,
+  Statistic,
+  Table,
+  Typography,
+} from "antd";
 import { DownloadOutlined, FilterOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
@@ -13,6 +31,7 @@ import {
   Grid,
   List,
   Popup,
+  SearchBar,
   Selector,
 } from "antd-mobile";
 
@@ -23,6 +42,9 @@ import { useErrorMessage, useNotifyError } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
+import type { Grafico } from "../components/GraficoRelatorio";
+
+const GraficoRelatorio = lazy(() => import("../components/GraficoRelatorio"));
 
 type Modo = "garanhao" | "proprietario" | "contentor" | "historico";
 type Hist = "insem" | "transf_int" | "transf_ext" | "stock";
@@ -43,6 +65,7 @@ interface Relatorio {
   kpis: [string, number][];
   tabelas: Tabela[];
   filtros: Partial<Record<FiltroChave, (string | number)[]>>;
+  graficos?: Grafico[];
   exportar?: Formato[];
 }
 
@@ -65,6 +88,36 @@ const FILTROS: { chave: FiltroChave; param: string; label: string }[] = [
   { chave: "and", param: "f_and", label: "reports.floor" },
 ];
 const FMT = "YYYY-MM-DD";
+const FORMATOS: Record<Formato, string> = { pdf: "PDF", xlsx: "Excel", csv: "CSV" };
+
+/** Períodos rápidos (o fim fica em aberto quando é "até hoje"). */
+function periodos(): { chave: string; valor: [Dayjs, Dayjs] | null }[] {
+  const hoje = dayjs();
+  const mesPassado = hoje.subtract(1, "month");
+  return [
+    { chave: "web.reports.preset.this_month", valor: [hoje.startOf("month"), hoje] },
+    { chave: "web.reports.preset.last_month", valor: [mesPassado.startOf("month"), mesPassado.endOf("month")] },
+    { chave: "web.reports.preset.last_3_months", valor: [hoje.subtract(2, "month").startOf("month"), hoje] },
+    { chave: "web.reports.preset.this_year", valor: [hoje.startOf("year"), hoje] },
+    { chave: "web.reports.preset.last_year", valor: [hoje.subtract(1, "year").startOf("year"), hoje.subtract(1, "year").endOf("year")] },
+    { chave: "web.reports.preset.all", valor: null },
+  ];
+}
+
+function comparar(a: unknown, b: unknown): number {
+  if (a == null || a === "") return b == null || b === "" ? 0 : 1;
+  if (b == null || b === "") return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
+}
+
+/** Sem acentos e em minúsculas, para a pesquisa. */
+function normalizar(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
 
 /** Datas ISO formatadas; texto livre (ex.: data de produção) fica como está. */
 function celula(v: string | number | null): string {
@@ -85,10 +138,12 @@ function useRelatorio() {
   const fim = params.get("fim");
 
   const opcoes = useQuery({ queryKey: ["relatorios", "opcoes"], queryFn: () => api<Opcoes>("/relatorios/opcoes") });
-  // Escolha por omissão: o primeiro da lista (como o selectbox da app atual).
-  const garanhao = params.get("g") ?? opcoes.data?.garanhoes[0] ?? null;
-  const proprietario = params.get("p") ?? (opcoes.data?.proprietarios[0] ? String(opcoes.data.proprietarios[0].id) : null);
-  const contentor = params.get("c") ?? (opcoes.data?.contentores[0] ? String(opcoes.data.contentores[0].id) : null);
+  // Sem escolha por omissão: o relatório só abre depois de escolher.
+  const garanhao = params.get("g");
+  const proprietario = params.get("p");
+  const contentor = params.get("c");
+  const semEscolha =
+    (modo === "garanhao" && !garanhao) || (modo === "proprietario" && !proprietario) || (modo === "contentor" && !contentor);
 
   const consulta = new URLSearchParams({ modo });
   if (modo === "garanhao" && garanhao) consulta.set("garanhao", garanhao);
@@ -102,7 +157,7 @@ function useRelatorio() {
   const relatorio = useQuery({
     queryKey: ["relatorios", consulta.toString()],
     queryFn: () => api<Relatorio>(`/relatorios?${consulta}`),
-    enabled: opcoes.isSuccess,
+    enabled: opcoes.isSuccess && !semEscolha,
     placeholderData: keepPreviousData,
   });
 
@@ -118,6 +173,8 @@ function useRelatorio() {
   /** Mudar o modo ou a escolha limpa os filtros, que dependem dela. */
   const limparFiltros = (p: URLSearchParams) => FILTROS.forEach((f) => p.delete(f.param));
   const [aExportar, setAExportar] = useState<Formato | null>(null);
+  const [pesquisa, setPesquisa] = useState("");
+  const termo = normalizar(pesquisa.trim());
 
   return {
     t,
@@ -128,12 +185,19 @@ function useRelatorio() {
     garanhao,
     proprietario,
     contentor,
+    semEscolha,
     opcoes,
     relatorio,
+    pesquisa,
+    setPesquisa,
+    /** Linhas da tabela que têm o texto pesquisado em alguma coluna. */
+    filtrar: (tab: Tabela) =>
+      termo ? tab.linhas.filter((l) => tab.colunas.some((c) => normalizar(celula(l[c])).includes(termo))) : tab.linhas,
     valoresFiltro: (param: string) => params.getAll(param),
-    mudarModo: (m: Modo) => atualizar((p) => (p.set("modo", m), limparFiltros(p))),
-    mudarHist: (h: Hist) => atualizar((p) => p.set("hist", h)),
-    escolher: (k: "g" | "p" | "c", v: string) => atualizar((p) => (p.set(k, v), limparFiltros(p))),
+    // Outro relatório, outra pesquisa: o texto escrito não passa de um para o outro.
+    mudarModo: (m: Modo) => (setPesquisa(""), atualizar((p) => (p.set("modo", m), limparFiltros(p)))),
+    mudarHist: (h: Hist) => (setPesquisa(""), atualizar((p) => p.set("hist", h))),
+    escolher: (k: "g" | "p" | "c", v: string) => (setPesquisa(""), atualizar((p) => (p.set(k, v), limparFiltros(p)))),
     mudarFiltro: (param: string, valores: (string | number)[]) =>
       atualizar((p) => (p.delete(param), valores.forEach((v) => p.append(param, String(v))))),
     mudarPeriodo: (i: string | null, f: string | null) =>
@@ -144,6 +208,7 @@ function useRelatorio() {
         else p.delete("fim");
       }),
     nFiltros: (inicio || fim ? 1 : 0) + FILTROS.filter((f) => params.getAll(f.param).length).length,
+    nFiltrosLista: FILTROS.filter((f) => params.getAll(f.param).length).length,
     aExportar,
     exportar: async (formato: Formato) => {
       setAExportar(formato);
@@ -217,19 +282,9 @@ function RelatoriosDesktop({ r }: { r: R }) {
       />
     );
 
-  const filtrosDisponiveis = FILTROS.filter((f) => d?.filtros[f.chave]);
+  const filtrosDisponiveis = FILTROS.filter((f) => d?.filtros[f.chave]?.length);
   const painelFiltros = (
     <Space orientation="vertical" size={10} style={{ width: 320 }}>
-      <div>
-        <Typography.Text type="secondary">{t("web.reports.period")}</Typography.Text>
-        <DatePicker.RangePicker
-          style={{ width: "100%" }}
-          format="DD/MM/YYYY"
-          allowEmpty={[true, true]}
-          value={[r.inicio ? dayjs(r.inicio) : null, r.fim ? dayjs(r.fim) : null]}
-          onChange={(v) => r.mudarPeriodo(v?.[0]?.format(FMT) ?? null, v?.[1]?.format(FMT) ?? null)}
-        />
-      </div>
       {filtrosDisponiveis.map((f) => (
         <div key={f.chave}>
           <Typography.Text type="secondary">{t(f.label)}</Typography.Text>
@@ -260,58 +315,104 @@ function RelatoriosDesktop({ r }: { r: R }) {
         />
         <Flex gap={8} wrap align="center">
           {seletor}
-          <Popover trigger="click" placement="bottomLeft" title={t("reports.filters_title")} content={painelFiltros}>
-            <Button icon={<FilterOutlined />}>
-              {t("reports.filters_title")}
-              {r.nFiltros > 0 && ` (${r.nFiltros})`}
-            </Button>
-          </Popover>
+          <DatePicker.RangePicker
+            format="DD/MM/YYYY"
+            allowEmpty={[true, true]}
+            placeholder={[t("reports.date_start"), t("reports.date_end")]}
+            value={[r.inicio ? dayjs(r.inicio) : null, r.fim ? dayjs(r.fim) : null]}
+            onChange={(v) => r.mudarPeriodo(v?.[0]?.format(FMT) ?? null, v?.[1]?.format(FMT) ?? null)}
+            presets={periodos()
+              .filter((p) => p.valor)
+              .map((p) => ({ label: t(p.chave), value: p.valor! }))}
+          />
+          {filtrosDisponiveis.length > 0 && (
+            <Popover trigger="click" placement="bottomLeft" title={t("reports.filters_title")} content={painelFiltros}>
+              <Button icon={<FilterOutlined />}>
+                {t("reports.filters_title")}
+                {r.nFiltrosLista > 0 && ` (${r.nFiltrosLista})`}
+              </Button>
+            </Popover>
+          )}
           <Flex gap={8} style={{ marginLeft: "auto" }}>
             {(d?.exportar ?? []).map((f) => (
               <Button key={f} icon={<DownloadOutlined />} loading={r.aExportar === f} onClick={() => r.exportar(f)}>
-                {f === "xlsx" ? "Excel" : f.toUpperCase()}
+                {FORMATOS[f]}
               </Button>
             ))}
           </Flex>
         </Flex>
         <ErroPeriodo r={r} />
 
-        {d && d.kpis.length > 0 && (
-          <Flex gap={40} wrap>
-            {d.kpis.map(([label, n]) => (
-              <Statistic key={label} title={t(label)} value={n} />
-            ))}
-          </Flex>
-        )}
-
-        {!d ? (
-          r.relatorio.isFetching && <Spin />
-        ) : !d.tabelas.length ? (
-          <Empty description={t("reports.no_data_filters")} />
+        {r.semEscolha ? (
+          <Empty description={t("web.reports.choose_first")} />
         ) : (
-          d.tabelas.map((tab) => (
-            <div key={tab.titulo}>
-              <Typography.Text strong style={{ display: "block", marginBottom: 6 }}>
-                {t(tab.titulo)} · {tab.linhas.length}
-              </Typography.Text>
-              <Table
-                size="small"
-                bordered
-                loading={r.relatorio.isFetching}
-                rowKey="__k"
-                dataSource={tab.linhas.map((l, i) => ({ ...l, __k: i }))}
-                pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small", showSizeChanger: false }}
-                scroll={{ x: true }}
-                locale={{ emptyText: t("reports.no_data_filters") }}
-                columns={tab.colunas.map((c) => ({
-                  title: t(`web.reports.col.${c}`),
-                  dataIndex: c,
-                  render: celula,
-                  align: typeof tab.linhas[0]?.[c] === "number" ? ("right" as const) : undefined,
-                }))}
+          <>
+            {d && d.kpis.length > 0 && (
+              <Flex gap={40} wrap>
+                {d.kpis.map(([label, n]) => (
+                  <Statistic key={label} title={t(label)} value={n} />
+                ))}
+              </Flex>
+            )}
+
+            {d && (d.graficos ?? []).length > 0 && (
+              <Row gutter={[12, 12]}>
+                {d.graficos!.map((g) => (
+                  <Col key={g.titulo} xs={24} lg={12}>
+                    <Card size="small" title={t(g.titulo)}>
+                      <Suspense fallback={<Spin />}>
+                        <GraficoRelatorio g={g} />
+                      </Suspense>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )}
+
+            {d && d.tabelas.length > 0 && (
+              <Input.Search
+                allowClear
+                style={{ width: 280 }}
+                placeholder={t("web.reports.search")}
+                value={r.pesquisa}
+                onChange={(e) => r.setPesquisa(e.target.value)}
               />
-            </div>
-          ))
+            )}
+
+            {!d ? (
+              r.relatorio.isFetching && <Spin />
+            ) : !d.tabelas.length ? (
+              <Empty description={t("reports.no_data_filters")} />
+            ) : (
+              d.tabelas.map((tab) => {
+                const linhas = r.filtrar(tab);
+                return (
+                  <div key={tab.titulo}>
+                    <Typography.Text strong style={{ display: "block", marginBottom: 6 }}>
+                      {t(tab.titulo)} · {linhas.length}
+                    </Typography.Text>
+                    <Table
+                      size="small"
+                      bordered
+                      loading={r.relatorio.isFetching}
+                      rowKey="__k"
+                      dataSource={linhas.map((l, i) => ({ ...l, __k: i }))}
+                      pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small", showSizeChanger: false }}
+                      scroll={{ x: true }}
+                      locale={{ emptyText: t(r.pesquisa ? "web.common.no_results" : "reports.no_data_filters") }}
+                      columns={tab.colunas.map((c) => ({
+                        title: t(`web.reports.col.${c}`),
+                        dataIndex: c,
+                        render: celula,
+                        sorter: (a: Record<string, unknown>, b: Record<string, unknown>) => comparar(a[c], b[c]),
+                        align: typeof tab.linhas[0]?.[c] === "number" ? ("right" as const) : undefined,
+                      }))}
+                    />
+                  </div>
+                );
+              })
+            )}
+          </>
         )}
       </Flex>
     </Card>
@@ -347,6 +448,7 @@ function RelatoriosMobile({ r }: { r: R }) {
           <List.Item prefix={t("label.garanhao")} arrow>
             <SeletorPesquisa<string>
               titulo={t("reports.select_stallion")}
+              placeholder={t("reports.select_stallion")}
               value={r.garanhao}
               onChange={(v) => r.escolher("g", v)}
               opcoes={o.garanhoes.map((g) => ({ value: g, label: g }))}
@@ -357,6 +459,7 @@ function RelatoriosMobile({ r }: { r: R }) {
           <List.Item prefix={t("label.owner")} arrow>
             <SeletorPesquisa<string>
               titulo={t("reports.select_owner")}
+              placeholder={t("reports.select_owner")}
               value={r.proprietario}
               onChange={(v) => r.escolher("p", v)}
               opcoes={o.proprietarios.map((p) => ({ value: String(p.id), label: p.nome }))}
@@ -367,6 +470,7 @@ function RelatoriosMobile({ r }: { r: R }) {
           <List.Item prefix={t("label.container")} arrow>
             <SeletorPesquisa<string>
               titulo={t("reports.select_container")}
+              placeholder={t("reports.select_container")}
               value={r.contentor}
               onChange={(v) => r.escolher("c", v)}
               opcoes={o.contentores.map((c) => ({ value: String(c.id), label: c.codigo }))}
@@ -389,59 +493,89 @@ function RelatoriosMobile({ r }: { r: R }) {
       </List>
       <ErroPeriodo r={r} />
 
-      {d && d.kpis.length > 0 && (
-        <Grid columns={d.kpis.length > 3 ? 4 : 3} style={{ background: "#fff", margin: "8px 0", padding: "10px 4px" }}>
-          {d.kpis.map(([label, n]) => (
-            <Grid.Item key={label} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{n}</div>
-              <div style={{ fontSize: 10, color: "#999" }}>{t(label)}</div>
-            </Grid.Item>
-          ))}
-        </Grid>
-      )}
-
-      {(d?.exportar ?? []).length > 0 && (
-        <div style={{ display: "flex", gap: 8, padding: "4px 12px 8px" }}>
-          {d!.exportar!.map((f) => (
-            <MButton key={f} size="small" loading={r.aExportar === f} onClick={() => r.exportar(f)}>
-              {f === "xlsx" ? "Excel" : f.toUpperCase()}
-            </MButton>
-          ))}
-        </div>
-      )}
-
-      {!d ? (
-        <div style={{ textAlign: "center", padding: 24 }}>
-          <DotLoading />
-        </div>
+      {r.semEscolha ? (
+        <List>
+          <List.Item>
+            <span style={{ color: "#999" }}>{t("web.reports.choose_first")}</span>
+          </List.Item>
+        </List>
       ) : (
-        d.tabelas.map((tab) => (
-          <div key={tab.titulo}>
-            <Cabecalho>
-              {t(tab.titulo)} · {tab.linhas.length}
-            </Cabecalho>
-            <List>
-              {!tab.linhas.length ? (
-                <List.Item>
-                  <span style={{ color: "#999" }}>{t("reports.no_data_filters")}</span>
-                </List.Item>
-              ) : (
-                // Primeira coluna como título; as outras por baixo.
-                tab.linhas.slice(0, 200).map((l, i) => (
-                  <List.Item
-                    key={i}
-                    description={tab.colunas
-                      .slice(1)
-                      .map((c) => `${t(`web.reports.col.${c}`)}: ${celula(l[c])}`)
-                      .join(" · ")}
-                  >
-                    {celula(l[tab.colunas[0]])}
-                  </List.Item>
-                ))
-              )}
-            </List>
-          </div>
-        ))
+        <>
+          {d && d.kpis.length > 0 && (
+            <Grid columns={d.kpis.length > 3 ? 4 : 3} style={{ background: "#fff", margin: "8px 0", padding: "10px 4px" }}>
+              {d.kpis.map(([label, n]) => (
+                <Grid.Item key={label} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: "#999" }}>{t(label)}</div>
+                </Grid.Item>
+              ))}
+            </Grid>
+          )}
+
+          {(d?.exportar ?? []).length > 0 && (
+            <div style={{ display: "flex", gap: 8, padding: "4px 12px 8px" }}>
+              {d!.exportar!.map((f) => (
+                <MButton key={f} size="small" loading={r.aExportar === f} onClick={() => r.exportar(f)}>
+                  {FORMATOS[f]}
+                </MButton>
+              ))}
+            </div>
+          )}
+
+          {(d?.graficos ?? []).map((g) => (
+            <div key={g.titulo}>
+              <Cabecalho>{t(g.titulo)}</Cabecalho>
+              <div style={{ background: "#fff", padding: "8px 4px" }}>
+                <Suspense fallback={<DotLoading />}>
+                  <GraficoRelatorio g={g} compacto />
+                </Suspense>
+              </div>
+            </div>
+          ))}
+
+          {d && d.tabelas.length > 0 && (
+            <div style={{ padding: "8px 12px 0" }}>
+              <SearchBar placeholder={t("web.reports.search")} value={r.pesquisa} onChange={r.setPesquisa} />
+            </div>
+          )}
+
+          {!d ? (
+            <div style={{ textAlign: "center", padding: 24 }}>
+              <DotLoading />
+            </div>
+          ) : (
+            d.tabelas.map((tab) => {
+              const linhas = r.filtrar(tab);
+              return (
+                <div key={tab.titulo}>
+                  <Cabecalho>
+                    {t(tab.titulo)} · {linhas.length}
+                  </Cabecalho>
+                  <List>
+                    {!linhas.length ? (
+                      <List.Item>
+                        <span style={{ color: "#999" }}>{t(r.pesquisa ? "web.common.no_results" : "reports.no_data_filters")}</span>
+                      </List.Item>
+                    ) : (
+                      // Primeira coluna como título; as outras por baixo.
+                      linhas.slice(0, 200).map((l, i) => (
+                        <List.Item
+                          key={i}
+                          description={tab.colunas
+                            .slice(1)
+                            .map((c) => `${t(`web.reports.col.${c}`)}: ${celula(l[c])}`)
+                            .join(" · ")}
+                        >
+                          {celula(l[tab.colunas[0]])}
+                        </List.Item>
+                      ))
+                    )}
+                  </List>
+                </div>
+              );
+            })
+          )}
+        </>
       )}
 
       <Popup
@@ -451,6 +585,20 @@ function RelatoriosMobile({ r }: { r: R }) {
         bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, padding: 16, maxHeight: "80dvh", overflowY: "auto" }}
       >
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{t("reports.filters_title")}</div>
+        <Selector
+          columns={3}
+          style={{ "--padding": "6px 8px", marginBottom: 8 } as React.CSSProperties}
+          value={[
+            periodos().find((p) =>
+              p.valor ? p.valor[0].format(FMT) === r.inicio && p.valor[1].format(FMT) === r.fim : !r.inicio && !r.fim,
+            )?.chave ?? "",
+          ]}
+          onChange={(v) => {
+            const p = periodos().find((x) => x.chave === v[0]);
+            if (p) r.mudarPeriodo(p.valor?.[0].format(FMT) ?? null, p.valor?.[1].format(FMT) ?? null);
+          }}
+          options={periodos().map((p) => ({ value: p.chave, label: t(p.chave) }))}
+        />
         <List style={{ "--border-top": "none" } as React.CSSProperties}>
           <List.Item prefix={t("reports.date_start")} extra={r.inicio ? dataCurta(r.inicio) : "—"} onClick={() => setData("inicio")} />
           <List.Item prefix={t("reports.date_end")} extra={r.fim ? dataCurta(r.fim) : "—"} onClick={() => setData("fim")} />

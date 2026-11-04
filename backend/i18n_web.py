@@ -1530,3 +1530,29 @@ for _lang, _v in zip(("pt-PT", "en", "fr", "de"), (
     "Pesquisar animal ou proprietário", "Search animal or owner", "Rechercher animal ou propriétaire", "Tier oder Besitzer suchen",
 )):
     WEB_TRANSLATIONS[_lang]["web.stays.search"] = _v
+
+# ── Relatórios: gráficos, períodos rápidos, pesquisa ──
+for _k, *_txt in [
+    ("chart.straws_used_month", "Palhetas usadas por mês", "Straws used per month", "Paillettes utilisées par mois", "Verbrauchte Pailletten pro Monat"),
+    ("chart.stock_by_owner", "Palhetas em stock por proprietário", "Straws in stock by owner", "Paillettes en stock par propriétaire",
+     "Pailletten auf Lager nach Besitzer"),
+    ("chart.stock_by_stallion", "Palhetas em stock por garanhão", "Straws in stock by stallion", "Paillettes en stock par étalon",
+     "Pailletten auf Lager nach Hengst"),
+    ("chart.straws_by_canister", "Palhetas por canister", "Straws per canister", "Paillettes par canister", "Pailletten pro Canister"),
+    ("chart.straws_used_by_stallion", "Palhetas usadas por garanhão", "Straws used by stallion", "Paillettes utilisées par étalon",
+     "Verbrauchte Pailletten nach Hengst"),
+    ("chart.straws_transferred_month", "Palhetas transferidas por mês", "Straws transferred per month", "Paillettes transférées par mois",
+     "Übertragene Pailletten pro Monat"),
+    ("preset.this_month", "Este mês", "This month", "Ce mois-ci", "Dieser Monat"),
+    ("preset.last_month", "Mês passado", "Last month", "Mois dernier", "Letzter Monat"),
+    ("preset.last_3_months", "Últimos 3 meses", "Last 3 months", "3 derniers mois", "Letzte 3 Monate"),
+    ("preset.this_year", "Este ano", "This year", "Cette année", "Dieses Jahr"),
+    ("preset.last_year", "Ano passado", "Last year", "L’année dernière", "Letztes Jahr"),
+    ("preset.all", "Sempre", "All time", "Toujours", "Gesamter Zeitraum"),
+    ("search", "Pesquisar na tabela", "Search in table", "Rechercher dans le tableau", "In Tabelle suchen"),
+    ("charts", "Gráficos", "Charts", "Graphiques", "Diagramme"),
+    ("choose_first", "Escolha em cima para ver o relatório.", "Choose above to see the report.", "Choisissez ci-dessus pour voir le rapport.",
+     "Oben auswählen, um den Bericht zu sehen."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v
