@@ -1531,18 +1531,10 @@ for _lang, _v in zip(("pt-PT", "en", "fr", "de"), (
 )):
     WEB_TRANSLATIONS[_lang]["web.stays.search"] = _v
 
-# ── Relatórios: períodos rápidos, pesquisa, motilidade ──
+# ── Relatórios: pesquisa, motilidade ──
 for _k, *_txt in [
-    ("preset.this_month", "Este mês", "This month", "Ce mois-ci", "Dieser Monat"),
-    ("preset.last_month", "Mês passado", "Last month", "Mois dernier", "Letzter Monat"),
-    ("preset.last_3_months", "Últimos 3 meses", "Last 3 months", "3 derniers mois", "Letzte 3 Monate"),
-    ("preset.this_year", "Este ano", "This year", "Cette année", "Dieses Jahr"),
-    ("preset.last_year", "Ano passado", "Last year", "L’année dernière", "Letztes Jahr"),
-    ("preset.all", "Sempre", "All time", "Toujours", "Gesamter Zeitraum"),
     ("col.motilidade", "Motilidade (%)", "Motility (%)", "Motilité (%)", "Motilität (%)"),
     ("search", "Pesquisar na tabela", "Search in table", "Rechercher dans le tableau", "In Tabelle suchen"),
-    ("choose_first", "Escolha em cima para ver o relatório.", "Choose above to see the report.", "Choisissez ci-dessus pour voir le rapport.",
-     "Oben auswählen, um den Bericht zu sehen."),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v
@@ -1568,11 +1560,8 @@ for _k, *_txt in [
     ("export.columns", "Colunas", "Columns", "Colonnes", "Spalten"),
     ("export.rows", "Linhas", "Rows", "Lignes", "Zeilen"),
     ("export.rows_all", "Todas ({n})", "All ({n})", "Toutes ({n})", "Alle ({n})"),
-    ("export.rows_search", "Só as da pesquisa ({n})", "Only the searched ({n})", "Seulement la recherche ({n})", "Nur Suchtreffer ({n})"),
     ("export.rows_selected", "Só as selecionadas ({n})", "Only selected ({n})", "Seulement la sélection ({n})", "Nur ausgewählte ({n})"),
     ("export.choose_rows", "Escolher linhas", "Choose rows", "Choisir les lignes", "Zeilen auswählen"),
-    ("export.select_hint", "Marque as linhas na tabela para exportar só essas.", "Tick rows in the table to export only those.",
-     "Cochez des lignes du tableau pour n’exporter que celles-ci.", "Zeilen in der Tabelle markieren, um nur diese zu exportieren."),
     ("export.download", "Descarregar", "Download", "Télécharger", "Herunterladen"),
     ("export.reset", "Repor", "Reset", "Réinitialiser", "Zurücksetzen"),
     ("export.clear_selection", "Limpar seleção", "Clear selection", "Effacer la sélection", "Auswahl aufheben"),

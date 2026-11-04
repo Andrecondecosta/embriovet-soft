@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Checkbox, Flex, Modal, Radio, Space, Typography } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Radio, Space, Table, Typography } from "antd";
 import { Button as MButton, CheckList, Checkbox as MCheckbox, List, Popup, SearchBar, Selector } from "antd-mobile";
 
 import { useT } from "../i18n/I18n";
@@ -23,7 +23,7 @@ export interface CorpoExportar {
   tabelas: { titulo: string; colunas: string[]; ids: number[] | null }[];
 }
 
-type Linhas = "todas" | "pesquisa" | "selecionadas";
+type Linhas = "todas" | "selecionadas";
 interface EscolhaTab {
   incluir: boolean;
   colunas: string[];
@@ -56,6 +56,14 @@ function guardar(chave: string, e: Estado) {
   }
 }
 
+/** Sem acentos e em minúsculas, para a pesquisa. */
+function normalizar(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function igual(a: string[], b: string[]) {
   return a.length === b.length && a.every((x) => b.includes(x));
 }
@@ -67,8 +75,6 @@ interface Props {
   chave: string;
   temResumo: boolean;
   tabelas: Tabela[];
-  filtrar: (tab: Tabela) => Linha[];
-  pesquisa: string;
   selecao: Record<string, number[]>;
   setSelecao: (titulo: string, ids: number[]) => void;
   aExportar: boolean;
@@ -85,8 +91,7 @@ function useExportar(p: Props) {
     return tab.linhas.filter((l) => ids.has(l._id as number));
   };
 
-  // Ao abrir: o que ficou guardado, com as linhas a seguir o ecrã
-  // (selecionadas > pesquisa > todas).
+  // Ao abrir: o que ficou guardado; linhas "selecionadas" se já há alguma escolhida.
   useEffect(() => {
     if (!p.aberto) return;
     const g = lerGuardado(p.chave);
@@ -97,7 +102,7 @@ function useExportar(p: Props) {
         p.tabelas.map((tab) => {
           const gt = g?.tabelas?.[tab.titulo];
           const colunas = gt?.colunas?.filter((c) => tab.disponiveis.includes(c)) ?? tab.colunas;
-          const linhas: Linhas = selecionadas(tab).length ? "selecionadas" : p.pesquisa.trim() ? "pesquisa" : "todas";
+          const linhas: Linhas = selecionadas(tab).length ? "selecionadas" : "todas";
           return [tab.titulo, { incluir: gt?.incluir ?? true, colunas: colunas.length ? colunas : tab.colunas, linhas }];
         }),
       ),
@@ -108,8 +113,7 @@ function useExportar(p: Props) {
   const mudar = (titulo: string, m: Partial<EscolhaTab>) =>
     setE((x) => x && { ...x, tabelas: { ...x.tabelas, [titulo]: { ...x.tabelas[titulo], ...m } } });
 
-  const ids = (tab: Tabela, linhas: Linhas): number[] | null =>
-    linhas === "todas" ? null : (linhas === "pesquisa" ? p.filtrar(tab) : selecionadas(tab)).map((l) => l._id as number);
+  const ids = (tab: Tabela, linhas: Linhas): number[] | null => (linhas === "todas" ? null : selecionadas(tab).map((l) => l._id as number));
 
   const descarregar = async () => {
     if (!e) return;
@@ -137,7 +141,12 @@ function useExportar(p: Props) {
   const vazio =
     !!e && !(e.resumo && p.temResumo) && !p.tabelas.some((tab) => e.tabelas[tab.titulo].incluir && e.tabelas[tab.titulo].colunas.length);
 
-  return { e, setE, mudar, selecionadas, descarregar, vazio };
+  // "Só as selecionadas" sem nenhuma escolhida: não há o que descarregar nessa parte.
+  const faltamLinhas =
+    !!e &&
+    p.tabelas.some((tab) => e.tabelas[tab.titulo].incluir && e.tabelas[tab.titulo].linhas === "selecionadas" && !selecionadas(tab).length);
+
+  return { e, setE, mudar, selecionadas, descarregar, vazio, faltamLinhas };
 }
 
 export function ExportarRelatorio(p: Props) {
@@ -148,6 +157,7 @@ function ExportarDesktop(p: Props) {
   const t = useT();
   const x = useExportar(p);
   const e = x.e;
+  const [escolher, setEscolher] = useState<Tabela | null>(null);
 
   return (
     <Modal
@@ -157,7 +167,7 @@ function ExportarDesktop(p: Props) {
       width={620}
       okText={t("web.reports.export.download")}
       cancelText={t("web.common.cancel")}
-      okButtonProps={{ loading: p.aExportar, disabled: x.vazio }}
+      okButtonProps={{ loading: p.aExportar, disabled: x.vazio || x.faltamLinhas }}
       onOk={x.descarregar}
       destroyOnHidden
     >
@@ -214,20 +224,22 @@ function ExportarDesktop(p: Props) {
                     <div style={{ marginTop: 4 }}>
                       <Radio.Group
                         value={et.linhas}
-                        onChange={(ev) => x.mudar(tab.titulo, { linhas: ev.target.value })}
+                        onChange={(ev) => {
+                          x.mudar(tab.titulo, { linhas: ev.target.value });
+                          // Ainda nada escolhido: abre logo a lista.
+                          if (ev.target.value === "selecionadas" && !nSel) setEscolher(tab);
+                        }}
                         options={[
                           { value: "todas", label: t("web.reports.export.rows_all", { n: tab.linhas.length }) },
-                          ...(p.pesquisa.trim()
-                            ? [{ value: "pesquisa", label: t("web.reports.export.rows_search", { n: p.filtrar(tab).length }) }]
-                            : []),
-                          { value: "selecionadas", label: t("web.reports.export.rows_selected", { n: nSel }), disabled: !nSel },
+                          { value: "selecionadas", label: t("web.reports.export.rows_selected", { n: nSel }) },
                         ]}
                       />
                     </div>
-                    {!nSel && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {t("web.reports.export.select_hint")}
-                      </Typography.Text>
+                    {et.linhas === "selecionadas" && (
+                      <Button size="small" style={{ marginTop: 6 }} onClick={() => setEscolher(tab)}>
+                        {t("web.reports.export.choose_rows")}
+                        {nSel > 0 && ` (${nSel})`}
+                      </Button>
                     )}
                   </div>
                 </Flex>
@@ -237,6 +249,69 @@ function ExportarDesktop(p: Props) {
           {x.vazio && <Alert type="warning" showIcon title={t("web.reports.error.nothing_to_export")} />}
         </Flex>
       )}
+      <EscolherLinhas {...p} tab={escolher} fechar={() => setEscolher(null)} />
+    </Modal>
+  );
+}
+
+/** Lista das linhas (lotes, inseminações…) para marcar as que vão no ficheiro. */
+function EscolherLinhas({ tab, fechar, selecao, setSelecao, celula }: Props & { tab: Tabela | null; fechar: () => void }) {
+  const t = useT();
+  const [q, setQ] = useState("");
+  const termo = normalizar(q.trim());
+  // Sempre montada (abre/fecha com `open`) para a animação correr bem; ao
+  // fechar continua a mostrar a última tabela até a janela desaparecer.
+  const ultima = useRef<Tabela | null>(null);
+  if (tab) ultima.current = tab;
+  const tb = ultima.current;
+  const linhas = !tb ? [] : termo ? tb.linhas.filter((l) => tb.colunas.some((c) => normalizar(celula(l[c])).includes(termo))) : tb.linhas;
+  const ids = tb ? (selecao[tb.titulo] ?? []) : [];
+  return (
+    <Modal
+      open={tab !== null}
+      afterClose={() => setQ("")}
+      onCancel={fechar}
+      onOk={fechar}
+      width={900}
+      title={`${tb ? t(tb.titulo) : ""} · ${t("web.reports.export.selected", { n: ids.length })}`}
+      cancelButtonProps={{ style: { display: "none" } }}
+    >
+      <Flex gap={8} align="center" style={{ marginBottom: 8 }}>
+        <Input.Search
+          allowClear
+          style={{ width: 280 }}
+          placeholder={t("web.reports.search")}
+          value={q}
+          onChange={(ev) => setQ(ev.target.value)}
+        />
+        {ids.length > 0 && (
+          <Button type="link" onClick={() => tb && setSelecao(tb.titulo, [])}>
+            {t("web.reports.export.clear_selection")}
+          </Button>
+        )}
+      </Flex>
+      <Table
+        size="small"
+        bordered
+        rowKey="_id"
+        dataSource={linhas}
+        scroll={{ x: true, y: 420 }}
+        pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small", showSizeChanger: false }}
+        rowSelection={{
+          selectedRowKeys: ids,
+          preserveSelectedRowKeys: true,
+          onChange: (k) => tb && setSelecao(tb.titulo, k as number[]),
+        }}
+        onRow={(l) => ({
+          // Clicar na linha também marca/desmarca.
+          onClick: () => {
+            const id = l._id as number;
+            tb && setSelecao(tb.titulo, ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]);
+          },
+          style: { cursor: "pointer" },
+        })}
+        columns={(tb?.colunas ?? []).map((c) => ({ title: t(`web.reports.col.${c}`), dataIndex: c, render: celula }))}
+      />
     </Modal>
   );
 }
@@ -297,9 +372,6 @@ function ExportarMobile(p: Props) {
                         onChange={(v) => v[0] && x.mudar(tab.titulo, { linhas: v[0] as Linhas })}
                         options={[
                           { value: "todas", label: t("web.reports.export.rows_all", { n: tab.linhas.length }) },
-                          ...(p.pesquisa.trim()
-                            ? [{ value: "pesquisa", label: t("web.reports.export.rows_search", { n: p.filtrar(tab).length }) }]
-                            : []),
                           { value: "selecionadas", label: t("web.reports.export.rows_selected", { n: nSel }) },
                         ]}
                       />
@@ -322,19 +394,7 @@ function ExportarMobile(p: Props) {
               <MButton block onClick={p.fechar}>
                 {t("web.common.cancel")}
               </MButton>
-              <MButton
-                block
-                color="primary"
-                loading={p.aExportar}
-                disabled={
-                  x.vazio ||
-                  p.tabelas.some(
-                    (tab) =>
-                      e.tabelas[tab.titulo].incluir && e.tabelas[tab.titulo].linhas === "selecionadas" && !x.selecionadas(tab).length,
-                  )
-                }
-                onClick={x.descarregar}
-              >
+              <MButton block color="primary" loading={p.aExportar} disabled={x.vazio || x.faltamLinhas} onClick={x.descarregar}>
                 {t("web.reports.export.download")}
               </MButton>
             </div>
@@ -359,7 +419,7 @@ function ExportarMobile(p: Props) {
             <div style={{ flex: 1, overflowY: "auto" }}>
               <CheckList multiple value={p.selecao[escolher.titulo] ?? []} onChange={(v) => p.setSelecao(escolher.titulo, v as number[])}>
                 {escolher.linhas
-                  .filter((l) => !q.trim() || escolher.colunas.some((c) => p.celula(l[c]).toLowerCase().includes(q.trim().toLowerCase())))
+                  .filter((l) => !q.trim() || escolher.colunas.some((c) => normalizar(p.celula(l[c])).includes(normalizar(q.trim()))))
                   .slice(0, 300)
                   .map((l) => (
                     <CheckList.Item
