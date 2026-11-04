@@ -118,17 +118,18 @@ def lote_factory(db, dono_id, contentor_id):
     função `criar(garanhao, existencia, canister, andar)` -> lote_id."""
     criados: list[int] = []
 
-    def criar(garanhao: str, existencia: int, canister: int, andar: int) -> int:
+    def criar(garanhao: str, existencia: int, canister: int, andar: int,
+              data_embriovet: str | None = None, motilidade: int | None = None) -> int:
         cur = db.cursor()
         cur.execute(
             """
             INSERT INTO estoque_dono (
                 garanhao, dono_id, existencia_atual, quantidade_inicial,
-                palhetas_produzidas, contentor_id, canister, andar
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                palhetas_produzidas, contentor_id, canister, andar, data_embriovet, motilidade
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
             """,
             (garanhao, dono_id, existencia, existencia, existencia,
-             contentor_id, canister, andar),
+             contentor_id, canister, andar, data_embriovet, motilidade),
         )
         lote_id = int(cur.fetchone()[0])
         db.commit()
@@ -286,6 +287,36 @@ def test_mover_lote_inteiro_soma_a_lote_existente_no_destino(
 
     destino = _ler_lote(db, lote_destino)
     assert destino[0] == 25
+
+
+def test_mover_lote_inteiro_nao_junta_a_lote_de_outra_producao(
+    db, dono_id, contentor_id, lote_factory,
+):
+    # Caso real: lote passado do andar 2 para o 1, onde já havia outro lote
+    # do mesmo garanhão e dono mas de OUTRA produção. Têm de ficar separados.
+    garanhao = f"_TEST_GAR_MOVER_{int(time.time() * 1000)}"
+    lote_origem = lote_factory(garanhao, 20, canister=1, andar=2, data_embriovet="2024-05-01", motilidade=60)
+    lote_destino = lote_factory(garanhao, 5, canister=1, andar=1, data_embriovet="2023-03-10", motilidade=45)
+
+    assert mover_palhetas_localizacao(lote_origem, 20, canister_destino=1, andar_destino=1) is True
+
+    assert _ler_lote(db, lote_origem)[:3] == (20, 1, 1)
+    assert _ler_lote(db, lote_destino)[:3] == (5, 1, 1)
+
+
+def test_mover_parcial_nao_junta_a_lote_de_outra_producao(
+    db, dono_id, contentor_id, lote_factory,
+):
+    garanhao = f"_TEST_GAR_MOVER_{int(time.time() * 1000)}"
+    lote_origem = lote_factory(garanhao, 20, canister=1, andar=2, data_embriovet="2024-05-01")
+    lote_destino = lote_factory(garanhao, 5, canister=1, andar=1, data_embriovet="2023-03-10")
+
+    assert mover_palhetas_localizacao(lote_origem, 8, canister_destino=1, andar_destino=1) is True
+
+    assert _ler_lote(db, lote_origem)[0] == 12
+    assert _ler_lote(db, lote_destino)[0] == 5
+    no_andar_1 = sorted(e for _, e in _ler_lote_localizacao(db, contentor_id, garanhao, canister=1, andar=1))
+    assert no_andar_1 == [5, 8]
 
 
 # ────────────────────────────────────────────────────────────────────

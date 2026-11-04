@@ -94,8 +94,9 @@ def test_interna_multi_lote_mesmo_local(ctx):
     assert r.status_code == 201, r.text
     op = r.json()["operation_id"]
     assert (_exist(ctx["l1"]), _exist(ctx["l2"])) == (6, 0)
-    # Mesmo garanhão e mesma localização no destino → um só lote com 10.
-    assert _lotes_de(ctx["b"]) == [(10, ctx["cont"], 1, 1)]
+    # Mesmo garanhão e local, mas produções diferentes (origens L1 e L2):
+    # no destino ficam dois lotes separados, não um só com 10.
+    assert _lotes_de(ctx["b"]) == [(4, ctx["cont"], 1, 1), (6, ctx["cont"], 1, 1)]
     regs = _exec("SELECT utilizador, operation_id::text FROM transferencias WHERE operation_id = %s::uuid", (op,))
     assert len(regs) == 2 and all(u == ctx["user"] for u, _ in regs)
 

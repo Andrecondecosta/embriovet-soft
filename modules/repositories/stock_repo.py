@@ -538,6 +538,22 @@ def deletar_stock(stock_id):
 # Transferências
 # ============================================================
 
+# Só se junta palhetas a um lote que seja da MESMA produção (os mesmos
+# dados do sémen). Dois lotes diferentes do mesmo garanhão e dono no mesmo
+# sítio ficam separados — juntá-los punha as palhetas de um com a data e a
+# motilidade do outro.
+_MESMA_PRODUCAO = """
+                AND data_embriovet IS NOT DISTINCT FROM %s AND origem_externa IS NOT DISTINCT FROM %s
+                AND qualidade IS NOT DISTINCT FROM %s AND concentracao IS NOT DISTINCT FROM %s
+                AND motilidade IS NOT DISTINCT FROM %s AND certificado IS NOT DISTINCT FROM %s
+                AND dose IS NOT DISTINCT FROM %s AND cor IS NOT DISTINCT FROM %s
+"""
+
+
+def _params_producao(data_emb, origem_ext, qual, conc, mot, cert, dose, cor) -> tuple:
+    return tuple(to_py(v) for v in (data_emb, origem_ext, qual, conc, mot, cert, dose, cor))
+
+
 def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quantidade, operation_id=None, utilizador=None):
     """Transfere quantidade parcial de palhetas para outro proprietário"""
     try:
@@ -586,9 +602,11 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
                 AND COALESCE(canister, 0) = COALESCE(%s, 0)
                 AND COALESCE(andar, 0) = COALESCE(%s, 0)
+            """ + _MESMA_PRODUCAO + """
                 LIMIT 1
             """, (to_py(garanhao), to_py(proprietario_destino_id), to_py(stock_origem_id),
-                  to_py(contentor_id), to_py(canister), to_py(andar)))
+                  to_py(contentor_id), to_py(canister), to_py(andar))
+                + _params_producao(data_emb, origem_ext, qual, conc, mot, cert, dose, cor))
             
             lote_destino = cur.fetchone()
             
@@ -700,9 +718,11 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                 AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
                 AND COALESCE(canister, 0) = COALESCE(%s, 0)
                 AND COALESCE(andar, 0) = COALESCE(%s, 0)
+            """ + _MESMA_PRODUCAO + """
                 LIMIT 1
             """, (to_py(garanhao), to_py(prop_destino_id), to_py(stock_origem_id),
-                  to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo)))
+                  to_py(contentor_id_novo), to_py(canister_novo), to_py(andar_novo))
+                + _params_producao(data_emb, origem_ext, qual, conc, mot, cert, dose, cor))
             
             lote_destino = cur.fetchone()
             
@@ -776,10 +796,11 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
     INSERT do destino.
 
     - Se `quantidade` for a existência toda do lote e não houver lote
-      do mesmo garanhão já no destino: só reposiciona o próprio registo
+      do mesmo garanhão e da mesma produção já no destino: só reposiciona o próprio registo
       (como `atualizar_andar_lote`) — evita criar um lote fantasma com
       existência 0 no caso mais comum (mover o lote inteiro).
-    - Caso contrário (parcial, ou o destino já tem o mesmo garanhão):
+    - Caso contrário (parcial, ou o destino já tem um lote da mesma
+      produção):
       desconta na origem e soma/cria no destino — mesmo padrão de
       `transferir_stock_interno_com_localizacao`, sem mudar de dono.
     """
@@ -831,17 +852,20 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
                 st.error("❌ O destino tem de ser diferente da localização atual.")
                 return False
 
-            # Lote do mesmo garanhão já no destino? (scoped ao CONTENTOR DE
-            # DESTINO — canister/andar não são únicos entre contentores)
+            # Lote do mesmo garanhão e da mesma produção já no destino?
+            # (scoped ao CONTENTOR DE DESTINO — canister/andar não são
+            # únicos entre contentores)
             cur.execute("""
                 SELECT id, existencia_atual
                 FROM estoque_dono
                 WHERE garanhao = %s AND dono_id = %s AND id != %s
                 AND COALESCE(contentor_id, 0) = COALESCE(%s, 0)
                 AND canister = %s AND andar = %s
+            """ + _MESMA_PRODUCAO + """
                 LIMIT 1
             """, (to_py(garanhao), to_py(dono_id), to_py(stock_origem_id),
-                  to_py(contentor_destino_int), canister_destino_int, andar_destino_int))
+                  to_py(contentor_destino_int), canister_destino_int, andar_destino_int)
+                + _params_producao(data_emb, origem_ext, qual, conc, mot, cert, dose, cor))
 
             lote_destino = cur.fetchone()
 
