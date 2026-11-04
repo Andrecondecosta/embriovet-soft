@@ -203,7 +203,14 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
               <List.Item
                 key={l.id}
                 onClick={() => setSelecionado(l)}
-                description={`${l.proprietario_nome ?? t("common.no_owner")} · ${localizacao(l) ?? "—"} · M ${l.motilidade ?? 0}%`}
+                description={[
+                  l.proprietario_nome ?? t("common.no_owner"),
+                  localizacao(l) ?? "—",
+                  `M ${l.motilidade ?? 0}%`,
+                  l.origem_externa && `${t("stock.external_origin")}: ${l.origem_externa}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
                 extra={
                   <Tag color={(l.existencia_atual ?? 0) > 0 ? "primary" : "default"} fill="outline">
                     {t("web.stock.straws_count", { count: l.existencia_atual ?? 0 })}

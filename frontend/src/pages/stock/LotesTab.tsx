@@ -53,15 +53,12 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
   const [params, setParams] = useSearchParams();
 
   const garanhoes = useGaranhoesStock();
-  const opcoesGaranhao = useMemo(
-    () => (garanhoes.data ?? []).filter((g) => g.no_seletor).map((g) => g.garanhao),
-    [garanhoes.data],
-  );
+  const opcoesGaranhao = useMemo(() => (garanhoes.data ?? []).filter((g) => g.no_seletor).map((g) => g.garanhao), [garanhoes.data]);
 
   // Estado no endereço: "Atualizar", "Voltar" e links diretos (ex.: do
   // separador Garanhões, ou depois de adicionar um lote) caem no sítio certo.
   const pedido = params.get("garanhao");
-  const garanhao = pedido && opcoesGaranhao.includes(pedido) ? pedido : opcoesGaranhao[0] ?? null;
+  const garanhao = pedido && opcoesGaranhao.includes(pedido) ? pedido : (opcoesGaranhao[0] ?? null);
   const donosSel = params.getAll("dono");
   const minPalhetas = Number(params.get("min")) || 0;
   const incluirVazios = params.get("vazios") === "1";
@@ -243,7 +240,11 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                           rowKey={(r) => String(r.dono_id)}
                           dataSource={lotes.data.por_proprietario}
                           columns={[
-                            { title: t("label.owner"), dataIndex: "proprietario_nome", render: (v: string | null) => v ?? t("common.no_owner") },
+                            {
+                              title: t("label.owner"),
+                              dataIndex: "proprietario_nome",
+                              render: (v: string | null) => v ?? t("common.no_owner"),
+                            },
                             { title: t("web.stock.kpi.palhetas"), dataIndex: "palhetas", align: "right" as const },
                           ]}
                         />
@@ -294,11 +295,19 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
               title={() => <Typography.Text strong>{t("stock.lots_detailed")}</Typography.Text>}
               onRow={(l) => ({ onClick: () => setSelecionado(l), style: { cursor: "pointer" } })}
               columns={[
+                // Data e origem em colunas separadas, tal como foram escritas.
                 {
-                  title: "Ref.",
-                  key: "ref",
-                  render: (_, l) => <Typography.Text strong>{referencia(l) ?? t("common.no_reference")}</Typography.Text>,
-                  sorter: (a, b) => (referencia(a) ?? "").localeCompare(referencia(b) ?? ""),
+                  title: t("stock.prod_date"),
+                  dataIndex: "data_embriovet",
+                  render: (v: string | null) => <Typography.Text strong>{v || "—"}</Typography.Text>,
+                  sorter: (a, b) => (a.data_embriovet ?? "").localeCompare(b.data_embriovet ?? "", undefined, { numeric: true }),
+                },
+                {
+                  title: t("stock.external_origin"),
+                  dataIndex: "origem_externa",
+                  ellipsis: true,
+                  render: (v: string | null) => v || "—",
+                  sorter: (a, b) => (a.origem_externa ?? "").localeCompare(b.origem_externa ?? ""),
                 },
                 {
                   title: t("label.owner"),
@@ -313,14 +322,29 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                   align: "right",
                   width: 90,
                   sorter: (a, b) => (a.existencia_atual ?? 0) - (b.existencia_atual ?? 0),
-                  render: (v: number | null) => <Tag color={v ? "red" : "default"} style={{ marginInlineEnd: 0 }}>{v ?? 0}</Tag>,
+                  render: (v: number | null) => (
+                    <Tag color={v ? "red" : "default"} style={{ marginInlineEnd: 0 }}>
+                      {v ?? 0}
+                    </Tag>
+                  ),
                 },
                 { title: t("label.location"), key: "loc", render: (_, l) => localizacao(l) ?? "—" },
                 { title: t("stock.color"), dataIndex: "cor", render: (v: string | null) => v || "—", responsive: ["lg"] },
                 { title: "Mot.", dataIndex: "motilidade", align: "right", render: (v: number | null) => `${v ?? 0}%` },
-                { title: "Conc.", dataIndex: "concentracao", align: "right", render: (v: number | null) => `${v ?? 0} M/ml`, responsive: ["lg"] },
+                {
+                  title: "Conc.",
+                  dataIndex: "concentracao",
+                  align: "right",
+                  render: (v: number | null) => `${v ?? 0} M/ml`,
+                  responsive: ["lg"],
+                },
                 { title: t("stock.quality_label"), dataIndex: "qualidade", render: (v: string | null) => v || "—", responsive: ["xl"] },
-                { title: t("stock.created_at_label"), dataIndex: "data_criacao", render: (v: string | null) => dataCurta(v), responsive: ["xl"] },
+                {
+                  title: t("stock.created_at_label"),
+                  dataIndex: "data_criacao",
+                  render: (v: string | null) => dataCurta(v),
+                  responsive: ["xl"],
+                },
               ]}
             />
           )}
