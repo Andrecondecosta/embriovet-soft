@@ -350,8 +350,8 @@ function LoteFormModalDesktop({ opened, lote, onClose }: { opened: boolean; lote
                 </Form.Item>
               </Col>
               <Col xs={12} md={6}>
-                <Form.Item name="origem_externa" label={t("stock.external_origin")}>
-                  <Input />
+                <Form.Item name="origem_externa" label={t("stock.external_origin")} tooltip={t("web.stock.external_origin_hint")}>
+                  <Input placeholder={t("web.stock.external_origin_placeholder")} />
                 </Form.Item>
               </Col>
               <Col xs={12} md={6}>

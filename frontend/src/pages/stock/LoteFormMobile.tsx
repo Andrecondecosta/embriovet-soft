@@ -198,8 +198,8 @@ export function NovoLoteMobile() {
               >
                 <NumeroCampo />
               </Form.Item>
-              <Form.Item name="origem_externa" label={t("stock.external_origin")}>
-                <Input clearable />
+              <Form.Item name="origem_externa" label={t("stock.external_origin")} help={t("web.stock.external_origin_hint")}>
+                <Input clearable placeholder={t("web.stock.external_origin_placeholder")} />
               </Form.Item>
             </>
           }
@@ -245,8 +245,8 @@ export function EditarLoteMobile({ opened, lote, onClose }: { opened: boolean; l
               <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
                 <Input clearable />
               </Form.Item>
-              <Form.Item name="origem_externa" label={t("stock.external_origin")}>
-                <Input clearable />
+              <Form.Item name="origem_externa" label={t("stock.external_origin")} help={t("web.stock.external_origin_hint")}>
+                <Input clearable placeholder={t("web.stock.external_origin_placeholder")} />
               </Form.Item>
               <Form.Item name="palhetas_produzidas" label={t("stock.straws_produced")}>
                 <NumeroCampo />

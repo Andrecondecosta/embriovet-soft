@@ -1571,3 +1571,14 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v
+
+# ── Stock: o que escrever em "Origem externa" ──
+for _k, *_txt in [
+    ("external_origin_hint", "De onde veio o sémen (centro, país ou código do lote). Deixe vazio se foi produzido aqui.",
+     "Where the semen came from (centre, country or batch code). Leave empty if produced here.",
+     "Provenance de la semence (centre, pays ou code du lot). Laisser vide si produite ici.",
+     "Herkunft des Samens (Zentrum, Land oder Chargencode). Leer lassen, wenn hier produziert."),
+    ("external_origin_placeholder", "ex.: Centro X, Alemanha", "e.g. Centre X, Germany", "ex. : Centre X, Allemagne", "z. B. Zentrum X, Deutschland"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v

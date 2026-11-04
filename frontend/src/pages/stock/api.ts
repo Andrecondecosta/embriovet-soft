@@ -130,9 +130,7 @@ export const useTransferencias = (garanhao: string | null) =>
     queryKey: ["stock", "transferencias", garanhao],
     enabled: !!garanhao,
     queryFn: () =>
-      api<{ internas: TransfInterna[]; externas: TransfExterna[] }>(
-        `/stock/transferencias?garanhao=${encodeURIComponent(garanhao!)}`,
-      ),
+      api<{ internas: TransfInterna[]; externas: TransfExterna[] }>(`/stock/transferencias?garanhao=${encodeURIComponent(garanhao!)}`),
   });
 
 export const useOpcoes = (tipo: "proprietarios" | "contentores" | "garanhoes", apenasAtivos = false) =>
@@ -156,8 +154,7 @@ function useStockMutation<V, R>(fn: (v: V) => Promise<R>) {
 export const useCriarLote = () => useStockMutation((d: LoteNovo) => api<Lote>("/stock/lotes", "POST", d));
 export const useEditarLote = () =>
   useStockMutation(({ id, ...d }: LoteEdicao & { id: number }) => api<Lote>(`/stock/lotes/${id}`, "PUT", d));
-export const useApagarLote = () =>
-  useStockMutation((id: number) => api<{ ok: boolean }>(`/stock/lotes/${id}`, "DELETE"));
+export const useApagarLote = () => useStockMutation((id: number) => api<{ ok: boolean }>(`/stock/lotes/${id}`, "DELETE"));
 
 /** "CT1/C3/A2" — como na lista da app atual. */
 export function localizacao(l: Pick<Lote, "contentor_codigo" | "canister" | "andar" | "local_armazenagem">): string | null {
@@ -167,5 +164,12 @@ export function localizacao(l: Pick<Lote, "contentor_codigo" | "canister" | "and
   return l.local_armazenagem || null;
 }
 
-/** Referência do lote: origem externa, ou data de produção. */
-export const referencia = (l: Pick<Lote, "origem_externa" | "data_embriovet">) => l.origem_externa || l.data_embriovet || null;
+// Há lotes com "Sim"/"Não" na origem externa (o campo foi lido como pergunta):
+// isso não identifica o lote, por isso não serve de referência.
+const SIM_NAO = /^(sim|n[ãa]o|s|n|yes|no|x)$/i;
+
+/** Referência do lote: origem externa (se for mesmo um texto), ou data de produção. */
+export const referencia = (l: Pick<Lote, "origem_externa" | "data_embriovet">) => {
+  const origem = l.origem_externa?.trim();
+  return (origem && !SIM_NAO.test(origem) ? origem : null) || l.data_embriovet || null;
+};
