@@ -1546,3 +1546,39 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v
+
+# ── Relatórios: janela Exportar (partes, colunas e linhas) ──
+for _k, *_txt in [
+    ("col.origem_externa", "Origem externa", "External origin", "Origine externe", "Externe Herkunft"),
+    ("col.palhetas_produzidas", "Palhetas produzidas", "Straws produced", "Paillettes produites", "Produzierte Pailletten"),
+    ("col.quantidade_inicial", "Quantidade inicial", "Initial quantity", "Quantité initiale", "Anfangsmenge"),
+    ("col.cor", "Cor", "Colour", "Couleur", "Farbe"),
+    ("col.concentracao", "Concentração (M/ml)", "Concentration (M/ml)", "Concentration (M/ml)", "Konzentration (M/ml)"),
+    ("col.certificado", "Certificado", "Certificate", "Certificat", "Zertifikat"),
+    ("col.dose", "Dose", "Dose", "Dose", "Dosis"),
+    ("col.contentor_codigo", "Contentor", "Container", "Conteneur", "Behälter"),
+    ("col.criado_por", "Criado por", "Created by", "Créé par", "Erstellt von"),
+    ("col.protocolo", "Protocolo", "Protocol", "Protocole", "Protokoll"),
+    ("col.resultado", "Resultado", "Result", "Résultat", "Ergebnis"),
+    ("col.utilizador", "Utilizador", "User", "Utilisateur", "Benutzer"),
+    ("export.button", "Exportar", "Export", "Exporter", "Exportieren"),
+    ("export.title", "Exportar relatório", "Export report", "Exporter le rapport", "Bericht exportieren"),
+    ("export.format", "Formato", "Format", "Format", "Format"),
+    ("export.summary", "Resumo (números do topo)", "Summary (top figures)", "Résumé (chiffres du haut)", "Zusammenfassung (Kennzahlen)"),
+    ("export.columns", "Colunas", "Columns", "Colonnes", "Spalten"),
+    ("export.rows", "Linhas", "Rows", "Lignes", "Zeilen"),
+    ("export.rows_all", "Todas ({n})", "All ({n})", "Toutes ({n})", "Alle ({n})"),
+    ("export.rows_search", "Só as da pesquisa ({n})", "Only the searched ({n})", "Seulement la recherche ({n})", "Nur Suchtreffer ({n})"),
+    ("export.rows_selected", "Só as selecionadas ({n})", "Only selected ({n})", "Seulement la sélection ({n})", "Nur ausgewählte ({n})"),
+    ("export.choose_rows", "Escolher linhas", "Choose rows", "Choisir les lignes", "Zeilen auswählen"),
+    ("export.select_hint", "Marque as linhas na tabela para exportar só essas.", "Tick rows in the table to export only those.",
+     "Cochez des lignes du tableau pour n’exporter que celles-ci.", "Zeilen in der Tabelle markieren, um nur diese zu exportieren."),
+    ("export.download", "Descarregar", "Download", "Télécharger", "Herunterladen"),
+    ("export.reset", "Repor", "Reset", "Réinitialiser", "Zurücksetzen"),
+    ("export.clear_selection", "Limpar seleção", "Clear selection", "Effacer la sélection", "Auswahl aufheben"),
+    ("export.selected", "{n} selecionada(s)", "{n} selected", "{n} sélectionnée(s)", "{n} ausgewählt"),
+    ("error.nothing_to_export", "Escolha pelo menos uma parte com colunas e linhas.", "Choose at least one part with columns and rows.",
+     "Choisissez au moins une partie avec colonnes et lignes.", "Mindestens einen Teil mit Spalten und Zeilen wählen."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v

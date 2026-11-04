@@ -124,3 +124,25 @@ def test_exportar_todos_os_relatorios(client, opcoes, modo, formato, tipo):
     assert tipo in r.headers["content-type"]
     assert r.content
 
+
+
+def test_exportar_so_lotes_e_colunas_escolhidos(client):
+    r = client.get("/api/relatorios", params={"modo": "historico", "hist": "stock"}).json()
+    tab = r["tabelas"][0]
+    if len(tab["linhas"]) < 3:
+        pytest.skip("poucos lotes na base de teste")
+    assert {"qualidade", "concentracao", "motilidade"} <= set(tab["disponiveis"])
+    ids = [l["_id"] for l in tab["linhas"][:2]]
+    escolha = {"formato": "csv", "resumo": False, "tabelas": [{"titulo": tab["titulo"], "colunas": ["garanhao_nome", "concentracao"], "ids": ids}]}
+    f = client.post("/api/relatorios/exportar", params={"modo": "historico", "hist": "stock"}, json=escolha)
+    assert f.status_code == 200, f.text
+    linhas = f.content.decode("utf-8-sig").strip().splitlines()
+    assert linhas[3] == "Garanhão,Concentração (M/ml)"
+    assert len(linhas) == 4 + 2
+
+
+def test_exportar_nada_escolhido(client):
+    escolha = {"formato": "pdf", "resumo": False, "tabelas": []}
+    f = client.post("/api/relatorios/exportar", params={"modo": "historico", "hist": "insem"}, json=escolha)
+    assert f.status_code == 400
+    assert f.json()["detail"]["code"] == "web.reports.error.nothing_to_export"

@@ -40,21 +40,16 @@ import { useErrorMessage, useNotifyError } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
+import { ExportarRelatorio, type CorpoExportar, type Formato, type Tabela } from "./ExportarRelatorio";
 
 type Modo = "garanhao" | "proprietario" | "contentor" | "historico";
 type Hist = "insem" | "transf_int" | "transf_ext" | "stock";
-type Formato = "csv" | "pdf" | "xlsx";
 type FiltroChave = "prop" | "gar" | "can" | "and";
 
 interface Opcoes {
   garanhoes: string[];
   proprietarios: { id: number; nome: string }[];
   contentores: { id: number; codigo: string; descricao: string | null }[];
-}
-interface Tabela {
-  titulo: string;
-  colunas: string[];
-  linhas: Record<string, string | number | null>[];
 }
 interface Relatorio {
   kpis: [string, number][];
@@ -82,7 +77,6 @@ const FILTROS: { chave: FiltroChave; param: string; label: string }[] = [
   { chave: "and", param: "f_and", label: "reports.floor" },
 ];
 const FMT = "YYYY-MM-DD";
-const FORMATOS: Record<Formato, string> = { pdf: "PDF", xlsx: "Excel", csv: "CSV" };
 
 /** Períodos rápidos (o fim fica em aberto quando é "até hoje"). */
 function periodos(): { chave: string; valor: [Dayjs, Dayjs] | null }[] {
@@ -166,8 +160,12 @@ function useRelatorio() {
     );
   /** Mudar o modo ou a escolha limpa os filtros, que dependem dela. */
   const limparFiltros = (p: URLSearchParams) => FILTROS.forEach((f) => p.delete(f.param));
-  const [aExportar, setAExportar] = useState<Formato | null>(null);
+  const [aExportar, setAExportar] = useState(false);
+  const [exportarAberto, setExportarAberto] = useState(false);
   const [pesquisa, setPesquisa] = useState("");
+  // Linhas marcadas na tabela (ids por tabela), para exportar só essas.
+  const [selecao, setSelecaoTodas] = useState<Record<string, number[]>>({});
+  const limpar = () => (setPesquisa(""), setSelecaoTodas({}));
   const termo = normalizar(pesquisa.trim());
 
   return {
@@ -189,9 +187,15 @@ function useRelatorio() {
       termo ? tab.linhas.filter((l) => tab.colunas.some((c) => normalizar(celula(l[c])).includes(termo))) : tab.linhas,
     valoresFiltro: (param: string) => params.getAll(param),
     // Outro relatório, outra pesquisa: o texto escrito não passa de um para o outro.
-    mudarModo: (m: Modo) => (setPesquisa(""), atualizar((p) => (p.set("modo", m), limparFiltros(p)))),
-    mudarHist: (h: Hist) => (setPesquisa(""), atualizar((p) => p.set("hist", h))),
-    escolher: (k: "g" | "p" | "c", v: string) => (setPesquisa(""), atualizar((p) => (p.set(k, v), limparFiltros(p)))),
+    mudarModo: (m: Modo) => (limpar(), atualizar((p) => (p.set("modo", m), limparFiltros(p)))),
+    mudarHist: (h: Hist) => (limpar(), atualizar((p) => p.set("hist", h))),
+    escolher: (k: "g" | "p" | "c", v: string) => (limpar(), atualizar((p) => (p.set(k, v), limparFiltros(p)))),
+    selecao,
+    setSelecao: (titulo: string, ids: number[]) => setSelecaoTodas((s) => ({ ...s, [titulo]: ids })),
+    exportarAberto,
+    setExportarAberto,
+    /** Escolhas guardadas por tipo de relatório (não por garanhão). */
+    chaveExportar: modo === "historico" ? `historico.${hist}` : modo,
     mudarFiltro: (param: string, valores: (string | number)[]) =>
       atualizar((p) => (p.delete(param), valores.forEach((v) => p.append(param, String(v))))),
     mudarPeriodo: (i: string | null, f: string | null) =>
@@ -204,14 +208,14 @@ function useRelatorio() {
     nFiltros: (inicio || fim ? 1 : 0) + FILTROS.filter((f) => params.getAll(f.param).length).length,
     nFiltrosLista: FILTROS.filter((f) => params.getAll(f.param).length).length,
     aExportar,
-    exportar: async (formato: Formato) => {
-      setAExportar(formato);
+    exportar: async (formato: Formato, corpo?: CorpoExportar) => {
+      setAExportar(true);
       try {
-        await descarregar(`/relatorios/exportar?${consulta}&formato=${formato}`);
+        await descarregar(`/relatorios/exportar?${consulta}&formato=${formato}`, "relatorio", corpo);
       } catch (err) {
         notifyError(err);
       } finally {
-        setAExportar(null);
+        setAExportar(false);
       }
     },
   };
@@ -221,7 +225,29 @@ type R = ReturnType<typeof useRelatorio>;
 
 export function RelatoriosPage() {
   const r = useRelatorio();
-  return useIsMobile() ? <RelatoriosMobile r={r} /> : <RelatoriosDesktop r={r} />;
+  const mobile = useIsMobile();
+  const d = r.relatorio.data;
+  return (
+    <>
+      {mobile ? <RelatoriosMobile r={r} /> : <RelatoriosDesktop r={r} />}
+      {d && (
+        <ExportarRelatorio
+          aberto={r.exportarAberto}
+          fechar={() => r.setExportarAberto(false)}
+          chave={r.chaveExportar}
+          temResumo={d.kpis.length > 0}
+          tabelas={d.tabelas}
+          filtrar={r.filtrar}
+          pesquisa={r.pesquisa}
+          selecao={r.selecao}
+          setSelecao={r.setSelecao}
+          aExportar={r.aExportar}
+          exportar={r.exportar}
+          celula={celula}
+        />
+      )}
+    </>
+  );
 }
 
 function ErroPeriodo({ r }: { r: R }) {
@@ -328,11 +354,11 @@ function RelatoriosDesktop({ r }: { r: R }) {
             </Popover>
           )}
           <Flex gap={8} style={{ marginLeft: "auto" }}>
-            {(d?.exportar ?? []).map((f) => (
-              <Button key={f} icon={<DownloadOutlined />} loading={r.aExportar === f} onClick={() => r.exportar(f)}>
-                {FORMATOS[f]}
+            {(d?.exportar ?? []).length > 0 && (
+              <Button icon={<DownloadOutlined />} onClick={() => r.setExportarAberto(true)}>
+                {t("web.reports.export.button")}
               </Button>
-            ))}
+            )}
           </Flex>
         </Flex>
         <ErroPeriodo r={r} />
@@ -370,13 +396,25 @@ function RelatoriosDesktop({ r }: { r: R }) {
                   <div key={tab.titulo}>
                     <Typography.Text strong style={{ display: "block", marginBottom: 6 }}>
                       {t(tab.titulo)} · {linhas.length}
+                      {(r.selecao[tab.titulo] ?? []).length > 0 && (
+                        <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>
+                          {" "}
+                          · {t("web.reports.export.selected", { n: r.selecao[tab.titulo].length })}{" "}
+                          <Typography.Link onClick={() => r.setSelecao(tab.titulo, [])}>{t("web.reports.export.clear_selection")}</Typography.Link>
+                        </Typography.Text>
+                      )}
                     </Typography.Text>
                     <Table
                       size="small"
                       bordered
                       loading={r.relatorio.isFetching}
-                      rowKey="__k"
-                      dataSource={linhas.map((l, i) => ({ ...l, __k: i }))}
+                      rowKey="_id"
+                      dataSource={linhas}
+                      rowSelection={{
+                        selectedRowKeys: r.selecao[tab.titulo] ?? [],
+                        onChange: (ids) => r.setSelecao(tab.titulo, ids as number[]),
+                        preserveSelectedRowKeys: true,
+                      }}
                       pagination={{ pageSize: 50, hideOnSinglePage: true, size: "small", showSizeChanger: false }}
                       scroll={{ x: true }}
                       locale={{ emptyText: t(r.pesquisa ? "web.common.no_results" : "reports.no_data_filters") }}
@@ -494,11 +532,9 @@ function RelatoriosMobile({ r }: { r: R }) {
 
           {(d?.exportar ?? []).length > 0 && (
             <div style={{ display: "flex", gap: 8, padding: "4px 12px 8px" }}>
-              {d!.exportar!.map((f) => (
-                <MButton key={f} size="small" loading={r.aExportar === f} onClick={() => r.exportar(f)}>
-                  {FORMATOS[f]}
-                </MButton>
-              ))}
+              <MButton size="small" onClick={() => r.setExportarAberto(true)}>
+                {t("web.reports.export.button")}
+              </MButton>
             </div>
           )}
 

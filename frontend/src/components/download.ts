@@ -2,8 +2,12 @@ import { ApiError } from "../api/client";
 
 /** Descarrega um ficheiro gerado pela API, com o nome que o servidor dá
  *  (inclui nomes com acentos, enviados em `filename*=UTF-8''…`). */
-export async function descarregar(caminho: string, nomePorOmissao = "ficheiro") {
-  const res = await fetch(`/api${caminho}`, { credentials: "same-origin" });
+export async function descarregar(caminho: string, nomePorOmissao = "ficheiro", corpo?: unknown) {
+  // Com `corpo`, vai por POST em JSON (ex.: escolhas da janela Exportar).
+  const res = await fetch(`/api${caminho}`, {
+    credentials: "same-origin",
+    ...(corpo !== undefined && { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }),
+  });
   if (!res.ok) {
     let codigo = "web.error.generic";
     let params: Record<string, string | number> = {};

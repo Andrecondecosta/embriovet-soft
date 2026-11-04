@@ -21,6 +21,7 @@ from typing import Literal
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel
 
 from backend.deps import get_current_user
 from backend.i18n_web import WEB_TRANSLATIONS
@@ -64,6 +65,15 @@ COL_H_TRANSF = ["data_transferencia", "garanhao", "proprietario_origem", "propri
 COL_H_EXT = ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]
 COL_H_STOCK = ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "motilidade", "local_armazenagem"]
 
+# Colunas que se podem acrescentar no ficheiro (Exportar → Colunas), além das do ecrã.
+EXTRA_STOCK = [
+    "garanhao_nome", "proprietario_nome", "data_embriovet", "origem_externa", "palhetas_produzidas", "quantidade_inicial",
+    "existencia_atual", "qualidade", "cor", "concentracao", "motilidade", "certificado", "dose", "contentor_codigo",
+    "canister", "andar", "local_armazenagem", "observacoes", "criado_por", "data_criacao",
+]
+EXTRA_INSEM = ["protocolo", "resultado", "observacoes", "utilizador"]
+EXTRA_TRANSF = ["utilizador"]
+
 
 def _erro(http_status: int, chave: str, **params):
     return HTTPException(http_status, {"code": chave, "params": params})
@@ -77,8 +87,12 @@ def _ordenar(df, col, desc=True):
     return df.sort_values(col, ascending=not desc) if not df.empty and col in df.columns else df
 
 
-def _tabela(titulo: str, df, colunas: list[str]) -> dict:
-    return {"titulo": titulo, "colunas": colunas, "linhas": registos(safe_pick(df, colunas), colunas)}
+def _tabela(titulo: str, df, colunas: list[str], extra: list[str] | None = None) -> dict:
+    """`colunas` são as do ecrã; `disponiveis` as que se podem pôr no
+    ficheiro. Cada linha leva o `_id` do registo, para escolher linhas."""
+    disponiveis = colunas + [c for c in (extra or []) if c not in colunas]
+    mapa = {c: c for c in disponiveis} | {"id": "_id"}
+    return {"titulo": titulo, "colunas": colunas, "disponiveis": disponiveis, "linhas": registos(safe_pick(df, list(mapa)), mapa)}
 
 
 def _unicos(df, col) -> list:
@@ -220,8 +234,8 @@ def _montar(p: Pedido) -> dict:
             "filtros": r["filtros"],
             "titulo": ("reports.mode.stallion", p.garanhao),
             "tabelas": [
-                _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_G),
-                _tabela("reports.section.inseminations", _ordenar(r["i"], "data_inseminacao"), COL_INSEM_G),
+                _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_G, EXTRA_STOCK),
+                _tabela("reports.section.inseminations", _ordenar(r["i"], "data_inseminacao"), COL_INSEM_G, EXTRA_INSEM),
             ],
         }
     if p.modo == "proprietario":
@@ -235,7 +249,7 @@ def _montar(p: Pedido) -> dict:
             "kpis": r["kpis"],
             "filtros": r["filtros"],
             "titulo": ("reports.mode.owner", nome.iloc[0] if not nome.empty else str(p.proprietario)),
-            "tabelas": [_tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_P)],
+            "tabelas": [_tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_P, EXTRA_STOCK)],
         }
     if p.modo == "contentor":
         if p.contentor is None:
@@ -247,17 +261,17 @@ def _montar(p: Pedido) -> dict:
             "kpis": r["kpis"],
             "filtros": r["filtros"],
             "titulo": ("reports.mode.container", cod.iloc[0] if not cod.empty else str(p.contentor)),
-            "tabelas": [_tabela("reports.section.stock", r["s"], COL_STOCK_C)],
+            "tabelas": [_tabela("reports.section.stock", r["s"], COL_STOCK_C, EXTRA_STOCK)],
         }
     # Histórico
     if p.hist == "insem":
-        tab = _tabela("reports.history.inseminations", _ordenar(d["insem"], "data_inseminacao"), COL_H_INSEM)
+        tab = _tabela("reports.history.inseminations", _ordenar(d["insem"], "data_inseminacao"), COL_H_INSEM, EXTRA_INSEM)
     elif p.hist == "transf_int":
-        tab = _tabela("reports.history.transfer_internal", _ordenar(d["transf"], "data_transferencia"), COL_H_TRANSF)
+        tab = _tabela("reports.history.transfer_internal", _ordenar(d["transf"], "data_transferencia"), COL_H_TRANSF, EXTRA_TRANSF)
     elif p.hist == "transf_ext":
-        tab = _tabela("reports.history.transfer_external", _ordenar(d["transf_ext"], "data_transferencia"), COL_H_EXT)
+        tab = _tabela("reports.history.transfer_external", _ordenar(d["transf_ext"], "data_transferencia"), COL_H_EXT, EXTRA_TRANSF)
     else:
-        tab = _tabela("reports.history.full_stock", _ordenar(d["stock"], "existencia_atual"), COL_H_STOCK)
+        tab = _tabela("reports.history.full_stock", _ordenar(d["stock"], "existencia_atual"), COL_H_STOCK, EXTRA_STOCK)
     return {"kpis": [], "filtros": {}, "titulo": ("reports.mode.history", tab["titulo"]), "tabelas": [tab]}
 
 
@@ -351,10 +365,46 @@ def _valor_ficheiro(v):
     return v
 
 
-def _exportar_generico(formato: str, p: Pedido) -> Response:
+class EscolhaTabela(BaseModel):
+    titulo: str
+    colunas: list[str]
+    ids: list[int] | None = None  # None = todas as linhas
+
+
+class Escolha(BaseModel):
+    formato: Literal["csv", "pdf", "xlsx"]
+    resumo: bool = True
+    tabelas: list[EscolhaTabela]
+
+
+@router.post("/exportar")
+def exportar_escolha(e: Escolha, p: Pedido = Depends(), _user: dict = Depends(get_current_user)):
+    """Ficheiro com só as partes, colunas e linhas escolhidas."""
+    return _exportar_generico(e.formato, p, e)
+
+
+def _aplicar_escolha(r: dict, e: Escolha) -> dict:
+    por_titulo = {tab["titulo"]: tab for tab in r["tabelas"]}
+    tabelas = []
+    for et in e.tabelas:
+        tab = por_titulo.get(et.titulo)
+        colunas = [c for c in (tab or {}).get("disponiveis", []) if c in et.colunas]
+        if not tab or not colunas:
+            continue
+        ids = set(et.ids) if et.ids is not None else None
+        linhas = [l for l in tab["linhas"] if ids is None or l.get("_id") in ids]
+        tabelas.append(tab | {"colunas": colunas, "linhas": linhas})
+    if not tabelas and not (e.resumo and r["kpis"]):
+        raise _erro(400, "web.reports.error.nothing_to_export")
+    return r | {"tabelas": tabelas, "kpis": r["kpis"] if e.resumo else []}
+
+
+def _exportar_generico(formato: str, p: Pedido, e: Escolha | None = None) -> Response:
     r = _montar(p)
     if not r["tabelas"]:
         raise _erro(400, "web.reports.error.export_unavailable")
+    if e is not None:
+        r = _aplicar_escolha(r, e)
     modo, nome = r["titulo"]
     titulo = f"{_t(modo)}: {_t(nome)}"
     kpis = [(_t(label), n) for label, n in r["kpis"]]
