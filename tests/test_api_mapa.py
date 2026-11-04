@@ -150,3 +150,27 @@ def test_trocar_contentores_de_lugar(ctx):
     assert pos[a["id"]] == (460, 190) and pos[b["id"]] == (10, 10)
 
     assert c.post("/api/mapa/trocar", json={"a": a["id"], "b": a["id"]}).status_code == 422
+
+
+def test_mover_lote_inteiro_nunca_vai_para_lote_de_outro_cavalo_e_dono(ctx):
+    # Caso real (Diamante Negro → andar onde já estava um Escorial de outro
+    # dono): o lote muda de sítio e o lote do outro cavalo fica intacto.
+    c = ctx["c"]
+    cont = c.post("/api/mapa/contentores", json={"codigo": f"{P}X{ctx['s']}", "descricao": ""}).json()["id"]
+    meu = _lote(ctx, cont, 44, canister=3, andar=2)
+    outro_dono = _exec("INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id", (f"{P}D2{ctx['s']}",))[0][0]
+    outro_animal = get_or_create_garanhao(f"{P}H{ctx['s']}")
+    outro = _exec(
+        """INSERT INTO estoque_dono (garanhao, animal_id, dono_id, existencia_atual, quantidade_inicial,
+               contentor_id, canister, andar)
+           VALUES (%s, %s, %s, 1, 1, %s, 3, 1) RETURNING id""",
+        (f"{P}H{ctx['s']}", outro_animal, outro_dono, cont),
+    )[0][0]
+    try:
+        r = c.post("/api/mapa/mover", json={"lote_id": meu, "quantidade": 44, "contentor_id": cont, "canister": 3, "andar": 1})
+        assert r.status_code == 200, r.text
+        assert _exec("SELECT existencia_atual, andar FROM estoque_dono WHERE id = %s", (meu,))[0] == (44, 1)
+        assert _exec("SELECT existencia_atual FROM estoque_dono WHERE id = %s", (outro,))[0][0] == 1
+    finally:
+        _exec("DELETE FROM estoque_dono WHERE id = %s", (outro,))
+        _exec("DELETE FROM dono WHERE id = %s", (outro_dono,))
