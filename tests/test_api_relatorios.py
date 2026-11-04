@@ -146,3 +146,22 @@ def test_exportar_nada_escolhido(client):
     f = client.post("/api/relatorios/exportar", params={"modo": "historico", "hist": "insem"}, json=escolha)
     assert f.status_code == 400
     assert f.json()["detail"]["code"] == "web.reports.error.nothing_to_export"
+
+
+def test_resumo_so_dos_lotes_escolhidos_e_sem_zeros(client, opcoes):
+    if not opcoes["garanhoes"]:
+        pytest.skip("sem stock na base de teste")
+    params = {"modo": "garanhao", "garanhao": opcoes["garanhoes"][0]}
+    stock = client.get("/api/relatorios", params=params).json()["tabelas"][0]
+    lotes = [l for l in stock["linhas"] if l["existencia_atual"]][:2]
+    if not lotes:
+        pytest.skip("garanhão sem palhetas")
+    escolha = {
+        "formato": "csv",
+        "resumo": True,
+        "tabelas": [{"titulo": stock["titulo"], "colunas": ["proprietario_nome"], "ids": [l["_id"] for l in lotes]}],
+    }
+    texto = client.post("/api/relatorios/exportar", params=params, json=escolha).content.decode("utf-8-sig")
+    resumo = texto.split("\r\n\r\n")[0].splitlines()[1:]
+    assert resumo[0].endswith(f",{sum(l['existencia_atual'] for l in lotes)}")
+    assert all(not linha.endswith(",0") for linha in resumo)

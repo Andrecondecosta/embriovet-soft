@@ -222,9 +222,9 @@ FORMATOS: list[str] = ["pdf", "xlsx", "csv"]
 VAZIO = {"kpis": [], "tabelas": [], "filtros": {}, "exportar": []}
 
 
-def _montar(p: Pedido) -> dict:
+def _montar(p: Pedido, d: dict | None = None) -> dict:
     """O relatório que o ecrã mostra — e de onde saem os ficheiros."""
-    d = _dados(p)
+    d = d if d is not None else _dados(p)
     if p.modo == "garanhao":
         if not p.garanhao:
             return VAZIO
@@ -399,15 +399,38 @@ def _aplicar_escolha(r: dict, e: Escolha) -> dict:
     return r | {"tabelas": tabelas, "kpis": r["kpis"] if e.resumo else []}
 
 
+TABELAS_LOTES = ("reports.section.stock", "reports.history.full_stock")
+
+
+def _so_lotes(d: dict, lotes: set[int]) -> dict:
+    """Os dados reduzidos aos lotes escolhidos (e ao que se fez com eles)."""
+
+    def _filtra(df, col):
+        return df[df[col].isin(lotes)] if not df.empty and col in df.columns else df
+
+    return {
+        "stock": _filtra(d["stock"], "id"),
+        "insem": _filtra(d["insem"], "estoque_id"),
+        "transf": _filtra(d["transf"], "estoque_id"),
+        "transf_ext": _filtra(d["transf_ext"], "estoque_id"),
+    }
+
+
 def _exportar_generico(formato: str, p: Pedido, e: Escolha | None = None) -> Response:
     r = _montar(p)
     if not r["tabelas"]:
         raise _erro(400, "web.reports.error.export_unavailable")
     if e is not None:
+        # Lotes escolhidos: o resumo do topo conta só esses.
+        escolhidos = [et for et in e.tabelas if et.titulo in TABELAS_LOTES and et.ids is not None]
+        if escolhidos and r["kpis"]:
+            lotes = {i for et in escolhidos for i in et.ids or []}
+            r = r | {"kpis": _montar(p, _so_lotes(_dados(p), lotes))["kpis"]}
         r = _aplicar_escolha(r, e)
     modo, nome = r["titulo"]
     titulo = f"{_t(modo)}: {_t(nome)}"
-    kpis = [(_t(label), n) for label, n in r["kpis"]]
+    # Números a 0 não vão para o ficheiro.
+    kpis = [(_t(label), n) for label, n in r["kpis"] if n]
     tabelas = [
         (_t(tab["titulo"]), [_t(f"web.reports.col.{c}") for c in tab["colunas"]], [[_valor_ficheiro(l[c]) for c in tab["colunas"]] for l in tab["linhas"]])
         for tab in r["tabelas"]
