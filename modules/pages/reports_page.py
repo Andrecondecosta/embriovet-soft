@@ -15,6 +15,7 @@ from reportlab.platypus import (
 
 from modules.db import to_py
 from modules.i18n import t
+from modules.mapa_export import texto_celula
 from modules.stock_export import gerar_csv_stock, gerar_excel_stock, gerar_pdf_stock
 from modules.repositories.stock_repo import (
     carregar_contentores, carregar_inseminacoes, carregar_proprietarios,
@@ -134,13 +135,13 @@ def gerar_pdf_garanhao(
 
         if not dados_stock.empty:
             elements.append(Paragraph("📦 Stock Atual", subtitulo_style))
-            stock_data = [['Proprietário', 'Data', 'Existência', 'Qualidade', 'Local']]
+            stock_data = [['Proprietário', 'Data', 'Existência', 'Motilidade (%)', 'Local']]
             for _, row in dados_stock.iterrows():
                 stock_data.append([
                     str(row.get('proprietario_nome', 'N/A'))[:30],
                     str(row.get('data_embriovet', 'N/A'))[:10],
                     str(int(row.get('existencia_atual', 0))),
-                    str(row.get('qualidade', '—')),
+                    texto_celula(row.get('motilidade')) or '—',
                     str(row.get('local_armazenagem', 'N/A'))[:20],
                 ])
             tbl = Table(stock_data, colWidths=[4 * cm, 3 * cm, 2.5 * cm, 2.5 * cm, 4 * cm])
@@ -388,7 +389,7 @@ def run_reports_page(ctx: dict):
         with right:
             csv = f"=== {t('label.garanhao').upper()}: {garanhao_sel} ===\n\n"
             for nome, df in {
-                t("reports.section.stock"): safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]),
+                t("reports.section.stock"): safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "motilidade"]),
                 t("reports.section.inseminations"): safe_pick(i, ["data_inseminacao", "egua_nome", "proprietario_nome", "palhetas_gastas"]),
                 t("reports.section.transfers_in"): safe_pick(transf_sel, ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]),
                 t("reports.section.transfers_out"): safe_pick(te, ["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"]),
@@ -407,7 +408,7 @@ def run_reports_page(ctx: dict):
             (t("reports.kpi.transfers_out"), len(te)),
         ])
         if not s.empty:
-            st.dataframe(safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
+            st.dataframe(safe_pick(s, ["proprietario_nome", "data_embriovet", "existencia_atual", "motilidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
         if not i.empty:
             st.dataframe(safe_pick(i, ["data_inseminacao", "egua_nome", "proprietario_nome", "palhetas_gastas"]).sort_values("data_inseminacao", ascending=False), width="stretch", hide_index=True, height=300)
 
@@ -424,7 +425,7 @@ def run_reports_page(ctx: dict):
         with left:
             st.markdown(f"<div class='reports-results-head'><strong>{t('label.owner')}:</strong> {nome}</div>", unsafe_allow_html=True)
         with right:
-            csv = safe_pick(s, ["garanhao_nome", "existencia_atual", "qualidade", "data_embriovet"])
+            csv = safe_pick(s, ["garanhao_nome", "existencia_atual", "motilidade", "data_embriovet"])
             st.download_button(t("btn.csv"), csv.to_csv(index=False).encode("utf-8"), f"proprietario_{nome}.csv", "text/csv", width="stretch", key="rel_csv_p")
 
         render_kpi_row([
@@ -434,7 +435,7 @@ def run_reports_page(ctx: dict):
             (t("reports.kpi.transfers_sent"), len(t_out)),
         ])
         if not s.empty:
-            st.dataframe(safe_pick(s, ["garanhao_nome", "data_embriovet", "existencia_atual", "qualidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
+            st.dataframe(safe_pick(s, ["garanhao_nome", "data_embriovet", "existencia_atual", "motilidade"]).sort_values("existencia_atual", ascending=False), width="stretch", hide_index=True, height=350)
 
     elif modo == t("reports.mode.container") and contentor_sel:
         s = stock[stock["contentor_id"] == contentor_sel].copy() if (not stock.empty and "contentor_id" in stock.columns) else pd.DataFrame()
@@ -483,4 +484,4 @@ def run_reports_page(ctx: dict):
                 with st.container(horizontal_alignment="right"):
                     with st.popover(t("map.export"), icon=":material/download:"):
                         _render_exportar_stock(d, periodo)
-            st.dataframe(safe_pick(d, ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "qualidade", "local_armazenagem"]).sort_values("existencia_atual", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)
+            st.dataframe(safe_pick(d, ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "motilidade", "local_armazenagem"]).sort_values("existencia_atual", ascending=False) if not d.empty else d, width="stretch", hide_index=True, height=620)

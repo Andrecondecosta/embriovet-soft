@@ -6,8 +6,8 @@ proprietário, PDF/CSV/Excel do stock completo). A lógica é a da página
 atual, reaproveitada: os números têm de bater com os que os clientes já
 conhecem.
 
-A mais do que a app antiga: gráficos simples em cada relatório e PDF,
-Excel e CSV em todos (os que não tinham ficheiro próprio usam
+A mais do que a app antiga: PDF, Excel e CSV em todos (os que não tinham
+ficheiro próprio usam
 `modules/relatorio_export.py`, a partir das mesmas tabelas do ecrã).
 
 As etiquetas (KPIs, títulos, colunas) vão como chaves de tradução; o ecrã
@@ -27,7 +27,6 @@ from backend.i18n_web import WEB_TRANSLATIONS
 from backend.serial import anexo, registos
 from modules.db import to_py
 from modules.i18n import TRANSLATIONS
-from modules.mapa_export import texto_celula
 from modules.pages.reports_page import (
     _contar_operacoes,
     _filtrar_stock_por_periodo,
@@ -53,17 +52,17 @@ Modo = Literal["garanhao", "proprietario", "contentor", "historico"]
 Hist = Literal["insem", "transf_int", "transf_ext", "stock"]
 
 # Colunas de cada tabela, pela ordem da página atual.
-COL_STOCK_G = ["proprietario_nome", "data_embriovet", "existencia_atual", "qualidade"]
+COL_STOCK_G = ["proprietario_nome", "data_embriovet", "existencia_atual", "motilidade"]
 COL_INSEM_G = ["data_inseminacao", "egua_nome", "proprietario_nome", "palhetas_gastas"]
 COL_TRANSF_G = ["data_transferencia", "proprietario_origem", "proprietario_destino", "quantidade"]
 COL_EXT_G = ["data_transferencia", "proprietario_origem", "destinatario_externo", "quantidade", "tipo"]
-COL_STOCK_P = ["garanhao_nome", "data_embriovet", "existencia_atual", "qualidade"]
-COL_CSV_P = ["garanhao_nome", "existencia_atual", "qualidade", "data_embriovet"]
+COL_STOCK_P = ["garanhao_nome", "data_embriovet", "existencia_atual", "motilidade"]
+COL_CSV_P = ["garanhao_nome", "existencia_atual", "motilidade", "data_embriovet"]
 COL_STOCK_C = ["proprietario_nome", "garanhao_nome", "existencia_atual", "canister", "andar", "data_embriovet", "data_criacao"]
 COL_H_INSEM = ["data_inseminacao", "garanhao_nome", "egua_nome", "proprietario_nome", "palhetas_gastas"]
 COL_H_TRANSF = ["data_transferencia", "garanhao", "proprietario_origem", "proprietario_destino", "quantidade"]
 COL_H_EXT = ["data_transferencia", "garanhao", "proprietario_origem", "destinatario_externo", "tipo", "quantidade", "observacoes"]
-COL_H_STOCK = ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "qualidade", "local_armazenagem"]
+COL_H_STOCK = ["proprietario_nome", "garanhao_nome", "data_embriovet", "data_criacao", "existencia_atual", "motilidade", "local_armazenagem"]
 
 
 def _erro(http_status: int, chave: str, **params):
@@ -205,50 +204,8 @@ def opcoes(_user: dict = Depends(get_current_user)):
     }
 
 
-MESES_MAX = 36
-
-
-def _meses(p: Pedido) -> list[pd.Period]:
-    """Meses do gráfico: os do período escolhido, ou os últimos 12."""
-    hoje = date.today()
-    fim = pd.Period(p.fim or hoje, "M")
-    inicio = pd.Period(p.inicio, "M") if p.inicio else fim - 11
-    if (fim - inicio).n >= MESES_MAX:
-        inicio = fim - (MESES_MAX - 1)
-    return list(pd.period_range(inicio, fim, freq="M"))
-
-
-def _por_mes(titulo: str, df, col_data: str, col_valor: str, p: Pedido) -> dict | None:
-    meses = _meses(p)
-    soma = pd.Series(0, index=meses, dtype="int64")
-    if not df.empty and col_data in df.columns:
-        datas = pd.to_datetime(df[col_data], errors="coerce")
-        valores = pd.to_numeric(df[col_valor], errors="coerce").fillna(0)
-        g = valores.groupby(datas.dt.to_period("M")).sum()
-        soma = soma.add(g.reindex(meses).fillna(0).astype("int64"), fill_value=0)
-    if not soma.any():
-        return None
-    return {"titulo": titulo, "tipo": "colunas", "dados": [{"x": m.strftime("%m/%Y"), "y": int(v)} for m, v in soma.items()]}
-
-
-def _por_categoria(titulo: str, df, col_cat: str, col_valor: str, n: int = 15) -> dict | None:
-    """As `n` categorias com mais (o resto não aparece no gráfico)."""
-    if df.empty or col_cat not in df.columns:
-        return None
-    valores = pd.to_numeric(df[col_valor], errors="coerce").fillna(0)
-    g = valores.groupby(df[col_cat].map(texto_celula)).sum()
-    g = g[g > 0].sort_values(ascending=False).head(n)
-    if g.empty:
-        return None
-    return {"titulo": titulo, "tipo": "barras", "dados": [{"x": str(k), "y": int(v)} for k, v in g.items()]}
-
-
-def _graficos(*gs) -> list[dict]:
-    return [g for g in gs if g]
-
-
 FORMATOS: list[str] = ["pdf", "xlsx", "csv"]
-VAZIO = {"kpis": [], "tabelas": [], "filtros": {}, "graficos": [], "exportar": []}
+VAZIO = {"kpis": [], "tabelas": [], "filtros": {}, "exportar": []}
 
 
 def _montar(p: Pedido) -> dict:
@@ -262,10 +219,6 @@ def _montar(p: Pedido) -> dict:
             "kpis": r["kpis"],
             "filtros": r["filtros"],
             "titulo": ("reports.mode.stallion", p.garanhao),
-            "graficos": _graficos(
-                _por_mes("web.reports.chart.straws_used_month", r["i"], "data_inseminacao", "palhetas_gastas", p),
-                _por_categoria("web.reports.chart.stock_by_owner", r["s"], "proprietario_nome", "existencia_atual"),
-            ),
             "tabelas": [
                 _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_G),
                 _tabela("reports.section.inseminations", _ordenar(r["i"], "data_inseminacao"), COL_INSEM_G),
@@ -282,10 +235,6 @@ def _montar(p: Pedido) -> dict:
             "kpis": r["kpis"],
             "filtros": r["filtros"],
             "titulo": ("reports.mode.owner", nome.iloc[0] if not nome.empty else str(p.proprietario)),
-            "graficos": _graficos(
-                _por_categoria("web.reports.chart.stock_by_stallion", r["s"], "garanhao_nome", "existencia_atual"),
-                _por_mes("web.reports.chart.straws_used_month", i, "data_inseminacao", "palhetas_gastas", p),
-            ),
             "tabelas": [_tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_P)],
         }
     if p.modo == "contentor":
@@ -298,31 +247,18 @@ def _montar(p: Pedido) -> dict:
             "kpis": r["kpis"],
             "filtros": r["filtros"],
             "titulo": ("reports.mode.container", cod.iloc[0] if not cod.empty else str(p.contentor)),
-            "graficos": _graficos(
-                _por_categoria("web.reports.chart.straws_by_canister", r["s"], "canister", "existencia_atual", n=50),
-                _por_categoria("web.reports.chart.stock_by_stallion", r["s"], "garanhao_nome", "existencia_atual"),
-            ),
             "tabelas": [_tabela("reports.section.stock", r["s"], COL_STOCK_C)],
         }
     # Histórico
     if p.hist == "insem":
         tab = _tabela("reports.history.inseminations", _ordenar(d["insem"], "data_inseminacao"), COL_H_INSEM)
-        graficos = _graficos(
-            _por_mes("web.reports.chart.straws_used_month", d["insem"], "data_inseminacao", "palhetas_gastas", p),
-            _por_categoria("web.reports.chart.straws_used_by_stallion", d["insem"], "garanhao_nome", "palhetas_gastas"),
-        )
     elif p.hist == "transf_int":
         tab = _tabela("reports.history.transfer_internal", _ordenar(d["transf"], "data_transferencia"), COL_H_TRANSF)
-        graficos = _graficos(_por_mes("web.reports.chart.straws_transferred_month", d["transf"], "data_transferencia", "quantidade", p))
     elif p.hist == "transf_ext":
         tab = _tabela("reports.history.transfer_external", _ordenar(d["transf_ext"], "data_transferencia"), COL_H_EXT)
-        graficos = _graficos(
-            _por_mes("web.reports.chart.straws_transferred_month", d["transf_ext"], "data_transferencia", "quantidade", p)
-        )
     else:
         tab = _tabela("reports.history.full_stock", _ordenar(d["stock"], "existencia_atual"), COL_H_STOCK)
-        graficos = _graficos(_por_categoria("web.reports.chart.stock_by_stallion", d["stock"], "garanhao_nome", "existencia_atual"))
-    return {"kpis": [], "filtros": {}, "titulo": ("reports.mode.history", tab["titulo"]), "graficos": graficos, "tabelas": [tab]}
+    return {"kpis": [], "filtros": {}, "titulo": ("reports.mode.history", tab["titulo"]), "tabelas": [tab]}
 
 
 @router.get("")
@@ -330,7 +266,7 @@ def relatorio(p: Pedido = Depends(), _user: dict = Depends(get_current_user)):
     r = _montar(p)
     if not r["tabelas"]:
         return VAZIO
-    return {k: r[k] for k in ("kpis", "filtros", "graficos", "tabelas")} | {"exportar": FORMATOS}
+    return {k: r[k] for k in ("kpis", "filtros", "tabelas")} | {"exportar": FORMATOS}
 
 
 def _ficheiro(dados: bytes, nome: str, tipo: str) -> Response:

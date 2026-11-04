@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
@@ -6,13 +6,11 @@ import {
   Alert,
   Button,
   Card,
-  Col,
   DatePicker,
   Empty,
   Flex,
   Input,
   Popover,
-  Row,
   Segmented,
   Select,
   Space,
@@ -42,9 +40,6 @@ import { useErrorMessage, useNotifyError } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
-import type { Grafico } from "../components/GraficoRelatorio";
-
-const GraficoRelatorio = lazy(() => import("../components/GraficoRelatorio"));
 
 type Modo = "garanhao" | "proprietario" | "contentor" | "historico";
 type Hist = "insem" | "transf_int" | "transf_ext" | "stock";
@@ -65,7 +60,6 @@ interface Relatorio {
   kpis: [string, number][];
   tabelas: Tabela[];
   filtros: Partial<Record<FiltroChave, (string | number)[]>>;
-  graficos?: Grafico[];
   exportar?: Formato[];
 }
 
@@ -355,20 +349,6 @@ function RelatoriosDesktop({ r }: { r: R }) {
               </Flex>
             )}
 
-            {d && (d.graficos ?? []).length > 0 && (
-              <Row gutter={[12, 12]}>
-                {d.graficos!.map((g) => (
-                  <Col key={g.titulo} xs={24} lg={12}>
-                    <Card size="small" title={t(g.titulo)}>
-                      <Suspense fallback={<Spin />}>
-                        <GraficoRelatorio g={g} />
-                      </Suspense>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            )}
-
             {d && d.tabelas.length > 0 && (
               <Input.Search
                 allowClear
@@ -521,17 +501,6 @@ function RelatoriosMobile({ r }: { r: R }) {
               ))}
             </div>
           )}
-
-          {(d?.graficos ?? []).map((g) => (
-            <div key={g.titulo}>
-              <Cabecalho>{t(g.titulo)}</Cabecalho>
-              <div style={{ background: "#fff", padding: "8px 4px" }}>
-                <Suspense fallback={<DotLoading />}>
-                  <GraficoRelatorio g={g} compacto />
-                </Suspense>
-              </div>
-            </div>
-          ))}
 
           {d && d.tabelas.length > 0 && (
             <div style={{ padding: "8px 12px 0" }}>

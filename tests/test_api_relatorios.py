@@ -124,19 +124,3 @@ def test_exportar_todos_os_relatorios(client, opcoes, modo, formato, tipo):
     assert tipo in r.headers["content-type"]
     assert r.content
 
-
-def test_grafico_por_mes_cobre_os_ultimos_12_meses(client):
-    r = client.get("/api/relatorios", params={"modo": "historico", "hist": "insem"}).json()
-    meses = [g for g in r["graficos"] if g["tipo"] == "colunas"]
-    if not meses:
-        pytest.skip("sem inseminações no último ano na base de teste")
-    assert len(meses[0]["dados"]) == 12
-    tabela = r["tabelas"][0]["linhas"]
-    assert sum(d["y"] for d in meses[0]["dados"]) <= sum(l["palhetas_gastas"] or 0 for l in tabela)
-
-
-def test_grafico_respeita_o_periodo(client):
-    r = client.get("/api/relatorios", params={"modo": "historico", "hist": "insem", "inicio": "2025-01-01", "fim": "2025-06-30"}).json()
-    for g in r["graficos"]:
-        if g["tipo"] == "colunas":
-            assert [d["x"] for d in g["dados"]] == [f"{m:02d}/2025" for m in range(1, 7)]
