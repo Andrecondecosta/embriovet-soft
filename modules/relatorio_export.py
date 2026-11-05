@@ -24,7 +24,13 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from modules.mapa_export import texto_celula, texto_pdf
 
-Tabela = tuple[str, list[str], list[list]]
+# (título, cabeçalhos, linhas[, índices das linhas de total, a negrito])
+Tabela = tuple
+
+def _partes(tab) -> tuple[str, list[str], list[list], set[int]]:
+    nome, cabecalhos, linhas, *resto = tab
+    return nome, cabecalhos, linhas, (resto[0] if resto else set())
+
 
 _CINZA_ESCURO = "#334155"
 _CINZA_CLARO = "#f1f5f9"
@@ -38,7 +44,8 @@ def gerar_csv(titulo: str, kpis: list[tuple[str, int]], tabelas: list[Tabela]) -
     w.writerow([titulo])
     for label, n in kpis:
         w.writerow([label, n])
-    for nome, cabecalhos, linhas in tabelas:
+    for tab in tabelas:
+        nome, cabecalhos, linhas, _ = _partes(tab)
         w.writerow([])
         w.writerow([nome])
         w.writerow(cabecalhos)
@@ -72,7 +79,8 @@ def gerar_excel(titulo: str, kpis: list[tuple[str, int]], tabelas: list[Tabela])
             ws.append([label, n])
         ws.column_dimensions["A"].width = 36
 
-    for nome, cabecalhos, linhas in tabelas:
+    for tab in tabelas:
+        nome, cabecalhos, linhas, destaques = _partes(tab)
         ws = wb.create_sheet(_nome_folha(nome, usados))
         ws.append(cabecalhos)
         for cel in ws[1]:
@@ -80,8 +88,12 @@ def gerar_excel(titulo: str, kpis: list[tuple[str, int]], tabelas: list[Tabela])
             cel.fill = cab_fill
             cel.border = borda
             cel.alignment = Alignment(vertical="center", wrap_text=True)
-        for linha in linhas:
+        for i, linha in enumerate(linhas):
             ws.append([v if isinstance(v, (int, float)) else (texto_celula(v) or None) for v in linha])
+            if i in destaques:
+                for cel in ws[ws.max_row]:
+                    cel.font = Font(bold=True)
+                    cel.fill = cab_fill
         for i, cab in enumerate(cabecalhos, start=1):
             largura = max([len(cab)] + [len(texto_celula(l[i - 1])) for l in linhas[:200]])
             ws.column_dimensions[get_column_letter(i)].width = min(45, max(9, largura + 2))
@@ -108,7 +120,8 @@ def gerar_pdf(
 ) -> bytes:
     """A4 (horizontal quando alguma tabela tem muitas colunas)."""
     gerado_em = gerado_em or datetime.now()
-    largo = any(len(cab) > 5 for _, cab, _ in tabelas)
+    tabelas = [_partes(tab) for tab in tabelas]
+    largo = any(len(cab) > 5 for _, cab, _, _ in tabelas)
     pagina = landscape(A4) if largo else A4
     margem = 1.2 * cm
     util = pagina[0] - 2 * margem
@@ -132,14 +145,16 @@ def gerar_pdf(
     if kpis:
         historia.append(Paragraph(texto_pdf(" · ".join(f"{label}: {n}" for label, n in kpis)), st_sub))
 
-    for nome, cabecalhos, linhas in tabelas:
-        historia.append(Paragraph(texto_pdf(f"{nome} · {len(linhas)}"), st_secao))
+    for nome, cabecalhos, linhas, destaques in tabelas:
+        historia.append(Paragraph(texto_pdf(f"{nome} · {len(linhas) - len(destaques)}"), st_secao))
         if not linhas:
             historia.append(Paragraph(texto_pdf(sem_dados), st_cel))
             continue
         numericas = {j for j in range(len(cabecalhos)) if all(isinstance(l[j], (int, float)) or l[j] is None for l in linhas)}
         dados = [[Paragraph(texto_pdf(c), st_cab) for c in cabecalhos]] + [
-            [texto_celula(v) if j in numericas else Paragraph(texto_pdf(v), st_cel) for j, v in enumerate(linha)] for linha in linhas
+            [texto_celula(v) if j in numericas else Paragraph(texto_pdf(v), st_cab if i in destaques else st_cel)
+             for j, v in enumerate(linha)]
+            for i, linha in enumerate(linhas)
         ]
         # Colunas de números estreitas; as de texto repartem o resto.
         n_num = len(numericas)
@@ -156,6 +171,9 @@ def gerar_pdf(
             ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
         ]
         estilo += [("ALIGN", (j, 1), (j, -1), "RIGHT") for j in numericas]
+        for i in destaques:  # linhas de total
+            estilo += [("FONTNAME", (0, i + 1), (-1, i + 1), "Helvetica-Bold"),
+                       ("BACKGROUND", (0, i + 1), (-1, i + 1), colors.HexColor(_CINZA_CLARO))]
         tabela.setStyle(TableStyle(estilo))
         historia.append(tabela)
         historia.append(Spacer(1, 4))

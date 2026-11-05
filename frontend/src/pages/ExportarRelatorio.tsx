@@ -20,15 +20,22 @@ export interface Tabela {
 export interface CorpoExportar {
   formato: Formato;
   resumo: boolean;
-  tabelas: { titulo: string; colunas: string[]; ids: number[] | null }[];
+  tabelas: { titulo: string; colunas: string[]; ids: number[] | null; modo: Modo }[];
 }
 
 type Linhas = "todas" | "selecionadas";
+/** Lote a lote (por cavalo, com o total de cada um) ou só os totais. */
+type Modo = "linhas" | "totais";
 interface EscolhaTab {
   incluir: boolean;
   colunas: string[];
   linhas: Linhas;
+  modo: Modo;
 }
+
+// Colunas que o servidor soma nos totais.
+const SOMAVEIS = ["existencia_atual", "palhetas_gastas", "quantidade", "palhetas_produzidas", "quantidade_inicial"];
+const temTotais = (tab: Tabela) => tab.disponiveis.some((c) => SOMAVEIS.includes(c));
 interface Estado {
   formato: Formato;
   resumo: boolean;
@@ -103,7 +110,10 @@ function useExportar(p: Props) {
           const gt = g?.tabelas?.[tab.titulo];
           const colunas = gt?.colunas?.filter((c) => tab.disponiveis.includes(c)) ?? tab.colunas;
           const linhas: Linhas = selecionadas(tab).length ? "selecionadas" : "todas";
-          return [tab.titulo, { incluir: gt?.incluir ?? true, colunas: colunas.length ? colunas : tab.colunas, linhas }];
+          return [
+            tab.titulo,
+            { incluir: gt?.incluir ?? true, colunas: colunas.length ? colunas : tab.colunas, linhas, modo: gt?.modo ?? "linhas" },
+          ];
         }),
       ),
     });
@@ -122,7 +132,7 @@ function useExportar(p: Props) {
       !e.resumo ||
       p.tabelas.some((tab) => {
         const et = e.tabelas[tab.titulo];
-        return !et.incluir || et.linhas !== "todas" || !igual(et.colunas, tab.colunas);
+        return !et.incluir || et.linhas !== "todas" || et.modo !== "linhas" || !igual(et.colunas, tab.colunas);
       });
     // Sem nada mudado sai o ficheiro de sempre (o PDF do garanhão, o stock completo…).
     const corpo: CorpoExportar | undefined = alterado
@@ -131,7 +141,12 @@ function useExportar(p: Props) {
           resumo: e.resumo && p.temResumo,
           tabelas: p.tabelas
             .filter((tab) => e.tabelas[tab.titulo].incluir)
-            .map((tab) => ({ titulo: tab.titulo, colunas: e.tabelas[tab.titulo].colunas, ids: ids(tab, e.tabelas[tab.titulo].linhas) })),
+            .map((tab) => ({
+              titulo: tab.titulo,
+              colunas: e.tabelas[tab.titulo].colunas,
+              ids: ids(tab, e.tabelas[tab.titulo].linhas),
+              modo: e.tabelas[tab.titulo].modo,
+            })),
         }
       : undefined;
     await p.exportar(e.formato, corpo);
@@ -242,6 +257,21 @@ function ExportarDesktop(p: Props) {
                       </Button>
                     )}
                   </div>
+                  {temTotais(tab) && (
+                    <div>
+                      <Typography.Text type="secondary">{t("web.reports.export.show")}</Typography.Text>
+                      <div style={{ marginTop: 4 }}>
+                        <Radio.Group
+                          value={et.modo}
+                          onChange={(ev) => x.mudar(tab.titulo, { modo: ev.target.value })}
+                          options={[
+                            { value: "linhas", label: t("web.reports.export.show_lines") },
+                            { value: "totais", label: t("web.reports.export.show_totals") },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </Flex>
               </Card>
             );
@@ -384,6 +414,20 @@ function ExportarMobile(p: Props) {
                           {t("web.reports.export.choose_rows")}
                         </List.Item>
                       </List>
+                      {temTotais(tab) && (
+                        <>
+                          <div style={{ color: "#999", margin: "8px 0 6px" }}>{t("web.reports.export.show")}</div>
+                          <Selector
+                            columns={1}
+                            value={[et.modo]}
+                            onChange={(v) => v[0] && x.mudar(tab.titulo, { modo: v[0] as Modo })}
+                            options={[
+                              { value: "linhas", label: t("web.reports.export.show_lines") },
+                              { value: "totais", label: t("web.reports.export.show_totals") },
+                            ]}
+                          />
+                        </>
+                      )}
                     </>
                   )}
                 </div>

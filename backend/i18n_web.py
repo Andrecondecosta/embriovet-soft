@@ -1611,3 +1611,17 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v
+
+# ── Relatórios: totais por cavalo nos ficheiros ──
+for _k, *_txt in [
+    ("total_of", "Total {nome}", "Total {nome}", "Total {nome}", "Summe {nome}"),
+    ("total_all", "Total geral", "Grand total", "Total général", "Gesamtsumme"),
+    ("col.n_lots", "Lotes", "Lots", "Lots", "Chargen"),
+    ("col.n_records", "Registos", "Records", "Enregistrements", "Einträge"),
+    ("export.show", "Mostrar", "Show", "Afficher", "Anzeigen"),
+    ("export.show_lines", "Lote a lote, com o total de cada cavalo", "Lot by lot, with each horse's total",
+     "Lot par lot, avec le total de chaque cheval", "Charge für Charge, mit Summe pro Pferd"),
+    ("export.show_totals", "Só os totais de cada cavalo", "Only each horse's totals", "Seulement les totaux par cheval", "Nur Summen pro Pferd"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v

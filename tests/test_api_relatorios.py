@@ -165,3 +165,25 @@ def test_resumo_so_dos_lotes_escolhidos_e_sem_zeros(client, opcoes):
     resumo = texto.split("\r\n\r\n")[0].splitlines()[1:]
     assert resumo[0].endswith(f",{sum(l['existencia_atual'] for l in lotes)}")
     assert all(not linha.endswith(",0") for linha in resumo)
+
+
+@pytest.mark.parametrize("modo", ["linhas", "totais"])
+def test_exportar_por_cavalo_com_totais(client, modo):
+    params = {"modo": "historico", "hist": "stock"}
+    tab = client.get("/api/relatorios", params=params).json()["tabelas"][0]
+    linhas = [l for l in tab["linhas"] if l["existencia_atual"]][:6]
+    if len({l["garanhao_nome"] for l in linhas}) < 2:
+        pytest.skip("precisa de lotes de pelo menos dois garanhões")
+    escolha = {"formato": "csv", "resumo": False, "tabelas": [{
+        "titulo": tab["titulo"], "colunas": ["proprietario_nome", "garanhao_nome", "existencia_atual"],
+        "ids": [l["_id"] for l in linhas], "modo": modo,
+    }]}
+    texto = client.post("/api/relatorios/exportar", params=params, json=escolha).content.decode("utf-8-sig")
+    corpo = texto.strip().splitlines()[3:]
+    assert corpo[-1].startswith("Total geral,") and corpo[-1].endswith(f",{sum(l['existencia_atual'] for l in linhas)}")
+    if modo == "totais":
+        assert corpo[0] == "Garanhão,Lotes,Palhetas"
+        assert len(corpo) == 1 + len({l["garanhao_nome"] for l in linhas}) + 1
+    else:
+        assert corpo[0] == "Garanhão,Proprietário,Palhetas"
+        assert sum(1 for c in corpo if c.startswith("Total ") and not c.startswith("Total geral")) == len({l["garanhao_nome"] for l in linhas})

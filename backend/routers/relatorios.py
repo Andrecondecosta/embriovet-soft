@@ -43,6 +43,7 @@ from modules.repositories.stock_repo import (
     carregar_transferencias,
     carregar_transferencias_externas,
 )
+from modules.mapa_export import texto_celula
 from modules.relatorio_export import gerar_csv, gerar_excel, gerar_pdf
 from modules.stock_export import gerar_csv_stock, gerar_excel_stock, gerar_pdf_stock
 from modules.ui_kit import safe_pick
@@ -369,6 +370,9 @@ class EscolhaTabela(BaseModel):
     titulo: str
     colunas: list[str]
     ids: list[int] | None = None  # None = todas as linhas
+    # "linhas": lote a lote, por cavalo, com o total de cada um;
+    # "totais": só uma linha por cavalo com os totais.
+    modo: Literal["linhas", "totais"] = "linhas"
 
 
 class Escolha(BaseModel):
@@ -393,13 +397,72 @@ def _aplicar_escolha(r: dict, e: Escolha) -> dict:
             continue
         ids = set(et.ids) if et.ids is not None else None
         linhas = [l for l in tab["linhas"] if ids is None or l.get("_id") in ids]
-        tabelas.append(tab | {"colunas": colunas, "linhas": linhas})
+        tabelas.append(tab | {"colunas": colunas, "linhas": linhas, "modo": et.modo})
     if not tabelas and not (e.resumo and r["kpis"]):
         raise _erro(400, "web.reports.error.nothing_to_export")
     return r | {"tabelas": tabelas, "kpis": r["kpis"] if e.resumo else []}
 
 
 TABELAS_LOTES = ("reports.section.stock", "reports.history.full_stock")
+
+# Colunas que se somam nos totais, e a que diz de que cavalo é cada linha.
+SOMAVEIS = ("existencia_atual", "palhetas_gastas", "quantidade", "palhetas_produzidas", "quantidade_inicial")
+COL_CAVALO = ("garanhao_nome", "garanhao")
+
+
+def _com_totais(tab: dict) -> tuple[list[str], list[list], set[int]]:
+    """Cabeçalhos, linhas e as linhas de total (a negrito) de uma tabela
+    do ficheiro. Lote a lote: ordenado por cavalo, com o total de cada
+    cavalo e o total geral no fim. Só totais: uma linha por cavalo."""
+    colunas, linhas = tab["colunas"], tab["linhas"]
+    cavalo = next((c for c in COL_CAVALO if c in tab.get("disponiveis", colunas)), None)
+    somas = [c for c in colunas if c in SOMAVEIS]
+    if tab.get("modo") == "totais" and not somas:
+        somas = [c for c in tab.get("disponiveis", []) if c in SOMAVEIS][:1]
+    if not somas:  # nada para somar: como está
+        return [_t(f"web.reports.col.{c}") for c in colunas], [[_valor_ficheiro(l[c]) for c in colunas] for l in linhas], set()
+
+    def soma(grupo, c):
+        return sum(int(l.get(c) or 0) for l in grupo)
+
+    def nome(l):
+        return texto_celula(l.get(cavalo)) or "—"
+
+    grupos: dict[str, list] = {}
+    for l in sorted(linhas, key=lambda l: normalizar(nome(l))) if cavalo else linhas:
+        grupos.setdefault(nome(l) if cavalo else "", []).append(l)
+
+    if tab.get("modo") == "totais":
+        n_label = _t("web.reports.col.n_lots" if tab["titulo"] in TABELAS_LOTES else "web.reports.col.n_records")
+        cab = ([_t(f"web.reports.col.{cavalo}")] if cavalo else []) + [n_label] + [_t(f"web.reports.col.{c}") for c in somas]
+        saida = [([g] if cavalo else []) + [len(gr)] + [soma(gr, c) for c in somas] for g, gr in grupos.items()]
+        total = ([_t("web.reports.total_all")] if cavalo else []) + [len(linhas)] + [soma(linhas, c) for c in somas]
+        return cab, saida + [total], {len(saida)}
+
+    # Lote a lote: o cavalo vai à frente (é por ele que se agrupa) e o texto
+    # do total fica na primeira coluna que não é número.
+    if cavalo in colunas:
+        colunas = [cavalo] + [c for c in colunas if c != cavalo]
+    rotulo = next((c for c in colunas if c not in somas), None)
+
+    def linha_total(texto, grupo):
+        return [soma(grupo, c) if c in somas else (texto if c == rotulo else None) for c in colunas]
+
+    saida, destaques = [], set()
+    for g, gr in grupos.items():
+        saida += [[_valor_ficheiro(l[c]) for c in colunas] for l in gr]
+        if cavalo and len(grupos) > 1:
+            destaques.add(len(saida))
+            saida.append(linha_total(_t("web.reports.total_of", nome=g), gr))
+    destaques.add(len(saida))
+    saida.append(linha_total(_t("web.reports.total_all"), linhas))
+    return [_t(f"web.reports.col.{c}") for c in colunas], saida, destaques
+
+
+def normalizar(s: str) -> str:
+    import unicodedata
+
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
 
 
 def _so_lotes(d: dict, lotes: set[int]) -> dict:
@@ -431,10 +494,7 @@ def _exportar_generico(formato: str, p: Pedido, e: Escolha | None = None) -> Res
     titulo = f"{_t(modo)}: {_t(nome)}"
     # Números a 0 não vão para o ficheiro.
     kpis = [(_t(label), n) for label, n in r["kpis"] if n]
-    tabelas = [
-        (_t(tab["titulo"]), [_t(f"web.reports.col.{c}") for c in tab["colunas"]], [[_valor_ficheiro(l[c]) for c in tab["colunas"]] for l in tab["linhas"]])
-        for tab in r["tabelas"]
-    ]
+    tabelas = [(_t(tab["titulo"]), *_com_totais(tab)) for tab in r["tabelas"]]
     periodo = ""
     if p.inicio or p.fim:
         periodo = _t(
