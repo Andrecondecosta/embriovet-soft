@@ -12,13 +12,14 @@ eliminar só Administrador.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from backend.deps import get_current_user, require_nivel
+from modules.datas_producao import dentro_do_periodo
 from modules.db import get_connection
 from modules.repositories.animal_repo import get_or_create_garanhao
 from modules.repositories.stock_repo import (
@@ -125,6 +126,10 @@ def lotes(
     sem_dono: bool = False,
     min_palhetas: int = Query(0, ge=0),
     incluir_vazios: bool = False,
+    prod_de: date | None = None,
+    prod_ate: date | None = None,
+    entrada_de: date | None = None,
+    entrada_ate: date | None = None,
     user: dict = Depends(get_current_user),
 ):
     """Lotes de um garanhão, com os indicadores e o resumo por dono que a
@@ -136,6 +141,13 @@ def lotes(
     if min_palhetas:
         where.append("COALESCE(e.existencia_atual, 0) >= %s")
         params.append(min_palhetas)
+    # Entrada = quando o lote foi registado na app.
+    if entrada_de:
+        where.append("e.data_criacao::date >= %s")
+        params.append(entrada_de)
+    if entrada_ate:
+        where.append("e.data_criacao::date <= %s")
+        params.append(entrada_ate)
     if donos or sem_dono:
         filtro = []
         if donos:
@@ -149,6 +161,10 @@ def lotes(
         with conn.cursor() as cur:
             cur.execute(_SELECT_LOTE + " WHERE " + " AND ".join(where) + " ORDER BY e.id", params)
             items = [_lote(r) for r in cur.fetchall()]
+            # A data de produção é texto livre ("2021-01-12", "12-01-2021",
+            # "2014"…): filtra-se aqui, depois de a ler.
+            if prod_de or prod_ate:
+                items = [l for l in items if dentro_do_periodo(l["data_embriovet"], prod_de, prod_ate)]
             # Opções do filtro de proprietários: os donos com stock deste
             # garanhão, independentemente dos outros filtros.
             cur.execute(

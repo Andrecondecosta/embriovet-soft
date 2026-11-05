@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
   Collapse,
+  DatePicker,
   DotLoading,
   ErrorBlock,
   FloatingBubble,
@@ -21,7 +22,18 @@ import { AddOutline, DownlandOutline, FilterOutline } from "antd-mobile-icons";
 import { useT } from "../../i18n/I18n";
 import { useIsAdmin } from "../../components/User";
 import { dataCurta, dataHora } from "../../components/csv";
-import { localizacao, referencia, useGaranhoesStock, useLotes, useTransferencias, type Lote } from "./api";
+import dayjs from "dayjs";
+import {
+  localizacao,
+  nPeriodos,
+  PERIODOS,
+  periodosDoEndereco,
+  referencia,
+  useGaranhoesStock,
+  useLotes,
+  useTransferencias,
+  type Lote,
+} from "./api";
 import { LoteFormModal } from "./LoteForm";
 import { ApagarLoteModal } from "./LoteDrawer";
 
@@ -47,6 +59,9 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
   const minPalhetas = Number(params.get("min")) || 0;
   const incluirVazios = params.get("vazios") === "1";
   const loteAberto = Number(params.get("lote")) || null;
+  const periodos = periodosDoEndereco(params);
+  // Qual das quatro datas do filtro está a ser escolhida.
+  const [dataAberta, setDataAberta] = useState<(typeof PERIODOS)[number] | null>(null);
 
   const atualizar = (fn: (p: URLSearchParams) => void) =>
     setParams(
@@ -66,6 +81,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
           semDono: donosSel.includes(SEM_DONO),
           minPalhetas,
           incluirVazios,
+          ...periodos,
         }
       : null,
   );
@@ -106,7 +122,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
     );
 
   const k = lotes.data?.kpis;
-  const nFiltros = (donosSel.length ? 1 : 0) + (minPalhetas ? 1 : 0) + (incluirVazios ? 1 : 0);
+  const nFiltros = (donosSel.length ? 1 : 0) + (minPalhetas ? 1 : 0) + (incluirVazios ? 1 : 0) + nPeriodos(periodos);
   // Histórico do lote aberto: transferências em que o dono foi origem ou destino.
   const dono = selecionado?.dono_id ?? null;
   const historico = (transf.data?.internas ?? []).filter((x) => x.origem_id === dono || x.destino_id === dono);
@@ -283,6 +299,11 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
           >
             {t("stock.min_straws")}
           </List.Item>
+          {PERIODOS.map((k) => (
+            <List.Item key={k} arrow onClick={() => setDataAberta(k)} extra={periodos[k] ? dataCurta(periodos[k]!) : "—"}>
+              {t(`web.stock.${k}`)}
+            </List.Item>
+          ))}
           <List.Item
             extra={<Switch checked={incluirVazios} onChange={(on) => atualizar((p) => (on ? p.set("vazios", "1") : p.delete("vazios")))} />}
           >
@@ -298,6 +319,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                   p.delete("dono");
                   p.delete("min");
                   p.delete("vazios");
+                  PERIODOS.forEach((k) => p.delete(k));
                 })
               }
             >
@@ -309,6 +331,14 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
           </Button>
         </div>
       </Popup>
+      <DatePicker
+        visible={dataAberta !== null}
+        onClose={() => setDataAberta(null)}
+        value={dataAberta && periodos[dataAberta] ? dayjs(periodos[dataAberta]).toDate() : new Date()}
+        min={dayjs().subtract(30, "year").toDate()}
+        max={dayjs().add(1, "year").toDate()}
+        onConfirm={(v) => dataAberta && atualizar((p) => p.set(dataAberta, dayjs(v).format("YYYY-MM-DD")))}
+      />
 
       {/* Detalhe do lote: folha que sobe de baixo. */}
       <Popup

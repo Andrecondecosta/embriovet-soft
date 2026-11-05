@@ -7,6 +7,7 @@ tudo no fim.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -127,6 +128,27 @@ def test_filtros(ctx):
     assert len(c.get("/api/stock/lotes", params={"garanhao": g, "min_palhetas": 5}).json()["items"]) == 1
     assert len(c.get("/api/stock/lotes", params={"garanhao": g, "donos": [ctx["dono"]]}).json()["items"]) == 2
     assert len(c.get("/api/stock/lotes", params={"garanhao": g, "sem_dono": True}).json()["items"]) == 0
+
+
+def test_filtro_periodo_producao_e_entrada(ctx):
+    a = _novo(ctx, data_embriovet="2021-01-12").json()["id"]
+    b = _novo(ctx, data_embriovet="12-03-2021").json()["id"]
+    c_ = _novo(ctx, data_embriovet="2019").json()["id"]
+    _novo(ctx, data_embriovet="Várias")
+    g, c = ctx["garanhao"], ctx["gestor"]
+
+    def ids(**p):
+        return sorted(l["id"] for l in c.get("/api/stock/lotes", params={"garanhao": g, **p}).json()["items"])
+
+    assert ids(prod_de="2021-01-01", prod_ate="2021-01-31") == [a]
+    assert ids(prod_de="2021-01-01") == sorted([a, b])
+    assert ids(prod_ate="2019-06-30") == [c_]
+    # Entrada: todos foram criados hoje.
+    hoje = date.today().isoformat()
+    assert len(ids(entrada_de=hoje, entrada_ate=hoje)) == 4
+    assert ids(entrada_ate="2000-01-01") == []
+    r = c.get("/api/stock/lotes", params={"garanhao": g, "prod_de": "2021-01-01", "prod_ate": "2021-01-31"}).json()
+    assert r["kpis"]["lotes"] == 1 and r["kpis"]["palhetas"] == 10
 
 
 def test_garanhoes(ctx):

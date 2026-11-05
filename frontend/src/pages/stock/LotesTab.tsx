@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Collapse,
+  DatePicker,
   Empty,
   Flex,
   FloatButton,
@@ -19,6 +20,7 @@ import {
   Typography,
 } from "antd";
 import { DownloadOutlined, FilterOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 
 import { useT } from "../../i18n/I18n";
 import { useErrorMessage } from "../../components/errors";
@@ -28,6 +30,9 @@ import { Lista } from "../../components/Lista";
 import { baixarCsv, dataCurta } from "../../components/csv";
 import {
   localizacao,
+  nPeriodos,
+  PERIODOS,
+  periodosDoEndereco,
   referencia,
   useGaranhoesStock,
   useLotes,
@@ -63,6 +68,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
   const minPalhetas = Number(params.get("min")) || 0;
   const incluirVazios = params.get("vazios") === "1";
   const loteAberto = Number(params.get("lote")) || null;
+  const periodos = periodosDoEndereco(params);
 
   const atualizar = (fn: (p: URLSearchParams) => void) =>
     setParams(
@@ -81,6 +87,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
         semDono: donosSel.includes(SEM_DONO),
         minPalhetas,
         incluirVazios,
+        ...periodos,
       }
     : null;
   const lotes = useLotes(filtro);
@@ -119,7 +126,25 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
       </Empty>
     );
 
-  const nFiltros = (donosSel.length ? 1 : 0) + (minPalhetas ? 1 : 0) + (incluirVazios ? 1 : 0);
+  const nFiltros = (donosSel.length ? 1 : 0) + (minPalhetas ? 1 : 0) + (incluirVazios ? 1 : 0) + nPeriodos(periodos);
+  // Um período (de/até) no endereço; qualquer um dos lados pode ficar em aberto.
+  const periodo = (de: (typeof PERIODOS)[number], ate: (typeof PERIODOS)[number]) => (
+    <DatePicker.RangePicker
+      style={{ width: "100%" }}
+      format="DD/MM/YYYY"
+      allowEmpty={[true, true]}
+      value={[periodos[de] ? dayjs(periodos[de]) : null, periodos[ate] ? dayjs(periodos[ate]) : null]}
+      onChange={(v) =>
+        atualizar((p) => {
+          const [i, f] = [v?.[0], v?.[1]];
+          if (i) p.set(de, i.format("YYYY-MM-DD"));
+          else p.delete(de);
+          if (f) p.set(ate, f.format("YYYY-MM-DD"));
+          else p.delete(ate);
+        })
+      }
+    />
+  );
   const opcoesDonos = (lotes.data?.donos_disponiveis ?? []).map((d) =>
     d.id === null ? { value: SEM_DONO, label: t("common.no_owner") } : { value: String(d.id), label: d.nome ?? "" },
   );
@@ -135,7 +160,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
   const k = lotes.data?.kpis;
 
   const filtros = (
-    <Space orientation="vertical" style={{ width: 260 }}>
+    <Space orientation="vertical" style={{ width: 280 }}>
       <Typography.Text type="secondary">{t("label.owner_plural")}</Typography.Text>
       <Select
         mode="multiple"
@@ -157,6 +182,15 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
         value={minPalhetas}
         onChange={(v) => atualizar((p) => (Number(v) ? p.set("min", String(v)) : p.delete("min")))}
       />
+      <Typography.Text type="secondary">{t("web.stock.period_production")}</Typography.Text>
+      {periodo("prod_de", "prod_ate")}
+      {(periodos.prod_de || periodos.prod_ate) && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t("web.stock.period_production_hint")}
+        </Typography.Text>
+      )}
+      <Typography.Text type="secondary">{t("web.stock.period_entry")}</Typography.Text>
+      {periodo("entrada_de", "entrada_ate")}
       <Space>
         <Switch
           size="small"
@@ -175,6 +209,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
               p.delete("dono");
               p.delete("min");
               p.delete("vazios");
+              PERIODOS.forEach((k) => p.delete(k));
             })
           }
         >

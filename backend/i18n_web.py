@@ -1582,3 +1582,20 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v
+
+# ── Stock: filtro por período (produção e entrada) ──
+for _k, *_txt in [
+    ("period_production", "Período de produção", "Production period", "Période de production", "Produktionszeitraum"),
+    ("period_production_hint", "Lotes com a data escrita de forma que não se percebe (ex.: «Várias») ficam de fora.",
+     "Lots whose date can't be read (e.g. “Various”) are left out.",
+     "Les lots dont la date est illisible (ex. « Plusieurs ») sont exclus.",
+     "Chargen mit unlesbarem Datum (z. B. „Mehrere“) werden ausgelassen."),
+    ("period_entry", "Período de entrada (registo na app)", "Entry period (registered in the app)",
+     "Période d’entrée (enregistrement dans l’app)", "Eingangszeitraum (in der App erfasst)"),
+    ("prod_de", "Produção desde", "Produced from", "Production depuis", "Produziert ab"),
+    ("prod_ate", "Produção até", "Produced until", "Production jusqu’au", "Produziert bis"),
+    ("entrada_de", "Entrada desde", "Entered from", "Entrée depuis", "Eingang ab"),
+    ("entrada_ate", "Entrada até", "Entered until", "Entrée jusqu’au", "Eingang bis"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v

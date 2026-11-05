@@ -78,13 +78,28 @@ export interface Opcao {
   nome: string;
 }
 
-export interface LotesFiltro {
+export interface LotesFiltro extends Periodos {
   garanhao: string;
   donos: number[];
   semDono: boolean;
   minPalhetas: number;
   incluirVazios: boolean;
 }
+
+/** Períodos do filtro de lotes (AAAA-MM-DD), guardados no endereço com estes nomes. */
+export interface Periodos {
+  prod_de?: string;
+  prod_ate?: string;
+  entrada_de?: string;
+  entrada_ate?: string;
+}
+export const PERIODOS = ["prod_de", "prod_ate", "entrada_de", "entrada_ate"] as const;
+
+export const periodosDoEndereco = (params: URLSearchParams): Periodos =>
+  Object.fromEntries(PERIODOS.filter((k) => params.get(k)).map((k) => [k, params.get(k)!]));
+
+/** Quantos dos dois períodos (produção, entrada) estão escolhidos. */
+export const nPeriodos = (p: Periodos) => (p.prod_de || p.prod_ate ? 1 : 0) + (p.entrada_de || p.entrada_ate ? 1 : 0);
 
 export interface LoteCampos {
   data_embriovet: string;
@@ -120,6 +135,7 @@ export function useLotes(f: LotesFiltro | null) {
       if (f!.semDono) p.set("sem_dono", "true");
       if (f!.minPalhetas) p.set("min_palhetas", String(f!.minPalhetas));
       if (f!.incluirVazios) p.set("incluir_vazios", "true");
+      PERIODOS.forEach((k) => f![k] && p.set(k, f![k]!));
       return api<LotesResposta>(`/stock/lotes?${p}`);
     },
   });
