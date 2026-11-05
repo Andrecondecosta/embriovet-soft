@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from modules.datas_producao import dentro_do_periodo, periodo_producao
+from modules.datas_producao import dentro_do_periodo, dia_exato, e_data_iso, periodo_producao
 
 D = date
 
@@ -44,3 +44,11 @@ def test_dentro_do_periodo():
     assert dentro_do_periodo("Várias", None, None)  # sem período: tudo
     assert dentro_do_periodo("2020-12-31", None, D(2021, 1, 1))
     assert not dentro_do_periodo("2020-12-31", D(2021, 1, 1), None)
+
+
+def test_dia_exato_e_formato_iso():
+    assert dia_exato("12-01-2021") == "2021-01-12"
+    assert dia_exato("2021.01.31HC") == "2021-01-31"
+    assert dia_exato("2014") is None and dia_exato("2026-05") is None and dia_exato("Várias") is None
+    assert e_data_iso("2021-01-12")
+    assert not e_data_iso("12-01-2021") and not e_data_iso("2021-02-30") and not e_data_iso("2021-1-5")

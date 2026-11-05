@@ -10,6 +10,7 @@ import { OwnerFormModal } from "../owners/OwnerFormModal";
 import { useOpcoes, type Lote, type LoteEdicao, type LoteNovo } from "./api";
 import { CANISTERS, camposVazios, inicialEdicao, useAjudaGaranhao, useGuardarEdicao } from "./LoteForm";
 import { useGuardarNovo } from "./AddLotePage";
+import { DataProducaoCampo } from "./DataProducaoCampo";
 
 type FormInstance = ReturnType<typeof Form.useForm>[0];
 
@@ -189,7 +190,7 @@ export function NovoLoteMobile() {
           producao={
             <>
               <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
-                <Input clearable />
+                <DataProducaoCampo />
               </Form.Item>
               <Form.Item
                 name="palhetas"
@@ -243,7 +244,7 @@ export function EditarLoteMobile({ opened, lote, onClose }: { opened: boolean; l
           producao={
             <>
               <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
-                <Input clearable />
+                <DataProducaoCampo />
               </Form.Item>
               <Form.Item name="origem_externa" label={t("stock.external_origin")} help={t("web.stock.external_origin_hint")}>
                 <Input clearable placeholder={t("web.stock.external_origin_placeholder")} />

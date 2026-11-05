@@ -25,6 +25,7 @@ import { dataCurta, dataHora } from "../../components/csv";
 import dayjs from "dayjs";
 import {
   localizacao,
+  mostrarProducao,
   nPeriodos,
   PERIODOS,
   periodosDoEndereco,
@@ -371,7 +372,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                     [t("stock.motility_label"), `${selecionado.motilidade ?? 0}%`],
                     [t("stock.dose_label"), selecionado.dose || "—"],
                     [t("stock.straws_produced_label"), selecionado.palhetas_produzidas ?? "—"],
-                    [t("stock.prod_date_label"), selecionado.data_embriovet || "—"],
+                    [t("stock.prod_date_label"), mostrarProducao(selecionado.data_embriovet) ?? "—"],
                     [t("stock.external_origin_label"), selecionado.origem_externa || "—"],
                     ...(selecionado.observacoes ? [[t("label.notes"), selecionado.observacoes]] : []),
                     [t("stock.created_at_label"), dataHora(selecionado.data_criacao)],

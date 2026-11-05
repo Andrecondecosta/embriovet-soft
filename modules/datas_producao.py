@@ -67,3 +67,23 @@ def dentro_do_periodo(texto, inicio: date | None, fim: date | None) -> bool:
     if p is None:
         return False
     return (inicio is None or p[1] >= inicio) and (fim is None or p[0] <= fim)
+
+
+def dia_exato(texto) -> str | None:
+    """AAAA-MM-DD quando o texto indica um dia certo ("12-01-2021",
+    "2019.12.03"…); None para mês, ano ou texto que não se percebe."""
+    if texto is None:
+        return None
+    s = str(texto).strip().lower()
+    if not (_ANO_PRIMEIRO.match(s) or _DIA_PRIMEIRO.match(s)):
+        return None
+    p = periodo_producao(s)
+    return p[0].isoformat() if p else None
+
+
+def e_data_iso(texto) -> bool:
+    """O formato gravado agora pela app: AAAA-MM-DD, um dia que existe."""
+    try:
+        return bool(texto) and date.fromisoformat(str(texto)).isoformat() == str(texto)
+    except ValueError:
+        return False

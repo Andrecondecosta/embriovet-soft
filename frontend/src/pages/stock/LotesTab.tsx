@@ -29,7 +29,9 @@ import { KpiRow } from "../../components/ds";
 import { Lista } from "../../components/Lista";
 import { baixarCsv, dataCurta } from "../../components/csv";
 import {
+  diaProducao,
   localizacao,
+  mostrarProducao,
   nPeriodos,
   PERIODOS,
   periodosDoEndereco,
@@ -334,8 +336,9 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                 {
                   title: t("stock.prod_date"),
                   dataIndex: "data_embriovet",
-                  render: (v: string | null) => <Typography.Text strong>{v || "—"}</Typography.Text>,
-                  sorter: (a, b) => (a.data_embriovet ?? "").localeCompare(b.data_embriovet ?? "", undefined, { numeric: true }),
+                  render: (v: string | null) => <Typography.Text strong>{mostrarProducao(v) ?? "—"}</Typography.Text>,
+                  // Por dia quando a data é um dia certo; texto antigo vai para o fim.
+                  sorter: (a, b) => (diaProducao(a.data_embriovet) ?? "~").localeCompare(diaProducao(b.data_embriovet) ?? "~"),
                 },
                 {
                   title: t("stock.external_origin"),

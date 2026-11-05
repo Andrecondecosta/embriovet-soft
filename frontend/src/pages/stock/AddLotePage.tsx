@@ -9,6 +9,7 @@ import { PageHeader } from "../../components/ds";
 import { useCriarLote, type LoteNovo } from "./api";
 import { NovoLoteMobile } from "./LoteFormMobile";
 import { CamposLote, DonoSelect, GaranhaoInput, Secao, camposVazios, useAjudaGaranhao } from "./LoteForm";
+import { DataProducaoCampo } from "./DataProducaoCampo";
 
 /** "Adicionar lote" — equivalente a `add_stock_view.py`. O garanhão pode
  *  ser escolhido da lista ou escrito de novo: o servidor cria-o em
@@ -89,7 +90,7 @@ function AddLoteDesktop() {
             <Row gutter={12}>
               <Col xs={24} sm={8}>
                 <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
-                  <Input />
+                  <DataProducaoCampo />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={8}>

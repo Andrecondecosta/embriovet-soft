@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 
@@ -187,5 +188,29 @@ const SIM_NAO = /^(sim|n[ãa]o|s|n|yes|no|x)$/i;
 /** Referência do lote: origem externa (se for mesmo um texto), ou data de produção. */
 export const referencia = (l: Pick<Lote, "origem_externa" | "data_embriovet">) => {
   const origem = l.origem_externa?.trim();
-  return (origem && !SIM_NAO.test(origem) ? origem : null) || l.data_embriovet || null;
+  return (origem && !SIM_NAO.test(origem) ? origem : null) || mostrarProducao(l.data_embriovet);
 };
+
+// Data de produção: agora grava-se sempre AAAA-MM-DD (escolhida num
+// calendário); lotes antigos podem ter texto livre ("12-01-2021", "2014"…).
+const ANO_PRIMEIRO = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/;
+const DIA_PRIMEIRO = /^(\d{1,2})[-./](\d{1,2})[-./](\d{4})/;
+
+/** O dia (AAAA-MM-DD) que o texto indica, se indicar um dia certo. */
+export function diaProducao(texto: string | null | undefined): string | null {
+  const s = texto?.trim() ?? "";
+  const m = ANO_PRIMEIRO.exec(s);
+  const n = m ? null : DIA_PRIMEIRO.exec(s);
+  const partes = m ? [m[1], m[2], m[3]] : n ? [n[3], n[2], n[1]] : null;
+  if (!partes) return null;
+  const [a, mes, d] = partes;
+  const iso = `${a}-${mes.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  // Recusa dias que não existem (ex.: 31/02), que o dayjs passaria para o mês seguinte.
+  return dayjs(iso).format("YYYY-MM-DD") === iso ? iso : null;
+}
+
+/** Para mostrar: dd/mm/aaaa quando é um dia certo; senão o texto como está. */
+export function mostrarProducao(texto: string | null | undefined): string | null {
+  const dia = diaProducao(texto);
+  return dia ? dayjs(dia).format("DD/MM/YYYY") : texto?.trim() || null;
+}

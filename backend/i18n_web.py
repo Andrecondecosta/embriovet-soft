@@ -1599,3 +1599,15 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v
+
+# ── Stock: data de produção escolhida no calendário ──
+for _k, *_txt in [
+    ("prod_date_choose", "Escolher data", "Choose date", "Choisir la date", "Datum wählen"),
+    ("prod_date_clear", "Limpar", "Clear", "Effacer", "Löschen"),
+    ("prod_date_old", "Escrito antes: «{valor}». Escolha a data para o substituir.", "Written before: “{valor}”. Choose the date to replace it.",
+     "Saisi auparavant : « {valor} ». Choisissez la date pour le remplacer.", "Früher eingegeben: „{valor}“. Datum wählen, um es zu ersetzen."),
+    ("error.prod_date_format", "A data de produção tem de ser escolhida no calendário.", "The production date must be picked from the calendar.",
+     "La date de production doit être choisie dans le calendrier.", "Das Produktionsdatum muss im Kalender gewählt werden."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.stock.{_k}"] = _v

@@ -78,7 +78,7 @@ def _novo(ctx, **extra):
         "qualidade": "80",
         "motilidade": 60,
         "concentracao": 200,
-        "data_embriovet": "2026-05",
+        "data_embriovet": "2026-05-10",
         **extra,
     }
     return ctx["gestor"].post("/api/stock/lotes", json=body)
@@ -132,9 +132,10 @@ def test_filtros(ctx):
 
 def test_filtro_periodo_producao_e_entrada(ctx):
     a = _novo(ctx, data_embriovet="2021-01-12").json()["id"]
-    b = _novo(ctx, data_embriovet="12-03-2021").json()["id"]
-    c_ = _novo(ctx, data_embriovet="2019").json()["id"]
-    _novo(ctx, data_embriovet="Várias")
+    # Lotes antigos com a data escrita à mão (já não se consegue criar assim).
+    b, c_, d = (_novo(ctx).json()["id"] for _ in range(3))
+    for lote, texto in ((b, "12-03-2021"), (c_, "2019"), (d, "Várias")):
+        _exec("UPDATE estoque_dono SET data_embriovet = %s WHERE id = %s", (texto, lote))
     g, c = ctx["garanhao"], ctx["gestor"]
 
     def ids(**p):
@@ -149,6 +150,33 @@ def test_filtro_periodo_producao_e_entrada(ctx):
     assert ids(entrada_ate="2000-01-01") == []
     r = c.get("/api/stock/lotes", params={"garanhao": g, "prod_de": "2021-01-01", "prod_ate": "2021-01-31"}).json()
     assert r["kpis"]["lotes"] == 1 and r["kpis"]["palhetas"] == 10
+
+
+def test_data_producao_so_do_calendario(ctx):
+    assert _novo(ctx, data_embriovet="12-01-2021").status_code == 422
+    assert _novo(ctx, data_embriovet="2021-02-30").status_code == 422
+    assert _novo(ctx, data_embriovet="").status_code == 201  # pode ficar vazia
+    assert _novo(ctx).json()["data_embriovet"] == "2026-05-10"
+
+
+def test_editar_lote_antigo_mantem_ou_normaliza_a_data(ctx):
+    lote = _novo(ctx).json()
+    body = {
+        "garanhao": lote["garanhao"], "dono_id": ctx["dono"], "contentor_id": ctx["contentor"],
+        "canister": 3, "andar": 2, "palhetas_produzidas": 10, "existencia_atual": 10,
+    }
+    url = f"/api/stock/lotes/{lote['id']}"
+    a = ctx["admin"]
+    # Texto antigo que não é um dia: fica como estava se não lhe mexerem.
+    _exec("UPDATE estoque_dono SET data_embriovet = '2014' WHERE id = %s", (lote["id"],))
+    assert a.put(url, json={**body, "data_embriovet": "2014"}).json()["data_embriovet"] == "2014"
+    # Mas não se pode escrever texto novo à mão.
+    r = a.put(url, json={**body, "data_embriovet": "Várias"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.stock.error.prod_date_format"
+    # Dia certo escrito à antiga passa a AAAA-MM-DD ao guardar.
+    _exec("UPDATE estoque_dono SET data_embriovet = '12-01-2021' WHERE id = %s", (lote["id"],))
+    assert a.put(url, json={**body, "data_embriovet": "12-01-2021"}).json()["data_embriovet"] == "2021-01-12"
+    assert a.put(url, json={**body, "data_embriovet": "2020-06-01"}).json()["data_embriovet"] == "2020-06-01"
 
 
 def test_garanhoes(ctx):

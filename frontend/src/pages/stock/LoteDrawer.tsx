@@ -7,7 +7,7 @@ import { useIsAdmin } from "../../components/User";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { dataHora } from "../../components/csv";
-import { referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
+import { mostrarProducao, referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
 import { HistoricoTransferencias } from "./LotesTab";
 import { LoteFormModal } from "./LoteForm";
 
@@ -93,7 +93,7 @@ export function LoteDrawer({
                 { label: t("stock.motility_label"), children: `${lote.motilidade ?? 0}%` },
                 { label: t("stock.dose_label"), children: na(lote.dose) },
                 { label: t("stock.straws_produced_label"), children: na(lote.palhetas_produzidas) },
-                { label: t("stock.prod_date_label"), children: na(lote.data_embriovet) },
+                { label: t("stock.prod_date_label"), children: na(mostrarProducao(lote.data_embriovet)) },
                 { label: t("stock.external_origin_label"), children: na(lote.origem_externa) },
                 ...(lote.observacoes
                   ? [{ label: t("label.notes"), children: <span style={{ whiteSpace: "pre-wrap" }}>{lote.observacoes}</span> }]

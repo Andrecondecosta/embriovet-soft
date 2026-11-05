@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from backend.deps import get_current_user, require_nivel
-from modules.datas_producao import dentro_do_periodo
+from modules.datas_producao import dentro_do_periodo, dia_exato, e_data_iso
 from modules.db import get_connection
 from modules.repositories.animal_repo import get_or_create_garanhao
 from modules.repositories.stock_repo import (
@@ -298,6 +298,14 @@ class LoteNovo(_LoteBase):
     dono_id: int
     palhetas: int = Field(gt=0)
 
+    @field_validator("data_embriovet")
+    @classmethod
+    def _data_producao(cls, v):
+        # Lote novo: a data vem do calendário, sempre AAAA-MM-DD.
+        if v is not None and not e_data_iso(v):
+            raise ValueError("web.stock.error.prod_date_format")
+        return v
+
     @field_validator("garanhao", mode="before")
     @classmethod
     def _garanhao(cls, v):
@@ -357,8 +365,16 @@ def criar_lote(body: LoteNovo, user: dict = Depends(get_current_user)):
 
 @router.put("/lotes/{lote_id}")
 def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_nivel("Administrador"))):
-    if not _obter_lote(lote_id):
+    atual = _obter_lote(lote_id)
+    if not atual:
         raise _erro(404, "web.stock.error.not_found")
+    # Data de produção: um lote antigo pode manter o texto que já tinha
+    # ("2014", "Várias"); uma data nova tem de vir do calendário. Um dia
+    # certo escrito à antiga ("12-01-2021") passa a AAAA-MM-DD.
+    data_producao = body.data_embriovet
+    if data_producao is not None and data_producao != atual["data_embriovet"] and not e_data_iso(data_producao):
+        raise _erro(422, "web.stock.error.prod_date_format")
+    data_producao = dia_exato(data_producao) or data_producao
     _validar_refs(body.dono_id, body.contentor_id)
     # Trocar de garanhão a sério: muda a ligação à ficha (animal_id), não
     # só o texto antigo — na app atual o campo não tinha efeito visível.
@@ -374,7 +390,7 @@ def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_ni
             "animal_id": animal_id,
             "garanhao": nome_garanhao,
             "dono_id": body.dono_id,
-            "data": body.data_embriovet,
+            "data": data_producao,
             "origem": body.origem_externa,
             "palhetas_produzidas": body.palhetas_produzidas,
             "qualidade": body.qualidade,

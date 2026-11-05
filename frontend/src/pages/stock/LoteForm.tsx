@@ -26,6 +26,7 @@ import { notifySuccess, useNotifyError } from "../../components/errors";
 import { OwnerFormModal } from "../owners/OwnerFormModal";
 import { EditarLoteMobile } from "./LoteFormMobile";
 import { useEditarLote, useOpcoes, type Lote, type LoteCampos, type LoteEdicao } from "./api";
+import { DataProducaoCampo } from "./DataProducaoCampo";
 
 export const CANISTERS = Array.from({ length: 10 }, (_, i) => String(i + 1));
 
@@ -346,7 +347,7 @@ function LoteFormModalDesktop({ opened, lote, onClose }: { opened: boolean; lote
             <Row gutter={12}>
               <Col xs={12} md={6}>
                 <Form.Item name="data_embriovet" label={t("stock.prod_date")}>
-                  <Input />
+                  <DataProducaoCampo />
                 </Form.Item>
               </Col>
               <Col xs={12} md={6}>
