@@ -82,8 +82,13 @@ def test_ler_valida_e_importa(c):
     v = c.post("/api/importar/validar", json={"linhas": linhas}).json()
     assert v["erros"] == [] and v["validas"] == 2
 
-    r = c.post("/api/importar/executar", json={"linhas": linhas}).json()
+    pedido = str(uuid.uuid4())
+    r = c.post("/api/importar/executar", json={"linhas": linhas, "pedido_id": pedido}).json()
     assert r["importados"] == 2
+    # O mesmo envio outra vez (duplo clique) não importa de novo.
+    r2 = c.post("/api/importar/executar", json={"linhas": linhas, "pedido_id": pedido})
+    assert r2.json()["detail"]["code"] == "web.import.error.duplicate_submit"
+    assert len(_exec_all("SELECT id FROM estoque_dono WHERE garanhao = %s", (gar,))) == 2
     rows = _exec_all("SELECT data_embriovet, origem_externa, existencia_atual, canister, andar, data_criacao FROM estoque_dono WHERE garanhao = %s ORDER BY id", (gar,))
     # Data lida dia-primeiro; texto que não é data vai para origem_externa;
     # canister/andar vazios ficam 1/1; data_criacao = 1 jan do ano do documento.

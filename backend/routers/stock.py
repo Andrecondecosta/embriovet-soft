@@ -18,6 +18,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
+from modules.repositories.audit_repo import registar_historico_edicao
 from backend.deps import get_current_user, require_nivel
 from modules.datas_producao import dentro_do_periodo, dia_exato, e_data_iso
 from modules.db import get_connection
@@ -321,6 +322,9 @@ class LoteEdicao(_LoteBase):
     dono_id: int
     palhetas_produzidas: int = Field(0, ge=0)
     existencia_atual: int = Field(0, ge=0)
+    # Existência quando o formulário abriu: se entretanto alguém gastou
+    # palhetas e o utilizador não mexeu neste campo, fica a da BD.
+    existencia_original: int | None = None
 
 
 def _validar_refs(dono_id: int, contentor_id: int):
@@ -365,10 +369,17 @@ def criar_lote(body: LoteNovo, user: dict = Depends(get_current_user)):
 
 
 @router.put("/lotes/{lote_id}")
-def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_nivel("Gestor"))):
+def editar_lote(lote_id: int, body: LoteEdicao, user: dict = Depends(require_nivel("Gestor"))):
     atual = _obter_lote(lote_id)
     if not atual:
         raise _erro(404, "web.stock.error.not_found")
+    existencia = body.existencia_atual
+    na_bd = int(atual.get("existencia_atual") or 0)
+    if body.existencia_original is not None and body.existencia_original != na_bd:
+        if existencia != body.existencia_original:
+            # Os dois mudaram a existência ao mesmo tempo: não se adivinha.
+            raise _erro(409, "web.stock.error.changed_meanwhile", atual=na_bd)
+        existencia = na_bd
     # Data de produção: um lote antigo pode manter o texto que já tinha
     # ("2014", "Várias"); uma data nova tem de vir do calendário. Um dia
     # certo escrito à antiga ("12-01-2021") passa a AAAA-MM-DD.
@@ -404,12 +415,14 @@ def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_ni
             "certificado": body.certificado,
             "dose": body.dose,
             "observacoes": body.observacoes,
-            "existencia": body.existencia_atual,
+            "existencia": existencia,
         },
     )
     if not ok:
         raise _erro(500, "web.error.generic")
-    return _obter_lote(lote_id)
+    novo = _obter_lote(lote_id)
+    registar_historico_edicao("estoque_dono", lote_id, atual, novo, utilizador=user["username"])
+    return novo
 
 
 @router.delete("/lotes/{lote_id}")

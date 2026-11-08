@@ -218,7 +218,7 @@ def operacao(ref: str, _user: dict = Depends(get_current_user)):
 
 
 @router.put("/operacao/{ref}")
-def editar(ref: str, d: InseminacaoIn, _user: dict = Depends(get_current_user)):
+def editar(ref: str, d: InseminacaoIn, user: dict = Depends(get_current_user)):
     atual = operacao(ref)
     _validar_linhas(d.linhas, extra={l["stock_id"]: int(l["palhetas"] or 0) for l in atual["linhas"]})
     # Cada linha leva o dono do lote (como a app atual).
@@ -234,6 +234,7 @@ def editar(ref: str, d: InseminacaoIn, _user: dict = Depends(get_current_user)):
         observacoes=d.observacoes,
         edit_operation_id=None if ref.startswith("id-") else ref,
         animal_id_egua=atual["animal_id_egua"] or d.animal_id_egua,
+        utilizador=user["username"],
     )
     if not ok:
         raise _erro(409, "web.insem.error.edit_failed")

@@ -100,6 +100,26 @@ def test_obrigado_a_mudar_credenciais(client, utilizador):
     assert client.get("/api/owners").status_code == 200
 
 
+def test_password_curta_e_outras_sessoes_terminam(client, utilizador):
+    outra = TestClient(app)
+    assert outra.post("/api/auth/login", json={"username": utilizador["username"], "password": "segredo123"}).status_code == 200
+    r = client.post("/api/auth/change-credentials", json={"username": utilizador["username"], "password": "1", "confirm_password": "1"})
+    assert r.json()["detail"] == "users.password_min_error"
+    r = client.post("/api/auth/change-credentials",
+                    json={"username": utilizador["username"], "password": "nova1234", "confirm_password": "nova1234"})
+    assert r.status_code == 200
+    assert client.get("/api/owners").status_code == 200  # esta sessão continua
+    assert outra.get("/api/owners").status_code == 401  # a outra terminou
+
+
+def test_bloqueio_depois_de_tentativas_falhadas(utilizador):
+    c = TestClient(app)
+    for _ in range(5):
+        assert c.post("/api/auth/login", json={"username": utilizador["username"], "password": "errada"}).status_code == 401
+    r = c.post("/api/auth/login", json={"username": utilizador["username"], "password": "segredo123"})
+    assert r.status_code == 429 and r.json()["detail"] == "login.too_many"
+
+
 # ── Proprietários ─────────────────────────────────────────────────────────
 
 def test_criar_editar_e_listar(client):

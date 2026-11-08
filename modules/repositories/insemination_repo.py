@@ -964,6 +964,7 @@ def registar_resultado(
 def registrar_inseminacao_multiplas(
     registros, data_inseminacao, egua, insemination_id=None,
     observacoes=None, edit_operation_id=None, animal_id_egua=None,
+    utilizador=None,
 ):
     """Registra múltiplas linhas de inseminação ou atualiza uma operação existente.
 
@@ -1005,7 +1006,8 @@ def registrar_inseminacao_multiplas(
                     SELECT i.id, i.estoque_id, i.palhetas_gastas,
                            i.garanhao, i.dono_id, i.egua, i.data_inseminacao,
                            i.protocolo, i.observacoes, d.nome AS dono_nome,
-                           i.resultado, i.data_resultado, i.hora_inseminacao, i.estadia_id
+                           i.resultado, i.data_resultado, i.hora_inseminacao, i.estadia_id,
+                           i.utilizador, i.created_at
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.operation_id = %s
@@ -1029,6 +1031,9 @@ def registrar_inseminacao_multiplas(
                     # estadia da inseminação mantêm-se (mesmo que a égua já
                     # tenha saído).
                     resultado_antigo, data_resultado_antiga, hora_antiga, estadia_antiga = old_for_audit[10:14]
+                    # Quem registou e quando mantêm-se (a edição reescreve as linhas).
+                    criado_por, criado_em = old_for_audit[14], old_for_audit[15]
+                    editor = utilizador or st.session_state.get('user', {}).get('username', '—')
                     estadia_id_resolvida = estadia_antiga or _resolver_estadia_ativa(cur, animal_id_egua)
                     if estadia_id_resolvida is None:
                         st.error(
@@ -1052,8 +1057,10 @@ def registrar_inseminacao_multiplas(
                                 (int(row[2] or 0), row[1])
                             )
 
+                    # Linhas cujo lote já foi apagado não aparecem no
+                    # formulário: ficam como estavam (senão perdiam-se).
                     cur.execute(
-                        "DELETE FROM inseminacoes WHERE operation_id = %s",
+                        "DELETE FROM inseminacoes WHERE operation_id = %s AND estoque_id IS NOT NULL",
                         (edit_operation_id,)
                     )
 
@@ -1073,18 +1080,18 @@ def registrar_inseminacao_multiplas(
                             INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
                                 protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado,
                                 animal_id_egua, animal_id_garanhao, estadia_id,
-                                resultado, data_resultado, hora_inseminacao)
+                                resultado, data_resultado, hora_inseminacao, created_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE, %s, %s, %s,
-                                COALESCE(%s, 'pendente'), %s, %s)
+                                COALESCE(%s, 'pendente'), %s, %s, COALESCE(%s, NOW()))
                             RETURNING id
                         """, (
                             to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
                             to_py(data_inseminacao), to_py(egua),
                             to_py(reg.get("protocolo")), palhetas,
-                            to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
+                            to_py(observacoes), criado_por or editor,
                             stock_id, edit_operation_id,
                             int(animal_id_egua), int(animal_id_garanhao_resolvido), int(estadia_id_resolvida),
-                            resultado_antigo, data_resultado_antiga, hora_antiga,
+                            resultado_antigo, data_resultado_antiga, hora_antiga, criado_em,
                         ))
                         new_row = cur.fetchone()
                         if first_new_id is None and new_row:
@@ -1114,7 +1121,7 @@ def registrar_inseminacao_multiplas(
                         'Égua': str(egua or '—'), 'Garanhão': str(registros[0].get("garanhao", '—')),
                         'Palhetas': total_pal, 'Data': str(data_inseminacao or ''),
                         'Proprietário': str(new_dono or '—'), 'Observações': str(observacoes or '—'),
-                    })
+                    }, utilizador=editor)
                     logger.info(f"✏️ Operação ATUALIZADA (op={edit_operation_id}): égua={egua}, total={total_pal}")
                     cur.close()
                     atualizar_status_proprietarios()

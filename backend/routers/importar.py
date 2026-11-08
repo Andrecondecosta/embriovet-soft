@@ -129,6 +129,8 @@ class LinhasIn(BaseModel):
     linhas: list[dict]
     # Proprietários da folha mapeados para um existente: {nome em minúsculas: id}.
     mapa_donos: dict[str, int] = {}
+    # Id do envio (anti-duplicados: o mesmo ficheiro não se importa duas vezes por duplo clique).
+    pedido_id: str | None = None
 
     @field_validator("linhas")
     @classmethod
@@ -235,6 +237,13 @@ def executar(d: LinhasIn, user: dict = Depends(get_current_user)):
     with get_connection() as conn:
         with conn.cursor() as cur:
             try:
+                if d.pedido_id:
+                    cur.execute(
+                        "INSERT INTO pedidos_unicos (id, tipo) VALUES (%s::uuid, 'importacao') ON CONFLICT (id) DO NOTHING",
+                        (d.pedido_id,),
+                    )
+                    if cur.rowcount == 0:
+                        raise _erro(409, "web.import.error.duplicate_submit")
                 for l in linhas:
                     de = l.get("data_embriovet")
                     # data_criacao = 1 de janeiro do ano do documento (não a data da importação).
@@ -274,6 +283,9 @@ def executar(d: LinhasIn, user: dict = Depends(get_current_user)):
                         }
                     )
                 conn.commit()
+            except HTTPException:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 raise _erro(500, "import.failed", error=str(e)) from e

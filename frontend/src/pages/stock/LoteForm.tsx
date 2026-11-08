@@ -258,6 +258,7 @@ export function inicialEdicao(lote: Lote): LoteEdicao {
     observacoes: lote.observacoes ?? "",
     palhetas_produzidas: lote.palhetas_produzidas ?? 0,
     existencia_atual: lote.existencia_atual ?? 0,
+    existencia_original: lote.existencia_atual ?? 0,
   };
 }
 

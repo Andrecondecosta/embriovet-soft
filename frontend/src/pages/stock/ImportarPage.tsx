@@ -115,6 +115,9 @@ function useImportar() {
   const [passo, setPasso] = useState(0);
   const [nome, setNome] = useState<string | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
+  // Um id por ficheiro lido: o mesmo envio não importa duas vezes (duplo clique).
+  const [pedidoId, setPedidoId] = useState(() => crypto.randomUUID());
+  useEffect(() => setPedidoId(crypto.randomUUID()), [linhas]);
   const [ocupado, setOcupado] = useState(false);
   const [entidades, setEntidades] = useState<Entidades | null>(null);
   // Proprietários mapeados para um existente ({nome em minúsculas: id}).
@@ -183,7 +186,7 @@ function useImportar() {
     validar(novas);
   };
   const importar = async () => {
-    const r = await correr(() => api<Relatorio>("/importar/executar", "POST", { linhas, mapa_donos: mapaDonos }));
+    const r = await correr(() => api<Relatorio>("/importar/executar", "POST", { linhas, mapa_donos: mapaDonos, pedido_id: pedidoId }));
     if (r) {
       setRelatorio(r);
       setPasso(3);

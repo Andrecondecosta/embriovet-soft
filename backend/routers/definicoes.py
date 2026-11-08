@@ -293,6 +293,11 @@ def mudar_password(uid: int, d: PasswordIn, _user: dict = Depends(require_nivel(
     _validar_password(d.password)
     if not alterar_password(uid, d.password):
         raise _erro(500, "web.error.generic")
+    # Password reposta: as sessões abertas desse utilizador terminam.
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_sessions WHERE username = (SELECT username FROM usuarios WHERE id = %s)", (uid,))
+        conn.commit()
     return {"ok": True}
 
 

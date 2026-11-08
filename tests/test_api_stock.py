@@ -238,3 +238,18 @@ def test_motilidade_nao_medida_fica_vazia(ctx):
     assert lote["motilidade"] is None and lote["concentracao"] is None
     insem = next(l for l in ctx["gestor"].get("/api/inseminacoes/lotes").json() if l["id"] == lote["id"])
     assert insem["motilidade"] is None and "observacoes" in insem
+
+
+def test_editar_lote_nao_repoe_existencia_antiga(ctx):
+    lote = _novo(ctx).json()  # 10 palhetas
+    body = {
+        "garanhao": lote["garanhao"], "dono_id": ctx["dono"], "contentor_id": ctx["contentor"],
+        "canister": 3, "andar": 2, "palhetas_produzidas": 10, "existencia_atual": 10, "existencia_original": 10,
+        "observacoes": "corrigido",
+    }
+    _exec("UPDATE estoque_dono SET existencia_atual = 8 WHERE id = %s", (lote["id"],))  # alguém gastou 2
+    r = ctx["gestor"].put(f"/api/stock/lotes/{lote['id']}", json=body)
+    assert r.status_code == 200 and r.json()["existencia_atual"] == 8
+    # Se o utilizador também mudou a existência, não se adivinha: conflito.
+    r = ctx["gestor"].put(f"/api/stock/lotes/{lote['id']}", json={**body, "existencia_atual": 5})
+    assert r.json()["detail"]["code"] == "web.stock.error.changed_meanwhile"

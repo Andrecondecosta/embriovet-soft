@@ -120,7 +120,7 @@ export interface LoteCampos {
 }
 
 export type LoteNovo = LoteCampos & { palhetas: number };
-export type LoteEdicao = LoteCampos & { palhetas_produzidas: number; existencia_atual: number };
+export type LoteEdicao = LoteCampos & { palhetas_produzidas: number; existencia_atual: number; existencia_original?: number };
 
 export const useGaranhoesStock = () =>
   useQuery({ queryKey: ["stock", "garanhoes"], queryFn: () => api<GaranhaoStock[]>("/stock/garanhoes") });

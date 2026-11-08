@@ -287,3 +287,15 @@ def test_stock_nunca_negativo_com_pedidos_ao_mesmo_tempo(ctx):
         estados = list(ex.map(lambda _: ctx["c"].post("/api/inseminacoes", json=_corpo(ctx, 1)).status_code, range(8)))
     assert estados.count(201) == 1, estados
     assert _stock(ctx["lote"]) == 0
+
+
+def test_editar_mantem_quem_registou_e_quando(ctx):
+    op = _inseminar(ctx, 3)
+    _um("UPDATE inseminacoes SET created_at = NOW() - INTERVAL '3 days' WHERE operation_id = %s::uuid", (op,))
+    antes = _um("SELECT utilizador, created_at FROM inseminacoes WHERE operation_id = %s::uuid", (op,))
+    corpo = _corpo(ctx, 2, data_inseminacao=(date.today() - timedelta(days=3)).isoformat(), observacoes="corrigida")
+    assert ctx["c"].put(f"/api/inseminacoes/operacao/{op}", json=corpo).status_code == 200
+    assert _um("SELECT utilizador, created_at FROM inseminacoes WHERE operation_id = %s::uuid", (op,)) == antes
+    assert antes[0] == ctx["user"]
+    editor = _um("SELECT utilizador_nome FROM historico_edicoes WHERE tabela_nome = 'inseminacoes' ORDER BY id DESC LIMIT 1")[0]
+    assert editor == ctx["user"]
