@@ -162,7 +162,7 @@ def tabelas_estudo(inicio: date | None = None, fim: date | None = None) -> list[
             ["ovulacao / folic_hemorragico", "sim / nao / nao_avaliado. Vazio = não registado nesse exame."],
             ["dg (Exames)", "positivo / negativo / inconclusivo / sem_exame, como escrito no registo."],
             ["Diagnósticos", "Um por exame, na etapa D+14 / D+28 / D+45 contada desde a inseminação; não se substituem."],
-            ["lote_concentracao / lote_motilidade", "Do lote usado (10⁶/mL e %). 0 pode querer dizer «não registado»."],
+            ["lote_concentracao / lote_motilidade", "Do lote usado (10⁶/mL e %). Motilidade sempre pós-descongelação. 0 pode querer dizer «não registado»."],
             ["lote_origem", "interno (vazio ou «Não» na origem externa) ou externo."],
             ["resultado_atual", "Estado da inseminação na app hoje (pendente / gestacao_confirmada / falhou)."],
             ["Datas e horas", "AAAA-MM-DD e HH:MM. Inseminações antigas podem não ter hora."],
