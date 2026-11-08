@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import type { Repro } from "../../components/EstadoReprodutivo";
 
 export const TIPOS_REGISTO = ["estadia", "visita", "externo"] as const;
 export const MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"] as const;
@@ -33,6 +34,7 @@ export interface Estadia {
   data_saida: string | null;
   alojamento_nome: string | null;
   dias_internado: number | null;
+  repro?: Repro | null;
 }
 
 export interface AnimalPesquisa {

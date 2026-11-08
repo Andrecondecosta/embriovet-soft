@@ -26,6 +26,7 @@ import { dataCurta } from "../../components/csv";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
 import { Cabecalho } from "../../components/mobile";
 import { NovaEstadia } from "./NovaEstadia";
+import { TagReprodutivo, useEstadoReprodutivo } from "../../components/EstadoReprodutivo";
 import {
   ESTADOS_SAIDA,
   TIPOS_ANIMAL,
@@ -240,6 +241,11 @@ function InternadasDesktop({ e }: { e: E }) {
         locale={{ emptyText: e.vazio(total ? t("web.stays.empty_type") : t("web.stays.empty_internal")) }}
         columns={[
           ...colunasBase(e),
+          {
+            title: t("web.stays.col.repro"),
+            key: "repro",
+            render: (_: unknown, x: Estadia) => <TagReprodutivo r={x.repro} />,
+          },
           {
             title: t("web.stays.col.days"),
             dataIndex: "dias_internado",
@@ -595,11 +601,12 @@ function FiltroTipoMobile({ e }: { e: E }) {
 }
 
 function LinhaMobile({ e, x, extra }: { e: E; x: Estadia; extra?: React.ReactNode }) {
+  const estadoRepro = useEstadoReprodutivo();
   return (
     <List.Item
       arrow
       onClick={() => e.verFicha(x)}
-      description={[x.proprietario, x.alojamento_nome, e.motivo(x.motivo)].filter(Boolean).join(" · ")}
+      description={[x.proprietario, x.alojamento_nome, estadoRepro(x.repro)?.texto ?? e.motivo(x.motivo)].filter(Boolean).join(" · ")}
       extra={extra}
     >
       {x.animal ?? "—"}

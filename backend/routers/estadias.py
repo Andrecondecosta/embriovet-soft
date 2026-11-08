@@ -98,7 +98,42 @@ def pesquisar_animais(
 def internadas(tipo_animal: TipoAnimal | None = None, _user: dict = Depends(get_current_user)):
     total = _lista("e.data_saida IS NULL", (), None)
     itens = [r for r in total if not tipo_animal or r["animal_tipo"] == tipo_animal]
+    repro = estado_reprodutivo([r["animal_id"] for r in itens])
+    for r in itens:
+        r["repro"] = repro.get(r["animal_id"])
     return {"total": len(total), "itens": itens}
+
+
+def estado_reprodutivo(animal_ids: list[int]) -> dict[int, dict]:
+    """Estado da última inseminação de cada égua (resultado, data, último
+    DG) — para responder "está gestante?" sem abrir o historial."""
+    if not animal_ids:
+        return {}
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (i.animal_id_egua)
+                       i.animal_id_egua, i.data_inseminacao, COALESCE(i.resultado, 'pendente'),
+                       d.etapa, d.resultado, d.data_exame
+                FROM inseminacoes i
+                LEFT JOIN LATERAL (
+                    SELECT etapa, resultado, data_exame FROM diagnosticos_gestacao g
+                    WHERE g.operation_id = i.operation_id ORDER BY data_exame DESC, id DESC LIMIT 1
+                ) d ON TRUE
+                WHERE i.animal_id_egua = ANY(%s)
+                ORDER BY i.animal_id_egua, i.data_inseminacao DESC, i.id DESC
+                """,
+                (animal_ids,),
+            )
+            return {
+                r[0]: {
+                    "data_inseminacao": r[1].isoformat() if r[1] else None,
+                    "resultado": r[2],
+                    "ultimo_dg": {"etapa": r[3], "resultado": r[4], "data": r[5].isoformat()} if r[3] else None,
+                }
+                for r in cur.fetchall()
+            }
 
 
 @router.get("/estadias/movimentos")

@@ -6,7 +6,8 @@ import { CapsuleTabs, DotLoading, ErrorBlock } from "antd-mobile";
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { useErrorMessage } from "../../components/errors";
-import { useAnimal, type Animal } from "./api";
+import { useAnimal, useReprodutivo, type Animal } from "./api";
+import { TagReprodutivo } from "../../components/EstadoReprodutivo";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
 import { AlertasTab, EstadiasAnimalTab, FertilidadeTab, ProducaoTab, ReprodutivoTab } from "./OutrosTabs";
@@ -38,6 +39,8 @@ export function AnimalPage() {
   const [params, setParams] = useSearchParams();
   const q = useAnimal(id);
   const animal = q.data;
+  // Estado reprodutivo à vista (a pergunta do dono, sem abrir o historial).
+  const ultima = useReprodutivo(id).data?.inseminacoes[0];
 
   if (q.isError)
     return isMobile ? (
@@ -60,7 +63,12 @@ export function AnimalPage() {
   const etiquetas = (
     <>
       <Tag>{t(`web.stays.animal.${animal.tipo}`)}</Tag>
-      {animal.estadia_ativa !== null && <Tag color="blue">{t("web.stays.in_progress")}</Tag>}
+      {animal.estadia_ativa !== null && <Tag color="blue">{t("web.stays.in_clinic")}</Tag>}
+      {animal.tipo !== "garanhao" && ultima && (
+        <TagReprodutivo
+          r={{ data_inseminacao: ultima.data_inseminacao, resultado: ultima.resultado, ultimo_dg: ultima.ultimo_dg }}
+        />
+      )}
     </>
   );
 
