@@ -276,8 +276,9 @@ class _LoteBase(BaseModel):
     data_embriovet: str | None = None
     origem_externa: str | None = None
     qualidade: str | None = None
-    concentracao: int = Field(0, ge=0)
-    motilidade: int = Field(0, ge=0, le=100)
+    # Vazio = não medido (≠ 0): um lote de fora pode chegar sem estes dados.
+    concentracao: int | None = Field(None, ge=0)
+    motilidade: int | None = Field(None, ge=0, le=100)
     certificado: Literal["Sim", "Não"] = "Sim"
     dose: str | None = None
     cor: str | None = None
@@ -364,7 +365,7 @@ def criar_lote(body: LoteNovo, user: dict = Depends(get_current_user)):
 
 
 @router.put("/lotes/{lote_id}")
-def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_nivel("Administrador"))):
+def editar_lote(lote_id: int, body: LoteEdicao, _user: dict = Depends(require_nivel("Gestor"))):
     atual = _obter_lote(lote_id)
     if not atual:
         raise _erro(404, "web.stock.error.not_found")

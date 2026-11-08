@@ -89,6 +89,9 @@ function usePalhetas() {
 
 const RESULTADOS_DG: ResultadoDG[] = ["positivo", "negativo", "inconclusivo", "sem_exame"];
 
+/** "14:30" (a hora vem como "14:30:00"); vazio se não houver. */
+const horaCurta = (h?: string | null) => (h ? h.slice(0, 5) : "");
+
 export function ReprodutivoTab({ animal }: { animal: Animal }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -204,6 +207,8 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
                 description={
                   <>
                     {i.garanhao ?? "—"} · {i.proprietario ?? "—"} · {palhetas(i)}
+                    {i.lotes && ` · ${i.lotes}`}
+                    {i.utilizador && ` · ${i.utilizador}`}
                     {i.pode_resultado && (
                       <div style={{ marginTop: 6 }}>
                         <MButton size="mini" color="primary" fill="outline" onClick={() => abrirDg(i)}>
@@ -215,7 +220,7 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
                 }
                 extra={<MTag color={COR_RESULTADO_M[i.resultado] ?? "default"}>{res(i.resultado)}</MTag>}
               >
-                {dataCurta(i.data_inseminacao)}
+                {dataCurta(i.data_inseminacao)} {horaCurta(i.hora_inseminacao)}
               </List.Item>
             ))
           )}
@@ -236,10 +241,17 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
         pagination={false}
         locale={{ emptyText: t("web.animal.no_inseminations") }}
         columns={[
-          { title: t("web.animal.col.date"), dataIndex: "data_inseminacao", width: 100, render: dataCurta },
+          {
+            title: t("web.animal.col.date"),
+            key: "data",
+            width: 130,
+            render: (_, i) => `${dataCurta(i.data_inseminacao)} ${horaCurta(i.hora_inseminacao)}`.trim(),
+          },
           { title: t("web.animal.col.stallion"), dataIndex: "garanhao", render: (v) => v ?? "—" },
           { title: t("web.animal.col.owner"), dataIndex: "proprietario", render: (v) => v ?? "—" },
           { title: t("web.animal.col.straws"), key: "p", width: 110, render: (_, i) => palhetas(i) },
+          { title: t("web.animal.col.lots"), dataIndex: "lotes", render: (v) => v ?? "—" },
+          { title: t("web.animal.col.by"), dataIndex: "utilizador", width: 110, render: (v) => v ?? "—" },
           {
             title: t("web.animal.col.result"),
             dataIndex: "resultado",
@@ -447,7 +459,7 @@ export function ProducaoTab({ animal }: { animal: Animal }) {
             lotes.map((l, i) => (
               <List.Item
                 key={i}
-                description={`${origem(l.origem_externa)} · ${l.proprietario ?? "—"} · ${local(l)} · M ${l.motilidade ?? 0}%`}
+                description={`${origem(l.origem_externa)} · ${l.proprietario ?? "—"} · ${local(l)} · M ${l.motilidade == null ? "—" : `${l.motilidade}%`}`}
                 extra={`${l.palhetas_restantes ?? 0}/${l.palhetas_iniciais ?? 0}`}
               >
                 {l.data_producao ? String(l.data_producao) : "—"}

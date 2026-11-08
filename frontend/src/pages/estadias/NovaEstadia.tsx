@@ -17,7 +17,8 @@ import {
   abrirAoTocar,
   irParaErro,
 } from "../../components/mobile";
-import { DonoSelect } from "../stock/LoteForm";
+import { DonoSelect, GaranhaoInput } from "../stock/LoteForm";
+import { useOpcoes } from "../stock/api";
 import { OwnerFormModal } from "../owners/OwnerFormModal";
 import type { Owner } from "../../api/types";
 import {
@@ -49,6 +50,7 @@ interface Valores {
   data_entrada: Dayjs | Date;
   alojamento_id: number | null;
   observacoes?: string;
+  garanhao?: string;
 }
 
 const INICIAIS: Valores = {
@@ -64,6 +66,16 @@ const INICIAIS: Valores = {
 
 const data = (v: Dayjs | Date | null | undefined) => (v ? dayjs(v).format(FMT) : null);
 
+type Alojamento = { id: number; nome: string; tipo: string; capacidade: number; ocupados?: number };
+const cheio = (a: Alojamento) => (a.ocupados ?? 0) >= (a.capacidade || 1);
+
+/** "Box 3 (Box) · 1/1" — a ocupação vê-se na escolha; os cheios não se escolhem. */
+function useRotuloAlojamento() {
+  const t = useT();
+  return (a: Alojamento) =>
+    `${a.nome} (${t(`web.housing.type.${a.tipo}`)}) · ${a.ocupados ?? 0}/${a.capacidade || 1}${cheio(a) ? ` ${t("web.stays.form.full")}` : ""}`;
+}
+
 /** Gravar — partilhado pelo computador e pelo telemóvel. */
 function useGuardar(onClose: () => void) {
   const t = useT();
@@ -77,6 +89,7 @@ function useGuardar(onClose: () => void) {
       data_entrada: data(v.data_entrada)!,
       alojamento_id: v.tipo_registo === "externo" ? null : v.alojamento_id,
       observacoes: v.observacoes,
+      garanhao: v.motivo === "inseminacao" ? v.garanhao?.trim() || undefined : undefined,
       ...(v.modo === "existente"
         ? { animal_id: v.animal?.id }
         : { animal: { ...(v.novo as AnimalNovo), data_nascimento: data(v.novo?.data_nascimento) } }),
@@ -181,6 +194,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
   );
   const aviso = useAvisoNome(Form.useWatch(["novo", "nome"], form), Form.useWatch("dono_id", form) ?? null);
   const alojamentos = opcoes.data?.alojamentos ?? [];
+  const rotuloAlojamento = useRotuloAlojamento();
   const r = (msg: string) => [{ required: true, message: t(msg) }];
 
   return (
@@ -317,9 +331,16 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
           </Col>
           <Col xs={24} sm={12}>
             <Form.Item name="dono_id" label={t("label.owner")} rules={r("web.stays.error.owner_required")}>
-              <DonoSelect apenasAtivos />
+              <DonoSelect apenasAtivos={false} />
             </Form.Item>
           </Col>
+          {Form.useWatch("motivo", form) === "inseminacao" && (
+            <Col xs={24} sm={12}>
+              <Form.Item name="garanhao" label={t("web.stays.form.requested_stallion")}>
+                <GaranhaoInput />
+              </Form.Item>
+            </Col>
+          )}
           <Col xs={24} sm={12}>
             <Form.Item
               name="data_entrada"
@@ -341,7 +362,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
                 >
                   <Select
                     allowClear
-                    options={alojamentos.map((a) => ({ value: a.id, label: `${a.nome} (${t(`web.housing.type.${a.tipo}`)})` }))}
+                    options={alojamentos.map((a) => ({ value: a.id, label: rotuloAlojamento(a), disabled: cheio(a) }))}
                   />
                 </Form.Item>
               )}
@@ -407,6 +428,7 @@ function PesquisaAnimalMobile({ value, onChange }: { value?: AnimalPesquisa | nu
 function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () => void }) {
   const t = useT();
   const [form] = MForm.useForm<Valores>();
+  const garanhoes = useOpcoes("garanhoes");
   const opcoes = useOpcoesEstadia();
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = MForm.useWatch("modo", form) ?? "existente";
@@ -424,6 +446,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
   const [novoDono, setNovoDono] = useState(false);
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
   const alojamentos = opcoes.data?.alojamentos ?? [];
+  const rotuloAlojamento = useRotuloAlojamento();
 
   return (
     <FolhaEcraInteiro
@@ -549,6 +572,15 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
             acao={{ texto: t("web.owners.new"), onClick: () => setNovoDono(true) }}
           />
         </MForm.Item>
+        {MForm.useWatch("motivo", form) === "inseminacao" && (
+          <MForm.Item name="garanhao" label={t("web.stays.form.requested_stallion")} arrow onClick={abrirAoTocar}>
+            <SeletorPesquisa<string>
+              titulo={t("web.stays.form.requested_stallion")}
+              opcoes={(garanhoes.data ?? []).map((g) => ({ value: g.nome, label: g.nome }))}
+              novo={(texto) => texto}
+            />
+          </MForm.Item>
+        )}
         <MForm.Item
           name="data_entrada"
           label={tipoRegisto === "externo" ? t("web.stays.form.service_date") : t("web.stays.form.entry_date")}
@@ -574,7 +606,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
               onClick={abrirAoTocar}
             >
               <PickerCampo<number>
-                opcoes={alojamentos.map((a) => ({ value: a.id, label: `${a.nome} (${t(`web.housing.type.${a.tipo}`)})` }))}
+                opcoes={alojamentos.filter((a) => !cheio(a)).map((a) => ({ value: a.id, label: rotuloAlojamento(a) }))}
               />
             </MForm.Item>
           ))}

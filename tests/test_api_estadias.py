@@ -167,3 +167,17 @@ def test_receptora_fica_marcada_pelo_tipo(client, base):
         with conn.cursor() as cur:
             cur.execute("SELECT is_receptora FROM animais WHERE id = %s", (r.json()["animal_id"],))
             assert cur.fetchone()[0] is True
+
+
+def test_box_cheia_e_garanhao_pedido(client, base):
+    r = _nova(client, base, garanhao="Xaquiro")
+    assert r.status_code == 201, r.text
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT garanhao FROM estadias WHERE id = %s", (r.json()["id"],))
+            assert cur.fetchone()[0] == "Xaquiro"
+    # A box (capacidade 1) já está ocupada: outra entrada nela é recusada.
+    aloj = next(a for a in client.get("/api/estadias/opcoes").json()["alojamentos"] if a["id"] == base["aloj"])
+    assert aloj["ocupados"] == 1
+    r = _nova(client, base, animal={"nome": f"{PREFIXO}{uuid.uuid4().hex[:6]}", "tipo": "egua"})
+    assert r.json()["detail"]["code"] == "web.stays.error.housing_full"

@@ -137,8 +137,13 @@ def opcoes(_user: dict = Depends(get_current_user)):
         with conn.cursor() as cur:
             cur.execute("SELECT id, nome FROM dono ORDER BY LOWER(nome)")
             donos = [{"id": r[0], "nome": r[1]} for r in cur.fetchall()]
-            cur.execute("SELECT id, nome, tipo, capacidade FROM alojamentos WHERE ativo = TRUE ORDER BY tipo, LOWER(nome)")
-            aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3]} for r in cur.fetchall()]
+            # Ocupação: estadias abertas em cada alojamento.
+            cur.execute(
+                """SELECT a.id, a.nome, a.tipo, a.capacidade,
+                          (SELECT count(*) FROM estadias e WHERE e.alojamento_id = a.id AND e.data_saida IS NULL)
+                   FROM alojamentos a WHERE a.ativo = TRUE ORDER BY a.tipo, LOWER(a.nome)"""
+            )
+            aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3], "ocupados": r[4]} for r in cur.fetchall()]
     return {"donos": donos, "alojamentos": aloj, "motivos_por_tipo": MOTIVOS_POR_TIPO}
 
 
@@ -176,8 +181,9 @@ class EstadiaIn(BaseModel):
     data_entrada: date
     alojamento_id: int | None = None
     observacoes: str | None = None
+    garanhao: str | None = None  # pedido pelo dono (inseminação)
 
-    @field_validator("observacoes", mode="before")
+    @field_validator("observacoes", "garanhao", mode="before")
     @classmethod
     def _limpar(cls, v):
         return _texto(v)
@@ -198,6 +204,21 @@ MOTIVOS_POR_TIPO = {
 def _validar_motivo(tipo_animal: str, motivo: str):
     if motivo not in MOTIVOS_POR_TIPO.get(tipo_animal, ()):
         raise _erro(422, "web.stays.error.reason_not_allowed")
+
+
+def _lugar_livre(cur, d) -> None:
+    """Recusa a entrada num alojamento já cheio (estadias abertas >= capacidade)."""
+    if not d.alojamento_id or d.tipo_registo == "externo":
+        return
+    cur.execute(
+        """SELECT a.nome, COALESCE(a.capacidade, 1),
+                  (SELECT count(*) FROM estadias e WHERE e.alojamento_id = a.id AND e.data_saida IS NULL)
+           FROM alojamentos a WHERE a.id = %s""",
+        (d.alojamento_id,),
+    )
+    row = cur.fetchone()
+    if row and row[2] >= row[1]:
+        raise _erro(409, "web.stays.error.housing_full", name=row[0])
 
 
 @router.post("/estadias", status_code=201)
@@ -257,18 +278,19 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
                     cur.execute("SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL LIMIT 1", (animal_id,))
                     if cur.fetchone():
                         raise _erro(409, "web.stays.error.already_open")
+                _lugar_livre(cur, d)
                 cur.execute(
                     """
                     INSERT INTO estadias (
                         tipo_registo, animal_id, alojamento_id, dono_id, data_entrada, data_saida,
-                        motivo, estado, observacoes_entrada, criado_por
-                    ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s) RETURNING id
+                        motivo, estado, observacoes_entrada, criado_por, garanhao
+                    ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s) RETURNING id
                     """,
                     (
                         d.tipo_registo, animal_id,
                         d.alojamento_id if d.tipo_registo != "externo" else None,
                         d.dono_id, d.data_entrada, d.motivo, ESTADO_INICIAL[d.tipo_registo],
-                        d.observacoes, user["username"],
+                        d.observacoes, user["username"], d.garanhao if d.motivo == "inseminacao" else None,
                     ),
                 )
                 estadia_id = cur.fetchone()[0]

@@ -304,6 +304,9 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
                 i.palhetas_gastas,
                 i.observacoes,
                 i.resultado,
+                i.hora_inseminacao,
+                i.utilizador,
+                i.estoque_id,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
             WHERE i.animal_id_egua = %s
@@ -317,9 +320,13 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
             COUNT(*)                  AS num_lotes,
             """ + _RESULTADO_SQL + """,
             MAX(ins.observacoes)      AS observacoes,
+            MIN(ins.hora_inseminacao) AS hora_inseminacao,
+            MAX(ins.utilizador)       AS utilizador,
+            STRING_AGG(DISTINCT COALESCE(NULLIF(TRIM(lt.origem_externa), ''), lt.data_embriovet, '#' || lt.id::text), ', ') AS lotes,
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
+        LEFT JOIN estoque_dono lt ON lt.id = ins.estoque_id
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
         LEFT JOIN est ON est.estadia_id = ins.estadia_id
         GROUP BY ins.op_key

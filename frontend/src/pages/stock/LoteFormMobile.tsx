@@ -96,10 +96,10 @@ function Campos({ producao }: { producao: ReactNode }) {
     <>
       <Cabecalho>{t("add_stock.section.technical")}</Cabecalho>
       <Form.Item name="motilidade" label={t("stock.motility_pct")}>
-        <NumeroCampo max={100} />
+        <NumeroCampo max={100} vazio placeholder={t("web.stock.not_measured")} />
       </Form.Item>
       <Form.Item name="concentracao" label={t("stock.concentration")}>
-        <NumeroCampo />
+        <NumeroCampo vazio placeholder={t("web.stock.not_measured")} />
       </Form.Item>
       <Form.Item name="qualidade" label={t("stock.quality_text")}>
         <Input clearable />

@@ -43,6 +43,9 @@ export type RegistoIn = Omit<Registo, "id">;
 
 export interface Inseminacao {
   data_inseminacao: string | null;
+  hora_inseminacao?: string | null;
+  utilizador?: string | null;
+  lotes?: string | null;
   garanhao?: string | null;
   egua?: string | null;
   proprietario: string | null;

@@ -10,3 +10,5 @@ export function useUser(): User {
 }
 
 export const useIsAdmin = () => useUser().nivel === "Administrador";
+/** Gestor ou Administrador (pode editar, p. ex. lotes). */
+export const useIsGestor = () => useUser().nivel !== "Visualizador";

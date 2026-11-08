@@ -35,6 +35,7 @@ import {
   type Contentor,
   type LoteContentor,
 } from "./api";
+import { pct } from "../api";
 import { ContentorMobile } from "./MapaMobile";
 
 export const valido = (l: LoteContentor) => !!l.canister && !!l.andar;
@@ -337,7 +338,7 @@ function BlocoCanister({ titulo, lotes, onMover }: { titulo: string; lotes: Lote
               <Flex justify="space-between" align="flex-start" gap={8}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {t("web.map.harvest")}: {l.data_embriovet || "—"} · {t("stock.quality_label")}: {l.qualidade || "—"} ·{" "}
-                  {t("stock.motility_label")}: {l.motilidade ?? 0}% · {t("stock.concentration_label")}: {l.concentracao ?? 0}M/ml
+                  {t("stock.motility_label")}: {pct(l.motilidade)} · {t("stock.concentration_label")}: {l.concentracao == null ? "—" : `${l.concentracao}M/ml`}
                 </Typography.Text>
                 <Button size="small" icon={<SwapOutlined />} onClick={() => onMover(l)} style={{ flexShrink: 0 }}>
                   {t("web.map.move")}

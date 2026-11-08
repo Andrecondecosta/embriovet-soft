@@ -37,8 +37,8 @@ export function camposVazios(): LoteCampos {
     data_embriovet: "",
     origem_externa: "",
     qualidade: "",
-    concentracao: 0,
-    motilidade: 0,
+    concentracao: null,
+    motilidade: null,
     certificado: "Sim",
     dose: "",
     cor: "",
@@ -152,12 +152,12 @@ export function CamposLote({ producao }: { producao: ReactNode }) {
         <Row gutter={12}>
           <Col xs={12} md={6}>
             <Form.Item name="motilidade" label={t("stock.motility_pct")}>
-              <InputNumber min={0} max={100} style={{ width: "100%" }} inputMode="numeric" />
+              <InputNumber min={0} max={100} style={{ width: "100%" }} inputMode="numeric" placeholder={t("web.stock.not_measured")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>
             <Form.Item name="concentracao" label={t("stock.concentration")}>
-              <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" />
+              <InputNumber min={0} style={{ width: "100%" }} inputMode="numeric" placeholder={t("web.stock.not_measured")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>
@@ -247,8 +247,8 @@ export function inicialEdicao(lote: Lote): LoteEdicao {
     data_embriovet: lote.data_embriovet ?? "",
     origem_externa: lote.origem_externa ?? "",
     qualidade: lote.qualidade ?? "",
-    concentracao: lote.concentracao ?? 0,
-    motilidade: lote.motilidade ?? 0,
+    concentracao: lote.concentracao ?? null,
+    motilidade: lote.motilidade ?? null,
     certificado: lote.certificado === "Sim" ? "Sim" : "Não",
     dose: lote.dose ?? "",
     cor: lote.cor ?? "",

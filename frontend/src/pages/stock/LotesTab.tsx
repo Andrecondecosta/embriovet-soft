@@ -29,6 +29,7 @@ import { KpiRow } from "../../components/ds";
 import { Lista } from "../../components/Lista";
 import { baixarCsv, dataCurta } from "../../components/csv";
 import {
+  pct,
   diaProducao,
   localizacao,
   mostrarProducao,
@@ -316,7 +317,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                     </Tag>
                   </Flex>
                 ),
-                descricao: `${l.proprietario_nome ?? t("common.no_owner")} · ${localizacao(l) ?? "—"} · M ${l.motilidade ?? 0}%`,
+                descricao: `${l.proprietario_nome ?? t("common.no_owner")} · ${localizacao(l) ?? "—"} · M ${pct(l.motilidade)}`,
                 extra: <RightOutlined style={{ color: "#bfbfbf" }} />,
               })}
             />
@@ -368,7 +369,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                 },
                 { title: t("label.location"), key: "loc", render: (_, l) => localizacao(l) ?? "—" },
                 { title: t("stock.color"), dataIndex: "cor", render: (v: string | null) => v || "—", responsive: ["lg"] },
-                { title: "Mot.", dataIndex: "motilidade", align: "right", render: (v: number | null) => `${v ?? 0}%` },
+                { title: "Mot.", dataIndex: "motilidade", align: "right", render: (v: number | null) => pct(v) },
                 {
                   title: "Conc.",
                   dataIndex: "concentracao",

@@ -69,6 +69,7 @@ export interface EstadiaIn {
   data_entrada: string;
   alojamento_id: number | null;
   observacoes?: string;
+  garanhao?: string;
 }
 
 export const useInternadas = (tipo: TipoAnimal | null) =>
@@ -96,7 +97,7 @@ export const useOpcoesEstadia = () =>
   useQuery({
     queryKey: ["estadias", "opcoes"],
     queryFn: () =>
-      api<{ donos: { id: number; nome: string }[]; alojamentos: { id: number; nome: string; tipo: string; capacidade: number }[] }>(
+      api<{ donos: { id: number; nome: string }[]; alojamentos: { id: number; nome: string; tipo: string; capacidade: number; ocupados: number }[] }>(
         "/estadias/opcoes",
       ),
   });

@@ -3,11 +3,11 @@ import { Alert, Button, Checkbox, Collapse, Descriptions, Drawer, Flex, Modal, S
 import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
-import { useIsAdmin } from "../../components/User";
+import { useIsAdmin, useIsGestor } from "../../components/User";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { dataHora } from "../../components/csv";
-import { mostrarProducao, referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
+import { mostrarProducao, pct, referencia, useApagarLote, type Ligacoes, type Lote, type TransfExterna, type TransfInterna } from "./api";
 import { HistoricoTransferencias } from "./LotesTab";
 import { LoteFormModal } from "./LoteForm";
 
@@ -26,6 +26,7 @@ export function LoteDrawer({
 }) {
   const t = useT();
   const isAdmin = useIsAdmin();
+  const podeEditar = useIsGestor();
   const isMobile = useIsMobile();
   const [editar, setEditar] = useState(false);
   const [apagar, setApagar] = useState(false);
@@ -61,15 +62,18 @@ export function LoteDrawer({
         }
         footer={
           lote &&
-          isAdmin && (
-            // Editar/Eliminar só para Administrador, como na app atual.
+          podeEditar && (
+            // Editar: Gestor ou Administrador (o stock corrige a motilidade
+            // quando chega o certificado); Eliminar só Administrador.
             <Space>
               <Button type="primary" icon={<EditOutlined />} onClick={() => setEditar(true)}>
                 {t("btn.edit")}
               </Button>
-              <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setApagar(true)}>
-                {t("stock.tab.delete")}
-              </Button>
+              {isAdmin && (
+                <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setApagar(true)}>
+                  {t("stock.tab.delete")}
+                </Button>
+              )}
             </Space>
           )
         }
@@ -89,8 +93,8 @@ export function LoteDrawer({
                 { label: t("stock.certificate_label"), children: na(certificado) },
                 { label: t("stock.quality_label"), children: na(lote.qualidade) },
                 { label: t("stock.color"), children: na(lote.cor) },
-                { label: t("stock.concentration_label"), children: `${lote.concentracao ?? 0} ${t("stock.million_ml")}` },
-                { label: t("stock.motility_label"), children: `${lote.motilidade ?? 0}%` },
+                { label: t("stock.concentration_label"), children: lote.concentracao == null ? "—" : `${lote.concentracao} ${t("stock.million_ml")}` },
+                { label: t("stock.motility_label"), children: pct(lote.motilidade) },
                 { label: t("stock.dose_label"), children: na(lote.dose) },
                 { label: t("stock.straws_produced_label"), children: na(lote.palhetas_produzidas) },
                 { label: t("stock.prod_date_label"), children: na(mostrarProducao(lote.data_embriovet)) },
@@ -121,7 +125,7 @@ export function LoteDrawer({
         )}
       </Drawer>
 
-      {lote && isAdmin && (
+      {lote && podeEditar && (
         <>
           <LoteFormModal opened={editar} lote={lote} onClose={() => setEditar(false)} />
           <ApagarLoteModal

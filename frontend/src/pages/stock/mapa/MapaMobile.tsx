@@ -19,6 +19,7 @@ import {
   type Contentor,
   type LoteContentor,
 } from "./api";
+import { pct } from "../api";
 
 /* Mapa dos contentores no telemóvel (Ant Design Mobile): as mesmas ações e
  * regras da versão de computador (`MapaTab`/`ContentorModal`). */
@@ -291,7 +292,7 @@ function ListaLotes({ titulo, lotes, onMover }: { titulo: string; lotes: LoteCon
                   {l.proprietario_nome ?? t("common.no_owner")} · {refCurta(l)} · {l.existencia_atual} {t("label.straws")}
                   <div>
                     {t("web.map.harvest")}: {l.data_embriovet || "—"} · {t("stock.quality_label")}: {l.qualidade || "—"} · M{" "}
-                    {l.motilidade ?? 0}% · {l.concentracao ?? 0}M/ml
+                    {pct(l.motilidade)} · {l.concentracao == null ? "—" : `${l.concentracao}M/ml`}
                   </div>
                 </>
               }

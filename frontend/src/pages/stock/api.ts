@@ -106,8 +106,8 @@ export interface LoteCampos {
   data_embriovet: string;
   origem_externa: string;
   qualidade: string;
-  concentracao: number;
-  motilidade: number;
+  concentracao: number | null;
+  motilidade: number | null;
   certificado: "Sim" | "Não";
   dose: string;
   cor: string;
@@ -184,6 +184,10 @@ export function localizacao(l: Pick<Lote, "contentor_codigo" | "canister" | "and
 // Há lotes com "Sim"/"Não" na origem externa (o campo foi lido como pergunta):
 // isso não identifica o lote, por isso não serve de referência.
 const SIM_NAO = /^(sim|n[ãa]o|s|n|yes|no|x)$/i;
+
+/** Motilidade / concentração: vazio = não medido ("—"), não 0. */
+export const pct = (v?: number | null) => (v == null ? "—" : `${v}%`);
+export const conc = (v?: number | null) => (v == null ? "—" : String(v));
 
 /** Lote vindo de fora (origem externa preenchida e não "Não") sem
  *  concentração ou motilidade — só avisa, não impede de gravar. */

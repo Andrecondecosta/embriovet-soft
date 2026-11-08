@@ -30,7 +30,7 @@ from modules.repositories.stock_repo import carregar_stock
 router = APIRouter(prefix="/api/inseminacoes", tags=["inseminacoes"])
 
 COLS_LOTE = ["id", "garanhao_nome", "dono_id", "proprietario_nome", "data_embriovet", "origem_externa", "contentor_codigo",
-             "local_armazenagem", "canister", "andar", "motilidade", "dose", "cor", "concentracao", "existencia_atual"]
+             "local_armazenagem", "canister", "andar", "motilidade", "dose", "cor", "concentracao", "existencia_atual", "observacoes"]
 
 
 def _erro(http_status: int, chave: str, **params):

@@ -186,14 +186,15 @@ def test_garanhoes(ctx):
     assert (g["palhetas"], g["lotes"], g["donos"], g["no_seletor"]) == (4, 1, 1, True)
 
 
-def test_editar_e_apagar_so_admin(ctx):
+def test_editar_gestor_e_apagar_so_admin(ctx):
     lote = _novo(ctx).json()
     body = {
         "garanhao": lote["garanhao"], "dono_id": ctx["dono"], "contentor_id": ctx["contentor"],
         "canister": 5, "andar": 1, "palhetas_produzidas": 10, "existencia_atual": 7,
         "certificado": "Não", "motilidade": 50,
     }
-    assert ctx["gestor"].put(f"/api/stock/lotes/{lote['id']}", json=body).status_code == 403
+    # O stock (Gestor) corrige o lote — ex.: motilidade quando chega o certificado.
+    assert ctx["gestor"].put(f"/api/stock/lotes/{lote['id']}", json=body).status_code == 200
     assert ctx["gestor"].delete(f"/api/stock/lotes/{lote['id']}").status_code == 403
 
     r = ctx["admin"].put(f"/api/stock/lotes/{lote['id']}", json=body)
@@ -230,3 +231,10 @@ def test_editar_muda_o_garanhao_a_serio(ctx):
     # cria duplicado: volta para o primeiro.
     r = ctx["admin"].put(f"/api/stock/lotes/{lote['id']}", json={**body, "garanhao": ctx["garanhao"].upper()})
     assert r.json()["animal_id"] == lote["animal_id"]
+
+
+def test_motilidade_nao_medida_fica_vazia(ctx):
+    lote = _novo(ctx, motilidade=None, concentracao=None, origem_externa="Haras X").json()
+    assert lote["motilidade"] is None and lote["concentracao"] is None
+    insem = next(l for l in ctx["gestor"].get("/api/inseminacoes/lotes").json() if l["id"] == lote["id"])
+    assert insem["motilidade"] is None and "observacoes" in insem

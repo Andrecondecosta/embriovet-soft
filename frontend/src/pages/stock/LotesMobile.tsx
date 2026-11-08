@@ -20,10 +20,11 @@ import {
 import { AddOutline, DownlandOutline, FilterOutline } from "antd-mobile-icons";
 
 import { useT } from "../../i18n/I18n";
-import { useIsAdmin } from "../../components/User";
+import { useIsAdmin, useIsGestor } from "../../components/User";
 import { dataCurta, dataHora } from "../../components/csv";
 import dayjs from "dayjs";
 import {
+  pct,
   localizacao,
   mostrarProducao,
   nPeriodos,
@@ -45,6 +46,7 @@ const SEM_DONO = "sem-dono";
 export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
   const t = useT();
   const isAdmin = useIsAdmin();
+  const podeEditar = useIsGestor();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [roda, setRoda] = useState(false);
@@ -223,7 +225,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                 description={[
                   l.proprietario_nome ?? t("common.no_owner"),
                   localizacao(l) ?? "—",
-                  `M ${l.motilidade ?? 0}%`,
+                  `M ${pct(l.motilidade)}`,
                   l.origem_externa && `${t("stock.external_origin")}: ${l.origem_externa}`,
                 ]
                   .filter(Boolean)
@@ -237,12 +239,14 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                 {referencia(l) ?? t("common.no_reference")}
               </List.Item>
             );
-            return isAdmin ? (
+            return podeEditar ? (
               <SwipeAction
                 key={l.id}
                 rightActions={[
                   { key: "editar", text: t("btn.edit"), color: "primary", onClick: () => setEditar(l) },
-                  { key: "apagar", text: t("btn.delete").replace(/^\W+/, ""), color: "danger", onClick: () => setApagar(l) },
+                  ...(isAdmin
+                    ? [{ key: "apagar", text: t("btn.delete").replace(/^\W+/, ""), color: "danger" as const, onClick: () => setApagar(l) }]
+                    : []),
                 ]}
               >
                 {item}
@@ -368,8 +372,8 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                     [t("stock.certificate_label"), selecionado.certificado ?? "—"],
                     [t("stock.quality_label"), selecionado.qualidade || "—"],
                     [t("stock.color"), selecionado.cor || "—"],
-                    [t("stock.concentration_label"), `${selecionado.concentracao ?? 0} ${t("stock.million_ml")}`],
-                    [t("stock.motility_label"), `${selecionado.motilidade ?? 0}%`],
+                    [t("stock.concentration_label"), selecionado.concentracao == null ? "—" : `${selecionado.concentracao} ${t("stock.million_ml")}`],
+                    [t("stock.motility_label"), pct(selecionado.motilidade)],
                     [t("stock.dose_label"), selecionado.dose || "—"],
                     [t("stock.straws_produced_label"), selecionado.palhetas_produzidas ?? "—"],
                     [t("stock.prod_date_label"), mostrarProducao(selecionado.data_embriovet) ?? "—"],
@@ -396,15 +400,17 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                 </Collapse>
               )}
             </div>
-            {/* Editar/Eliminar só para Administrador, como na app atual. */}
-            {isAdmin && (
+            {/* Editar: Gestor ou Administrador; Eliminar só Administrador. */}
+            {podeEditar && (
               <div style={{ display: "flex", gap: 8, padding: 16, paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
                 <Button block color="primary" onClick={() => setEditar(selecionado)}>
                   {t("btn.edit")}
                 </Button>
-                <Button block color="danger" fill="outline" onClick={() => setApagar(selecionado)}>
-                  {t("stock.tab.delete").replace(/^\W+/, "")}
-                </Button>
+                {isAdmin && (
+                  <Button block color="danger" fill="outline" onClick={() => setApagar(selecionado)}>
+                    {t("stock.tab.delete").replace(/^\W+/, "")}
+                  </Button>
+                )}
               </div>
             )}
           </>

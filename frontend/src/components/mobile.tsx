@@ -217,12 +217,15 @@ export function NumeroCampo({
   min = 0,
   max,
   placeholder,
+  vazio = false,
 }: {
   value?: number | null;
   onChange?: (v: number) => void;
   min?: number;
   max?: number;
   placeholder?: string;
+  /** Apagar deixa vazio (null) em vez de 0 — ex.: "não medido". */
+  vazio?: boolean;
 }) {
   return (
     <input
@@ -236,6 +239,7 @@ export function NumeroCampo({
       max={max}
       onFocus={(e) => e.target.select()}
       onChange={(e) => {
+        if (vazio && e.target.value === "") return onChange?.(null as unknown as number);
         let n = e.target.value === "" ? 0 : Number(e.target.value);
         if (Number.isNaN(n)) return;
         if (n < min) n = min;
