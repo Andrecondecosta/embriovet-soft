@@ -224,9 +224,9 @@ def _etapa(data_inseminacao: date | None, resultado: str | None, feitas=(), em: 
     if resultado != "gestacao_confirmada":
         return "diagnostico_gestacao", "D+14"
     dias = ((em or date.today()) - data_inseminacao).days if data_inseminacao else 0
-    # D+45 a partir do dia 45, ou do dia 40 se o D+28 já foi feito; antes
-    # disso uma confirmação é ainda (repetir) a D+28.
-    if dias >= 45 or ("D+28" in feitas and dias >= 40):
+    # Feito o D+28, a próxima etapa (a que o ecrã mostra, `em` vazio) é a
+    # D+45. Um exame feito antes do dia 40 conta ainda como (repetir) D+28.
+    if dias >= 45 or ("D+28" in feitas and (em is None or dias >= 40)):
         return "segunda_confirmacao", "D+45"
     return "confirmacao_gestacao", "D+28"
 

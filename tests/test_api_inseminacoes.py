@@ -305,5 +305,16 @@ def test_confirmacao_antes_do_dia_40_e_ainda_d28(ctx):
     a = _inseminar(ctx, 32)
     assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
     assert _resultado(ctx, a, "positivo").status_code == 200  # D+28 (dia 32)
-    # Outra confirmação ao dia 32 é ainda D+28 (não D+45).
-    assert _historial(ctx)[a]["etapa"] == "D+28"
+    # O ecrã mostra a próxima etapa (D+45); um exame ao dia 32 conta ainda como D+28.
+    assert _historial(ctx)[a]["etapa"] == "D+45"
+    assert _resultado(ctx, a, "positivo").status_code == 200
+    etapas = [e for (e,) in _todas_insem("SELECT etapa FROM diagnosticos_gestacao WHERE operation_id = %s::uuid ORDER BY id", (a,))]
+    assert etapas == ["D+14", "D+28", "D+28"]
+
+
+
+def _todas_insem(sql, params=()):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
