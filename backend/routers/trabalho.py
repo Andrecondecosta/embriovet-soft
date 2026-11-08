@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from backend.deps import get_current_user
 from backend.serial import registos
+from modules.db import get_connection
 from modules.pages.trabalho_diario_page import _gerar_tarefas_primeira_observacao
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
@@ -50,3 +52,50 @@ def trabalho(dia: date | None = None, _user: dict = Depends(get_current_user)):
         "atrasadas": atrasadas,
         "feitas": registos(carregar_tarefas_feitas_hoje(), COLS + ["concluida_por", "data_conclusao"]),
     }
+
+
+# ── Concluir / cancelar à mão (também tarefas em atraso e de estadias já
+#    fechadas, que o registo clínico não fecha) ──────────────────────────
+
+class ConcluirIn(BaseModel):
+    observacoes: str | None = None
+
+
+@router.post("/{tarefa_id:int}/concluir")
+def concluir(tarefa_id: int, d: ConcluirIn, user: dict = Depends(get_current_user)):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE trabalho_diario
+                SET concluida = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s, observacoes_conclusao = %s
+                WHERE id = %s AND concluida = FALSE
+                """,
+                (user["username"][:50], (d.observacoes or "").strip() or None, tarefa_id),
+            )
+            feito = cur.rowcount
+        conn.commit()
+    if not feito:
+        raise HTTPException(404, {"code": "web.work.error.task_not_found", "params": {}})
+    return {"ok": True}
+
+
+@router.post("/{tarefa_id:int}/cancelar")
+def cancelar(tarefa_id: int, user: dict = Depends(get_current_user)):
+    """Cancela uma tarefa por fazer: sai das listas mas fica registada
+    (`cancelada`), e não conta como feita."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE trabalho_diario
+                SET concluida = TRUE, cancelada = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s
+                WHERE id = %s AND concluida = FALSE
+                """,
+                (user["username"][:50], tarefa_id),
+            )
+            feito = cur.rowcount
+        conn.commit()
+    if not feito:
+        raise HTTPException(404, {"code": "web.work.error.task_not_found", "params": {}})
+    return {"ok": True}

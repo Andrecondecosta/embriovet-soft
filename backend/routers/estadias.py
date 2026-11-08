@@ -291,8 +291,11 @@ class SaidaIn(BaseModel):
         return _texto(v)
 
 
+TAREFAS_GESTACAO = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "pre_parto", "parto_previsto")
+
+
 @router.post("/estadias/{estadia_id}/saida")
-def registar_saida(estadia_id: int, d: SaidaIn, _user: dict = Depends(get_current_user)):
+def registar_saida(estadia_id: int, d: SaidaIn, user: dict = Depends(get_current_user)):
     # "Outro" exige descrição, como na app atual.
     if d.estado == "sem_resultado" and not d.observacoes:
         raise _erro(422, "web.stays.error.exit_notes_required")
@@ -313,5 +316,17 @@ def registar_saida(estadia_id: int, d: SaidaIn, _user: dict = Depends(get_curren
                 "UPDATE estadias SET data_saida = %s, estado = %s, observacoes_saida = %s WHERE id = %s",
                 (d.data_saida, d.estado, d.observacoes, estadia_id),
             )
+            # As tarefas por fazer saem com a égua (ficam canceladas), menos
+            # as da gestação (diagnósticos e parto), que continuam.
+            cur.execute(
+                """
+                UPDATE trabalho_diario
+                SET concluida = TRUE, cancelada = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s,
+                    observacoes_conclusao = 'Saída da estadia'
+                WHERE estadia_id = %s AND concluida = FALSE AND tipo <> ALL(%s)
+                """,
+                (user["username"][:50], estadia_id, list(TAREFAS_GESTACAO)),
+            )
+            canceladas = cur.rowcount
         conn.commit()
-    return {"ok": True}
+    return {"ok": True, "tarefas_canceladas": canceladas}

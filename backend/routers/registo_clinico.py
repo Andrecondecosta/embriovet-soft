@@ -296,9 +296,15 @@ def _pede(animal_id: int) -> dict:
     avaliado"/"sem exame" fica escrito, em vez de ficar em branco."""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # A ovulação também se a tarefa D+1 ficou em atraso (o registo
+            # fecha-a); o DG só no dia (fecha com o resultado).
             cur.execute(
-                "SELECT DISTINCT tipo FROM trabalho_diario WHERE animal_id = %s AND data_tarefa = CURRENT_DATE AND concluida = FALSE",
-                (animal_id,),
+                """
+                SELECT DISTINCT tipo FROM trabalho_diario
+                WHERE animal_id = %s AND concluida = FALSE
+                  AND (data_tarefa = CURRENT_DATE OR (data_tarefa < CURRENT_DATE AND tipo = ANY(%s)))
+                """,
+                (animal_id, list(TAREFAS_OVULACAO)),
             )
             tipos = {r[0] for r in cur.fetchall()}
     return {"ovulacao": bool(tipos & set(TAREFAS_OVULACAO)), "dg": bool(tipos & set(TAREFAS_DG))}
@@ -341,7 +347,7 @@ def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str
     """Guarda o DG na etapa certa (D+14/D+28/D+45) da inseminação mais
     recente da égua, com a data e hora do exame. Positivo/negativo também
     atualizam o resultado da inseminação (tarefas seguintes, como antes)."""
-    from backend.routers.animais import _como_data, _etapa, reprodutivo
+    from backend.routers.animais import _como_data, _etapa, _etapas_feitas, reprodutivo
 
     dia = data_exame.date()
     ops = [
@@ -353,7 +359,7 @@ def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str
     if not ops:
         return "sem_inseminacao"
     alvo = max(ops, key=lambda r: _como_data(r["data_inseminacao"]))
-    tipo, _ = _etapa(_como_data(alvo["data_inseminacao"]), dia)
+    tipo, _ = _etapa(_como_data(alvo["data_inseminacao"]), alvo["resultado"], _etapas_feitas(animal_id).get(alvo["op_key"], ()), dia)
     try:
         registar_diagnostico(
             animal_id=animal_id,

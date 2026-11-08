@@ -217,15 +217,30 @@ def apagar_registo(animal_id: int, rid: int, _user: dict = Depends(get_current_u
 
 # ── Historial reprodutivo e estadias ──────────────────────────────────────
 
-def _etapa(data_inseminacao: date | None, em: date | None = None) -> tuple[str, str]:
-    """Etapa do diagnóstico pelos dias desde a inseminação até ao exame
-    (`em`, por omissão hoje)."""
+def _etapa(data_inseminacao: date | None, resultado: str | None, feitas=(), em: date | None = None) -> tuple[str, str]:
+    """Etapa do próximo diagnóstico. Sem positivo ainda é o 1.º (D+14),
+    mesmo que feito tarde; depois de positivo é a confirmação D+28 e, se
+    essa já foi feita (`feitas`) ou passou o D+45, a 2.ª confirmação."""
+    if resultado != "gestacao_confirmada":
+        return "diagnostico_gestacao", "D+14"
     dias = ((em or date.today()) - data_inseminacao).days if data_inseminacao else 0
-    if dias >= 45:
+    if "D+28" in feitas or dias >= 45:
         return "segunda_confirmacao", "D+45"
-    if dias >= 28:
-        return "confirmacao_gestacao", "D+28"
-    return "diagnostico_gestacao", "D+14"
+    return "confirmacao_gestacao", "D+28"
+
+
+def _etapas_feitas(animal_id: int) -> dict[str, set]:
+    """Etapas de diagnóstico já registadas, por operação."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT operation_id::text, etapa FROM diagnosticos_gestacao WHERE animal_id = %s AND operation_id IS NOT NULL",
+                (animal_id,),
+            )
+            feitas: dict[str, set] = {}
+            for op, etapa in cur.fetchall():
+                feitas.setdefault(op, set()).add(etapa)
+    return feitas
 
 
 def _como_data(v) -> date | None:
@@ -243,6 +258,7 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
     a = _animal(animal_id)
     df = _carregar_inseminacoes_animal(animal_id, a.get("nome") or "")
     ins = registos(df, ["data_inseminacao", "garanhao", "proprietario", "palhetas_gastas", "num_lotes", "resultado", "observacoes", "op_key"])
+    feitas = _etapas_feitas(animal_id)
     for r in ins:
         # Só operações reais (não linhas antigas "solo_") podem receber
         # resultado aqui; depois de um positivo continua a dar, para as
@@ -252,7 +268,7 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
             and not str(r["op_key"]).startswith("solo_")
             and r["data_inseminacao"] is not None
         )
-        r["etapa"] = _etapa(_como_data(r["data_inseminacao"]))[1]
+        r["etapa"] = _etapa(_como_data(r["data_inseminacao"]), r["resultado"], feitas.get(r["op_key"], ()))[1]
     total = len(ins)
     gest = sum(1 for r in ins if r["resultado"] == "gestacao_confirmada")
     return {"total": total, "gestacoes": gest, "taxa": round(gest / total * 100) if total else None, "inseminacoes": ins}
@@ -274,7 +290,7 @@ def resultado(animal_id: int, d: ResultadoIn, user: dict = Depends(get_current_u
     dia = d.data_exame or date.today()
     if dia > date.today() or dia < _como_data(linha["data_inseminacao"]):
         raise _erro(422, "web.animal.error.result_bad_date")
-    tipo_tarefa, _ = _etapa(_como_data(linha["data_inseminacao"]), dia)
+    tipo_tarefa, _ = _etapa(_como_data(linha["data_inseminacao"]), linha["resultado"], _etapas_feitas(animal_id).get(d.op_key, ()), dia)
     try:
         registar_diagnostico(
             animal_id=animal_id, operation_id=d.op_key, tipo_tarefa=tipo_tarefa, resultado=d.resultado,

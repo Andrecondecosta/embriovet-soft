@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
-import { Alert, Button, Card, Col, DatePicker, Flex, Popover, Row, Select, Space, Statistic, Switch, Table, Tag, Typography } from "antd";
-import { FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, DatePicker, Flex, Popover, Row, Select, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import { CheckOutlined, CloseOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
   DatePicker as MDatePicker,
+  Dialog,
   DotLoading,
   ErrorBlock,
   Grid,
@@ -14,6 +15,7 @@ import {
   Popup,
   SearchBar,
   Selector,
+  SwipeAction,
   Switch as MSwitch,
 } from "antd-mobile";
 
@@ -22,7 +24,7 @@ import { useT } from "../i18n/I18n";
 import { useUser } from "../components/User";
 import { useBrand } from "../components/Brand";
 import { useDebounced, useIsMobile } from "../components/responsive";
-import { notifySuccess, useErrorMessage } from "../components/errors";
+import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../components/errors";
 import { Cabecalho } from "../components/mobile";
 import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 
@@ -59,6 +61,7 @@ function useTrabalho() {
   const dia: Dayjs = pedido && /^\d{4}-\d{2}-\d{2}$/.test(pedido) ? dayjs(pedido) : dayjs().startOf("day");
   const ehHoje = dia.isSame(dayjs(), "day");
   const minhas = params.get("minhas") === "1";
+  const notifyError = useNotifyError();
   const dono = params.get("dono");
 
   // Tarefas automáticas de 1.ª observação, ao abrir (como a app atual).
@@ -78,6 +81,15 @@ function useTrabalho() {
     queryFn: () => api<Trabalho>(`/trabalho?dia=${dia.format(FMT)}`),
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
+  });
+
+  // Concluir / cancelar à mão (também as em atraso).
+  const acao = useMutation({
+    mutationFn: ({ tarefa, como }: { tarefa: Tarefa; como: "concluir" | "cancelar" }) =>
+      api(`/trabalho/${tarefa.tarefa_id}/${como}`, "POST", como === "concluir" ? {} : undefined),
+    onSuccess: (_, v) => notifySuccess(t(v.como === "concluir" ? "web.daily.completed" : "web.daily.cancelled")),
+    onError: notifyError,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["trabalho"] }),
   });
 
   const filtrar = (lista: Tarefa[]) => lista.filter((x) => (!minhas || x.utilizador === user.username) && (!dono || x.dono === dono));
@@ -119,6 +131,10 @@ function useTrabalho() {
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
     atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
     titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
+    concluir: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "concluir" }),
+    cancelar: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "cancelar" }),
+    textoCancelar: (tarefa: Tarefa) =>
+      t("web.daily.cancel_confirm", { tipo: t(`web.task.${tarefa.tipo}`), nome: tarefa.animal ?? "—" }),
   };
 }
 type T = ReturnType<typeof useTrabalho>;
@@ -150,6 +166,35 @@ function TrabalhoDesktop({ x }: { x: T }) {
       boxShadow: `inset 3px 0 0 ${tarefa.dias_atraso ? "#dc2626" : (COR_URGENCIA[tarefa.urgencia] ?? "transparent")}`,
     },
   });
+  const acoes = {
+    key: "acoes",
+    width: 76,
+    render: (_: unknown, a: Tarefa) => (
+      <Space size={2} onClick={(e) => e.stopPropagation()}>
+        <Tooltip title={t("web.daily.complete")}>
+          <Button size="small" type="text" icon={<CheckOutlined />} aria-label={t("web.daily.complete")} onClick={() => x.concluir(a)} />
+        </Tooltip>
+        <Tooltip title={t("web.daily.cancel_task")}>
+          <Button
+            size="small"
+            type="text"
+            icon={<CloseOutlined />}
+            aria-label={t("web.daily.cancel_task")}
+            onClick={() =>
+              confirmar({
+                titulo: t("web.daily.cancel_task"),
+                texto: x.textoCancelar(a),
+                ok: t("web.daily.cancel_task"),
+                cancelar: t("web.daily.keep"),
+                perigo: true,
+                onOk: () => x.cancelar(a),
+              })
+            }
+          />
+        </Tooltip>
+      </Space>
+    ),
+  };
   const colunas = [
     {
       title: "#",
@@ -250,6 +295,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
                   width: 110,
                   render: (_, a) => <Typography.Text type="secondary">{x.urgencia(a)}</Typography.Text>,
                 },
+                acoes,
               ]}
             />
           </Card>
@@ -278,6 +324,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
                       </span>
                     ),
                   },
+                  acoes,
                 ]}
               />
             </Card>
@@ -323,17 +370,36 @@ function TrabalhoMobile({ x }: { x: T }) {
       </div>
     );
 
+  // Deslizar para a esquerda: concluir / cancelar.
   const item = (a: Tarefa, direita: React.ReactNode) => (
-    <List.Item
+    <SwipeAction
       key={a.tarefa_id}
-      onClick={() => x.abrir(a)}
-      arrow
-      description={`${a.dono ?? "—"} · ${x.tipo(a)}`}
-      extra={direita}
-      style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
+      rightActions={[
+        { key: "concluir", text: t("web.daily.complete"), color: "primary", onClick: () => x.concluir(a) },
+        {
+          key: "cancelar",
+          text: t("web.daily.cancel_task"),
+          color: "danger",
+          onClick: () =>
+            void Dialog.confirm({
+              content: x.textoCancelar(a),
+              confirmText: <span style={{ color: "var(--adm-color-danger)" }}>{t("web.daily.cancel_task")}</span>,
+              cancelText: t("web.daily.keep"),
+              onConfirm: () => x.cancelar(a),
+            }),
+        },
+      ]}
     >
-      {x.nome(a)}
-    </List.Item>
+      <List.Item
+        onClick={() => x.abrir(a)}
+        arrow
+        description={`${a.dono ?? "—"} · ${x.tipo(a)}`}
+        extra={direita}
+        style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
+      >
+        {x.nome(a)}
+      </List.Item>
+    </SwipeAction>
   );
 
   return (

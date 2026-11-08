@@ -169,3 +169,57 @@ def test_mesmo_envio_nao_grava_duas_vezes(ctx):
     assert r.status_code == 409 and r.json()["detail"]["code"] == "web.insem.error.duplicate_submit"
     # Só descontou uma vez.
     assert _stock(ctx["lote"]) == antes - 1
+
+
+# ── Acompanhamento: o resultado é de cada inseminação, não da estadia ──────
+
+def _inseminar(x, dias_atras):
+    corpo = _corpo(x, 1, data_inseminacao=(date.today() - timedelta(days=dias_atras)).isoformat())
+    assert x["c"].post("/api/inseminacoes", json=corpo).status_code == 201
+    return _um(
+        "SELECT operation_id::text FROM inseminacoes WHERE animal_id_egua = %s ORDER BY id DESC LIMIT 1", (x["egua"],)
+    )[0]
+
+
+def _resultado(x, op, resultado):
+    return x["c"].post(f"/api/animais/{x['egua']}/resultado", json={"op_key": op, "resultado": resultado})
+
+
+def _historial(x):
+    return {r["op_key"]: r for r in x["c"].get(f"/api/animais/{x['egua']}/reprodutivo").json()["inseminacoes"]}
+
+
+def test_reinseminar_depois_de_negativo_na_mesma_estadia(ctx):
+    a = _inseminar(ctx, 20)
+    assert _resultado(ctx, a, "negativo").json()["resultado"] == "falhou"
+    b = _inseminar(ctx, 0)
+    h = _historial(ctx)
+    assert h[a]["resultado"] == "falhou" and h[a]["pode_resultado"] is False
+    assert h[b]["resultado"] == "pendente" and h[b]["pode_resultado"] is True
+    # Editar a inseminação antiga não lhe apaga o resultado.
+    corpo = _corpo(ctx, 2, data_inseminacao=(date.today() - timedelta(days=20)).isoformat())
+    assert ctx["c"].put(f"/api/inseminacoes/operacao/{a}", json=corpo).status_code == 200
+    assert _historial(ctx)[a]["resultado"] == "falhou"
+
+
+def test_dg_vale_para_as_inseminacoes_do_mesmo_cio(ctx):
+    a = _inseminar(ctx, 15)
+    b = _inseminar(ctx, 14)
+    assert _resultado(ctx, b, "positivo").json()["resultado"] == "gestacao_confirmada"
+    h = _historial(ctx)
+    assert h[a]["resultado"] == h[b]["resultado"] == "gestacao_confirmada"
+    # Fica gravado em cada uma, não só no acompanhamento da estadia.
+    assert _um("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (a,))[0] == "gestacao_confirmada"
+
+
+def test_primeiro_dg_feito_tarde_e_d14_e_agenda_confirmacoes(ctx):
+    a = _inseminar(ctx, 29)
+    assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"
+    assert _um("SELECT etapa FROM diagnosticos_gestacao WHERE operation_id = %s::uuid", (a,))[0] == "D+14"
+    abertas = {t for (t,) in _tarefas(ctx["egua"])}
+    assert {"confirmacao_gestacao", "segunda_confirmacao"} <= abertas
+    assert _um(
+        "SELECT concluida FROM trabalho_diario WHERE animal_id = %s AND tipo = 'diagnostico_gestacao'", (ctx["egua"],)
+    )[0] is True
+    # A seguir é a confirmação D+28.
+    assert _historial(ctx)[a]["etapa"] == "D+28"

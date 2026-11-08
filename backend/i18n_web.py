@@ -1689,6 +1689,18 @@ for _k, *_txt in [
      "External lot without concentration and/or motility: fill them in when known.",
      "Lot externe sans concentration et/ou motilité : complétez-les dès que possible.",
      "Externe Charge ohne Konzentration und/oder Motilität: bitte nachtragen."),
+    # Trabalho diário: concluir / cancelar tarefas à mão
+    ("web.daily.complete", "Concluir", "Complete", "Terminer", "Erledigen"),
+    ("web.daily.cancel_task", "Cancelar tarefa", "Cancel task", "Annuler la tâche", "Aufgabe stornieren"),
+    ("web.daily.keep", "Manter", "Keep", "Garder", "Behalten"),
+    ("web.daily.cancel_confirm", "Cancelar «{tipo}» de {nome}? Sai da lista e fica registada como cancelada.",
+     "Cancel “{tipo}” for {nome}? It leaves the list and is recorded as cancelled.",
+     "Annuler « {tipo} » de {nome} ? Elle quitte la liste et reste enregistrée comme annulée.",
+     "„{tipo}“ für {nome} stornieren? Sie verschwindet aus der Liste und bleibt als storniert gespeichert."),
+    ("web.daily.completed", "Tarefa concluída.", "Task completed.", "Tâche terminée.", "Aufgabe erledigt."),
+    ("web.daily.cancelled", "Tarefa cancelada.", "Task cancelled.", "Tâche annulée.", "Aufgabe storniert."),
+    ("web.work.error.task_not_found", "Esta tarefa já foi feita ou cancelada.", "This task was already done or cancelled.",
+     "Cette tâche a déjà été faite ou annulée.", "Diese Aufgabe ist bereits erledigt oder storniert."),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v

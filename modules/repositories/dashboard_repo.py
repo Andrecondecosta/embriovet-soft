@@ -256,6 +256,7 @@ def carregar_tarefas_feitas_hoje() -> pd.DataFrame:
         LEFT JOIN dono d ON d.id = a.dono_id
         WHERE td.data_tarefa = CURRENT_DATE
           AND td.concluida = TRUE
+          AND NOT td.cancelada
         ORDER BY td.data_conclusao DESC NULLS LAST, td.id DESC
     """
     with get_connection() as conn:
@@ -289,7 +290,7 @@ def carregar_resumo_tarefas_hoje() -> dict:
                 WHERE data_tarefa <= CURRENT_DATE AND concluida = FALSE
             ) AS por_fazer,
             COUNT(*) FILTER (
-                WHERE data_tarefa = CURRENT_DATE AND concluida = TRUE
+                WHERE data_tarefa = CURRENT_DATE AND concluida = TRUE AND NOT cancelada
             ) AS feitas,
             COUNT(*) FILTER (
                 WHERE data_tarefa < CURRENT_DATE AND concluida = FALSE

@@ -122,3 +122,63 @@ def test_primeira_observacao_nao_inclui_garanhoes_nem_eguas_com_registo_novo(cli
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM registo_clinico WHERE animal_id = %s", (egua_com_registo,))
             conn.commit()
+
+
+def _ids(r):
+    return {x["tarefa_id"] for x in r["por_fazer"] + r["atrasadas"]}
+
+
+def test_concluir_e_cancelar_a_mao(client):
+    hoje, atrasada = _tarefa(0), _tarefa(4)
+    feitas_antes = client.get("/api/trabalho").json()["resumo"]["feitas"]
+    assert client.post(f"/api/trabalho/{atrasada}/concluir", json={}).status_code == 200
+    assert client.post(f"/api/trabalho/{hoje}/cancelar").status_code == 200
+    r = client.get("/api/trabalho").json()
+    assert not _ids(r) & {hoje, atrasada}
+    # Cancelada não conta como feita.
+    assert not any(x["tarefa_id"] == hoje for x in r["feitas"])
+    assert r["resumo"]["feitas"] == feitas_antes
+    assert client.post(f"/api/trabalho/{hoje}/cancelar").json()["detail"]["code"] == "web.work.error.task_not_found"
+
+
+def test_primeira_observacao_cancelada_nao_volta(client):
+    aid = _internado("egua")
+    client.post("/api/trabalho/gerar")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM trabalho_diario WHERE animal_id = %s AND tipo = 'primeira_observacao'", (aid,))
+            tid = cur.fetchone()[0]
+            # Em atraso: não se cria outra no dia seguinte.
+            cur.execute("UPDATE trabalho_diario SET data_tarefa = CURRENT_DATE - 2 WHERE id = %s", (tid,))
+        conn.commit()
+    client.post("/api/trabalho/gerar")
+    assert _primeiras_observacoes(aid) == 1
+    client.post(f"/api/trabalho/{tid}/cancelar")
+    client.post("/api/trabalho/gerar")
+    assert _primeiras_observacoes(aid) == 1
+
+
+def test_saida_cancela_tarefas_menos_as_da_gestacao(client):
+    aid = _internado("egua")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM estadias WHERE animal_id = %s", (aid,))
+            eid = cur.fetchone()[0]
+            ids = {}
+            for tipo in ("tratamento", "verificar_ovulacao", "diagnostico_gestacao", "parto_previsto"):
+                cur.execute(
+                    """INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo)
+                       VALUES (%s, %s, CURRENT_DATE + 3, %s, 'teste') RETURNING id""",
+                    (aid, eid, tipo),
+                )
+                ids[tipo] = cur.fetchone()[0]
+        conn.commit()
+    r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": date.today().isoformat(), "estado": "alta"})
+    assert r.status_code == 200, r.text
+    assert r.json()["tarefas_canceladas"] == 2
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tipo, concluida, cancelada FROM trabalho_diario WHERE estadia_id = %s", (eid,))
+            estado = {t: (c, x) for t, c, x in cur.fetchall()}
+    assert estado["tratamento"] == estado["verificar_ovulacao"] == (True, True)
+    assert estado["diagnostico_gestacao"] == estado["parto_previsto"] == (False, False)

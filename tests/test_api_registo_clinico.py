@@ -206,10 +206,10 @@ def test_d45_depois_de_positivo_e_sem_exame(ctx):
     op = _inseminada_ha(aid, 45)
     _exec("UPDATE inseminacoes SET resultado = 'gestacao_confirmada' WHERE operation_id = %s::uuid", (op,))
     # Perda embrionária: negativo no D+45 depois de positivo no D+14.
-    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Negativo")).json()["resultado"] == "registado"
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Sem exame")).json()["resultado"] == "registado"
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Negativo")).json()["resultado"] == "registado"
     diag = _todas("SELECT etapa, resultado FROM diagnosticos_gestacao WHERE animal_id = %s ORDER BY id", (aid,))
-    assert diag == [("D+45", "negativo"), ("D+45", "sem_exame")]
+    assert diag == [("D+45", "sem_exame"), ("D+45", "negativo")]
     assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "falhou"
 
 
@@ -227,15 +227,32 @@ def test_dg_nao_reescreve_inseminacao_fechada(ctx):
 def test_resultado_na_ficha_com_data_do_exame(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     op = _inseminada_ha(aid, 30)
-    dia = date.today() - timedelta(days=2)  # exame há 2 dias → D+28
+    dia = date.today() - timedelta(days=2)  # 1.º diagnóstico, feito tarde: continua a ser D+14
     r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "inconclusivo", "data_exame": dia.isoformat()})
     assert r.status_code == 200, r.text
     r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "positivo", "data_exame": dia.isoformat()})
     assert r.json()["resultado"] == "gestacao_confirmada"
     diag = _todas("SELECT etapa, resultado, data_exame::date FROM diagnosticos_gestacao WHERE animal_id = %s ORDER BY id", (aid,))
-    assert diag == [("D+28", "inconclusivo", dia), ("D+28", "positivo", dia)]
+    assert diag == [("D+14", "inconclusivo", dia), ("D+14", "positivo", dia)]
     # Depois de positivo ainda se pode registar (confirmações seguintes).
     assert c.get(f"/api/animais/{aid}/reprodutivo").json()["inseminacoes"][0]["pode_resultado"] is True
     futuro = (date.today() + timedelta(days=1)).isoformat()
     r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "positivo", "data_exame": futuro})
     assert r.json()["detail"]["code"] == "web.animal.error.result_bad_date"
+
+
+def test_registo_fecha_observacoes_em_atraso_mas_nao_tratamentos(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    eid = _exec("SELECT id FROM estadias WHERE animal_id = %s", (aid,))[0]
+    for tipo in ("observacao_clinica", "tratamento", "verificar_ovulacao"):
+        _exec(
+            """INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo)
+               VALUES (%s, %s, CURRENT_DATE - 3, %s, 'atraso')""",
+            (aid, eid, tipo),
+        )
+    # D+1 em atraso: a ovulação também é pedida.
+    assert c.get(f"/api/animais/{aid}/registos").json()["pede"]["ovulacao"] is True
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "sim", "fh": "nao"}))
+    assert r.status_code == 201, r.text
+    abertas = _todas("SELECT tipo FROM trabalho_diario WHERE animal_id = %s AND concluida = FALSE", (aid,))
+    assert abertas == [("tratamento",)]

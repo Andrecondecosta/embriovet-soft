@@ -39,6 +39,9 @@ DIAS_CONFIRMACAO = 28
 DIAS_2A_CONFIRMACAO = 45
 DIAS_PARTO_PREVISTO = 330  # ~11 meses de gestação em equinos (padrão)
 DIAS_PRE_PARTO = 14  # antecedência da tarefa "preparar acompanhamento"
+# Inseminações da mesma égua até este intervalo são do mesmo cio: um
+# diagnóstico vale para todas as que ainda estão pendentes.
+DIAS_MESMO_CIO = 7
 
 
 class InseminacaoDuplicada(Exception):
@@ -350,6 +353,12 @@ def registar_inseminacao_completa(
                 data_2a_confirmacao=data_2a,
                 data_parto_previsto=data_parto,
                 cur=cur,
+            )
+            # Uma inseminação nova começa um ciclo novo: o acompanhamento
+            # da estadia não fica com o resultado do anterior.
+            cur.execute(
+                "UPDATE acompanhamento_inseminacao SET resultado = 'pendente' WHERE id = %s",
+                (acompanhamento_id,),
             )
 
             # 4. Actualiza a coluna `garanhao` da estadia (compat legado).
@@ -671,6 +680,20 @@ def registar_resultado(
                 """,
                 (resultado_gravado, data, str(operation_id)),
             )
+            # 2b. As outras inseminações pendentes do mesmo cio têm o
+            #     mesmo resultado (não ficam pendentes para sempre).
+            if animal_id_egua is not None:
+                cur.execute(
+                    """
+                    UPDATE inseminacoes
+                    SET resultado = %s, data_resultado = %s, atualizado = TRUE
+                    WHERE animal_id_egua = %s
+                      AND operation_id IS DISTINCT FROM %s::uuid
+                      AND COALESCE(resultado, 'pendente') = 'pendente'
+                      AND ABS(data_inseminacao - %s) <= %s
+                    """,
+                    (resultado_gravado, data, animal_id_egua, str(operation_id), data_inseminacao, DIAS_MESMO_CIO),
+                )
 
             # 3. Actualiza acompanhamento (se existir para a estadia).
             if estadia_id is not None:
@@ -901,7 +924,8 @@ def registrar_inseminacao_multiplas(
                 cur.execute("""
                     SELECT i.id, i.estoque_id, i.palhetas_gastas,
                            i.garanhao, i.dono_id, i.egua, i.data_inseminacao,
-                           i.protocolo, i.observacoes, d.nome AS dono_nome
+                           i.protocolo, i.observacoes, d.nome AS dono_nome,
+                           i.resultado, i.data_resultado, i.hora_inseminacao, i.estadia_id
                     FROM inseminacoes i
                     LEFT JOIN dono d ON i.dono_id = d.id
                     WHERE i.operation_id = %s
@@ -921,7 +945,11 @@ def registrar_inseminacao_multiplas(
                     if not animal_id_egua:
                         st.error("animal_id_egua obrigatório para editar.")
                         return False
-                    estadia_id_resolvida = _resolver_estadia_ativa(cur, animal_id_egua)
+                    # A edição reescreve as linhas: o resultado, a hora e a
+                    # estadia da inseminação mantêm-se (mesmo que a égua já
+                    # tenha saído).
+                    resultado_antigo, data_resultado_antiga, hora_antiga, estadia_antiga = old_for_audit[10:14]
+                    estadia_id_resolvida = estadia_antiga or _resolver_estadia_ativa(cur, animal_id_egua)
                     if estadia_id_resolvida is None:
                         st.error(
                             f"Égua id={animal_id_egua} não tem estadia activa."
@@ -964,8 +992,10 @@ def registrar_inseminacao_multiplas(
                         cur.execute("""
                             INSERT INTO inseminacoes (garanhao, dono_id, data_inseminacao, egua,
                                 protocolo, palhetas_gastas, observacoes, utilizador, estoque_id, operation_id, atualizado,
-                                animal_id_egua, animal_id_garanhao, estadia_id)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE, %s, %s, %s)
+                                animal_id_egua, animal_id_garanhao, estadia_id,
+                                resultado, data_resultado, hora_inseminacao)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid, TRUE, %s, %s, %s,
+                                COALESCE(%s, 'pendente'), %s, %s)
                             RETURNING id
                         """, (
                             to_py(reg.get("garanhao")), to_py(reg.get("dono_id")),
@@ -974,6 +1004,7 @@ def registrar_inseminacao_multiplas(
                             to_py(observacoes), st.session_state.get('user', {}).get('username', '—'),
                             stock_id, edit_operation_id,
                             int(animal_id_egua), int(animal_id_garanhao_resolvido), int(estadia_id_resolvida),
+                            resultado_antigo, data_resultado_antiga, hora_antiga,
                         ))
                         new_row = cur.fetchone()
                         if first_new_id is None and new_row:

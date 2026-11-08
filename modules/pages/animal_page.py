@@ -190,7 +190,9 @@ def _criar_tarefa_proxima_observacao(
 
 
 def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None) -> int:
-    """Marca como concluídas todas as tarefas pendentes do animal para hoje.
+    """Marca como concluídas todas as tarefas pendentes do animal para hoje,
+    e as observações em atraso (o exame de hoje cumpre-as; tratamentos e
+    diagnósticos em atraso não, ficam para fechar à mão ou com o resultado).
     Devolve o número de tarefas concluídas.
 
     `utilizador` é quem está a registar o diário clínico agora — grava-se
@@ -204,8 +206,10 @@ def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None)
             concluida_por = %s,
             observacoes_conclusao = 'Concluído via registo clínico'
         WHERE animal_id = %s
-          AND data_tarefa = CURRENT_DATE
           AND concluida = FALSE
+          AND (data_tarefa = CURRENT_DATE
+               OR (data_tarefa < CURRENT_DATE
+                   AND tipo IN ('observacao_clinica', 'primeira_observacao', 'verificar_ovulacao')))
     """
     with get_connection() as conn:
         cur = conn.cursor()
@@ -256,6 +260,26 @@ COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"]
 
 
 # ── Historial reprodutivo ──────────────────────────────────────────────────
+# Resultado de cada operação: o dela própria (`inseminacoes.resultado`).
+# O de `acompanhamento_inseminacao` (um por estadia) só serve de recurso
+# para a última inseminação da estadia, e só se nenhuma outra o tiver já —
+# assim, reinseminar depois de um negativo não herda o "falhou" anterior.
+_ESTADIAS_CTE = """
+        est AS (
+            SELECT i.estadia_id, MAX(i.data_inseminacao) AS ultima,
+                   BOOL_OR(i.resultado = ai.resultado) AS ja_atribuido
+            FROM inseminacoes i
+            JOIN acompanhamento_inseminacao ai ON ai.estadia_id = i.estadia_id
+            GROUP BY i.estadia_id
+        )"""
+_RESULTADO_SQL = """COALESCE(
+                MAX(NULLIF(ins.resultado, 'pendente')),
+                MAX(CASE WHEN ins.data_inseminacao = est.ultima AND NOT est.ja_atribuido
+                         THEN NULLIF(ai.resultado, 'pendente') END),
+                'pendente'
+            ) AS resultado"""
+
+
 def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFrame:
     """Histórico de inseminações da égua, **agrupado por `operation_id`**.
 
@@ -279,23 +303,25 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
                 i.estadia_id,
                 i.palhetas_gastas,
                 i.observacoes,
+                i.resultado,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
             WHERE i.animal_id_egua = %s
                OR (i.animal_id_egua IS NULL AND LOWER(i.egua) = LOWER(%s))
-        )
+        ),""" + _ESTADIAS_CTE + """
         SELECT
             MIN(ins.data_inseminacao) AS data_inseminacao,
             MAX(ins.garanhao)         AS garanhao,
             MAX(d.nome)               AS proprietario,
             SUM(ins.palhetas_gastas)  AS palhetas_gastas,
             COUNT(*)                  AS num_lotes,
-            COALESCE(MAX(ai.resultado), 'pendente') AS resultado,
+            """ + _RESULTADO_SQL + """,
             MAX(ins.observacoes)      AS observacoes,
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
+        LEFT JOIN est ON est.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """
@@ -1205,21 +1231,23 @@ def _carregar_inseminacoes_garanhao(animal_id: int) -> pd.DataFrame:
                 i.animal_id_egua,
                 i.estadia_id,
                 i.palhetas_gastas,
+                i.resultado,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
             WHERE i.animal_id_garanhao = %s
-        )
+        ),""" + _ESTADIAS_CTE + """
         SELECT
             MIN(ins.data_inseminacao) AS data_inseminacao,
             MAX(ins.egua)             AS egua,
             MAX(d.nome)               AS proprietario,
             SUM(ins.palhetas_gastas)  AS palhetas_gastas,
             COUNT(*)                  AS num_lotes,
-            COALESCE(MAX(ai.resultado), 'pendente') AS resultado,
+            """ + _RESULTADO_SQL + """,
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id
         LEFT JOIN acompanhamento_inseminacao ai ON ai.estadia_id = ins.estadia_id
+        LEFT JOIN est ON est.estadia_id = ins.estadia_id
         GROUP BY ins.op_key
         ORDER BY MIN(ins.data_inseminacao) DESC
     """
