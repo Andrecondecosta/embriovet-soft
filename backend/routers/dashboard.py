@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from backend.deps import get_current_user
 from backend.serial import registos
 from modules.repositories.dashboard_repo import (
+    carregar_alertas_reprodutivos,
     carregar_atividade_recente_agrupada,
     carregar_kpis_clinicos,
     carregar_kpis_stock,
@@ -30,6 +31,7 @@ LIMITE_STOCK_ATENCAO = 5
 def dashboard(_user: dict = Depends(get_current_user)):
     return {
         "stock": carregar_kpis_stock(),
+        "alertas": carregar_alertas_reprodutivos(),
         "clinica": carregar_kpis_clinicos(),
         "hoje": registos(
             carregar_tarefas_hoje(),

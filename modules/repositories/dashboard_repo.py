@@ -69,12 +69,14 @@ def carregar_kpis_clinicos() -> dict:
         WHERE data_tarefa = CURRENT_DATE
     """
     # Gestações confirmadas em curso: acompanhamentos com resultado
-    # 'gestacao_confirmada' cuja estadia ainda está aberta.
+    # 'gestacao_confirmada' ainda antes do parto previsto (a égua gestante
+    # normalmente já foi para casa — conta na mesma).
     sql_gestacoes = """
         SELECT COUNT(*) FROM acompanhamento_inseminacao ai
         JOIN estadias e ON e.id = ai.estadia_id
         WHERE ai.resultado = 'gestacao_confirmada'
-          AND e.data_saida IS NULL
+          AND (e.data_saida IS NULL OR e.estado = 'gestante')
+          AND (ai.data_parto_previsto IS NULL OR ai.data_parto_previsto >= CURRENT_DATE)
     """
     # Inseminações do mês corrente — DISTINCT operation_id.
     # NULL operation_id conta como 1 operação por linha (backwards compat).
@@ -321,7 +323,8 @@ def carregar_partos_previstos(dias: int = 30) -> pd.DataFrame:
     - `acompanhamento_inseminacao.resultado = 'gestacao_confirmada'`
       (só gestações confirmadas em curso; exclui 'falhou' e NULL)
     - `data_parto_previsto` entre hoje e hoje+`dias` dias
-    - `estadias.data_saida IS NULL` (estadia ainda aberta)
+    - estadia aberta, ou fechada com saída "gestante" (as gestantes vão
+      para casa e o parto continua a interessar)
 
     Devolve colunas: `egua`, `data_parto_previsto`, `dias_restantes`,
     `estadia_id`, `animal_id`.
@@ -341,7 +344,7 @@ def carregar_partos_previstos(dias: int = 30) -> pd.DataFrame:
           AND ai.data_parto_previsto IS NOT NULL
           AND ai.data_parto_previsto BETWEEN CURRENT_DATE
                                           AND CURRENT_DATE + (%s || ' days')::interval
-          AND e.data_saida IS NULL
+          AND (e.data_saida IS NULL OR e.estado = 'gestante')
         ORDER BY ai.data_parto_previsto ASC, a.nome ASC
     """
     with get_connection() as conn:
@@ -523,3 +526,57 @@ def carregar_atividade_do_dia(dia) -> list[dict]:
         rows = cur.fetchall()
         cur.close()
     return _agrupar_operacoes(rows)
+
+
+# ─── Alertas reprodutivos (controlo da direção) ───────────────────────
+DIAS_SEM_DG = 16  # inseminação sem nenhum diagnóstico depois disto
+DIAS_SEM_INSEMINAR = 30  # égua internada para inseminar há tanto tempo sem inseminação
+MINIMO_GARANHAO = 10  # palhetas por garanhão abaixo das quais avisa
+
+
+def carregar_alertas_reprodutivos() -> dict:
+    """O que a direção tinha de procurar ficha a ficha:
+    - inseminações sem DG depois do D+16 (ainda pendentes);
+    - éguas internadas para inseminação há 30+ dias sem nenhuma inseminação;
+    - garanhões com poucas palhetas (incluindo os que já estão a zero)."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.id, a.nome, MIN(i.data_inseminacao), (CURRENT_DATE - MIN(i.data_inseminacao))
+            FROM inseminacoes i JOIN animais a ON a.id = i.animal_id_egua
+            WHERE COALESCE(i.resultado, 'pendente') = 'pendente'
+              AND i.data_inseminacao <= CURRENT_DATE - %s
+              AND NOT EXISTS (SELECT 1 FROM diagnosticos_gestacao d
+                              WHERE d.operation_id = i.operation_id AND d.resultado IN ('positivo', 'negativo'))
+            GROUP BY a.id, a.nome, COALESCE(i.operation_id::text, i.id::text)
+            ORDER BY 3
+            """,
+            (DIAS_SEM_DG,),
+        )
+        sem_dg = [{"animal_id": r[0], "animal": r[1], "data": r[2].isoformat(), "dias": r[3]} for r in cur.fetchall()]
+        cur.execute(
+            """
+            SELECT a.id, a.nome, e.data_entrada, (CURRENT_DATE - e.data_entrada)
+            FROM estadias e JOIN animais a ON a.id = e.animal_id
+            WHERE e.data_saida IS NULL AND e.motivo = 'inseminacao' AND a.tipo = 'egua'
+              AND e.data_entrada <= CURRENT_DATE - %s
+              AND NOT EXISTS (SELECT 1 FROM inseminacoes i WHERE i.estadia_id = e.id)
+            ORDER BY e.data_entrada
+            """,
+            (DIAS_SEM_INSEMINAR,),
+        )
+        paradas = [{"animal_id": r[0], "animal": r[1], "data": r[2].isoformat(), "dias": r[3]} for r in cur.fetchall()]
+        cur.execute(
+            """
+            SELECT COALESCE(a.nome, e.garanhao) AS g, SUM(COALESCE(e.existencia_atual, 0))
+            FROM estoque_dono e LEFT JOIN animais a ON a.id = e.animal_id
+            GROUP BY 1 HAVING SUM(COALESCE(e.existencia_atual, 0)) < %s
+            ORDER BY 2, 1
+            """,
+            (MINIMO_GARANHAO,),
+        )
+        garanhoes = [{"garanhao": r[0], "palhetas": int(r[1])} for r in cur.fetchall()]
+        cur.close()
+    return {"sem_dg": sem_dg, "paradas": paradas, "garanhoes": garanhoes, "minimo": MINIMO_GARANHAO, "dias_sem_dg": DIAS_SEM_DG,
+            "dias_sem_inseminar": DIAS_SEM_INSEMINAR}

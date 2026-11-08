@@ -832,7 +832,12 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   const notifyError = useNotifyError();
   const resumo = useResumo();
   const resumoLinha = useResumoLinha();
-  const q = useQuery({ queryKey: ["animal", animal.id, "registos"], queryFn: () => api<Resposta>(`/animais/${animal.id}/registos`) });
+  // "Ver todos": o historial inteiro em vez dos últimos.
+  const [todos, setTodos] = useState(false);
+  const q = useQuery({
+    queryKey: ["animal", animal.id, "registos", todos],
+    queryFn: () => api<Resposta>(`/animais/${animal.id}/registos${todos ? "?todos=true" : ""}`),
+  });
   // null = lista do diário; Novo = ecrã do registo (novo ou a corrigir).
   const [novo, setNovo] = useState<Novo | null>(null);
   const [aberto, setAberto] = useState<Ficha | null>(null);
@@ -900,7 +905,8 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
 
   // ── 1) Diário clínico: últimos 5 em resumo + "Novo registo" ──
   if (!novo) {
-    const ultimos = r.historico.slice(0, 5);
+    const ultimos = todos ? r.historico : r.historico.slice(0, 5);
+    const verTodos = todos ? t("web.registo.show_less") : t("web.registo.show_all");
     const semEstadia = <Alert type="warning" showIcon title={t("web.animal.error.no_active_stay")} />;
 
     if (isMobile)
@@ -911,7 +917,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
               <span style={{ fontSize: 13, color: "#666" }}>{identificacao}</span>
             </List.Item>
           </List>
-          <Cabecalho>{t("web.registo.last_n", { n: 5 })}</Cabecalho>
+          <Cabecalho>{todos ? t("web.registo.all_records") : t("web.registo.last_n", { n: 5 })}</Cabecalho>
           <List>
             {!ultimos.length ? (
               <List.Item>
@@ -930,6 +936,9 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
                 </List.Item>
               ))
             )}
+            <List.Item onClick={() => setTodos(!todos)} style={{ color: "var(--adm-color-primary)" }}>
+              {verTodos}
+            </List.Item>
           </List>
           <div style={{ padding: 12 }}>
             {r.estadia_ativa ? (
@@ -995,7 +1004,14 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
         <Table<Historico>
           size="small"
           bordered
-          title={() => t("web.registo.last_n", { n: 5 })}
+          title={() => (
+            <Flex justify="space-between">
+              {todos ? t("web.registo.all_records") : t("web.registo.last_n", { n: 5 })}
+              <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setTodos(!todos)}>
+                {verTodos}
+              </Button>
+            </Flex>
+          )}
           rowKey={(h) => `${h.antigo ? "a" : "n"}${h.id}`}
           dataSource={ultimos}
           pagination={false}

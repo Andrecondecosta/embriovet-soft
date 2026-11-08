@@ -124,15 +124,22 @@ def test_widget_exclui_gestacao_sem_resultado(db):
     assert ctx["estadia_id"] not in ids
 
 
-def test_widget_exclui_estadia_encerrada(db):
+def test_widget_estadia_encerrada_so_se_saiu_gestante(db):
+    """A égua gestante vai para casa: o parto continua a aparecer. Uma
+    estadia fechada por outro motivo não."""
     ctx = _seed_egua_com_gestacao(
         db, dias_ate_parto=5, estadia_aberta=False
     )
     df = carregar_partos_previstos(dias=30)
     ids = set(int(x) for x in df["estadia_id"].tolist()) if not df.empty else set()
     assert ctx["estadia_id"] not in ids, (
-        "estadia fechada não deve aparecer nos partos previstos"
+        "estadia fechada sem ser 'gestante' não deve aparecer nos partos previstos"
     )
+    with db.cursor() as cur:
+        cur.execute("UPDATE estadias SET estado = 'gestante' WHERE id = %s", (ctx["estadia_id"],))
+    db.commit()
+    df = carregar_partos_previstos(dias=30)
+    assert ctx["estadia_id"] in set(int(x) for x in df["estadia_id"].tolist())
 
 
 def test_widget_exclui_partos_fora_da_janela(db):

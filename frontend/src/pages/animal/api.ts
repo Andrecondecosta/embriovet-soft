@@ -46,6 +46,7 @@ export interface Inseminacao {
   hora_inseminacao?: string | null;
   utilizador?: string | null;
   lotes?: string | null;
+  ultimo_dg?: { etapa: string; resultado: string; data: string } | null;
   garanhao?: string | null;
   egua?: string | null;
   proprietario: string | null;
@@ -104,7 +105,14 @@ export const useProducao = (id: number) =>
 export const useFertilidade = (id: number) =>
   useQuery({
     queryKey: ["animal", id, "fertilidade"],
-    queryFn: () => api<{ total: number; gestacoes: number; taxa: number | null; inseminacoes: Inseminacao[] }>(`${base(id)}/fertilidade`),
+    queryFn: () => api<{
+        total: number;
+        gestacoes: number;
+        pendentes: number;
+        taxa: number | null;
+        palhetas_por_gestacao: number | null;
+        inseminacoes: Inseminacao[];
+      }>(`${base(id)}/fertilidade`),
   });
 export const useAlertas = (id: number) =>
   useQuery({

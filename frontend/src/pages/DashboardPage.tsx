@@ -32,6 +32,47 @@ interface Dashboard {
   };
   por_contentor: { nome: string; palhetas: number }[];
   por_proprietario: { nome: string; palhetas: number }[];
+  alertas: {
+    sem_dg: AlertaEgua[];
+    paradas: AlertaEgua[];
+    garanhoes: { garanhao: string; palhetas: number }[];
+    minimo: number;
+    dias_sem_dg: number;
+    dias_sem_inseminar: number;
+  };
+}
+interface AlertaEgua {
+  animal_id: number;
+  animal: string;
+  data: string;
+  dias: number;
+}
+
+/** Linhas dos alertas (comuns às duas versões): o que a direção tinha de procurar ficha a ficha. */
+function useLinhasAlertas(a: Dashboard["alertas"] | undefined) {
+  const t = useT();
+  const navigate = useNavigate();
+  if (!a) return [];
+  return [
+    ...a.sem_dg.map((x) => ({
+      key: `dg-${x.animal_id}-${x.data}`,
+      titulo: x.animal,
+      texto: t("web.dashboard.alert.no_dg", { data: dataCurta(x.data), dias: x.dias }),
+      abrir: () => navigate(`/animais/${x.animal_id}?tab=reprodutivo`),
+    })),
+    ...a.paradas.map((x) => ({
+      key: `p-${x.animal_id}`,
+      titulo: x.animal,
+      texto: t("web.dashboard.alert.idle", { dias: x.dias }),
+      abrir: () => navigate(`/animais/${x.animal_id}?tab=diario`),
+    })),
+    ...a.garanhoes.map((g) => ({
+      key: `g-${g.garanhao}`,
+      titulo: g.garanhao,
+      texto: t("web.dashboard.alert.low_stallion", { n: g.palhetas }),
+      abrir: () => navigate(`/stock-semen/lotes?garanhao=${encodeURIComponent(g.garanhao)}`),
+    })),
+  ];
 }
 
 // No telemóvel cada lista mostra só as primeiras linhas (o resto está na página própria).
@@ -97,6 +138,7 @@ function DashboardDesktop() {
   const t = useT();
   const errorMessage = useErrorMessage();
   const x = useDashboard();
+  const alertas = useLinhasAlertas(x.q.data?.alertas);
   const d = x.q.data;
 
   if (x.q.isError) return <Alert type="error" showIcon title={errorMessage(x.q.error)} />;
@@ -166,6 +208,22 @@ function DashboardDesktop() {
           </Card>
         </Col>
         <Col xs={24} lg={10}>
+          <Card size="small" title={`${t("web.dashboard.alerts")} (${alertas.length})`} style={{ marginBottom: 12 }}>
+            <Table
+              size="small"
+              rowKey="key"
+              dataSource={alertas}
+              pagination={false}
+              showHeader={false}
+              scroll={{ y: 220 }}
+              locale={vazio(t("web.dashboard.no_alerts"))}
+              onRow={(r) => ({ onClick: r.abrir, style: { cursor: "pointer" } })}
+              columns={[
+                { key: "t", render: (_, r) => <Typography.Text strong>{r.titulo}</Typography.Text> },
+                { key: "x", render: (_, r) => <Typography.Text type="secondary">{r.texto}</Typography.Text> },
+              ]}
+            />
+          </Card>
           <Card size="small" title={t("web.dashboard.births", { dias: d.partos.dias })}>
             <Table
               size="small"
@@ -275,6 +333,7 @@ function DashboardMobile() {
   const t = useT();
   const errorMessage = useErrorMessage();
   const x = useDashboard();
+  const alertas = useLinhasAlertas(x.q.data?.alertas);
   const d = x.q.data;
 
   if (x.q.isError) return <ErrorBlock status="default" title={errorMessage(x.q.error)} description="" />;
@@ -337,6 +396,20 @@ function DashboardMobile() {
         <List.Item arrow onClick={() => x.navigate("/trabalho-diario")} style={{ color: "var(--adm-color-primary)" }}>
           {t("web.dashboard.open_daily")}
         </List.Item>
+      </List>
+
+      <List header={`${t("web.dashboard.alerts")} (${alertas.length})`}>
+        {!alertas.length ? (
+          <List.Item>
+            <span style={{ color: "#999" }}>{t("web.dashboard.no_alerts")}</span>
+          </List.Item>
+        ) : (
+          alertas.slice(0, MAX_TELEMOVEL * 2).map((r) => (
+            <List.Item key={r.key} arrow onClick={r.abrir} description={r.texto}>
+              {r.titulo}
+            </List.Item>
+          ))
+        )}
       </List>
 
       <List header={t("web.dashboard.births", { dias: d.partos.dias })}>

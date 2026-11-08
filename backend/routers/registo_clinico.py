@@ -267,9 +267,12 @@ def _antigos(animal_id: int, limite: int = 10) -> list[dict]:
 
 
 @router.get("/{animal_id:int}/registos")
-def listar(animal_id: int, _user: dict = Depends(get_current_user)):
+def listar(animal_id: int, todos: bool = False, _user: dict = Depends(get_current_user)):
     a = _egua(animal_id)
-    historico = sorted(_novos(animal_id) + _antigos(animal_id), key=lambda r: r["data_registo"] or "", reverse=True)[:10]
+    # Por omissão os últimos 10; `todos` traz o historial inteiro (rever os
+    # exames à volta de uma inseminação antiga).
+    n = 5000 if todos else 10
+    historico = sorted(_novos(animal_id, n) + _antigos(animal_id, n), key=lambda r: r["data_registo"] or "", reverse=True)[:n]
     tratamentos = [
         {"data_registo": r["data_registo"], "texto": resumo_tx(Tratamento(**r["dados"]["TX"]))}
         for r in _novos(animal_id, 30)

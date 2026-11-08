@@ -249,6 +249,20 @@ def _etapas_feitas(animal_id: int) -> dict[str, set]:
     return feitas
 
 
+def _ultimos_dg(animal_id: int) -> dict[str, dict]:
+    """Último diagnóstico de cada operação (qualquer resultado, incluindo
+    inconclusivo e sem exame) — o que a receção diz ao dono."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT DISTINCT ON (operation_id) operation_id::text, etapa, resultado, data_exame
+                   FROM diagnosticos_gestacao WHERE animal_id = %s AND operation_id IS NOT NULL
+                   ORDER BY operation_id, data_exame DESC, id DESC""",
+                (animal_id,),
+            )
+            return {op: {"etapa": e, "resultado": r, "data": valor(d)} for op, e, r, d in cur.fetchall()}
+
+
 def _como_data(v) -> date | None:
     if v is None:
         return None
@@ -266,7 +280,9 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
     ins = registos(df, ["data_inseminacao", "hora_inseminacao", "utilizador", "lotes", "garanhao", "proprietario", "palhetas_gastas",
                         "num_lotes", "resultado", "observacoes", "op_key"])
     feitas = _etapas_feitas(animal_id)
+    ultimos = _ultimos_dg(animal_id)
     for r in ins:
+        r["ultimo_dg"] = ultimos.get(r["op_key"])
         # Só operações reais (não linhas antigas "solo_") podem receber
         # resultado aqui; depois de um positivo continua a dar, para as
         # confirmações D+28 e D+45.
@@ -281,7 +297,8 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
         r["etapa"] = _etapa(_como_data(r["data_inseminacao"]), r["resultado"], feitas.get(r["op_key"], ()))[1]
     total = len(ins)
     gest = sum(1 for r in ins if r["resultado"] == "gestacao_confirmada")
-    return {"total": total, "gestacoes": gest, "taxa": round(gest / total * 100) if total else None, "inseminacoes": ins}
+    fechadas = sum(1 for r in ins if r["resultado"] != "pendente")  # as pendentes não contam na taxa
+    return {"total": total, "gestacoes": gest, "taxa": round(gest / fechadas * 100) if fechadas else None, "inseminacoes": ins}
 
 
 class ResultadoIn(BaseModel):
@@ -377,11 +394,18 @@ def producao(animal_id: int, _user: dict = Depends(get_current_user)):
 def fertilidade(animal_id: int, _user: dict = Depends(get_current_user)):
     _animal(animal_id)
     df = _carregar_inseminacoes_garanhao(animal_id)
-    total, gest, _, taxa = _kpis_fertilidade_garanhao(df)
+    total, gest, _, _ = _kpis_fertilidade_garanhao(df)
+    # A taxa conta só as inseminações com resultado (as pendentes à parte),
+    # e as palhetas gastas por gestação.
+    pendentes = int((df["resultado"] == "pendente").sum()) if total else 0
+    fechadas = total - pendentes
+    palhetas = int(df["palhetas_gastas"].fillna(0).sum()) if total else 0
     return {
         "total": total,
         "gestacoes": gest,
-        "taxa": round(taxa) if taxa is not None else None,
+        "pendentes": pendentes,
+        "taxa": round(gest / fechadas * 100) if fechadas else None,
+        "palhetas_por_gestacao": round(palhetas / gest, 1) if gest else None,
         "inseminacoes": registos(df, ["data_inseminacao", "egua", "proprietario", "palhetas_gastas", "num_lotes", "resultado"]),
     }
 

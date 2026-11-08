@@ -101,6 +101,9 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
   const palhetas = usePalhetas();
   const d = q.data;
   const res = (r: string) => t(`web.animal.result.${r}`);
+  // "D+28 inconclusivo · 12/05" — a etapa em que a égua está, mesmo sem resultado.
+  const ultimoDg = (u: NonNullable<Inseminacao["ultimo_dg"]>) =>
+    `${u.etapa} ${t(`web.animal.dg_result.${u.resultado}`)} · ${dataCurta(u.data)}`;
 
   // Diagnóstico de gestação: resultado (com "sem exame") e o dia do exame.
   const [dg, setDg] = useState<{ i: Inseminacao; resultado?: ResultadoDG; dia: string } | null>(null);
@@ -209,6 +212,7 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
                     {i.garanhao ?? "—"} · {i.proprietario ?? "—"} · {palhetas(i)}
                     {i.lotes && ` · ${i.lotes}`}
                     {i.utilizador && ` · ${i.utilizador}`}
+                    {i.ultimo_dg && <div>{ultimoDg(i.ultimo_dg)}</div>}
                     {i.pode_resultado && (
                       <div style={{ marginTop: 6 }}>
                         <MButton size="mini" color="primary" fill="outline" onClick={() => abrirDg(i)}>
@@ -257,6 +261,12 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
             dataIndex: "resultado",
             width: 120,
             render: (r) => <Tag color={COR_RESULTADO[r]}>{res(r)}</Tag>,
+          },
+          {
+            title: t("web.animal.col.last_dg"),
+            dataIndex: "ultimo_dg",
+            width: 170,
+            render: (v: Inseminacao["ultimo_dg"]) => (v ? ultimoDg(v) : "—"),
           },
           { title: t("web.animal.col.notes"), dataIndex: "observacoes", ellipsis: true, render: (v) => v ?? "—" },
           {
@@ -509,6 +519,8 @@ export function FertilidadeTab({ animal }: { animal: Animal }) {
     [t("web.animal.kpi.inseminations"), d?.total ?? "—"],
     [t("web.animal.kpi.pregnancies"), d?.gestacoes ?? "—"],
     [t("web.animal.kpi.fertility"), d?.taxa != null ? `${d.taxa} %` : "—"],
+    [t("web.animal.kpi.pending"), d?.pendentes ?? "—"],
+    [t("web.animal.kpi.straws_per_pregnancy"), d?.palhetas_por_gestacao ?? "—"],
   ];
 
   if (isMobile)
