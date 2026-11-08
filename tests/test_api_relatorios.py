@@ -187,3 +187,20 @@ def test_exportar_por_cavalo_com_totais(client, modo):
     else:
         assert corpo[0] == "Garanhão,Proprietário,Palhetas"
         assert sum(1 for c in corpo if c.startswith("Total ") and not c.startswith("Total geral")) == len({l["garanhao_nome"] for l in linhas})
+
+
+def test_dados_estudo_so_admin_e_sem_nomes(client):
+    # O cliente destes testes é Visualizador.
+    assert client.get("/api/relatorios/estudo").status_code == 403
+
+
+def test_dados_estudo_folhas():
+    from modules.estudo_export import tabelas_estudo
+
+    folhas = tabelas_estudo()
+    assert [f[0] for f in folhas] == ["Éguas", "Exames", "Inseminações", "Diagnósticos", "Legenda"]
+    insem = folhas[2]
+    assert insem[1][:4] == ["egua", "inseminacao", "data", "hora"]
+    # Códigos, não nomes.
+    assert all(str(l[0]).startswith("E") for l in insem[2])
+    assert all(l[4] is None or str(l[4]).startswith("G") for l in insem[2])

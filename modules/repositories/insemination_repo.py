@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 import unicodedata
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
 from modules.db import get_connection, invalidate_data_cache
@@ -39,6 +39,10 @@ DIAS_CONFIRMACAO = 28
 DIAS_2A_CONFIRMACAO = 45
 DIAS_PARTO_PREVISTO = 330  # ~11 meses de gestação em equinos (padrão)
 DIAS_PRE_PARTO = 14  # antecedência da tarefa "preparar acompanhamento"
+
+
+class InseminacaoDuplicada(Exception):
+    """O mesmo envio do formulário chegou duas vezes (duplo clique)."""
 
 
 class InseminacaoError(Exception):
@@ -147,6 +151,8 @@ def registar_inseminacao_completa(
     utilizador: str = "—",
     operation_id: Optional[str] = None,
     criar_tarefa_d1: bool = True,
+    hora_inseminacao: Optional[time] = None,
+    pedido_id: Optional[str] = None,
 ) -> dict:
     """Regista uma inseminação completa numa única transacção.
 
@@ -179,6 +185,11 @@ def registar_inseminacao_completa(
         Username para auditoria (`inseminacoes.utilizador`).
     operation_id : str | None
         UUID que agrupa lotes da mesma operação. Gerado se `None`.
+    hora_inseminacao : time | None
+        Hora a que a inseminação foi feita.
+    pedido_id : str | None
+        Id do envio do formulário. Se já foi gravado, levanta
+        `InseminacaoDuplicada` e não grava nada (anti-duplicados).
 
     Devolve
     -------
@@ -242,6 +253,21 @@ def registar_inseminacao_completa(
             #    inseminação e as tarefas ficarem numa estadia
             #    diferente da que já tinha, por exemplo, a tarefa
             #    `primeira_observacao`.
+            # Anti-duplicados: o mesmo envio só se grava uma vez. A chave
+            # primária recusa o segundo, mesmo que cheguem ao mesmo tempo.
+            if pedido_id:
+                cur.execute("SAVEPOINT pedido")
+                try:
+                    cur.execute(
+                        "INSERT INTO pedidos_unicos (id, tipo) VALUES (%s::uuid, 'inseminacao')",
+                        (str(pedido_id),),
+                    )
+                except Exception as e:  # UniqueViolation
+                    cur.execute("ROLLBACK TO SAVEPOINT pedido")
+                    if getattr(e, "pgcode", None) == "23505":
+                        raise InseminacaoDuplicada(str(pedido_id)) from e
+                    raise
+
             estadia_id = _resolver_estadia_ativa(cur, animal_id_egua)
             if estadia_id is None:
                 raise InseminacaoError(
@@ -284,19 +310,19 @@ def registar_inseminacao_completa(
                 cur.execute(
                     """
                     INSERT INTO inseminacoes (
-                        garanhao, dono_id, data_inseminacao, egua,
+                        garanhao, dono_id, data_inseminacao, hora_inseminacao, egua,
                         protocolo, palhetas_gastas, observacoes, utilizador,
                         estoque_id, operation_id,
                         animal_id_egua, animal_id_garanhao, estadia_id
                     ) VALUES (
-                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
                         %s, %s::uuid,
                         %s, %s, %s
                     ) RETURNING id
                     """,
                     (
-                        gar_nome, dono_id, data_inseminacao, egua_nome,
+                        gar_nome, dono_id, data_inseminacao, hora_inseminacao, egua_nome,
                         reg.get("protocolo"), palhetas, observacoes, utilizador,
                         stock_id, operation_id,
                         int(animal_id_egua), int(animal_id_garanhao),
@@ -466,6 +492,41 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
 # ────────────────────────────────────────────────────────────────────
 # Ciclo de resultados (Pedido 4)
 # ────────────────────────────────────────────────────────────────────
+
+ETAPAS = {"diagnostico_gestacao": "D+14", "confirmacao_gestacao": "D+28", "segunda_confirmacao": "D+45"}
+RESULTADOS_DG = ("positivo", "negativo", "inconclusivo", "sem_exame")
+
+
+def registar_diagnostico(
+    *,
+    animal_id: int,
+    operation_id: Optional[str],
+    tipo_tarefa: str,
+    resultado: str,
+    data_exame: datetime,
+    utilizador: str = "—",
+    registo_clinico_id: Optional[int] = None,
+) -> int:
+    """Guarda um diagnóstico de gestação na sua etapa (D+14/D+28/D+45),
+    com a data e hora reais do exame. Não substitui os anteriores: cada
+    exame fica numa linha (para o estudo de 2027)."""
+    if resultado not in RESULTADOS_DG:
+        raise InseminacaoError(f"resultado de diagnóstico inválido: '{resultado}'")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO diagnosticos_gestacao
+                    (animal_id, operation_id, etapa, resultado, data_exame, registo_clinico_id, utilizador)
+                VALUES (%s, %s::uuid, %s, %s, %s, %s, %s) RETURNING id
+                """,
+                (animal_id, operation_id, ETAPAS.get(tipo_tarefa, "D+14"), resultado, data_exame,
+                 registo_clinico_id, (utilizador or "—")[:50]),
+            )
+            novo = int(cur.fetchone()[0])
+        conn.commit()
+    return novo
+
 
 RESULTADO_POSITIVO = "positivo"
 RESULTADO_NEGATIVO = "negativo"

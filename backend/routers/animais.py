@@ -47,7 +47,7 @@ from modules.pages.animal_page import (
     _upsert_acompanhamento,
 )
 from modules.repositories.colheita_repo import agendar_colheita, cancelar_colheita, listar_colheitas_futuras
-from modules.repositories.insemination_repo import InseminacaoError, registar_resultado
+from modules.repositories.insemination_repo import InseminacaoError, registar_diagnostico, registar_resultado
 
 router = APIRouter(prefix="/api/animais", tags=["animais"])
 
@@ -217,9 +217,10 @@ def apagar_registo(animal_id: int, rid: int, _user: dict = Depends(get_current_u
 
 # ── Historial reprodutivo e estadias ──────────────────────────────────────
 
-def _etapa(data_inseminacao: date | None) -> tuple[str, str]:
-    """Etapa do diagnóstico pelos dias desde a inseminação (como a app atual)."""
-    dias = (date.today() - data_inseminacao).days if data_inseminacao else 0
+def _etapa(data_inseminacao: date | None, em: date | None = None) -> tuple[str, str]:
+    """Etapa do diagnóstico pelos dias desde a inseminação até ao exame
+    (`em`, por omissão hoje)."""
+    dias = ((em or date.today()) - data_inseminacao).days if data_inseminacao else 0
     if dias >= 45:
         return "segunda_confirmacao", "D+45"
     if dias >= 28:
@@ -243,8 +244,14 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
     df = _carregar_inseminacoes_animal(animal_id, a.get("nome") or "")
     ins = registos(df, ["data_inseminacao", "garanhao", "proprietario", "palhetas_gastas", "num_lotes", "resultado", "observacoes", "op_key"])
     for r in ins:
-        # Só operações reais (não linhas antigas "solo_") podem receber resultado aqui.
-        r["pode_resultado"] = r["resultado"] == "pendente" and not str(r["op_key"]).startswith("solo_") and r["data_inseminacao"] is not None
+        # Só operações reais (não linhas antigas "solo_") podem receber
+        # resultado aqui; depois de um positivo continua a dar, para as
+        # confirmações D+28 e D+45.
+        r["pode_resultado"] = (
+            r["resultado"] in ("pendente", "gestacao_confirmada")
+            and not str(r["op_key"]).startswith("solo_")
+            and r["data_inseminacao"] is not None
+        )
         r["etapa"] = _etapa(_como_data(r["data_inseminacao"]))[1]
     total = len(ins)
     gest = sum(1 for r in ins if r["resultado"] == "gestacao_confirmada")
@@ -253,7 +260,9 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
 
 class ResultadoIn(BaseModel):
     op_key: str
-    resultado: Literal["positivo", "negativo"]
+    resultado: Literal["positivo", "negativo", "inconclusivo", "sem_exame"]
+    # Dia do exame (por omissão hoje).
+    data_exame: date | None = None
 
 
 @router.post("/{animal_id:int}/resultado")
@@ -262,10 +271,19 @@ def resultado(animal_id: int, d: ResultadoIn, user: dict = Depends(get_current_u
     linha = next((r for r in rep["inseminacoes"] if r["op_key"] == d.op_key), None)
     if not linha or not linha["pode_resultado"]:
         raise _erro(409, "web.animal.error.result_not_allowed")
-    tipo_tarefa, _ = _etapa(_como_data(linha["data_inseminacao"]))
+    dia = d.data_exame or date.today()
+    if dia > date.today() or dia < _como_data(linha["data_inseminacao"]):
+        raise _erro(422, "web.animal.error.result_bad_date")
+    tipo_tarefa, _ = _etapa(_como_data(linha["data_inseminacao"]), dia)
     try:
+        registar_diagnostico(
+            animal_id=animal_id, operation_id=d.op_key, tipo_tarefa=tipo_tarefa, resultado=d.resultado,
+            data_exame=datetime.combine(dia, datetime.min.time()), utilizador=user["username"],
+        )
+        if d.resultado not in ("positivo", "negativo"):
+            return {"resultado": None}
         r = registar_resultado(
-            operation_id=d.op_key, resultado=d.resultado, tipo_tarefa=tipo_tarefa, data=date.today(), utilizador=user["username"],
+            operation_id=d.op_key, resultado=d.resultado, tipo_tarefa=tipo_tarefa, data=dia, utilizador=user["username"],
         )
     except InseminacaoError as e:
         raise _erro(409, "web.animal.error.result_failed", detalhe=str(e)) from e

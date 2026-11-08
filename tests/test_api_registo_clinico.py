@@ -44,7 +44,7 @@ def ctx():
     assert c.post("/api/auth/login", json={"username": username, "password": "segredo123"}).status_code == 200
     dono = _exec("INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id", (f"{P}d{uuid.uuid4().hex[:6]}",))[0]
 
-    def animal(tipo="egua", estadia=True):
+    def animal(tipo="egua", estadia=True, tarefa="observacao_clinica"):
         aid = _exec("INSERT INTO animais (nome, tipo, dono_id, ativo) VALUES (%s, %s, %s, TRUE) RETURNING id", (f"{P}{uuid.uuid4().hex[:6]}", tipo, dono))[0]
         if estadia:
             eid = _exec(
@@ -54,14 +54,17 @@ def ctx():
             )[0]
             _exec(
                 """INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia)
-                   VALUES (%s, %s, CURRENT_DATE, 'verificar_ovulacao', 'teste', 'hoje')""",
-                (aid, eid),
+                   VALUES (%s, %s, CURRENT_DATE, %s, 'teste', 'hoje')""",
+                (aid, eid, tarefa),
             )
         return aid
 
     yield {"c": c, "animal": animal}
     sub = "SELECT id FROM animais WHERE nome LIKE %s"
     for sql in (
+        f"DELETE FROM diagnosticos_gestacao WHERE animal_id IN ({sub})",
+        f"DELETE FROM inseminacoes WHERE animal_id_egua IN ({sub})",
+        f"DELETE FROM acompanhamento_inseminacao WHERE animal_id IN ({sub})",
         f"DELETE FROM registo_clinico WHERE animal_id IN ({sub})",
         f"DELETE FROM trabalho_diario WHERE animal_id IN ({sub})",
         f"DELETE FROM estadias WHERE animal_id IN ({sub})",
@@ -81,7 +84,7 @@ def _registo(**dados):
 def test_registar_e_historico(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     lista = c.get(f"/api/animais/{aid}/registos").json()
-    assert lista["historico"] == [] and lista["tamanho_inicial"] == {"OE": 25, "OD": 25}
+    assert lista["historico"] == [] and lista["pede"] == {"ovulacao": False, "dg": False}
     assert lista["garanhao"] == "Zeus" and lista["estadia_ativa"] is True
 
     r = c.post(
@@ -100,8 +103,6 @@ def test_registar_e_historico(ctx):
     h = lista["historico"][0]
     assert h["dados"]["OE"]["foliculos"][0] == {"tamanho": 35, "achados": ["OV"]}
     assert h["dados"]["OE"]["comentario"] == "ok"
-    # O ovário com registo recente começa no último tamanho; o outro em 25.
-    assert lista["tamanho_inicial"] == {"OE": 35, "OD": 25}
 
     # Corrigir e apagar.
     rid = h["id"]
@@ -161,3 +162,69 @@ def test_validacoes(ctx):
 def test_dg_sem_inseminacao_fica_so_registado(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo")).json()["resultado"] == "sem_inseminacao"
+
+
+def _inseminada_ha(aid, dias):
+    """Inseminação (uma operação) feita há `dias` dias."""
+    op = str(uuid.uuid4())
+    eid = _exec("SELECT id FROM estadias WHERE animal_id = %s", (aid,))[0]
+    _exec(
+        """INSERT INTO inseminacoes (garanhao, data_inseminacao, egua, palhetas_gastas, operation_id, animal_id_egua, estadia_id, resultado)
+           VALUES ('Zeus', %s, 'x', 1, %s::uuid, %s, %s, 'pendente')""",
+        (date.today() - timedelta(days=dias), op, aid, eid),
+    )
+    return op
+
+
+def test_ovulacao_obrigatoria_com_tarefa_d1(ctx):
+    c, aid = ctx["c"], ctx["animal"](tarefa="verificar_ovulacao")
+    assert c.get(f"/api/animais/{aid}/registos").json()["pede"] == {"ovulacao": True, "dg": False}
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 1}))
+    assert r.json()["detail"]["code"] == "web.registo.error.ovulation_required"
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "nao_avaliado", "fh": "nao"}))
+    assert r.status_code == 201 and r.json()["tarefas_concluidas"] == 1
+    assert c.get(f"/api/animais/{aid}/registos").json()["historico"][0]["dados"]["OVU"] == {"ovulacao": "nao_avaliado", "fh": "nao"}
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "talvez", "fh": "nao"})).status_code == 422
+
+
+def test_dg_obrigatorio_com_tarefa_e_guardado_por_etapa(ctx):
+    c, aid = ctx["c"], ctx["animal"](tarefa="diagnostico_gestacao")
+    op = _inseminada_ha(aid, 14)
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 2}))
+    assert r.json()["detail"]["code"] == "web.registo.error.dg_required"
+    exame = datetime.now().replace(second=0, microsecond=0)
+    corpo = _registo(DG="Positivo")
+    corpo["data_registo"] = exame.isoformat()
+    assert c.post(f"/api/animais/{aid}/registos", json=corpo).json()["resultado"] == "registado"
+    diag = _todas("SELECT operation_id::text, etapa, resultado, data_exame FROM diagnosticos_gestacao WHERE animal_id = %s", (aid,))
+    assert diag == [(op, "D+14", "positivo", exame)]
+    assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "gestacao_confirmada"
+
+
+def test_d45_depois_de_positivo_e_sem_exame(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 45)
+    _exec("UPDATE inseminacoes SET resultado = 'gestacao_confirmada' WHERE operation_id = %s::uuid", (op,))
+    # Perda embrionária: negativo no D+45 depois de positivo no D+14.
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Negativo")).json()["resultado"] == "registado"
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Sem exame")).json()["resultado"] == "registado"
+    diag = _todas("SELECT etapa, resultado FROM diagnosticos_gestacao WHERE animal_id = %s ORDER BY id", (aid,))
+    assert diag == [("D+45", "negativo"), ("D+45", "sem_exame")]
+    assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "falhou"
+
+
+def test_resultado_na_ficha_com_data_do_exame(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 30)
+    dia = date.today() - timedelta(days=2)  # exame há 2 dias → D+28
+    r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "inconclusivo", "data_exame": dia.isoformat()})
+    assert r.status_code == 200, r.text
+    r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "positivo", "data_exame": dia.isoformat()})
+    assert r.json()["resultado"] == "gestacao_confirmada"
+    diag = _todas("SELECT etapa, resultado, data_exame::date FROM diagnosticos_gestacao WHERE animal_id = %s ORDER BY id", (aid,))
+    assert diag == [("D+28", "inconclusivo", dia), ("D+28", "positivo", dia)]
+    # Depois de positivo ainda se pode registar (confirmações seguintes).
+    assert c.get(f"/api/animais/{aid}/reprodutivo").json()["inseminacoes"][0]["pode_resultado"] is True
+    futuro = (date.today() + timedelta(days=1)).isoformat()
+    r = c.post(f"/api/animais/{aid}/resultado", json={"op_key": op, "resultado": "positivo", "data_exame": futuro})
+    assert r.json()["detail"]["code"] == "web.animal.error.result_bad_date"

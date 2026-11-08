@@ -23,7 +23,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 
-from backend.deps import get_current_user
+from backend.deps import get_current_user, require_nivel
 from backend.i18n_web import WEB_TRANSLATIONS
 from backend.serial import anexo, registos
 from modules.db import to_py
@@ -44,6 +44,7 @@ from modules.repositories.stock_repo import (
     carregar_transferencias_externas,
 )
 from modules.mapa_export import texto_celula
+from modules.estudo_export import tabelas_estudo
 from modules.relatorio_export import gerar_csv, gerar_excel, gerar_pdf
 from modules.stock_export import gerar_csv_stock, gerar_excel_stock, gerar_pdf_stock
 from modules.ui_kit import safe_pick
@@ -510,3 +511,23 @@ def _exportar_generico(formato: str, p: Pedido, e: Escolha | None = None) -> Res
     else:
         dados = gerar_csv(titulo, kpis, tabelas)
     return _ficheiro(dados, ficheiro, TIPOS[formato])
+
+
+# ── Dados para o estudo (só Administrador) ────────────────────────────────
+
+@router.get("/estudo")
+def exportar_estudo(
+    formato: Literal["xlsx", "csv"] = "xlsx",
+    inicio: date | None = None,
+    fim: date | None = None,
+    _user: dict = Depends(require_nivel("Administrador")),
+):
+    """Eventos (exames, inseminações por lote, diagnósticos por etapa) com
+    códigos em vez de nomes — ver `modules/estudo_export.py`."""
+    if inicio and fim and inicio > fim:
+        raise _erro(422, "reports.invalid_period")
+    tabelas = tabelas_estudo(inicio, fim)
+    nome = f"dados_estudo_{datetime.now():%Y%m%d}.{formato}"
+    if formato == "xlsx":
+        return _ficheiro(gerar_excel("EquiCore — dados para estudo", [], tabelas), nome, TIPOS["xlsx"])
+    return _ficheiro(gerar_csv("EquiCore — dados para estudo", [], tabelas), nome, TIPOS["csv"])

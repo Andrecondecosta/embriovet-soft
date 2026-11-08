@@ -23,6 +23,8 @@ import { useErrorMessage, useNotifyError } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
+import { DadosEstudo } from "./DadosEstudo";
+import { useIsAdmin } from "../components/User";
 import { ExportarRelatorio, type CorpoExportar, type Formato, type Tabela } from "./ExportarRelatorio";
 
 type Modo = "garanhao" | "proprietario" | "contentor" | "historico";
@@ -275,9 +277,12 @@ function RelatoriosDesktop({ r }: { r: R }) {
   return (
     <Card size="small">
       <Flex vertical gap={12}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {t("reports.title")}
-        </Typography.Title>
+        <Flex justify="space-between" align="center">
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {t("reports.title")}
+          </Typography.Title>
+          <DadosEstudo />
+        </Flex>
         <Segmented
           value={r.modo}
           onChange={(v) => r.mudarModo(v as Modo)}
@@ -345,6 +350,7 @@ function RelatoriosDesktop({ r }: { r: R }) {
 
 function RelatoriosMobile({ r }: { r: R }) {
   const { t } = r;
+  const admin = useIsAdmin();
   const errorMessage = useErrorMessage();
   const [filtros, setFiltros] = useState(false);
   const [data, setData] = useState<"inicio" | "fim" | null>(null);
@@ -361,6 +367,11 @@ function RelatoriosMobile({ r }: { r: R }) {
 
   return (
     <>
+      {admin && (
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0", background: "#fff" }}>
+          <DadosEstudo />
+        </div>
+      )}
       <CapsuleTabs activeKey={r.modo} onChange={(v) => r.mudarModo(v as Modo)} style={{ background: "#fff" }}>
         {MODOS.map((m) => (
           <CapsuleTabs.Tab key={m.value} title={t(m.label)} />

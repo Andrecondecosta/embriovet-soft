@@ -2,7 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { Alert, Button, Card, Checkbox, Col, DatePicker, Empty, Flex, Input, Result, Row, Select, Space, Spin, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Col,
+  DatePicker,
+  Empty,
+  Flex,
+  Input,
+  Result,
+  Row,
+  Select,
+  Space,
+  Spin,
+  TimePicker,
+  Typography,
+} from "antd";
 import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
@@ -11,6 +28,7 @@ import {
   ErrorBlock,
   List,
   NoticeBar,
+  Picker,
   Result as MResult,
   Stepper,
   SwipeAction,
@@ -69,6 +87,7 @@ interface Confirmacao {
   total_palhetas: number;
   num_lotes: number;
   data_inseminacao: string;
+  hora_inseminacao: string;
   data_ver_ovulacao: string | null;
   data_1o_diagnostico: string;
 }
@@ -78,6 +97,7 @@ interface Operacao {
   egua: string | null;
   garanhao: string | null;
   data_inseminacao: string;
+  hora_inseminacao: string | null;
   observacoes: string | null;
   linhas: { stock_id: number; palhetas: number; max: number }[];
 }
@@ -111,6 +131,10 @@ function useInseminacao() {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [egua, setEgua] = useState<number | null>(prefillEgua);
   const [data, setData] = useState(dayjs().format("YYYY-MM-DD"));
+  // Hora da inseminação (obrigatória): começa na hora atual, para confirmar.
+  const [hora, setHora] = useState(dayjs().format("HH:mm"));
+  // Id deste envio: se o mesmo formulário chegar duas vezes, só grava uma.
+  const [pedidoId, setPedidoId] = useState(() => crypto.randomUUID());
   const [observacoes, setObservacoes] = useState("");
   const [d1, setD1] = useState(true);
   const [modal, setModal] = useState(false);
@@ -137,6 +161,7 @@ function useInseminacao() {
     if (!op || !lotes.data) return;
     setGaranhao(op.garanhao);
     setData(op.data_inseminacao.slice(0, 10));
+    setHora(op.hora_inseminacao ?? "");
     setObservacoes(op.observacoes ?? "");
     setEgua(op.animal_id_egua);
     setLinhas(
@@ -155,6 +180,8 @@ function useInseminacao() {
     animal_id_egua: egua,
     garanhao: garanhaoAtual,
     data_inseminacao: data,
+    hora_inseminacao: hora || null,
+    pedido_id: editarRef ? null : pedidoId,
     linhas: linhas.filter((l) => l.qty > 0).map((l) => ({ stock_id: l.stock_id, palhetas: l.qty })),
     observacoes,
     criar_tarefa_d1: d1,
@@ -173,6 +200,7 @@ function useInseminacao() {
     setErro(null);
     if (!linhas.some((l) => l.qty > 0)) return setErro(t("error.select_lot_line"));
     if (!egua) return setErro(t("error.mare_required"));
+    if (!hora && !editarRef) return setErro(t("web.insem.error.time_required"));
     try {
       const r = await gravar.mutateAsync();
       if (editarRef) {
@@ -180,6 +208,8 @@ function useInseminacao() {
         navigate("/atividade");
       } else {
         setConfirmacao(r as Confirmacao);
+        setPedidoId(crypto.randomUUID());
+        setHora(dayjs().format("HH:mm"));
         setLinhas([]);
         setObservacoes("");
       }
@@ -233,6 +263,8 @@ function useInseminacao() {
     remover: (id: number) => setLinhas((ls) => ls.filter((l) => l.stock_id !== id)),
     setEgua,
     setData,
+    hora,
+    setHora,
     setObservacoes,
     setD1,
     outra: () => setConfirmacao(null),
@@ -256,7 +288,7 @@ function ConfirmacaoDesktop({ x, c }: { x: X; c: Confirmacao }) {
       <Result
         status="success"
         title={`${t("web.insem.done")} — ${c.egua} × ${c.garanhao}`}
-        subTitle={t("web.insem.done_summary", { n: c.total_palhetas, l: c.num_lotes, data: dataCurta(c.data_inseminacao) })}
+        subTitle={t("web.insem.done_summary", { n: c.total_palhetas, l: c.num_lotes, data: `${dataCurta(c.data_inseminacao)} ${c.hora_inseminacao ?? ""}`.trim() })}
         extra={[
           <Button key="t" type="primary" onClick={() => x.navigate("/trabalho-diario")}>
             {t("web.insem.go_daily")}
@@ -385,7 +417,7 @@ function InseminacaoDesktop({ x }: { x: X }) {
                     />
                   )}
                 </Col>
-                <Col xs={24} md={10}>
+                <Col xs={14} md={6}>
                   <Typography.Text type="secondary">{t("label.insemination_date")}</Typography.Text>
                   <DatePicker
                     style={{ width: "100%" }}
@@ -393,6 +425,17 @@ function InseminacaoDesktop({ x }: { x: X }) {
                     allowClear={false}
                     value={dayjs(x.data)}
                     onChange={(d) => d && x.setData(d.format("YYYY-MM-DD"))}
+                  />
+                </Col>
+                <Col xs={10} md={4}>
+                  <Typography.Text type="secondary">{t("web.insem.time")}</Typography.Text>
+                  <TimePicker
+                    style={{ width: "100%" }}
+                    format="HH:mm"
+                    needConfirm={false}
+                    status={!x.hora && !x.editarRef ? "error" : undefined}
+                    value={x.hora ? dayjs(`2000-01-01T${x.hora}`) : null}
+                    onChange={(d) => x.setHora(d ? d.format("HH:mm") : "")}
                   />
                 </Col>
                 <Col span={24}>
@@ -452,7 +495,7 @@ function InseminacaoMobile({ x }: { x: X }) {
         <MResult
           status="success"
           title={`${c.egua} × ${c.garanhao}`}
-          description={t("web.insem.done_summary", { n: c.total_palhetas, l: c.num_lotes, data: dataCurta(c.data_inseminacao) })}
+          description={t("web.insem.done_summary", { n: c.total_palhetas, l: c.num_lotes, data: `${dataCurta(c.data_inseminacao)} ${c.hora_inseminacao ?? ""}`.trim() })}
         />
         <List header={t("web.insem.tasks_created")}>
           {c.data_ver_ovulacao && <List.Item extra={dataCurta(c.data_ver_ovulacao)}>{t("web.insem.task_d1")}</List.Item>}
@@ -549,6 +592,9 @@ function InseminacaoMobile({ x }: { x: X }) {
             <List.Item prefix={t("label.insemination_date")} arrow>
               <DataCampo value={x.data} onChange={(v) => v && x.setData(v)} />
             </List.Item>
+            <List.Item prefix={t("web.insem.time")} arrow>
+              <HoraCampo value={x.hora} onChange={x.setHora} />
+            </List.Item>
             <List.Item>
               <TextArea
                 value={x.observacoes}
@@ -582,6 +628,28 @@ function InseminacaoMobile({ x }: { x: X }) {
         onConfirmar={x.adicionar}
         qtdInicial={() => 1}
         rotuloQtd={t("web.insem.qty")}
+      />
+    </>
+  );
+}
+
+const HORAS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTOS_60 = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+
+/** Hora (HH:mm) no telemóvel: duas rodas, horas e minutos. */
+function HoraCampo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <span onClick={() => setAberto(true)} style={{ color: value ? undefined : "var(--adm-color-danger)" }}>
+        {value || "--:--"}
+      </span>
+      <Picker
+        visible={aberto}
+        onClose={() => setAberto(false)}
+        columns={[HORAS_24.map((h) => ({ label: h, value: h })), MINUTOS_60.map((m) => ({ label: m, value: m }))]}
+        value={(value || dayjs().format("HH:mm")).split(":")}
+        onConfirm={(v) => v[0] && v[1] && onChange(`${v[0]}:${v[1]}`)}
       />
     </>
   );

@@ -28,7 +28,7 @@ from backend.deps import get_current_user
 from backend.serial import valor
 from modules.db import get_connection
 from modules.pages.animal_page import _carregar_animal, _concluir_tarefas_animal_hoje, _obter_estadia_activa
-from modules.repositories.insemination_repo import InseminacaoError, registar_resultado
+from modules.repositories.insemination_repo import InseminacaoError, registar_diagnostico, registar_resultado
 
 router = APIRouter(prefix="/api/animais", tags=["registo_clinico"])
 
@@ -37,9 +37,9 @@ ANTIBIOTICOS = ("Genta", "Genta + Peni", "Ceftiofur", "Marbofloxacina")
 EDEMA = ("0", "+", "++", "+++")
 LIQUIDO = ("0", "<2 cm", "+", "++", "+++")
 CERVIX = ("1 · fechado", "2 · intermédio", "3 · aberto")
-# O tamanho do folículo começa no do último registo se tiver menos de 5 dias.
-DIAS_ULTIMO_TAMANHO = 5
-TAMANHO_POR_OMISSAO = 25
+# Tarefas de hoje que obrigam a responder no registo (o registo fecha-as).
+TAREFAS_OVULACAO = ("verificar_ovulacao",)
+TAREFAS_DG = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao")
 
 
 def _erro(http_status: int, chave: str, **params):
@@ -134,13 +134,24 @@ class Tratamento(BaseModel):
     marcar: Marcar | None = None
 
 
+SimNao = Literal["sim", "nao", "nao_avaliado"]
+
+
+class Ovulacao(BaseModel):
+    """Exame de confirmação de ovulação (D+1): "não avaliado" é diferente
+    de "não" — para o estudo de 2027."""
+    ovulacao: SimNao
+    fh: SimNao  # folículo hemorrágico anovulatório
+
+
 class Dados(BaseModel):
     OE: Ovario | None = None
     OD: Ovario | None = None
     UT: Utero | None = None
     CER: Cervix | None = None
     TX: Tratamento | None = None
-    DG: Literal["Positivo", "Negativo", "Inconclusivo"] | None = None
+    OVU: Ovulacao | None = None
+    DG: Literal["Positivo", "Negativo", "Inconclusivo", "Sem exame"] | None = None
 
 
 class RegistoIn(BaseModel):
@@ -259,12 +270,6 @@ def _antigos(animal_id: int, limite: int = 10) -> list[dict]:
 def listar(animal_id: int, _user: dict = Depends(get_current_user)):
     a = _egua(animal_id)
     historico = sorted(_novos(animal_id) + _antigos(animal_id), key=lambda r: r["data_registo"] or "", reverse=True)[:10]
-    # Valor inicial do folículo por ovário: o do último registo (se < 5 dias).
-    ultimo = {}
-    for parte in ("OE", "OD"):
-        r = next((x for x in _novos(animal_id, 50) if (x["dados"].get(parte) or {}).get("foliculos")), None)
-        recente = r and (datetime.now() - datetime.fromisoformat(r["data_registo"])).days < DIAS_ULTIMO_TAMANHO
-        ultimo[parte] = r["dados"][parte]["foliculos"][0]["tamanho"] if recente else TAMANHO_POR_OMISSAO
     tratamentos = [
         {"data_registo": r["data_registo"], "texto": resumo_tx(Tratamento(**r["dados"]["TX"]))}
         for r in _novos(animal_id, 30)
@@ -278,11 +283,25 @@ def listar(animal_id: int, _user: dict = Depends(get_current_user)):
         **_contexto(animal_id, a),
         "estadia_ativa": _obter_estadia_activa(animal_id) is not None,
         "historico": historico,
-        "tamanho_inicial": ultimo,
+        "pede": _pede(animal_id),
         "tratamentos_anteriores": tratamentos,
         "antibioticos": [*ANTIBIOTICOS, *(v for c, v in extra if c == "antibiotico" and v not in ANTIBIOTICOS)],
         "infusoes": [v for c, v in extra if c == "infusao"],
     }
+
+
+def _pede(animal_id: int) -> dict:
+    """O que o registo de hoje tem de dizer, pelas tarefas por fazer hoje:
+    a ovulação (tarefa D+1) e/ou o diagnóstico de gestação. Assim "não
+    avaliado"/"sem exame" fica escrito, em vez de ficar em branco."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT tipo FROM trabalho_diario WHERE animal_id = %s AND data_tarefa = CURRENT_DATE AND concluida = FALSE",
+                (animal_id,),
+            )
+            tipos = {r[0] for r in cur.fetchall()}
+    return {"ovulacao": bool(tipos & set(TAREFAS_OVULACAO)), "dg": bool(tipos & set(TAREFAS_DG))}
 
 
 # ── Gravar ────────────────────────────────────────────────────────────────
@@ -318,23 +337,39 @@ def _tarefa(cur, animal_id: int, estadia_id: int, dia: date, motivo: str, utiliz
     return cur.fetchone()[0]
 
 
-def _resultado_dg(animal_id: int, dg: str, utilizador: str) -> str | None:
-    """DG +/−: regista o resultado da inseminação pendente mais recente
-    (mesma regra das etapas D+14/D+28/D+45 da ficha)."""
+def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str, registo_id: int) -> str | None:
+    """Guarda o DG na etapa certa (D+14/D+28/D+45) da inseminação mais
+    recente da égua, com a data e hora do exame. Positivo/negativo também
+    atualizam o resultado da inseminação (tarefas seguintes, como antes)."""
     from backend.routers.animais import _como_data, _etapa, reprodutivo
 
-    pendente = next((r for r in reprodutivo(animal_id)["inseminacoes"] if r["pode_resultado"]), None)
-    if not pendente:
+    dia = data_exame.date()
+    ops = [
+        r for r in reprodutivo(animal_id)["inseminacoes"]
+        if not str(r["op_key"]).startswith("solo_") and r["data_inseminacao"] and _como_data(r["data_inseminacao"]) <= dia
+    ]
+    if not ops:
         return "sem_inseminacao"
-    tipo, _ = _etapa(_como_data(pendente["data_inseminacao"]))
+    alvo = max(ops, key=lambda r: _como_data(r["data_inseminacao"]))
+    tipo, _ = _etapa(_como_data(alvo["data_inseminacao"]), dia)
     try:
-        registar_resultado(
-            operation_id=pendente["op_key"],
-            resultado="positivo" if dg == "Positivo" else "negativo",
+        registar_diagnostico(
+            animal_id=animal_id,
+            operation_id=alvo["op_key"],
             tipo_tarefa=tipo,
-            data=date.today(),
+            resultado={"Positivo": "positivo", "Negativo": "negativo", "Inconclusivo": "inconclusivo"}.get(dg, "sem_exame"),
+            data_exame=data_exame,
             utilizador=utilizador,
+            registo_clinico_id=registo_id,
         )
+        if dg in ("Positivo", "Negativo"):
+            registar_resultado(
+                operation_id=alvo["op_key"],
+                resultado="positivo" if dg == "Positivo" else "negativo",
+                tipo_tarefa=tipo,
+                data=dia,
+                utilizador=utilizador,
+            )
     except InseminacaoError as e:
         raise _erro(409, "web.animal.error.result_failed", detalhe=str(e)) from e
     return "registado"
@@ -347,8 +382,13 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
     if estadia_id is None:
         raise _erro(409, "web.animal.error.no_active_stay")
     dados = d.dados
-    if not any([dados.OE, dados.OD, dados.UT, dados.CER, dados.TX, dados.DG]):
+    if not any([dados.OE, dados.OD, dados.UT, dados.CER, dados.TX, dados.OVU, dados.DG]):
         raise _erro(422, "web.registo.error.empty")
+    pede = _pede(animal_id)
+    if pede["ovulacao"] and not dados.OVU:
+        raise _erro(422, "web.registo.error.ovulation_required")
+    if pede["dg"] and not dados.DG:
+        raise _erro(422, "web.registo.error.dg_required")
     if dados.TX and dados.TX.marcar and dados.TX.marcar.dias == "agenda" and not dados.TX.marcar.data:
         raise _erro(422, "web.registo.error.agenda_date")
 
@@ -387,7 +427,7 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                 raise
 
     concluidas = _concluir_tarefas_animal_hoje(animal_id, user["username"])
-    resultado = _resultado_dg(animal_id, dados.DG, user["username"]) if dados.DG in ("Positivo", "Negativo") else None
+    resultado = _resultado_dg(animal_id, dados.DG, d.data_registo, user["username"], rid) if dados.DG else None
     if d.prioritario:
         # A próxima tarefa por fazer desta égua passa a urgente.
         with get_connection() as conn:

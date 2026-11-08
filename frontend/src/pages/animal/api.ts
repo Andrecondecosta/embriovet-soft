@@ -136,8 +136,9 @@ export const useEditarRegisto = (id: number) =>
   useFichaMutation(id, ({ rid, ...d }: RegistoIn & { rid: number }) => api<{ ok: boolean }>(`${base(id)}/diario/${rid}`, "PUT", d));
 export const useApagarRegisto = (id: number) =>
   useFichaMutation(id, (rid: number) => api<{ ok: boolean }>(`${base(id)}/diario/${rid}`, "DELETE"));
+export type ResultadoDG = "positivo" | "negativo" | "inconclusivo" | "sem_exame";
 export const useResultado = (id: number) =>
-  useFichaMutation(id, (d: { op_key: string; resultado: "positivo" | "negativo" }) =>
+  useFichaMutation(id, (d: { op_key: string; resultado: ResultadoDG; data_exame: string }) =>
     api<{ resultado: string }>(`${base(id)}/resultado`, "POST", d),
   );
 export const useGuardarAcompanhamento = (id: number) =>

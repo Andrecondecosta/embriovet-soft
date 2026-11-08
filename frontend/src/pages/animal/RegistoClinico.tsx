@@ -53,9 +53,10 @@ import type { Animal } from "./api";
  * Computador: antd; telemóvel: antd-mobile — como as outras abas da ficha. */
 
 type Parte = "OE" | "OD" | "UT" | "CER";
-type Ficha = Parte | "TX" | "DG";
+type Ficha = Parte | "TX" | "OVU" | "DG";
 interface Foliculo {
-  tamanho: number; // 9 = "<10", 61 = ">60"
+  // null só enquanto se preenche: não se guarda sem tamanho.
+  tamanho: number | null; // 9 = "<10", 61 = ">60"
   achados: string[];
 }
 interface Ovario {
@@ -87,7 +88,14 @@ interface Dados {
   UT?: Utero;
   CER?: Cervix;
   TX?: Tratamento;
+  OVU?: Ovulacao;
   DG?: string;
+}
+type SimNao = "sim" | "nao" | "nao_avaliado";
+/** Confirmação de ovulação (D+1): "não avaliado" é diferente de "não". */
+interface Ovulacao {
+  ovulacao: SimNao;
+  fh: SimNao;
 }
 interface Historico {
   id: number;
@@ -104,7 +112,8 @@ interface Resposta {
   garanhao: string | null;
   estadia_ativa: boolean;
   historico: Historico[];
-  tamanho_inicial: { OE: number; OD: number };
+  /** Tarefas de hoje que obrigam a responder (o registo fecha-as). */
+  pede: { ovulacao: boolean; dg: boolean };
   tratamentos_anteriores: { data_registo: string; texto: string }[];
   antibioticos: string[];
   infusoes: string[];
@@ -120,7 +129,9 @@ const ACHADOS = ["NS", "OV", "FH", "MF", "CL"];
 const EDEMA = ["0", "+", "++", "+++"];
 const LIQUIDO = ["0", "<2 cm", "+", "++", "+++"];
 const HORAS = ["8h", "10h", "12h", "14h", "16h"];
-const mm = (n: number) => (n <= 9 ? "<10" : n >= 61 ? ">60" : String(n));
+const SIM_NAO: SimNao[] = ["sim", "nao", "nao_avaliado"];
+const DGS = ["Positivo", "Negativo", "Inconclusivo", "Sem exame"];
+const mm = (n: number | null) => (n == null ? "—" : n <= 9 ? "<10" : n >= 61 ? ">60" : String(n));
 
 /** Resumo curto de cada parte (tabela, desenho). */
 function useResumo() {
@@ -148,6 +159,10 @@ function useResumo() {
     if (f === "UT") return d.UT ? `Ed ${EDEMA[d.UT.edema]} · ${t("web.registo.liquid_short")} ${LIQUIDO[d.UT.liquido]}` : "";
     if (f === "CER") return d.CER ? cervix(d.CER.grau) : "";
     if (f === "DG") return d.DG ? t(`web.registo.dg.${d.DG}`) : "";
+    if (f === "OVU")
+      return d.OVU
+        ? `${t("web.registo.ovulation")}: ${t(`web.registo.sn.${d.OVU.ovulacao}`)} · FH: ${t(`web.registo.sn.${d.OVU.fh}`)}`
+        : "";
     return tx(d.TX);
   };
 }
@@ -193,18 +208,32 @@ function Multiplas({ opcoes, valor, onChange }: { opcoes: string[]; valor: strin
 }
 
 /** Tamanho do folículo em mm (9 = "<10", 61 = ">60"). */
-function Tamanho({ valor, onChange }: { valor: number; onChange: (v: number) => void }) {
-  const parser = (s?: string) => (!s ? 25 : s.startsWith("<") ? 9 : s.startsWith(">") ? 61 : Number(s.replace(/\D/g, "")) || 25);
+/** Tamanho do folículo: começa vazio — um valor só fica gravado se for medido. */
+function Tamanho({ valor, onChange }: { valor: number | null; onChange: (v: number | null) => void }) {
+  const parser = (s?: string) =>
+    !s ? (null as unknown as number) : s.startsWith("<") ? 9 : s.startsWith(">") ? 61 : Number(s.replace(/\D/g, ""));
   if (useIsMobile())
-    return <Stepper min={9} max={61} digits={0} value={valor} formatter={(v) => mm(v ?? 25)} parser={parser} onChange={onChange} />;
+    return (
+      <Stepper
+        allowEmpty
+        min={9}
+        max={61}
+        digits={0}
+        value={valor}
+        formatter={(v) => (v == null ? "" : mm(v))}
+        parser={parser}
+        onChange={(v) => onChange(v ?? null)}
+      />
+    );
   return (
     <InputNumber
       min={9}
       max={61}
       value={valor}
-      formatter={(v) => mm(Number(v))}
+      placeholder="mm"
+      formatter={(v) => (v == null || String(v) === "" ? "" : mm(Number(v)))}
       parser={parser}
-      onChange={(v) => v != null && onChange(v)}
+      onChange={(v) => onChange(v ?? null)}
       suffix="mm"
       style={{ width: 110 }}
     />
@@ -314,6 +343,14 @@ function Ajuda({ children }: { children: ReactNode }) {
   );
 }
 
+function Falta({ children }: { children: ReactNode }) {
+  return (
+    <Typography.Text type="danger" style={{ display: "block", fontSize: 12, marginTop: 8 }}>
+      {children}
+    </Typography.Text>
+  );
+}
+
 function Guardar({ onClick, children }: { onClick: () => void; children?: ReactNode }) {
   const t = useT();
   if (useIsMobile())
@@ -333,10 +370,11 @@ const indices = (valores: string[]): Op[] => valores.map((label, i) => ({ label,
 
 // ── Fichas ──────────────────────────────────────────────────────────────────
 
-function FichaOvario({ inicial, atual, onGuardar }: { inicial: number; atual?: Ovario; onGuardar: (v: Ovario) => void }) {
+function FichaOvario({ atual, onGuardar }: { atual?: Ovario; onGuardar: (v: Ovario) => void }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const [ov, setOv] = useState<Ovario>(atual ?? { foliculos: [{ tamanho: inicial, achados: [] }] });
+  const [ov, setOv] = useState<Ovario>(atual ?? { foliculos: [{ tamanho: null, achados: [] }] });
+  const [falta, setFalta] = useState(false);
   const mudar = (i: number, f: Partial<Foliculo>) =>
     setOv((o) => ({ ...o, foliculos: o.foliculos.map((x, j) => (j === i ? { ...x, ...f } : x)) }));
   const remover = (i: number) => setOv((o) => ({ ...o, foliculos: o.foliculos.filter((_, j) => j !== i) }));
@@ -368,14 +406,14 @@ function FichaOvario({ inicial, atual, onGuardar }: { inicial: number; atual?: O
       <Ajuda>{t("web.registo.findings_legend")}</Ajuda>
       <div style={{ margin: "10px 0" }}>
         {isMobile ? (
-          <MButton block size="small" onClick={() => setOv((o) => ({ ...o, foliculos: [...o.foliculos, { tamanho: 25, achados: [] }] }))}>
+          <MButton block size="small" onClick={() => setOv((o) => ({ ...o, foliculos: [...o.foliculos, { tamanho: null, achados: [] }] }))}>
             + {t("web.registo.add_follicle")}
           </MButton>
         ) : (
           <Button
             size="small"
             icon={<PlusOutlined />}
-            onClick={() => setOv((o) => ({ ...o, foliculos: [...o.foliculos, { tamanho: 25, achados: [] }] }))}
+            onClick={() => setOv((o) => ({ ...o, foliculos: [...o.foliculos, { tamanho: null, achados: [] }] }))}
           >
             {t("web.registo.add_follicle")}
           </Button>
@@ -383,42 +421,56 @@ function FichaOvario({ inicial, atual, onGuardar }: { inicial: number; atual?: O
         <Ajuda>{t("web.registo.follicle_hint")}</Ajuda>
       </div>
       <Comentario value={ov.comentario} onChange={(v) => setOv({ ...ov, comentario: v })} />
-      <Guardar onClick={() => onGuardar(ov)} />
+      {falta && <Falta>{t("web.registo.size_missing")}</Falta>}
+      <Guardar onClick={() => (ov.foliculos.some((f) => f.tamanho == null) ? setFalta(true) : onGuardar(ov))} />
     </>
   );
 }
 
 function FichaUtero({ atual, onGuardar }: { atual?: Utero; onGuardar: (v: Utero) => void }) {
   const t = useT();
-  const [u, setU] = useState<Utero>(atual ?? { edema: 0, liquido: 0 });
+  // Sem valor por defeito: o edema e o líquido têm de ser escolhidos.
+  const [u, setU] = useState<Partial<Utero>>(atual ?? {});
+  const [falta, setFalta] = useState(false);
   return (
     <>
       <Seccao titulo={t("web.registo.edema")}>
-        <Escolha opcoes={indices(EDEMA)} valor={String(u.edema)} onChange={(v) => setU({ ...u, edema: Number(v) })} />
+        <Escolha
+          opcoes={indices(EDEMA)}
+          valor={u.edema == null ? undefined : String(u.edema)}
+          onChange={(v) => setU({ ...u, edema: Number(v) })}
+        />
       </Seccao>
       <Seccao titulo={t("web.registo.liquid")}>
-        <Escolha opcoes={indices(LIQUIDO)} valor={String(u.liquido)} onChange={(v) => setU({ ...u, liquido: Number(v) })} />
+        <Escolha
+          opcoes={indices(LIQUIDO)}
+          valor={u.liquido == null ? undefined : String(u.liquido)}
+          onChange={(v) => setU({ ...u, liquido: Number(v) })}
+        />
       </Seccao>
       <Comentario value={u.comentario} onChange={(v) => setU({ ...u, comentario: v })} />
-      <Guardar onClick={() => onGuardar(u)} />
+      {falta && <Falta>{t("web.registo.choose_all")}</Falta>}
+      <Guardar onClick={() => (u.edema == null || u.liquido == null ? setFalta(true) : onGuardar(u as Utero))} />
     </>
   );
 }
 
 function FichaCervix({ atual, onGuardar }: { atual?: Cervix; onGuardar: (v: Cervix) => void }) {
   const t = useT();
-  const [c, setC] = useState<Cervix>(atual ?? { grau: 1 });
+  const [c, setC] = useState<Partial<Cervix>>(atual ?? {});
+  const [falta, setFalta] = useState(false);
   return (
     <>
       <Seccao titulo={t("web.registo.grade")}>
         <Escolha
           opcoes={[1, 2, 3].map((g) => ({ label: t(`web.registo.cervix.${g}`), value: String(g) }))}
-          valor={String(c.grau)}
+          valor={c.grau == null ? undefined : String(c.grau)}
           onChange={(v) => setC({ ...c, grau: Number(v) })}
         />
       </Seccao>
       <Comentario value={c.comentario} onChange={(v) => setC({ ...c, comentario: v })} />
-      <Guardar onClick={() => onGuardar(c)} />
+      {falta && <Falta>{t("web.registo.choose_all")}</Falta>}
+      <Guardar onClick={() => (c.grau == null ? setFalta(true) : onGuardar(c as Cervix))} />
     </>
   );
 }
@@ -429,15 +481,32 @@ function FichaDG({ atual, onGuardar }: { atual?: string; onGuardar: (v: string |
   return (
     <>
       <Escolha
-        opcoes={[
-          ...["Positivo", "Negativo", "Inconclusivo"].map((d) => ({ label: t(`web.registo.dg.${d}`), value: d })),
-          { label: "—", value: "" },
-        ]}
+        opcoes={[...DGS.map((d) => ({ label: t(`web.registo.dg.${d}`), value: d })), { label: "—", value: "" }]}
         valor={v}
         onChange={setV}
       />
       <Ajuda>{t("web.registo.dg_help")}</Ajuda>
       <Guardar onClick={() => onGuardar(v || undefined)} />
+    </>
+  );
+}
+
+function FichaOVU({ atual, onGuardar }: { atual?: Ovulacao; onGuardar: (v: Ovulacao | undefined) => void }) {
+  const t = useT();
+  const [o, setO] = useState<Partial<Ovulacao>>(atual ?? {});
+  const [falta, setFalta] = useState(false);
+  const opcoes = SIM_NAO.map((v) => ({ label: t(`web.registo.sn.${v}`), value: v }));
+  return (
+    <>
+      <Seccao titulo={t("web.registo.ovulation")}>
+        <Escolha opcoes={opcoes} valor={o.ovulacao} onChange={(v) => setO({ ...o, ovulacao: v as SimNao })} />
+      </Seccao>
+      <Seccao titulo={t("web.registo.fh")}>
+        <Escolha opcoes={opcoes} valor={o.fh} onChange={(v) => setO({ ...o, fh: v as SimNao })} />
+      </Seccao>
+      <Ajuda>{t("web.registo.ovu_help")}</Ajuda>
+      {falta && <Falta>{t("web.registo.choose_all")}</Falta>}
+      <Guardar onClick={() => (!o.ovulacao || !o.fh ? setFalta(true) : onGuardar(o as Ovulacao))} />
     </>
   );
 }
@@ -684,6 +753,7 @@ function useLinhasDetalhe() {
         ]);
     if (d.UT) linhas.push([t("web.registo.part.UT"), com(resumo(d, "UT"), d.UT.comentario)]);
     if (d.CER) linhas.push([t("web.registo.part.CER"), com(resumo(d, "CER"), d.CER.comentario)]);
+    if (d.OVU) linhas.push([t("web.registo.part.OVU"), resumo(d, "OVU")]);
     if (d.DG) linhas.push([t("web.registo.part.DG"), resumo(d, "DG")]);
     if (d.TX)
       linhas.push([
@@ -745,7 +815,7 @@ function useResumoLinha() {
   return (h: Historico) =>
     h.antigo
       ? h.texto || "—"
-      : (["OE", "OD", "UT", "CER", "TX", "DG"] as Ficha[])
+      : (["OE", "OD", "UT", "CER", "TX", "OVU", "DG"] as Ficha[])
           .map((f) => resumo(h.dados, f) && `${f}: ${resumo(h.dados, f)}`)
           .filter(Boolean)
           .join(" · ") || t("web.common.none");
@@ -947,6 +1017,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
             coluna("OD"),
             coluna("UT"),
             coluna("CER"),
+            coluna("OVU"),
             coluna("DG"),
             coluna("TX"),
             { title: t("web.registo.user"), dataIndex: "utilizador", width: 110, render: (v) => v ?? "—" },
@@ -981,7 +1052,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
 
   // ── 2) Novo registo (ou correção): último registo em cima + desenho ──
   const dados = novo.dados;
-  const temAlgo = !!(dados.OE || dados.OD || dados.UT || dados.CER || dados.TX || dados.DG);
+  const temAlgo = !!(dados.OE || dados.OD || dados.UT || dados.CER || dados.TX || dados.OVU || dados.DG);
   const guardarParte = (f: Ficha, v: unknown) => {
     setNovo((n) => n && { ...n, dados: { ...n.dados, [f]: v } });
     setAberto(null);
@@ -1011,31 +1082,41 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   };
   const ficha =
     aberto === "OE" || aberto === "OD" ? (
-      <FichaOvario inicial={r.tamanho_inicial[aberto]} atual={dados[aberto]} onGuardar={(v) => guardarParte(aberto, v)} />
+      <FichaOvario key={aberto} atual={dados[aberto]} onGuardar={(v) => guardarParte(aberto, v)} />
     ) : aberto === "UT" ? (
       <FichaUtero atual={dados.UT} onGuardar={(v) => guardarParte("UT", v)} />
     ) : aberto === "CER" ? (
       <FichaCervix atual={dados.CER} onGuardar={(v) => guardarParte("CER", v)} />
     ) : aberto === "TX" ? (
       <FichaTX r={r} atual={dados.TX} onGuardar={(v) => guardarParte("TX", v)} />
+    ) : aberto === "OVU" ? (
+      <FichaOVU atual={dados.OVU} onGuardar={(v) => guardarParte("OVU", v)} />
     ) : aberto === "DG" ? (
       <FichaDG atual={dados.DG} onGuardar={(v) => guardarParte("DG", v)} />
     ) : null;
   // Ao corrigir, o "último registo" de referência é o anterior a este.
   const referencia = novo.id ? r.historico.find((h) => h.antigo || h.id !== novo.id) : r.historico[0];
   const titulo = novo.id ? t("web.registo.editing") : t("web.registo.new_button");
-  const acoes: [string, () => void, boolean][] = [
-    ["DG", () => setAberto("DG"), !!dados.DG],
-    ["TX", () => setAberto("TX"), !!dados.TX],
-    ["!", () => setNovo({ ...novo, prioritario: !novo.prioritario }), novo.prioritario],
+  // [rótulo, ação, já preenchido, obrigatório hoje (tarefa D+1 / DG por fazer)]
+  const pedeHoje = !novo.id;
+  const acoes: [string, () => void, boolean, boolean][] = [
+    ["OVU", () => setAberto("OVU"), !!dados.OVU, pedeHoje && r.pede.ovulacao],
+    ["DG", () => setAberto("DG"), !!dados.DG, pedeHoje && r.pede.dg],
+    ["TX", () => setAberto("TX"), !!dados.TX, false],
+    ["!", () => setNovo({ ...novo, prioritario: !novo.prioritario }), novo.prioritario, false],
     ...(animal.tipo === "egua"
-      ? [["INS", () => navigate(`/trabalho-diario/inseminacao?egua=${animal.id}`), false] as [string, () => void, boolean]]
+      ? [["INS", () => navigate(`/trabalho-diario/inseminacao?egua=${animal.id}`), false, false] as [string, () => void, boolean, boolean]]
       : []),
   ];
+  const faltaHoje = acoes.filter(([, , ativo, obrigatorio]) => obrigatorio && !ativo).map(([rotulo]) => rotulo);
   const ajudaBotoes = t(animal.tipo === "egua" ? "web.registo.buttons_help" : "web.registo.buttons_help_recipient");
   const extras = (
     <>
+      {faltaHoje.length > 0 && (
+        <Typography.Text type="danger">{t("web.registo.required_today", { o: faltaHoje.join(", ") })}</Typography.Text>
+      )}
       {novo.prioritario && <Typography.Text type="danger">! {t("web.registo.priority_help")}</Typography.Text>}
+      {dados.OVU && <div>OVU: {resumo(dados, "OVU")}</div>}
       {dados.DG && <div>DG: {resumo(dados, "DG")}</div>}
       {dados.TX && <div>TX: {resumo(dados, "TX") || "—"}</div>}
     </>
@@ -1085,8 +1166,15 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
           </Flex>
           <Desenho dados={dados} onTocar={setAberto} />
           <div style={{ display: "flex", gap: 8 }}>
-            {acoes.map(([rotulo, onClick, ativo]) => (
-              <MButton key={rotulo} style={{ flex: 1 }} size="small" color="primary" fill={ativo ? "solid" : "outline"} onClick={onClick}>
+            {acoes.map(([rotulo, onClick, ativo, obrigatorio]) => (
+              <MButton
+                key={rotulo}
+                style={{ flex: 1 }}
+                size="small"
+                color={obrigatorio && !ativo ? "danger" : "primary"}
+                fill={ativo ? "solid" : "outline"}
+                onClick={onClick}
+              >
                 {rotulo}
               </MButton>
             ))}
@@ -1095,7 +1183,13 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
           <div style={{ fontSize: 12, marginTop: 6 }}>{extras}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <MButton onClick={() => setNovo(null)}>{t("web.common.cancel")}</MButton>
-            <MButton style={{ flex: 1 }} color="primary" disabled={!temAlgo} loading={gravar.isPending} onClick={submeter}>
+            <MButton
+              style={{ flex: 1 }}
+              color="primary"
+              disabled={!temAlgo || faltaHoje.length > 0}
+              loading={gravar.isPending}
+              onClick={submeter}
+            >
               {novo.id ? t("btn.save_changes") : t("web.registo.save")}
             </MButton>
           </div>
@@ -1161,8 +1255,14 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
           <Col xs={24} md={12}>
             <Flex vertical gap={8}>
               <Space wrap>
-                {acoes.map(([rotulo, onClick, ativo]) => (
-                  <Button key={rotulo} type={ativo ? "primary" : "default"} onClick={onClick} style={{ minWidth: 56 }}>
+                {acoes.map(([rotulo, onClick, ativo, obrigatorio]) => (
+                  <Button
+                    key={rotulo}
+                    type={ativo ? "primary" : "default"}
+                    danger={obrigatorio && !ativo}
+                    onClick={onClick}
+                    style={{ minWidth: 56 }}
+                  >
                     {rotulo}
                   </Button>
                 ))}
@@ -1176,7 +1276,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
               </Typography.Text>
               <Space>
                 <Button onClick={() => setNovo(null)}>{t("web.common.cancel")}</Button>
-                <Button type="primary" disabled={!temAlgo} loading={gravar.isPending} onClick={submeter}>
+                <Button type="primary" disabled={!temAlgo || faltaHoje.length > 0} loading={gravar.isPending} onClick={submeter}>
                   {novo.id ? t("btn.save_changes") : t("web.registo.save")}
                 </Button>
               </Space>

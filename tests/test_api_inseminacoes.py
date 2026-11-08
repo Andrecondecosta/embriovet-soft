@@ -78,6 +78,7 @@ def _corpo(x, palhetas, **extra):
         "animal_id_egua": x["egua"],
         "garanhao": x["gar"],
         "data_inseminacao": date.today().isoformat(),
+        "hora_inseminacao": "10:30",
         "linhas": [{"stock_id": x["lote"], "palhetas": palhetas}],
         **extra,
     }
@@ -138,3 +139,33 @@ def test_receptora_nao_e_inseminada(ctx):
     assert not any(e["animal_id"] == ctx["egua"] for e in ctx["c"].get("/api/inseminacoes/eguas").json())
     r = ctx["c"].post("/api/inseminacoes", json=_corpo(ctx, 1))
     assert r.json()["detail"]["code"] == "web.insem.error.recipient"
+
+
+def test_hora_obrigatoria_e_gravada(ctx):
+    c = ctx["c"]
+    corpo = _corpo(ctx, 1)
+    sem_hora = {k: v for k, v in corpo.items() if k != "hora_inseminacao"}
+    r = c.post("/api/inseminacoes", json=sem_hora)
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.insem.error.time_required"
+    r = c.post("/api/inseminacoes", json=corpo)
+    assert r.status_code == 201, r.text
+    assert r.json()["hora_inseminacao"] == "10:30"
+    ref = _um("SELECT operation_id::text FROM inseminacoes WHERE animal_id_egua = %s ORDER BY id DESC LIMIT 1", (ctx["egua"],))[0]
+    assert c.get(f"/api/inseminacoes/operacao/{ref}").json()["hora_inseminacao"] == "10:30"
+    # Editar mantém (ou muda) a hora.
+    r = c.put(f"/api/inseminacoes/operacao/{ref}", json={**corpo, "hora_inseminacao": "16:05"})
+    assert r.status_code == 200, r.text
+    assert c.get(f"/api/inseminacoes/operacao/{ref}").json()["hora_inseminacao"] == "16:05"
+
+
+def test_mesmo_envio_nao_grava_duas_vezes(ctx):
+    import uuid
+
+    c = ctx["c"]
+    antes = _stock(ctx["lote"])
+    corpo = _corpo(ctx, 1, pedido_id=str(uuid.uuid4()))
+    assert c.post("/api/inseminacoes", json=corpo).status_code == 201
+    r = c.post("/api/inseminacoes", json=corpo)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "web.insem.error.duplicate_submit"
+    # Só descontou uma vez.
+    assert _stock(ctx["lote"]) == antes - 1

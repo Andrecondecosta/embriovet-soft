@@ -8,7 +8,8 @@ app atual (repõe as palhetas antigas e grava as novas).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -17,6 +18,7 @@ from backend.deps import get_current_user
 from backend.serial import registos, valor
 from modules.db import get_connection
 from modules.repositories.insemination_repo import (
+    InseminacaoDuplicada,
     InseminacaoError,
     listar_eguas_com_estadia_ativa,
     registar_inseminacao_completa,
@@ -66,9 +68,13 @@ class InseminacaoIn(BaseModel):
     animal_id_egua: int
     garanhao: str
     data_inseminacao: date
+    # Obrigatória numa inseminação nova; as antigas podem não ter.
+    hora_inseminacao: time | None = None
     linhas: list[Linha] = Field(min_length=1)
     observacoes: str | None = None
     criar_tarefa_d1: bool = True
+    # Id do envio do formulário (anti-duplicados).
+    pedido_id: UUID | None = None
 
     @field_validator("observacoes", "garanhao", mode="before")
     @classmethod
@@ -110,6 +116,8 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
         raise _erro(409, "web.insem.error.mare_no_stay")
     if not d.garanhao:
         raise _erro(422, "warning.select_garanhao_first")
+    if d.hora_inseminacao is None:
+        raise _erro(422, "web.insem.error.time_required")
     _validar_linhas(d.linhas)
     try:
         ret = registar_inseminacao_completa(
@@ -122,7 +130,11 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
             observacoes=d.observacoes,
             utilizador=user["username"],
             criar_tarefa_d1=d.criar_tarefa_d1,
+            hora_inseminacao=d.hora_inseminacao,
+            pedido_id=str(d.pedido_id) if d.pedido_id else None,
         )
+    except InseminacaoDuplicada as e:
+        raise _erro(409, "web.insem.error.duplicate_submit") from e
     except InseminacaoError as e:
         raise _erro(409, "web.insem.error.failed", detalhe=str(e)) from e
     try:
@@ -136,6 +148,7 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
         "total_palhetas": ret["total_palhetas"],
         "num_lotes": len(ret["inseminacao_ids"]),
         "data_inseminacao": d.data_inseminacao.isoformat(),
+        "hora_inseminacao": d.hora_inseminacao.strftime("%H:%M"),
         "data_ver_ovulacao": valor(ret.get("data_ver_ovulacao")) if ret.get("verificar_ovulacao_id") else None,
         "data_1o_diagnostico": valor(ret["data_1o_diagnostico"]),
     }
@@ -152,7 +165,7 @@ def _linhas_da_operacao(ref: str) -> list[tuple]:
             cur.execute(
                 f"""
                 SELECT i.id, i.estoque_id, i.palhetas_gastas, i.data_inseminacao, i.observacoes,
-                       i.animal_id_egua, i.egua, i.garanhao, ed.existencia_atual
+                       i.animal_id_egua, i.egua, i.garanhao, ed.existencia_atual, i.hora_inseminacao
                 FROM inseminacoes i
                 LEFT JOIN estoque_dono ed ON ed.id = i.estoque_id
                 WHERE {onde}
@@ -178,6 +191,7 @@ def operacao(ref: str, _user: dict = Depends(get_current_user)):
         "egua": r0[6],
         "garanhao": r0[7],
         "data_inseminacao": valor(r0[3]),
+        "hora_inseminacao": r0[9].strftime("%H:%M") if r0[9] else None,
         "observacoes": r0[4],
         # Disponível = o que o lote tem + o que esta operação já gastou dele.
         "linhas": [{"stock_id": r[1], "palhetas": r[2], "max": int(r[8] or 0) + int(r[2] or 0)} for r in rows if r[1]],
@@ -204,4 +218,13 @@ def editar(ref: str, d: InseminacaoIn, _user: dict = Depends(get_current_user)):
     )
     if not ok:
         raise _erro(409, "web.insem.error.edit_failed")
+    # A edição reescreve as linhas da operação; a hora grava-se a seguir.
+    if d.hora_inseminacao is not None:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                if ref.startswith("id-"):
+                    cur.execute("UPDATE inseminacoes SET hora_inseminacao = %s WHERE id = %s", (d.hora_inseminacao, int(ref[3:])))
+                else:
+                    cur.execute("UPDATE inseminacoes SET hora_inseminacao = %s WHERE operation_id = %s::uuid", (d.hora_inseminacao, ref))
+            conn.commit()
     return {"ok": True}

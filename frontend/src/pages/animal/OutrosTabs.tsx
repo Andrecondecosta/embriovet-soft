@@ -1,11 +1,40 @@
 import dayjs from "dayjs";
-import { Alert, Button, Card, Col, DatePicker, Flex, Form, Input, Row, Space, Statistic, Steps, Table, Tag, Typography } from "antd";
-import { Button as MButton, Dialog, Form as MForm, Grid, Input as MInput, List, Steps as MSteps, Tag as MTag } from "antd-mobile";
+import { useState } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  Modal,
+  Radio,
+  Row,
+  Space,
+  Statistic,
+  Steps,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
+import {
+  Button as MButton,
+  Form as MForm,
+  Grid,
+  Input as MInput,
+  List,
+  Popup,
+  Selector,
+  Steps as MSteps,
+  Tag as MTag,
+} from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
-import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
+import { notifySuccess, useNotifyError } from "../../components/errors";
 import { Cabecalho, DataCampo, abrirAoTocar, semNulos } from "../../components/mobile";
 import {
   useAlertas,
@@ -15,6 +44,7 @@ import {
   useProducao,
   useReprodutivo,
   useResultado,
+  type ResultadoDG,
   type Acompanhamento,
   type Animal,
   type Inseminacao,
@@ -57,6 +87,8 @@ function usePalhetas() {
 
 // ── Historial reprodutivo (égua) ────────────────────────────────────────────
 
+const RESULTADOS_DG: ResultadoDG[] = ["positivo", "negativo", "inconclusivo", "sem_exame"];
+
 export function ReprodutivoTab({ animal }: { animal: Animal }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -67,21 +99,87 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
   const d = q.data;
   const res = (r: string) => t(`web.animal.result.${r}`);
 
-  /** Resultado +/− de uma inseminação pendente (etapa D+14/28/45 pelos dias). */
-  const resultado = (i: Inseminacao, r: "positivo" | "negativo") => {
-    const rotulo = t(r === "positivo" ? "web.animal.result.positive" : "web.animal.result.negative", { etapa: i.etapa ?? "" });
-    const fazer = async () => {
-      try {
-        await registar.mutateAsync({ op_key: i.op_key!, resultado: r });
-        notifySuccess(t(r === "positivo" ? "web.animal.result.saved_pos" : "web.animal.result.saved_neg"));
-      } catch (err) {
-        notifyError(err);
-      }
-    };
-    const texto = t("web.animal.result.confirm", { res: rotulo, data: dataCurta(i.data_inseminacao) });
-    if (isMobile) void Dialog.confirm({ content: texto, confirmText: "OK", cancelText: t("web.common.cancel"), onConfirm: fazer });
-    else confirmar({ titulo: rotulo, texto, ok: "OK", cancelar: t("web.common.cancel"), perigo: r === "negativo", onOk: fazer });
+  // Diagnóstico de gestação: resultado (com "sem exame") e o dia do exame.
+  const [dg, setDg] = useState<{ i: Inseminacao; resultado?: ResultadoDG; dia: string } | null>(null);
+  const abrirDg = (i: Inseminacao) => setDg({ i, dia: dayjs().format("YYYY-MM-DD") });
+  const gravarDg = async () => {
+    if (!dg?.resultado) return;
+    try {
+      await registar.mutateAsync({ op_key: dg.i.op_key!, resultado: dg.resultado, data_exame: dg.dia });
+      notifySuccess(t("web.animal.result.saved"));
+      setDg(null);
+    } catch (err) {
+      notifyError(err);
+    }
   };
+  const opcoesDg = RESULTADOS_DG.map((r) => ({ label: t(`web.animal.dg.${r}`), value: r }));
+  const minDg = dg ? dayjs(dg.i.data_inseminacao) : dayjs();
+  const tituloDg = dg ? t("web.animal.dg.title", { etapa: dg.i.etapa ?? "", data: dataCurta(dg.i.data_inseminacao) }) : "";
+  const janelaDg = isMobile ? (
+    <Popup
+      visible={dg !== null}
+      onMaskClick={() => setDg(null)}
+      bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, padding: 16 }}
+    >
+      {dg && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10 }}>{tituloDg}</div>
+          <Selector
+            columns={2}
+            value={dg.resultado ? [dg.resultado] : []}
+            onChange={(v) => setDg({ ...dg, resultado: v[0] })}
+            options={opcoesDg}
+          />
+          <List style={{ marginTop: 8, "--border-top": "none" } as React.CSSProperties}>
+            <List.Item prefix={t("web.animal.dg.exam_date")} arrow>
+              <DataCampo value={dg.dia} min={minDg.toDate()} max={new Date()} onChange={(v) => v && setDg({ ...dg, dia: v })} />
+            </List.Item>
+          </List>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <MButton block onClick={() => setDg(null)}>
+              {t("web.common.cancel")}
+            </MButton>
+            <MButton block color="primary" disabled={!dg.resultado} loading={registar.isPending} onClick={gravarDg}>
+              {t("btn.save")}
+            </MButton>
+          </div>
+        </>
+      )}
+    </Popup>
+  ) : (
+    <Modal
+      open={dg !== null}
+      onCancel={() => setDg(null)}
+      onOk={gravarDg}
+      okText={t("btn.save")}
+      cancelText={t("web.common.cancel")}
+      okButtonProps={{ disabled: !dg?.resultado, loading: registar.isPending }}
+      title={tituloDg}
+      width={480}
+      destroyOnHidden
+    >
+      {dg && (
+        <Flex vertical gap={12}>
+          <Radio.Group
+            optionType="button"
+            value={dg.resultado}
+            onChange={(e) => setDg({ ...dg, resultado: e.target.value })}
+            options={opcoesDg}
+          />
+          <Space>
+            <Typography.Text type="secondary">{t("web.animal.dg.exam_date")}</Typography.Text>
+            <DatePicker
+              format="DD/MM/YYYY"
+              allowClear={false}
+              value={dayjs(dg.dia)}
+              disabledDate={(d) => d.isAfter(dayjs(), "day") || d.isBefore(minDg, "day")}
+              onChange={(d) => d && setDg({ ...dg, dia: d.format("YYYY-MM-DD") })}
+            />
+          </Space>
+        </Flex>
+      )}
+    </Modal>
+  );
 
   const kpis: [string, string | number][] = [
     [t("web.animal.kpi.inseminations"), d?.total ?? "—"],
@@ -92,6 +190,7 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
   if (isMobile)
     return (
       <>
+        {janelaDg}
         <Kpis itens={kpis} />
         <List style={{ marginTop: 8 }}>
           {!d?.inseminacoes.length ? (
@@ -106,12 +205,9 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
                   <>
                     {i.garanhao ?? "—"} · {i.proprietario ?? "—"} · {palhetas(i)}
                     {i.pode_resultado && (
-                      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                        <MButton size="mini" color="success" fill="outline" onClick={() => resultado(i, "positivo")}>
-                          ✓ {t("web.animal.result.positive", { etapa: i.etapa ?? "" })}
-                        </MButton>
-                        <MButton size="mini" color="danger" fill="outline" onClick={() => resultado(i, "negativo")}>
-                          ✗ {t("web.animal.result.negative", { etapa: i.etapa ?? "" })}
+                      <div style={{ marginTop: 6 }}>
+                        <MButton size="mini" color="primary" fill="outline" onClick={() => abrirDg(i)}>
+                          {t("web.animal.dg.button", { etapa: i.etapa ?? "" })}
                         </MButton>
                       </div>
                     )}
@@ -129,6 +225,7 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
 
   return (
     <>
+      {janelaDg}
       <Kpis itens={kpis} />
       <Table<Inseminacao>
         size="small"
@@ -152,17 +249,12 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
           { title: t("web.animal.col.notes"), dataIndex: "observacoes", ellipsis: true, render: (v) => v ?? "—" },
           {
             key: "acoes",
-            width: 230,
+            width: 120,
             render: (_, i) =>
               i.pode_resultado && (
-                <Space size={4}>
-                  <Button size="small" onClick={() => resultado(i, "positivo")}>
-                    ✓ {t("web.animal.result.positive", { etapa: i.etapa ?? "" })}
-                  </Button>
-                  <Button size="small" danger onClick={() => resultado(i, "negativo")}>
-                    ✗ {t("web.animal.result.negative", { etapa: i.etapa ?? "" })}
-                  </Button>
-                </Space>
+                <Button size="small" onClick={() => abrirDg(i)}>
+                  {t("web.animal.dg.button", { etapa: i.etapa ?? "" })}
+                </Button>
               ),
           },
         ]}
