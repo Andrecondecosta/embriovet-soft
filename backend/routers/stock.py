@@ -90,8 +90,12 @@ def _qualidade_media(lotes: list[dict]) -> float | None:
 
 # ── Leituras ──────────────────────────────────────────────────────────────
 
+# Abaixo disto o separador Garanhões marca "Pouco stock".
+MINIMO_PALHETAS_GARANHAO = 10
+
+
 @router.get("/garanhoes")
-def garanhoes(_user: dict = Depends(get_current_user)):
+def garanhoes(incluir_vazios: bool = False, _user: dict = Depends(get_current_user)):
     """Garanhões com stock: alimenta o seletor dos Lotes e o separador
     Garanhões. `no_seletor` = tem stock visível na lista de Lotes (donos
     ativos ou sem dono), como o selectbox da app atual."""
@@ -105,7 +109,7 @@ def garanhoes(_user: dict = Depends(get_current_user)):
         FROM estoque_dono e
         LEFT JOIN animais a ON a.id = e.animal_id
         LEFT JOIN dono d ON d.id = e.dono_id
-        WHERE e.existencia_atual > 0
+        {"" if incluir_vazios else "WHERE e.existencia_atual > 0"}
         GROUP BY 1, 2
         ORDER BY LOWER(COALESCE(a.nome, e.garanhao)) ASC
     """
@@ -114,8 +118,8 @@ def garanhoes(_user: dict = Depends(get_current_user)):
             cur.execute(sql)
             rows = cur.fetchall()
     return [
-        {"animal_id": r[0], "garanhao": r[1], "palhetas": r[2], "lotes": r[3],
-         "donos": r[4], "no_seletor": bool(r[5])}
+        {"animal_id": r[0], "garanhao": r[1], "palhetas": r[2] or 0, "lotes": r[3],
+         "donos": r[4], "no_seletor": bool(r[5]), "pouco": (r[2] or 0) < MINIMO_PALHETAS_GARANHAO}
         for r in rows
     ]
 

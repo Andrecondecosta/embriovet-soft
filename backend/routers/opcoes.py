@@ -26,7 +26,8 @@ def proprietarios(apenas_ativos: bool = False, _user: dict = Depends(get_current
 
 @router.get("/contentores")
 def contentores(_user: dict = Depends(get_current_user)):
-    return _lista("SELECT id, codigo FROM contentores WHERE ativo = TRUE ORDER BY codigo")
+    # Ordem natural (C2 antes de C10).
+    return _lista(r"SELECT id, codigo FROM contentores WHERE ativo = TRUE ORDER BY LOWER(regexp_replace(codigo, '\d+', '', 'g')), NULLIF(regexp_replace(codigo, '\D', '', 'g'), '')::bigint NULLS FIRST, codigo")
 
 
 @router.get("/garanhoes")

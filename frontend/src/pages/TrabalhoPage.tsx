@@ -85,12 +85,23 @@ function useTrabalho() {
     queryFn: () => api<Trabalho>(`/trabalho?dia=${dia.format(FMT)}`),
     placeholderData: keepPreviousData,
     refetchInterval: 60_000,
+    // Só depois de criar as tarefas automáticas (senão a lista vinha sem elas).
+    enabled: !gerar.isPending && !gerar.isIdle,
   });
 
   // Concluir / cancelar à mão (também as em atraso).
   const acao = useMutation({
     mutationFn: ({ tarefa, como }: { tarefa: Tarefa; como: "concluir" | "cancelar" }) =>
       api(`/trabalho/${tarefa.tarefa_id}/${como}`, "POST", como === "concluir" ? {} : undefined),
+    // Sai logo da lista (sem esperar pela resposta); volta se der erro.
+    onMutate: ({ tarefa }) =>
+      queryClient.setQueriesData<Trabalho>({ queryKey: ["trabalho"] }, (d) =>
+        d && {
+          ...d,
+          por_fazer: d.por_fazer.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
+          atrasadas: d.atrasadas.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
+        },
+      ),
     onSuccess: (_, v) => notifySuccess(t(v.como === "concluir" ? "web.daily.completed" : "web.daily.cancelled")),
     onError: notifyError,
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["trabalho"] }),
@@ -143,6 +154,8 @@ function useTrabalho() {
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
     atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
     titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
+    // Noutro dia, "em atraso" é em relação a esse dia (o aviso do topo é sempre de hoje).
+    tituloAtraso: () => (ehHoje ? t("web.daily.overdue") : t("web.daily.overdue_on", { dia: dia.format("DD/MM") })),
     concluir: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "concluir" }),
     cancelar: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "cancelar" }),
     textoCancelar: (tarefa: Tarefa) =>
@@ -331,7 +344,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
         </Col>
         <Col xs={24} lg={10}>
           <Flex vertical gap={12}>
-            <Card size="small" title={<span style={{ color: "#dc2626" }}>{`${t("web.daily.overdue")} (${x.atrasadas.length})`}</span>}>
+            <Card size="small" title={<span style={{ color: "#dc2626" }}>{`${x.tituloAtraso()} (${x.atrasadas.length})`}</span>}>
               <Table<Tarefa>
                 size="small"
                 rowKey="tarefa_id"
@@ -498,7 +511,7 @@ function TrabalhoMobile({ x }: { x: T }) {
 
       <Cabecalho>
         <span style={{ color: "#dc2626" }}>
-          {t("web.daily.overdue")} ({x.atrasadas.length})
+          {x.tituloAtraso()} ({x.atrasadas.length})
         </span>
       </Cabecalho>
       <List>

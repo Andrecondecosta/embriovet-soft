@@ -37,6 +37,7 @@ export interface GaranhaoStock {
   lotes: number;
   donos: number;
   no_seletor: boolean;
+  pouco?: boolean;
 }
 
 export interface Ligacoes {
@@ -122,8 +123,11 @@ export interface LoteCampos {
 export type LoteNovo = LoteCampos & { palhetas: number };
 export type LoteEdicao = LoteCampos & { palhetas_produzidas: number; existencia_atual: number; existencia_original?: number };
 
-export const useGaranhoesStock = () =>
-  useQuery({ queryKey: ["stock", "garanhoes"], queryFn: () => api<GaranhaoStock[]>("/stock/garanhoes") });
+export const useGaranhoesStock = (incluirVazios = false) =>
+  useQuery({
+    queryKey: ["stock", "garanhoes", incluirVazios],
+    queryFn: () => api<GaranhaoStock[]>(`/stock/garanhoes${incluirVazios ? "?incluir_vazios=true" : ""}`),
+  });
 
 export function useLotes(f: LotesFiltro | null) {
   return useQuery({

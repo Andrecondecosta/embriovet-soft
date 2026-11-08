@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Input, Table, Typography } from "antd";
+import { Alert, Input, Table, Tag, Typography } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
-import { DotLoading, ErrorBlock, List, SearchBar } from "antd-mobile";
+import { DotLoading, ErrorBlock, List, SearchBar, Tag as MTag } from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useErrorMessage } from "../../components/errors";
@@ -16,12 +16,14 @@ export function GaranhoesTab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
-  const { data, isPending, isError, error } = useGaranhoesStock();
+  // Também os que já estão a zero (é deles que se tem de encomendar).
+  const { data, isPending, isError, error } = useGaranhoesStock(true);
   const [pesquisa, setPesquisa] = useState("");
 
   const lista = useMemo(() => {
     const q = pesquisa.trim().toLowerCase();
-    return (data ?? []).filter((g) => !q || g.garanhao.toLowerCase().includes(q));
+    // Os com menos palhetas primeiro.
+    return (data ?? []).filter((g) => !q || g.garanhao.toLowerCase().includes(q)).sort((a, b) => a.palhetas - b.palhetas);
   }, [data, pesquisa]);
 
   const abrir = (g: GaranhaoStock) => navigate(`/stock-semen/lotes?garanhao=${encodeURIComponent(g.garanhao)}`);
@@ -49,10 +51,15 @@ export function GaranhoesTab() {
                 key={`${g.animal_id}-${g.garanhao}`}
                 arrow
                 onClick={() => abrir(g)}
-                description={`${g.lotes} ${t("web.stock.kpi.lotes").toLowerCase()} · ${g.donos} ${t("web.stock.col.donos").toLowerCase()}`}
+                description={`${t("web.stock.n_lots", { count: g.lotes })} · ${t("web.stock.n_owners", { count: g.donos })}`}
                 extra={`${g.palhetas} ${t("label.straws")}`}
               >
                 {g.garanhao}
+                {g.pouco && (
+                  <MTag color="danger" fill="outline" style={{ marginLeft: 6 }}>
+                    {t("web.stock.low")}
+                  </MTag>
+                )}
               </List.Item>
             ))
           )}
@@ -89,13 +96,23 @@ export function GaranhoesTab() {
           {
             title: t("label.garanhao"),
             dataIndex: "garanhao",
-            render: (v) => <Typography.Text strong>{v}</Typography.Text>,
+            render: (v, g) => (
+              <>
+                <Typography.Text strong>{v}</Typography.Text>
+                {g.pouco && (
+                  <Tag color="red" style={{ marginLeft: 8 }}>
+                    {t("web.stock.low")}
+                  </Tag>
+                )}
+              </>
+            ),
             sorter: (a, b) => a.garanhao.localeCompare(b.garanhao),
           },
           {
             title: t("web.stock.kpi.palhetas"),
             dataIndex: "palhetas",
             align: "right",
+            defaultSortOrder: "ascend",
             sorter: (a, b) => a.palhetas - b.palhetas,
           },
           {

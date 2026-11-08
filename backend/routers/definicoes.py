@@ -171,7 +171,7 @@ def mudar_uso_alojamentos(d: UsoAlojamentosIn, _user: dict = Depends(require_niv
 def listar_alojamentos(_user: dict = Depends(get_current_user)):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT {', '.join(_COL_ALOJ)} FROM alojamentos ORDER BY ativo DESC, tipo, nome")
+            cur.execute(rf"SELECT {', '.join(_COL_ALOJ)} FROM alojamentos ORDER BY ativo DESC, tipo, LOWER(regexp_replace(nome, '\d+', '', 'g')), NULLIF(regexp_replace(nome, '\D', '', 'g'), '')::bigint NULLS FIRST, nome")
             return [dict(zip(_COL_ALOJ, r)) for r in cur.fetchall()]
 
 

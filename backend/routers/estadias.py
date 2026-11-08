@@ -177,7 +177,7 @@ def opcoes(_user: dict = Depends(get_current_user)):
             cur.execute(
                 """SELECT a.id, a.nome, a.tipo, a.capacidade,
                           (SELECT count(*) FROM estadias e WHERE e.alojamento_id = a.id AND e.data_saida IS NULL)
-                   FROM alojamentos a WHERE a.ativo = TRUE ORDER BY a.tipo, LOWER(a.nome)"""
+                   FROM alojamentos a WHERE a.ativo = TRUE ORDER BY a.tipo, LOWER(regexp_replace(a.nome, '\\d+', '', 'g')), NULLIF(regexp_replace(a.nome, '\\D', '', 'g'), '')::bigint NULLS FIRST, a.nome"""
             )
             aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3], "ocupados": r[4]} for r in cur.fetchall()]
     return {"donos": donos, "alojamentos": aloj, "motivos_por_tipo": MOTIVOS_POR_TIPO, "usar_alojamentos": usar_alojamentos()}

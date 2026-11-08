@@ -15,7 +15,8 @@ function limpar(texto: string) {
 export function I18nProvider({ messages, children }: { messages: Record<string, string>; children: ReactNode }) {
   const t = useCallback<TFn>(
     (key, params) => {
-      let texto = messages[key] ?? key;
+      // Singular: se houver "<chave>_one" e count = 1, usa essa ("1 lote", não "1 lotes").
+      let texto = (params?.count === 1 ? messages[`${key}_one`] : undefined) ?? messages[key] ?? key;
       if (params) for (const [k, v] of Object.entries(params)) texto = texto.replaceAll(`{${k}}`, String(v));
       return limpar(texto);
     },

@@ -441,7 +441,7 @@ function InseminacaoDesktop({ x }: { x: X }) {
                   <Button type="link" icon={<PlusOutlined />} onClick={() => x.setModal(true)} style={{ paddingInline: 0 }}>
                     {t("btn.add_line")}
                   </Button>
-                  <Typography.Text strong>{t("web.insem.total", { n: x.total, l: x.linhas.length })}</Typography.Text>
+                  <Typography.Text strong>{t("web.insem.total", { n: x.total, l: x.linhas.length, count: x.linhas.length })}</Typography.Text>
                 </Flex>
               </Space>
             )}
@@ -621,7 +621,7 @@ function InseminacaoMobile({ x }: { x: X }) {
         ))}
         <List.Item
           onClick={() => x.setModal(true)}
-          extra={x.linhas.length > 0 && <b>{t("web.insem.total", { n: x.total, l: x.linhas.length })}</b>}
+          extra={x.linhas.length > 0 && <b>{t("web.insem.total", { n: x.total, l: x.linhas.length, count: x.linhas.length })}</b>}
         >
           <span style={{ color: "var(--adm-color-primary)" }}>
             <AddOutline /> {x.linhas.length ? t("btn.add_line") : t("btn.select_lots")}

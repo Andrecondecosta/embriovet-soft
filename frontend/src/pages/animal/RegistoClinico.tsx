@@ -1084,8 +1084,8 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
         notifySuccess(
           [
             t("web.animal.record_saved"),
-            x.tarefas_concluidas > 0 && t("web.registo.tasks_done", { n: x.tarefas_concluidas }),
-            x.tarefas_criadas > 0 && t("web.registo.tasks_created", { n: x.tarefas_criadas }),
+            x.tarefas_concluidas > 0 && t("web.registo.tasks_done", { n: x.tarefas_concluidas, count: x.tarefas_concluidas }),
+            x.tarefas_criadas > 0 && t("web.registo.tasks_created", { n: x.tarefas_criadas, count: x.tarefas_criadas }),
             x.resultado === "registado" && t("web.registo.dg_saved"),
             x.resultado === "sem_inseminacao" && t("web.registo.dg_no_insemination"),
           ]
