@@ -11,31 +11,34 @@ from __future__ import annotations
 
 from backend import config  # noqa: F401 — tem de vir antes de `modules.*`
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import FRONTEND_DIST
+from backend.deps import pode_escrever
 from backend.routers import animais, auth, registo_clinico, dashboard, definicoes, estadias, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
 
 app = FastAPI(title="EquiCore API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
+# Escrever/apagar exige Gestor em tudo menos login e público (backend/deps.py).
+ESCRITA = [Depends(pode_escrever)]
 app.include_router(public.router)
 app.include_router(auth.router)
-app.include_router(owners.router)
-app.include_router(opcoes.router)
-app.include_router(stock.router)
-app.include_router(transferencias.router)
-app.include_router(mapa.router)
-app.include_router(definicoes.router)
-app.include_router(dashboard.router)
-app.include_router(relatorios.router)
-app.include_router(estadias.router)
-app.include_router(trabalho.router)
-app.include_router(animais.router)
-app.include_router(registo_clinico.router)
-app.include_router(inseminacoes.router)
-app.include_router(importar.router)
+app.include_router(owners.router, dependencies=ESCRITA)
+app.include_router(opcoes.router, dependencies=ESCRITA)
+app.include_router(stock.router, dependencies=ESCRITA)
+app.include_router(transferencias.router, dependencies=ESCRITA)
+app.include_router(mapa.router, dependencies=ESCRITA)
+app.include_router(definicoes.router, dependencies=ESCRITA)
+app.include_router(dashboard.router, dependencies=ESCRITA)
+app.include_router(relatorios.router, dependencies=ESCRITA)
+app.include_router(estadias.router, dependencies=ESCRITA)
+app.include_router(trabalho.router, dependencies=ESCRITA)
+app.include_router(animais.router, dependencies=ESCRITA)
+app.include_router(registo_clinico.router, dependencies=ESCRITA)
+app.include_router(inseminacoes.router, dependencies=ESCRITA)
+app.include_router(importar.router, dependencies=ESCRITA)
 
 
 @app.get("/api/health")

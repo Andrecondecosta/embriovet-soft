@@ -28,7 +28,8 @@ python scripts/personalizar_carregamento.py || true
 # compilado (build command antigo, sem `bash render-build.sh`).
 if [ "${EQUICORE_APP:-}" != "streamlit" ] && [ -f frontend/dist/index.html ]; then
     echo "📦 A aplicar migrations..."
-    python scripts/aplicar_migracoes.py
+    # Se uma migração falhar, não arranca (a versão anterior continua no ar).
+    python scripts/aplicar_migracoes.py || exit 1
     echo "🎯 Iniciando EquiCore (app nova)..."
     exec uvicorn backend.main:app \
         --host 0.0.0.0 \

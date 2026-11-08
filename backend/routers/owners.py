@@ -16,7 +16,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, field_validator
 
-from backend.deps import get_current_user
+from backend.deps import get_current_user, require_nivel
 from modules.db import get_connection
 from modules.repositories.owner_repo import (
     adicionar_proprietario,
@@ -203,7 +203,7 @@ def _primeira_dependencia(owner_id: int):
     return None
 
 
-@router.delete("/{owner_id}")
+@router.delete("/{owner_id}", dependencies=[Depends(require_nivel("Administrador"))])
 def apagar(owner_id: int, _user: dict = Depends(get_current_user)):
     if not _obter(owner_id):
         raise _erro(404, "web.owners.error.not_found")

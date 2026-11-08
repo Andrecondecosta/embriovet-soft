@@ -31,7 +31,7 @@ def ctx():
     username = f"{P}{s}"
     _exec(
         "INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)"
-        " VALUES (%s, 'Teste', %s, 'Visualizador', TRUE, FALSE)",
+        " VALUES (%s, 'Teste', %s, 'Gestor', TRUE, FALSE)",
         (username, criar_hash_password("x123")),
     )
     c = TestClient(app)

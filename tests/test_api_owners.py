@@ -161,13 +161,24 @@ def test_paginacao(client):
     assert [o["id"] for o in p3["items"]] == ids[4:]
 
 
-def test_apagar(client):
+def _como_admin(utilizador):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE usuarios SET nivel = 'Administrador' WHERE id = %s", (utilizador["id"],))
+        conn.commit()
+
+
+def test_apagar(client, utilizador):
     owner_id = client.post("/api/owners", json={"nome": _nome()}).json()["id"]
+    # Apagar proprietários é só para Administrador.
+    assert client.delete(f"/api/owners/{owner_id}").status_code == 403
+    _como_admin(utilizador)
     assert client.delete(f"/api/owners/{owner_id}").status_code == 200
     assert client.get(f"/api/owners/{owner_id}").status_code == 404
 
 
-def test_nao_apaga_com_stock(client):
+def test_nao_apaga_com_stock(client, utilizador):
+    _como_admin(utilizador)
     owner_id = client.post("/api/owners", json={"nome": _nome()}).json()["id"]
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -217,3 +228,17 @@ def test_dono_de_eguas_nao_fica_inativo_sem_stock(client):
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM estoque_dono WHERE dono_id = %s", (de_semen,))
             conn.commit()
+
+
+def test_visualizador_so_consulta(client, utilizador):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE usuarios SET nivel = 'Visualizador' WHERE id = %s", (utilizador["id"],))
+        conn.commit()
+    assert client.get("/api/owners").status_code == 200
+    assert client.post("/api/owners", json={"nome": _nome()}).status_code == 403
+    assert client.post("/api/inseminacoes", json={}).status_code == 403
+    assert client.delete("/api/animais/1/registos/1").status_code == 403
+    assert client.post("/api/transferencias/anular", json={}).status_code == 403
+    # Pedidos só de leitura continuam a dar.
+    assert client.post("/api/trabalho/gerar").status_code == 200

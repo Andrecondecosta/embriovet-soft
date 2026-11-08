@@ -81,7 +81,7 @@ def obter_marca(_user: dict = Depends(get_current_user)):
     return _marca()
 
 
-@router.put("/marca")
+@router.put("/marca", dependencies=[Depends(require_nivel("Administrador"))])
 def gravar_marca(dados: MarcaIn, _user: dict = Depends(get_current_user)):
     if not dados.company_name:
         raise _erro(422, "web.settings.error.company_required")
@@ -96,7 +96,7 @@ def gravar_marca(dados: MarcaIn, _user: dict = Depends(get_current_user)):
     return _marca()
 
 
-@router.post("/marca/repor")
+@router.post("/marca/repor", dependencies=[Depends(require_nivel("Administrador"))])
 def repor_marca(_user: dict = Depends(get_current_user)):
     """"Repor predefinições" da app atual: nome "Sistema", sem logótipo,
     português e a cor de origem."""

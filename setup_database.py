@@ -216,12 +216,17 @@ def criar_tabelas():
         import bcrypt
         senha_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
+        # Só numa instalação nova (sem nenhum utilizador): o start.sh corre
+        # isto em cada deploy no Render, e recriar 'admin'/'admin123' depois
+        # de o administrador lhe ter mudado o nome abria uma porta.
+        cur.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE")
         cur.execute("""
-            INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo)
-            VALUES ('admin', 'Administrador', %s, 'Administrador', TRUE)
-            ON CONFLICT (username) DO NOTHING
+            INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password)
+            SELECT 'admin', 'Administrador', %s, 'Administrador', TRUE, TRUE
+            WHERE NOT EXISTS (SELECT 1 FROM usuarios)
         """, (senha_hash,))
-        print("✅ Usuário admin criado (username: admin, password: admin123)")
+        if cur.rowcount:
+            print("✅ Usuário admin criado (username: admin, password: admin123) — tem de mudar no 1.º login")
         
         conn.commit()
         cur.close()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 
 from backend.config import SESSION_COOKIE
 from modules.db import get_connection
@@ -71,3 +71,23 @@ def require_nivel(nivel_minimo: str):
         return user
 
     return _dep
+
+
+# Pedidos POST que só leem (exportar, gerar tarefas automáticas ao abrir,
+# ler/validar um ficheiro a importar): um Visualizador pode fazê-los.
+POST_SO_LEITURA = {
+    "/api/relatorios/exportar",
+    "/api/trabalho/gerar",
+    "/api/importar/ler",
+    "/api/importar/validar",
+    "/api/importar/entidades",
+}
+
+
+def pode_escrever(request: Request, user: dict = Depends(get_current_user)) -> dict:
+    """Em todos os routers (menos login e público): escrever ou apagar exige
+    Gestor. O Visualizador só consulta."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path not in POST_SO_LEITURA:
+        if NIVEIS.get(user["nivel"], 0) < NIVEIS["Gestor"]:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
+    return user

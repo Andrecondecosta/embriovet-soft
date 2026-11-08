@@ -1708,6 +1708,8 @@ for _k, *_txt in [
      "Diagnostic de gestation seulement à partir de J+{dias} après l’insémination.",
      "Trächtigkeitsuntersuchung erst ab Tag {dias} nach der Besamung."),
     ("web.task.inseminar", "Inseminar", "Inseminate", "Inséminer", "Besamen"),
+    ("forbidden", "O seu nível de acesso não permite esta ação.", "Your access level does not allow this action.",
+     "Votre niveau d’accès ne permet pas cette action.", "Ihre Zugriffsstufe erlaubt diese Aktion nicht."),
     ("web.insem.pregnant_title", "Égua dada como gestante", "Mare recorded as pregnant", "Jument enregistrée gestante", "Stute als trächtig erfasst"),
     ("web.insem.confirm_pregnant", "Esta égua está dada como gestante (inseminação de {data}). Inseminar mesmo assim? Essa gestação passa a «Falhou».",
      "This mare is recorded as pregnant (insemination of {data}). Inseminate anyway? That pregnancy becomes “Failed”.",

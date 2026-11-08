@@ -70,7 +70,9 @@ def gestor():
 
 # ── Marca e idioma ──────────────────────────────────────────────────────────
 
-def test_marca_grava_e_repoe(gestor):
+def test_marca_grava_e_repoe(admin, gestor):
+    assert gestor.put("/api/definicoes/marca", json={"company_name": "X"}).status_code == 403
+    gestor = admin["c"]  # mudar a marca é só para Administrador
     r = gestor.put("/api/definicoes/marca", json={"company_name": "  Clínica X ", "primary_color": "#123abc", "language": "en"})
     assert r.status_code == 200
     assert r.json()["company_name"] == "Clínica X"
@@ -91,13 +93,15 @@ def test_marca_grava_e_repoe(gestor):
         ({"company_name": "X", "logo_base64": "data:text/html;base64,AAAA"}, "web.settings.error.logo_type"),
     ],
 )
-def test_marca_validacoes(gestor, dados, codigo):
+def test_marca_validacoes(admin, dados, codigo):
+    gestor = admin["c"]
     r = gestor.put("/api/definicoes/marca", json=dados)
     assert r.status_code == 422
     assert r.json()["detail"]["code"] == codigo
 
 
-def test_marca_logo_grande_demais(gestor):
+def test_marca_logo_grande_demais(admin):
+    gestor = admin["c"]
     logo = "data:image/png;base64," + "A" * 1_600_000
     r = gestor.put("/api/definicoes/marca", json={"company_name": "X", "logo_base64": logo})
     assert r.json()["detail"]["code"] == "web.settings.error.logo_size"
