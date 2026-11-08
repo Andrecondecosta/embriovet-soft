@@ -509,7 +509,7 @@ def registar_diagnostico(
 ) -> int:
     """Guarda um diagnóstico de gestação na sua etapa (D+14/D+28/D+45),
     com a data e hora reais do exame. Não substitui os anteriores: cada
-    exame fica numa linha (para o estudo de 2027)."""
+    exame fica numa linha."""
     if resultado not in RESULTADOS_DG:
         raise InseminacaoError(f"resultado de diagnóstico inválido: '{resultado}'")
     with get_connection() as conn:

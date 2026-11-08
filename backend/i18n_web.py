@@ -1626,7 +1626,7 @@ for _k, *_txt in [
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.reports.{_k}"] = _v
 
-# ── Dados para o estudo de 2027: hora da inseminação, ovulação, DG por etapa ──
+# ── Hora da inseminação, ovulação, DG por etapa ──
 for _k, *_txt in [
     ("web.insem.time", "Hora", "Time", "Heure", "Uhrzeit"),
     ("web.insem.error.time_required", "Indique a hora da inseminação.", "Enter the insemination time.",
@@ -1684,17 +1684,11 @@ for _k, *_txt in [
      "The exam date can't be in the future or before the insemination.",
      "La date de l’examen ne peut être ni future ni antérieure à l’insémination.",
      "Das Untersuchungsdatum darf nicht in der Zukunft oder vor der Besamung liegen."),
-    ("web.study.button", "Dados para estudo", "Study data", "Données d’étude", "Studiendaten"),
-    ("web.study.title", "Dados para estudo", "Study data", "Données d’étude", "Studiendaten"),
-    ("web.study.help", "Exames, inseminações (por lote) e diagnósticos por etapa, com códigos em vez de nomes. Inclui uma folha de legenda.",
-     "Exams, inseminations (per lot) and diagnoses by stage, with codes instead of names. Includes a legend sheet.",
-     "Examens, inséminations (par lot) et diagnostics par étape, avec des codes au lieu des noms. Avec une feuille de légende.",
-     "Untersuchungen, Besamungen (pro Charge) und Diagnosen pro Etappe, mit Codes statt Namen. Mit Legende."),
     ("web.stock.warn_external_no_quality",
-     "Lote de fora sem concentração e/ou motilidade: preencha-as quando as souber (fazem falta para o estudo).",
-     "External lot without concentration and/or motility: fill them in when known (needed for the study).",
-     "Lot externe sans concentration et/ou motilité : complétez-les dès que possible (nécessaires pour l’étude).",
-     "Externe Charge ohne Konzentration und/oder Motilität: bitte nachtragen (für die Studie nötig)."),
+     "Lote de fora sem concentração e/ou motilidade: preencha-as quando as souber.",
+     "External lot without concentration and/or motility: fill them in when known.",
+     "Lot externe sans concentration et/ou motilité : complétez-les dès que possible.",
+     "Externe Charge ohne Konzentration und/oder Motilität: bitte nachtragen."),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v

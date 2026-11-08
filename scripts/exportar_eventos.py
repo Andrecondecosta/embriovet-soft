@@ -1,4 +1,4 @@
-"""Exportação de eventos para o estudo da época de 2027 (ciclo inseminado).
+"""Exportação de eventos reprodutivos — corre fora da app (não há botão).
 
 Uma folha por tipo de evento — éguas, exames do diário clínico,
 inseminações (uma linha por lote) e diagnósticos de gestação por etapa —
@@ -9,13 +9,22 @@ Pseudonimizado: em vez de nomes vão códigos estáveis (E = égua,
 G = garanhão, L = lote, I = inseminação, R = registo clínico,
 V = veterinário/utilizador). Só a clínica, com a app, consegue voltar
 dos códigos aos nomes.
+
+Uso (liga-se à base da `DATABASE_URL`):
+    python scripts/exportar_eventos.py [--inicio AAAA-MM-DD] [--fim AAAA-MM-DD] [ficheiro.xlsx]
 """
 
 from __future__ import annotations
 
+import argparse
+import sys
 from datetime import date, datetime, time
+from pathlib import Path
 
-from modules.db import get_connection
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from modules.db import get_connection  # noqa: E402
 
 EDEMA = ("0", "+", "++", "+++")
 LIQUIDO = ("0", "<2 cm", "+", "++", "+++")
@@ -52,7 +61,7 @@ def _ovario(ov: dict | None) -> list:
     return [len(fol), max((f.get("tamanho") or 0) for f in fol) if fol else None, lista or None]
 
 
-def tabelas_estudo(inicio: date | None = None, fim: date | None = None) -> list[tuple]:
+def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list[tuple]:
     """(nome da folha, cabeçalhos, linhas) para `gerar_excel` / `gerar_csv`."""
     entre = "BETWEEN COALESCE(%s, '-infinity'::date) AND COALESCE(%s, 'infinity'::date)"
     with get_connection() as conn:
@@ -169,3 +178,15 @@ def tabelas_estudo(inicio: date | None = None, fim: date | None = None) -> list[
         ],
     )
     return [t_eguas, t_exames, t_insem, t_diag, legenda]
+
+
+if __name__ == "__main__":
+    from modules.relatorio_export import gerar_excel
+
+    ap = argparse.ArgumentParser(description="Exporta os eventos reprodutivos para Excel.")
+    ap.add_argument("--inicio", type=date.fromisoformat)
+    ap.add_argument("--fim", type=date.fromisoformat)
+    ap.add_argument("ficheiro", nargs="?", default=f"eventos_{datetime.now():%Y%m%d}.xlsx")
+    a = ap.parse_args()
+    Path(a.ficheiro).write_bytes(gerar_excel("EquiCore — eventos reprodutivos", [], tabelas_eventos(a.inicio, a.fim)))
+    print(f"✅ {a.ficheiro}")

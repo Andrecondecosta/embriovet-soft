@@ -1,4 +1,4 @@
--- 034: dados para o estudo da época de 2027 (ciclo inseminado).
+-- 034: hora da inseminação, diagnósticos por etapa e anti-duplicados.
 -- Só acrescenta: nenhuma coluna ou tabela existente muda.
 
 -- Hora da inseminação (as antigas ficam sem hora).

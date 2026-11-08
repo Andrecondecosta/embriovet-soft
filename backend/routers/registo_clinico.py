@@ -139,7 +139,7 @@ SimNao = Literal["sim", "nao", "nao_avaliado"]
 
 class Ovulacao(BaseModel):
     """Exame de confirmação de ovulação (D+1): "não avaliado" é diferente
-    de "não" — para o estudo de 2027."""
+    de "não"."""
     ovulacao: SimNao
     fh: SimNao  # folículo hemorrágico anovulatório
 
