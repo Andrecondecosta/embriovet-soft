@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Col, ColorPicker, Flex, Input, Radio, Row, Space, Spin, Typography } from "antd";
+import { Alert, Button, Col, ColorPicker, Flex, Input, Radio, Row, Select, Space, Spin, Typography } from "antd";
 import { DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import { Button as MButton, CheckList, Dialog, DotLoading, Input as MInput, List } from "antd-mobile";
 
@@ -7,7 +7,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
 import { Cabecalho } from "../../components/mobile";
-import { IDIOMAS, useGravarMarca, useMarca, useReporMarca, type Marca } from "./api";
+import { FUSOS, IDIOMAS, useGravarMarca, useMarca, useReporMarca, type Marca } from "./api";
 
 /** Cores para escolher depressa (a primeira é a de origem). */
 const CORES = ["#E85D4A", "#1677FF", "#13A8A8", "#52C41A", "#FA8C16", "#722ED1", "#EB2F96", "#262626"];
@@ -350,6 +350,18 @@ export function IdiomaTab() {
       notifyError(err);
     }
   };
+  // Fuso horário da clínica: "hoje" e as horas automáticas seguem-no.
+  const escolherFuso = async (fuso_horario: string) => {
+    if (!marca.data || fuso_horario === marca.data.fuso_horario) return;
+    try {
+      await gravar.mutateAsync({ ...marca.data, fuso_horario });
+      notifySuccess(t("web.settings.timezone.updated"));
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+  const fusoAtual = marca.data?.fuso_horario ?? "Europe/Lisbon";
+  const fusos = FUSOS.includes(fusoAtual) ? FUSOS : [fusoAtual, ...FUSOS];
 
   if (!marca.data) return isMobile ? <DotLoading /> : <Spin style={{ display: "block", margin: 32 }} />;
 
@@ -361,6 +373,16 @@ export function IdiomaTab() {
           {IDIOMAS.map((i) => (
             <CheckList.Item key={i.value} value={i.value} disabled={gravar.isPending}>
               {i.label}
+            </CheckList.Item>
+          ))}
+        </CheckList>
+        <div style={{ padding: "16px 12px 10px", color: "#999", fontSize: 12 }}>
+          {t("web.settings.timezone")} · {t("web.settings.timezone.help")}
+        </div>
+        <CheckList value={[fusoAtual]} onChange={(v) => v[0] && escolherFuso(String(v[0]))}>
+          {fusos.map((f) => (
+            <CheckList.Item key={f} value={f} disabled={gravar.isPending}>
+              {f.replace("_", " ")}
             </CheckList.Item>
           ))}
         </CheckList>
@@ -376,6 +398,18 @@ export function IdiomaTab() {
         disabled={gravar.isPending}
         options={IDIOMAS.map((i) => ({ value: i.value, label: i.label }))}
         style={{ display: "flex", flexDirection: "column", gap: 8 }}
+      />
+      <Typography.Text strong style={{ marginTop: 12 }}>
+        {t("web.settings.timezone")}
+      </Typography.Text>
+      <Typography.Text type="secondary">{t("web.settings.timezone.help")}</Typography.Text>
+      <Select
+        showSearch
+        style={{ width: 280 }}
+        value={fusoAtual}
+        onChange={escolherFuso}
+        disabled={gravar.isPending}
+        options={fusos.map((f) => ({ value: f, label: f.replace("_", " ") }))}
       />
     </Space>
   );

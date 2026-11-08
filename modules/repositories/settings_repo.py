@@ -183,3 +183,24 @@ def guardar_usar_alojamentos(valor: bool) -> None:
         with conn.cursor() as cur:
             cur.execute("UPDATE app_settings SET usar_alojamentos = %s, updated_at = NOW()", (bool(valor),))
         conn.commit()
+
+
+def guardar_fuso_horario(fuso: str) -> None:
+    from modules.db import esquecer_fuso
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE app_settings SET fuso_horario = %s, updated_at = NOW()", (fuso,))
+        conn.commit()
+    esquecer_fuso()
+
+
+def fuso_horario() -> str:
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT fuso_horario FROM app_settings ORDER BY id LIMIT 1")
+                row = cur.fetchone()
+        return (row and row[0]) or "Europe/Lisbon"
+    except Exception:
+        return "Europe/Lisbon"

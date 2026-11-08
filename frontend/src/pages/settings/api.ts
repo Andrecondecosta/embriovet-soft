@@ -13,7 +13,26 @@ export const IDIOMAS = [
   { value: "de", label: "Deutsch" },
 ] as const;
 
-export type Marca = PublicSettings;
+export type Marca = PublicSettings & { fuso_horario?: string };
+
+/** Fusos horários mais prováveis (IANA). "Hoje" na app segue o escolhido. */
+export const FUSOS = [
+  "Europe/Lisbon",
+  "Atlantic/Madeira",
+  "Atlantic/Azores",
+  "Europe/London",
+  "Europe/Madrid",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "Europe/Berlin",
+  "Europe/Rome",
+  "Europe/Zurich",
+  "America/Sao_Paulo",
+  "America/New_York",
+  "Africa/Luanda",
+  "Africa/Maputo",
+  "UTC",
+];
 
 export const useMarca = () => useQuery({ queryKey: ["definicoes", "marca"], queryFn: () => api<Marca>("/definicoes/marca") });
 

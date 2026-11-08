@@ -184,3 +184,27 @@ def test_backup(admin):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/zip"
     assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+
+
+def test_fuso_horario(admin):
+    import os
+
+    from modules.db import get_connection
+
+    c = admin["c"]
+    marca = c.get("/api/definicoes/marca").json()
+    assert marca["fuso_horario"] == "Europe/Lisbon"
+    assert c.put("/api/definicoes/marca", json={**marca, "fuso_horario": "Marte/Base"}).json()["detail"]["code"] == "web.settings.error.timezone_invalid"
+    try:
+        assert c.put("/api/definicoes/marca", json={**marca, "fuso_horario": "America/Sao_Paulo"}).status_code == 200
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SHOW TimeZone")
+                assert cur.fetchone()[0] == "America/Sao_Paulo"
+        assert os.environ["TZ"] == "America/Sao_Paulo"
+    finally:
+        c.put("/api/definicoes/marca", json={**marca, "fuso_horario": "Europe/Lisbon"})
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SHOW TimeZone")
+            assert cur.fetchone()[0] == "Europe/Lisbon"

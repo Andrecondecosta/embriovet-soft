@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from zoneinfo import available_timezones
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -20,7 +21,14 @@ from pydantic import BaseModel, field_validator
 from backend.serial import anexo
 from backend.deps import get_current_user, require_nivel
 from modules.db import get_connection
-from modules.repositories.settings_repo import get_app_settings, guardar_usar_alojamentos, update_branding_settings, usar_alojamentos
+from modules.repositories.settings_repo import (
+    fuso_horario,
+    get_app_settings,
+    guardar_fuso_horario,
+    guardar_usar_alojamentos,
+    update_branding_settings,
+    usar_alojamentos,
+)
 from modules.services.auth_service import (
     adicionar_usuario,
     alterar_password,
@@ -59,6 +67,8 @@ class MarcaIn(BaseModel):
     logo_base64: str | None = None
     primary_color: str | None = None
     language: Literal["pt-PT", "en", "fr", "de"] = "pt-PT"
+    # Fuso horário da clínica (IANA, ex.: "Europe/Lisbon"); vazio = não mexe.
+    fuso_horario: str | None = None
 
     @field_validator("company_name", "logo_base64", "primary_color", mode="before")
     @classmethod
@@ -73,6 +83,7 @@ def _marca() -> dict:
         "logo_base64": s.get("logo_base64"),
         "primary_color": s.get("primary_color") or DEFAULT_PRIMARY_COLOR,
         "language": s.get("language") or "pt-PT",
+        "fuso_horario": fuso_horario(),
     }
 
 
@@ -92,7 +103,11 @@ def gravar_marca(dados: MarcaIn, _user: dict = Depends(get_current_user)):
             raise _erro(422, "web.settings.error.logo_type")
         if len(dados.logo_base64) > LOGO_MAX:
             raise _erro(422, "web.settings.error.logo_size")
+    if dados.fuso_horario and dados.fuso_horario not in available_timezones():
+        raise _erro(422, "web.settings.error.timezone_invalid")
     update_branding_settings(dados.company_name, dados.logo_base64, dados.language, dados.primary_color)
+    if dados.fuso_horario:
+        guardar_fuso_horario(dados.fuso_horario)
     return _marca()
 
 

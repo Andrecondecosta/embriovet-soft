@@ -152,6 +152,45 @@ def _obter_ligacao_valida(pool, tentativas: int = 3):
     return pool.getconn()
 
 
+# ── Fuso horário da clínica (Definições) ────────────────────────────────
+# "Hoje" (CURRENT_DATE, date.today()) e as horas gravadas automaticamente
+# (NOW()) seguem o fuso escolhido — senão, com o servidor em UTC, entre a
+# meia-noite e a 1 h (horário de verão em Portugal) a app julgava que ainda
+# era o dia anterior. Lido no máximo de minuto a minuto.
+FUSO_PADRAO = "Europe/Lisbon"
+_FUSO = {"valor": None, "lido": 0.0}
+
+
+def _aplicar_fuso_processo(fuso: str) -> None:
+    if os.environ.get("TZ") != fuso:
+        os.environ["TZ"] = fuso
+        time.tzset()
+
+
+def esquecer_fuso() -> None:
+    """Depois de mudar o fuso nas Definições: volta a lê-lo já."""
+    _FUSO["lido"] = 0.0
+
+
+def _preparar_fuso(conn) -> None:
+    if _FUSO["valor"] is None or time.monotonic() - _FUSO["lido"] > 60:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT fuso_horario FROM app_settings ORDER BY id LIMIT 1")
+                row = cur.fetchone()
+            fuso = (row and row[0]) or FUSO_PADRAO
+        except psycopg2.Error:  # coluna ainda por criar (migração por aplicar)
+            fuso = FUSO_PADRAO
+        conn.rollback()
+        _FUSO.update(valor=fuso, lido=time.monotonic())
+        _aplicar_fuso_processo(fuso)
+    fuso = _FUSO["valor"]
+    if conn.info.parameter_status("TimeZone") != fuso:
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('TimeZone', %s, false)", (fuso,))
+        conn.commit()
+
+
 @contextmanager
 def get_connection():
     """Context manager para gestão segura de conexões."""
@@ -159,6 +198,7 @@ def get_connection():
     conn = None
     try:
         conn = _obter_ligacao_valida(pool)
+        _preparar_fuso(conn)
         yield conn
     except Exception as e:
         # Se a ligação morreu a meio, o rollback também falha — não pode
