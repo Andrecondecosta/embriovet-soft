@@ -22,7 +22,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from modules.mapa_export import texto_celula, texto_pdf
+from modules.mapa_export import sem_formula, texto_celula, texto_pdf
 
 # (título, cabeçalhos, linhas[, índices das linhas de total, a negrito])
 Tabela = tuple
@@ -49,7 +49,7 @@ def gerar_csv(titulo: str, kpis: list[tuple[str, int]], tabelas: list[Tabela]) -
         w.writerow([])
         w.writerow([nome])
         w.writerow(cabecalhos)
-        w.writerows([[texto_celula(v) for v in linha] for linha in linhas])
+        w.writerows([[sem_formula(texto_celula(v)) for v in linha] for linha in linhas])
     # BOM para o Excel abrir os acentos bem.
     return ("﻿" + saida.getvalue()).encode("utf-8")
 
@@ -89,7 +89,7 @@ def gerar_excel(titulo: str, kpis: list[tuple[str, int]], tabelas: list[Tabela])
             cel.border = borda
             cel.alignment = Alignment(vertical="center", wrap_text=True)
         for i, linha in enumerate(linhas):
-            ws.append([v if isinstance(v, (int, float)) else (texto_celula(v) or None) for v in linha])
+            ws.append([v if isinstance(v, (int, float)) else (sem_formula(texto_celula(v)) or None) for v in linha])
             if i in destaques:
                 for cel in ws[ws.max_row]:
                     cel.font = Font(bold=True)

@@ -56,6 +56,18 @@ def texto_celula(valor) -> str:
     return str(valor).strip()
 
 
+_NUMERO = re.compile(r"-?\d+([.,]\d+)?")
+
+
+def sem_formula(valor):
+    """Texto vindo de quem usa a app (nome, observação) que comece por
+    = + - @ abria como fórmula no Excel/LibreOffice: leva um apóstrofo à
+    frente. Números (ex.: "-5") ficam como estão."""
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@") and not _NUMERO.fullmatch(valor):
+        return "'" + valor
+    return valor
+
+
 def texto_pdf(valor) -> str:
     """Texto para um `Paragraph` do reportlab, que interpreta marcação
     XML — sem escapar, um "&" ou "<" num nome partia a geração do PDF."""
@@ -244,7 +256,7 @@ def _escrever_folha(ws, linhas: pd.DataFrame, com_contentor: bool):
             elif col in {"canister", "andar", "palhetas", "motilidade", "concentracao"}:
                 valores.append(int(v))
             else:
-                valores.append(texto_celula(v))
+                valores.append(sem_formula(texto_celula(v)))
         ws.append(valores)
 
     if not linhas.empty:

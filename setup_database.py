@@ -45,7 +45,7 @@ def criar_tabelas():
             CREATE TABLE IF NOT EXISTS estoque_dono (
                 id SERIAL PRIMARY KEY,
                 garanhao VARCHAR(255) NOT NULL,
-                dono_id INTEGER REFERENCES dono(id) ON DELETE CASCADE,
+                dono_id INTEGER REFERENCES dono(id) ON DELETE RESTRICT,
                 data_embriovet VARCHAR(100),
                 origem_externa VARCHAR(255),
                 palhetas_produzidas INTEGER DEFAULT 0,

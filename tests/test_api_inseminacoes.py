@@ -226,7 +226,7 @@ def test_primeiro_dg_feito_tarde_e_d14_e_agenda_confirmacoes(ctx):
 
 
 def test_inconclusivo_nao_faz_a_etapa_e_d45_positivo_fecha(ctx):
-    b = _inseminar(ctx, 30)
+    b = _inseminar(ctx, 42)
     assert _resultado(ctx, b, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
     assert _resultado(ctx, b, "sem_exame").status_code == 200  # D+28 sem exame
     assert _historial(ctx)[b]["etapa"] == "D+28"  # continua por fazer
@@ -299,3 +299,11 @@ def test_editar_mantem_quem_registou_e_quando(ctx):
     assert antes[0] == ctx["user"]
     editor = _um("SELECT utilizador_nome FROM historico_edicoes WHERE tabela_nome = 'inseminacoes' ORDER BY id DESC LIMIT 1")[0]
     assert editor == ctx["user"]
+
+
+def test_confirmacao_antes_do_dia_40_e_ainda_d28(ctx):
+    a = _inseminar(ctx, 32)
+    assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
+    assert _resultado(ctx, a, "positivo").status_code == 200  # D+28 (dia 32)
+    # Outra confirmação ao dia 32 é ainda D+28 (não D+45).
+    assert _historial(ctx)[a]["etapa"] == "D+28"

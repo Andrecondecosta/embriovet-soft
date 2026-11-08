@@ -61,6 +61,12 @@ def _ovario(ov: dict | None) -> list:
     return [len(fol), max((f.get("tamanho") or 0) for f in fol) if fol else None, lista or None]
 
 
+def _hora_inducao(d: dict):
+    """Data e hora da indução da ovulação escrita no registo (hCG/deslorelina)."""
+    v = ((d.get("TX") or {}).get("inducao") or {}).get("data")
+    return v.replace("T", " ")[:16] if v else None
+
+
 def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list[tuple]:
     """(nome da folha, cabeçalhos, linhas) para `gerar_excel` / `gerar_csv`."""
     entre = "BETWEEN COALESCE(%s, '-infinity'::date) AND COALESCE(%s, 'infinity'::date)"
@@ -111,6 +117,14 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
             diag = cur.fetchall()
 
             ids_eguas = sorted({r[2] for r in insem} | {r[1] for r in exames} | {r[1] for r in diag})
+            # Estadias (entrada/saída e como saiu): sem isto não se distingue
+            # "sem D+45 porque foi para casa" de "sem D+45 por falta de registo".
+            cur.execute(
+                """SELECT e.animal_id, e.id, e.data_entrada, e.data_saida, e.estado, e.motivo
+                   FROM estadias e WHERE e.animal_id = ANY(%s) ORDER BY e.animal_id, e.data_entrada""",
+                (ids_eguas,),
+            )
+            estadias = cur.fetchall()
             cur.execute("SELECT id, tipo, data_nascimento FROM animais WHERE id = ANY(%s) ORDER BY id", (ids_eguas,))
             eguas = cur.fetchall()
 
@@ -124,13 +138,15 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
     t_exames = (
         "Exames",
         ["egua", "registo", "data_hora", "oe_n_foliculos", "oe_maior_mm", "oe_foliculos", "od_n_foliculos", "od_maior_mm",
-         "od_foliculos", "edema", "liquido", "cervix", "ovulacao", "folic_hemorragico", "dg", "veterinario"],
+         "od_foliculos", "edema", "liquido", "cervix", "ovulacao", "folic_hemorragico", "dg", "inducao", "inducao_produto",
+         "veterinario"],
         [
             [
                 _cod("E", aid), _cod("R", rid), _txt(quando),
                 *_ovario(d.get("OE")), *_ovario(d.get("OD")),
                 (d.get("UT") or {}).get("edema"), (d.get("UT") or {}).get("liquido"), (d.get("CER") or {}).get("grau"),
-                (d.get("OVU") or {}).get("ovulacao"), (d.get("OVU") or {}).get("fh"), DG.get(d.get("DG")), vet(u),
+                (d.get("OVU") or {}).get("ovulacao"), (d.get("OVU") or {}).get("fh"), DG.get(d.get("DG")),
+                _hora_inducao(d), ((d.get("TX") or {}).get("inducao") or {}).get("produto"), vet(u),
             ]
             for rid, aid, quando, d, u in exames
             for d in [d or {}]
@@ -160,8 +176,8 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
         "Legenda",
         ["campo", "significado"],
         [
-            ["egua / garanhao / lote / inseminacao / registo / veterinario",
-             "Códigos em vez de nomes (E, G, L, I, R, V + número interno da app)."],
+            ["egua / garanhao / lote / inseminacao / registo / estadia / veterinario",
+             "Códigos em vez de nomes (E, G, L, I, R, S, V + número interno da app)."],
             ["oe_* / od_*", "Ovário esquerdo / direito. Vazio = ovário não examinado nesse registo; 0 folículos = examinado sem folículos."],
             ["*_maior_mm", "Diâmetro do maior folículo (mm). 9 significa «<10 mm» e 61 significa «>60 mm»."],
             ["*_foliculos", "Cada folículo: tamanho e achados (OV, FH, NS, MF, CL)."],
@@ -175,9 +191,16 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
             ["lote_origem", "interno (vazio ou «Não» na origem externa) ou externo."],
             ["resultado_atual", "Estado da inseminação na app hoje (pendente / gestacao_confirmada / falhou)."],
             ["Datas e horas", "AAAA-MM-DD e HH:MM. Inseminações antigas podem não ter hora."],
+            ["inducao / inducao_produto", "Indução da ovulação registada nesse exame: data e hora previstas da administração e produto."],
+            ["Estadias", "Entrada e saída de cada égua; estado_saida = gestante / alta / sem_resultado / transferido (vazio se ainda está)."],
         ],
     )
-    return [t_eguas, t_exames, t_insem, t_diag, legenda]
+    t_estadias = (
+        "Estadias",
+        ["egua", "estadia", "entrada", "saida", "estado_saida", "motivo"],
+        [[_cod("E", aid), _cod("S", eid), _txt(ent), _txt(sai), est if sai else None, mot] for aid, eid, ent, sai, est, mot in estadias],
+    )
+    return [t_eguas, t_exames, t_insem, t_diag, t_estadias, legenda]
 
 
 if __name__ == "__main__":

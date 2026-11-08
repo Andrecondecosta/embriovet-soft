@@ -23,7 +23,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from modules.mapa_export import texto_celula, texto_pdf
+from modules.mapa_export import sem_formula, texto_celula, texto_pdf
 
 # (coluna em `carregar_stock`, cabeçalho) — tabela "Lotes", com tudo.
 COLUNAS_LOTES = [
@@ -113,7 +113,7 @@ def tabelas_stock(stock: pd.DataFrame) -> dict:
 def gerar_csv_stock(stock: pd.DataFrame) -> bytes:
     """CSV com a tabela "Lotes" (todos os campos). `utf-8-sig` para o
     Excel abrir os acentos corretamente."""
-    return tabelas_stock(stock)["Lotes"].to_csv(index=False).encode("utf-8-sig")
+    return tabelas_stock(stock)["Lotes"].map(sem_formula).to_csv(index=False).encode("utf-8-sig")
 
 
 # ------------------------------------------------------------------
@@ -125,7 +125,7 @@ def _valor_excel(v):
         return None
     if hasattr(v, "__index__"):  # int / numpy int / Int64
         return int(v)
-    return v
+    return sem_formula(v)
 
 
 def gerar_excel_stock(stock: pd.DataFrame) -> bytes:

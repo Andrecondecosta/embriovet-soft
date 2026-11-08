@@ -11,15 +11,43 @@ from __future__ import annotations
 
 from backend import config  # noqa: F401 — tem de vir antes de `modules.*`
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import FRONTEND_DIST
+from backend.config import FRONTEND_DIST, IS_RENDER
 from backend.deps import pode_escrever
 from backend.routers import animais, auth, registo_clinico, dashboard, definicoes, estadias, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
 
-app = FastAPI(title="EquiCore API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+# A documentação da API só fora do Render (em produção não fica pública).
+_DOCS = not IS_RENDER
+app = FastAPI(
+    title="EquiCore API",
+    docs_url="/api/docs" if _DOCS else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if _DOCS else None,
+)
+
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request: Request, call_next):
+    """Cabeçalhos de segurança em todas as respostas (a app só usa recursos
+    da própria origem; imagens em data: são o logótipo)."""
+    r = await call_next(request)
+    r.headers.setdefault("X-Content-Type-Options", "nosniff")
+    r.headers.setdefault("X-Frame-Options", "DENY")
+    r.headers.setdefault("Referrer-Policy", "same-origin")
+    # Por agora só relatório (o browser avisa na consola, não bloqueia):
+    # passa a "Content-Security-Policy" depois de confirmado que nada parte.
+    r.headers.setdefault(
+        "Content-Security-Policy-Report-Only",
+        "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
+        "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    )
+    if IS_RENDER:
+        r.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return r
+
 
 # Escrever/apagar exige Gestor em tudo menos login e público (backend/deps.py).
 ESCRITA = [Depends(pode_escrever)]

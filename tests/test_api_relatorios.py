@@ -193,7 +193,9 @@ def test_exportar_eventos_folhas():
     from scripts.exportar_eventos import tabelas_eventos
 
     folhas = tabelas_eventos()
-    assert [f[0] for f in folhas] == ["Éguas", "Exames", "Inseminações", "Diagnósticos", "Legenda"]
+    assert [f[0] for f in folhas] == ["Éguas", "Exames", "Inseminações", "Diagnósticos", "Estadias", "Legenda"]
+    assert "inducao" in folhas[1][1]
+    assert folhas[4][1] == ["egua", "estadia", "entrada", "saida", "estado_saida", "motivo"]
     insem = folhas[2]
     assert insem[1][:4] == ["egua", "inseminacao", "data", "hora"]
     # Códigos, não nomes.
