@@ -213,6 +213,17 @@ def test_d45_depois_de_positivo_e_sem_exame(ctx):
     assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "falhou"
 
 
+def test_dg_nao_reescreve_inseminacao_fechada(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 30)
+    eid = _exec("SELECT id FROM estadias WHERE animal_id = %s", (aid,))[0]
+    _exec("UPDATE inseminacoes SET resultado = 'falhou' WHERE operation_id = %s::uuid", (op,))
+    _exec("INSERT INTO acompanhamento_inseminacao (estadia_id, animal_id, resultado) VALUES (%s, %s, 'falhou')", (eid, aid))
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo")).json()["resultado"] == "sem_inseminacao"
+    assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "falhou"
+    assert _todas("SELECT id FROM diagnosticos_gestacao WHERE animal_id = %s", (aid,)) == []
+
+
 def test_resultado_na_ficha_com_data_do_exame(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     op = _inseminada_ha(aid, 30)

@@ -346,7 +346,9 @@ def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str
     dia = data_exame.date()
     ops = [
         r for r in reprodutivo(animal_id)["inseminacoes"]
-        if not str(r["op_key"]).startswith("solo_") and r["data_inseminacao"] and _como_data(r["data_inseminacao"]) <= dia
+        # Só inseminações ainda em aberto (pendente ou positiva à espera das
+        # confirmações): um DG nunca reescreve uma inseminação já fechada.
+        if r["pode_resultado"] and _como_data(r["data_inseminacao"]) <= dia
     ]
     if not ops:
         return "sem_inseminacao"
