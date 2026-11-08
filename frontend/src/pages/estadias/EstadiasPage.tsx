@@ -262,7 +262,7 @@ function InternadasDesktop({ e }: { e: E }) {
                 <Button size="small" type="link" onClick={() => e.verFicha(x)}>
                   {t("web.stays.view_record")}
                 </Button>
-                <Button size="small" type="primary" onClick={() => e.setSaida(x)}>
+                <Button size="small" onClick={() => e.setSaida(x)}>
                   {t("web.stays.register_exit")}
                 </Button>
               </Flex>
@@ -376,7 +376,7 @@ interface SaidaForm {
   observacoes?: string;
 }
 
-function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; onClose: () => void }) {
+export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; onClose: () => void }) {
   const t = useT();
   const isMobile = useIsMobile();
   const notifyError = useNotifyError();

@@ -118,7 +118,9 @@ function useEstadiaMutation<V, R>(fn: (v: V) => Promise<R>) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estadias"] });
       queryClient.invalidateQueries({ queryKey: ["animais"] });
+      queryClient.invalidateQueries({ queryKey: ["animal"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["trabalho"] });
     },
   });
 }

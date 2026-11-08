@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Button, Card, Flex, Spin, Tabs, Tag, Typography } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { CapsuleTabs, DotLoading, ErrorBlock } from "antd-mobile";
+import { Button as MButton, CapsuleTabs, DotLoading, ErrorBlock } from "antd-mobile";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { useErrorMessage } from "../../components/errors";
 import { useAnimal, useReprodutivo, type Animal } from "./api";
 import { TagReprodutivo } from "../../components/EstadoReprodutivo";
+import { RegistarSaida } from "../estadias/EstadiasPage";
+import type { Estadia } from "../estadias/api";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
 import { AlertasTab, EstadiasAnimalTab, FertilidadeTab, ProducaoTab, ReprodutivoTab } from "./OutrosTabs";
@@ -41,6 +44,8 @@ export function AnimalPage() {
   const animal = q.data;
   // Estado reprodutivo à vista (a pergunta do dono, sem abrir o historial).
   const ultima = useReprodutivo(id).data?.inseminacoes[0];
+  // Registar saída também a partir da ficha (no telemóvel só havia o deslizar na lista).
+  const [saida, setSaida] = useState<Estadia | null>(null);
 
   if (q.isError)
     return isMobile ? (
@@ -72,12 +77,28 @@ export function AnimalPage() {
     </>
   );
 
+  const abrirSaida = () => {
+    if (animal.estadia_ativa !== null) setSaida({ id: animal.estadia_ativa, animal: animal.nome } as Estadia);
+  };
+  const botaoSaida =
+    animal.estadia_ativa !== null &&
+    (isMobile ? (
+      <MButton size="small" fill="outline" style={{ margin: "4px 0 8px" }} onClick={abrirSaida}>
+        {t("web.stays.register_exit")}
+      </MButton>
+    ) : (
+      <Button onClick={abrirSaida}>{t("web.stays.register_exit")}</Button>
+    ));
+  const janelaSaida = <RegistarSaida estadia={saida} onClose={() => setSaida(null)} />;
+
   if (isMobile)
     return (
       <>
+        {janelaSaida}
         <div style={{ background: "#fff", padding: "10px 12px 0" }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{animal.nome}</div>
           <div style={{ margin: "4px 0 2px" }}>{etiquetas}</div>
+          {botaoSaida}
         </div>
         <CapsuleTabs activeKey={tab} onChange={mudar} style={{ background: "#fff" }}>
           {tabs.map((x) => (
@@ -90,6 +111,7 @@ export function AnimalPage() {
 
   return (
     <Card size="small">
+      {janelaSaida}
       <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ paddingInline: 0 }}>
         {t("web.common.back")}
       </Button>
@@ -98,6 +120,7 @@ export function AnimalPage() {
           {animal.nome}
         </Typography.Title>
         {etiquetas}
+        <div style={{ marginLeft: "auto" }}>{botaoSaida}</div>
       </Flex>
       <Tabs activeKey={tab} onChange={mudar} destroyOnHidden items={tabs.map((x) => ({ key: x.id, label: t(x.label), children: x.el }))} />
     </Card>

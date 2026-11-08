@@ -1188,7 +1188,6 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
               <MButton
                 key={rotulo}
                 style={{ flex: 1 }}
-                size="small"
                 color={obrigatorio && !ativo ? "danger" : "primary"}
                 fill={ativo ? "solid" : "outline"}
                 onClick={onClick}
@@ -1199,18 +1198,30 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
           </div>
           <div style={{ fontSize: 11, color: "#999", marginTop: 6 }}>{ajudaBotoes}</div>
           <div style={{ fontSize: 12, marginTop: 6 }}>{extras}</div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <MButton onClick={() => setNovo(null)}>{t("web.common.cancel")}</MButton>
-            <MButton
-              style={{ flex: 1 }}
-              color="primary"
-              disabled={!temAlgo || faltaHoje.length > 0}
-              loading={gravar.isPending}
-              onClick={submeter}
-            >
-              {novo.id ? t("btn.save_changes") : t("web.registo.save")}
-            </MButton>
-          </div>
+        </div>
+        {/* Preso ao fundo (como em "Adicionar lote"): nunca fica tapado nem foge. */}
+        <div
+          style={{
+            position: "sticky",
+            bottom: 0,
+            display: "flex",
+            gap: 8,
+            padding: 12,
+            background: "#f5f5f5",
+            borderTop: "1px solid #eee",
+            zIndex: 2,
+          }}
+        >
+          <MButton onClick={() => setNovo(null)}>{t("web.common.cancel")}</MButton>
+          <MButton
+            style={{ flex: 1 }}
+            color="primary"
+            disabled={!temAlgo || faltaHoje.length > 0}
+            loading={gravar.isPending}
+            onClick={submeter}
+          >
+            {novo.id ? t("btn.save_changes") : t("web.registo.save")}
+          </MButton>
         </div>
         <Popup
           visible={aberto !== null}
@@ -1288,16 +1299,18 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {ajudaBotoes}
               </Typography.Text>
-              <div>{extras}</div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t("web.registo.by", { name: user.nome || user.username })}
-              </Typography.Text>
+              {/* Guardar logo a seguir aos botões: não muda de sítio quando
+                  aparece o resumo de OVU/DG/TX por baixo. */}
               <Space>
                 <Button onClick={() => setNovo(null)}>{t("web.common.cancel")}</Button>
                 <Button type="primary" disabled={!temAlgo || faltaHoje.length > 0} loading={gravar.isPending} onClick={submeter}>
                   {novo.id ? t("btn.save_changes") : t("web.registo.save")}
                 </Button>
               </Space>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t("web.registo.by", { name: user.nome || user.username })}
+              </Typography.Text>
+              <div>{extras}</div>
             </Flex>
           </Col>
         </Row>
