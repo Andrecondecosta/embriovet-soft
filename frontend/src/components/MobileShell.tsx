@@ -37,14 +37,18 @@ export function MobileShell({ user }: { user: User }) {
   const [mais, setMais] = useState(false);
 
   const { titulo, voltar } = tituloDaRota(pathname, t);
-  const ativo = BARRA.find((p) => pathname.startsWith(p)) ?? "mais";
+  // Fora das páginas da barra nenhum separador fica ativo: assim tocar em
+  // "Mais" volta a abrir o menu (com "mais" ativo, o toque não fazia nada).
+  const ativo = BARRA.find((p) => pathname.startsWith(p)) ?? (mais ? "mais" : "");
 
   const logout = async () => {
     try {
       await api("/auth/logout", "POST");
     } finally {
+      // Recarrega a app do zero: nada da sessão anterior fica em memória
+      // (limpar a cache à mão deixava o ecrã igual até recarregar).
       queryClient.clear();
-      queryClient.setQueryData(["me"], null);
+      window.location.replace("/");
     }
   };
 

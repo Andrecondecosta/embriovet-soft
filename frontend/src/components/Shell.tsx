@@ -54,8 +54,10 @@ function DesktopShell({ user }: { user: User }) {
     try {
       await api("/auth/logout", "POST");
     } finally {
+      // Recarrega a app do zero: nada da sessão anterior fica em memória
+      // (limpar a cache à mão deixava o ecrã igual até recarregar).
       queryClient.clear();
-      queryClient.setQueryData(["me"], null);
+      window.location.replace("/");
     }
   };
 

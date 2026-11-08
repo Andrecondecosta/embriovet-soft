@@ -342,7 +342,8 @@ def _tarefa(cur, animal_id: int, estadia_id: int, dia: date, motivo: str, utiliz
         INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia, criado_automaticamente, utilizador)
         VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id
         """,
-        (animal_id, estadia_id, dia, tipo, motivo[:500], _urgencia(dia), utilizador[:50]),
+        # "Inseminar" (da indução) é sempre urgente: tem hora marcada.
+        (animal_id, estadia_id, dia, tipo, motivo[:500], "urgente" if tipo == "inseminar" else _urgencia(dia), utilizador[:50]),
     )
     return cur.fetchone()[0]
 

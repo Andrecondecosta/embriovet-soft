@@ -34,6 +34,7 @@ interface Tarefa {
   animal: string | null;
   dono: string | null;
   tipo: string;
+  motivo?: string | null;
   urgencia: string;
   utilizador: string | null;
   dias_atraso?: number;
@@ -128,9 +129,17 @@ function useTrabalho() {
     mudarDono: (v: string | null) => atualizar("dono", v),
     // Tocar numa tarefa abre a ficha do animal logo no Diário clínico (onde
     // se faz o registo do dia). Nos garanhões, que não têm diário, abre o resumo.
-    abrir: (x: Tarefa) => navigate(`/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`),
+    // "Inseminar" (da indução) abre logo a inseminação dessa égua.
+    abrir: (x: Tarefa) =>
+      navigate(
+        x.tipo === "inseminar"
+          ? `/trabalho-diario/inseminacao?egua=${x.animal_id}`
+          : `/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`,
+      ),
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
+    // Tarefas com pormenor útil (hora da indução, o tratamento a fazer).
+    detalhe: (x: Tarefa) => (["inseminar", "tratamento"].includes(x.tipo) && x.motivo ? x.motivo : null),
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
     atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
     titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
@@ -213,7 +222,22 @@ function TrabalhoDesktop({ x }: { x: T }) {
       render: (_: unknown, a: Tarefa) => <Typography.Text strong>{x.nome(a)}</Typography.Text>,
     },
     { title: t("web.dashboard.owner"), dataIndex: "dono", render: (v: string | null) => v ?? "—" },
-    { title: t("web.dashboard.task_type"), key: "tipo", render: (_: unknown, a: Tarefa) => x.tipo(a) },
+    {
+      title: t("web.dashboard.task_type"),
+      key: "tipo",
+      render: (_: unknown, a: Tarefa) => (
+        <>
+          {x.tipo(a)}
+          {x.detalhe(a) && (
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {x.detalhe(a)}
+              </Typography.Text>
+            </div>
+          )}
+        </>
+      ),
+    },
   ];
 
   return (
@@ -398,7 +422,7 @@ function TrabalhoMobile({ x }: { x: T }) {
       <List.Item
         onClick={() => x.abrir(a)}
         arrow
-        description={`${a.dono ?? "—"} · ${x.tipo(a)}`}
+        description={`${a.dono ?? "—"} · ${x.detalhe(a) ?? x.tipo(a)}`}
         extra={direita}
         style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
       >

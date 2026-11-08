@@ -617,7 +617,8 @@ function FichaTX({ r, atual, onGuardar }: { r: Resposta; atual?: Tratamento; onG
         () =>
           setX({
             ...x,
-            inducao: x.inducao ? null : { data: dayjs().add(1, "day").hour(20).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss") },
+            // Por omissão, agora (a hora a que se faz a indução); muda-se se for marcada.
+            inducao: x.inducao ? null : { data: dayjs().second(0).format("YYYY-MM-DDTHH:mm:ss") },
           }),
         x.inducao && (
           <>
@@ -627,7 +628,8 @@ function FichaTX({ r, atual, onGuardar }: { r: Resposta; atual?: Tratamento; onG
               onChange={(v) => setX({ ...x, inducao: { ...x.inducao!, produto: v } })}
             />
             <div>
-              <DataHora futuro valor={x.inducao.data} onChange={(d) => setX({ ...x, inducao: { ...x.inducao!, data: d } })} />
+              <span style={{ color: "#888", fontSize: 12, marginRight: 6 }}>{t("web.registo.induction_time")}</span>
+              <DataHora valor={x.inducao.data} onChange={(d) => setX({ ...x, inducao: { ...x.inducao!, data: d } })} />
             </div>
           </>
         ),

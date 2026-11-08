@@ -18,6 +18,7 @@ import {
   Space,
   Spin,
   TimePicker,
+  Tag,
   Typography,
 } from "antd";
 import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
@@ -72,6 +73,7 @@ interface Egua {
   alojamento_tipo: string | null;
   dono_id: number | null;
   dono_nome: string | null;
+  garanhao_pedido?: string | null;
 }
 interface Linha {
   stock_id: number;
@@ -142,7 +144,11 @@ function useInseminacao() {
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const garanhaoAtual = garanhao ?? operacao.data?.garanhao ?? garanhoes[0] ?? null;
+  // Garanhão: o escolhido aqui, ou o da operação a editar, ou o pedido pelo
+  // dono na estadia da égua — nunca "o primeiro da lista" (inseminava-se
+  // com o sémen errado sem dar por isso). Sem nenhum, fica por escolher.
+  const garanhaoPedido = (eguas.data ?? []).find((e) => e.animal_id === egua)?.garanhao_pedido ?? null;
+  const garanhaoAtual = garanhao ?? operacao.data?.garanhao ?? (garanhaoPedido && garanhoes.includes(garanhaoPedido) ? garanhaoPedido : null);
   const doGaranhao = (lotes.data ?? []).filter((l) => l.garanhao_nome === garanhaoAtual);
   const donos = [...new Set(doGaranhao.map((l) => l.proprietario_nome).filter(Boolean) as string[])].sort();
   const disponiveis = doGaranhao.filter((l) => dono === TODOS || l.proprietario_nome === dono);
@@ -295,7 +301,15 @@ function useInseminacao() {
     },
     mudarQtd: (id: number, n: number) => setLinhas((ls) => ls.map((l) => (l.stock_id === id ? { ...l, qty: n } : l))),
     remover: (id: number) => setLinhas((ls) => ls.filter((l) => l.stock_id !== id)),
-    setEgua,
+    setEgua: (id: number | null) => {
+      // Outra égua: o garanhão volta a ser o pedido para ela.
+      setEgua(id);
+      if (!editarRef) {
+        setGaranhao(null);
+        setLinhas([]);
+      }
+    },
+    garanhaoPedido,
     setData,
     hora,
     setHora,
@@ -376,9 +390,15 @@ function InseminacaoDesktop({ x }: { x: X }) {
                 showSearch
                 style={{ width: "100%" }}
                 value={x.garanhaoAtual ?? undefined}
+                placeholder={t("web.insem.choose_stallion")}
                 onChange={x.mudarGaranhao}
                 options={x.garanhoes.map((g) => ({ value: g, label: g }))}
               />
+              {x.garanhaoPedido && (
+                <Tag color={x.garanhaoPedido === x.garanhaoAtual ? "green" : "orange"} style={{ marginTop: 4 }}>
+                  {t("web.insem.requested", { g: x.garanhaoPedido })}
+                </Tag>
+              )}
             </Col>
             <Col xs={24} md={12}>
               <Typography.Text type="secondary">{t("label.owner")}</Typography.Text>
@@ -563,7 +583,11 @@ function InseminacaoMobile({ x }: { x: X }) {
       {x.editarRef && <NoticeBar color="alert" content={t("web.insem.edit_title")} />}
       <List style={{ "--prefix-width": "7em" } as React.CSSProperties}>
         <Cabecalho>{t("insemination.zone_selection")}</Cabecalho>
-        <List.Item prefix={t("label.garanhao")} arrow>
+        <List.Item
+          prefix={t("label.garanhao")}
+          arrow
+          description={x.garanhaoPedido && t("web.insem.requested", { g: x.garanhaoPedido })}
+        >
           <SeletorPesquisa<string>
             titulo={t("label.garanhao")}
             value={x.garanhaoAtual}
