@@ -132,9 +132,12 @@ def _atualizar_diario_clinico(registo_id: int, dados: dict) -> bool:
     return True
 
 
-def _apagar_diario_clinico(registo_id: int) -> bool:
+def _apagar_diario_clinico(registo_id: int, utilizador: str | None = None) -> bool:
+    from modules.repositories.audit_repo import auditar_apagadas
+
     with get_connection() as conn:
         cur = conn.cursor()
+        auditar_apagadas(cur, "diario_clinico", "id = %s", (registo_id,), utilizador)
         cur.execute("DELETE FROM diario_clinico WHERE id = %s", (registo_id,))
         conn.commit()
         cur.close()

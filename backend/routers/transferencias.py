@@ -38,7 +38,7 @@ from modules.repositories.stock_repo import (
     transferir_palhetas_parcial,
     transferir_stock_interno_com_localizacao,
 )
-from modules.repositories.transfer_repo import reverter_operacao
+from modules.repositories.transfer_repo import DestinoJaUsado, reverter_operacao
 
 router = APIRouter(prefix="/api/transferencias", tags=["transferencias"])
 
@@ -280,7 +280,11 @@ def editar_operacao(
             devolvido[r[1]] = devolvido.get(r[1], 0) + int(r[2] or 0)
     lotes = _validar(body, devolvido)
 
-    if not reverter_operacao(tipo=tipo, action_id=action_id, operation_id=op_antigo):
+    try:
+        ok = reverter_operacao(tipo=tipo, action_id=action_id, operation_id=op_antigo, utilizador=user["username"], motivo="editado")
+    except DestinoJaUsado as e:
+        raise _erro(409, "web.transfer.error.destination_used") from e
+    if not ok:
         raise _erro(500, "web.error.generic")
 
     op_id = op_antigo or str(uuid.uuid4())
@@ -335,7 +339,11 @@ class AnularIn(BaseModel):
 
 
 @router.post("/anular")
-def anular(body: AnularIn, _user: dict = Depends(get_current_user)):
-    if not reverter_operacao(tipo=body.tipo, action_id=body.action_id, operation_id=body.operation_id):
+def anular(body: AnularIn, user: dict = Depends(get_current_user)):
+    try:
+        ok = reverter_operacao(tipo=body.tipo, action_id=body.action_id, operation_id=body.operation_id, utilizador=user["username"])
+    except DestinoJaUsado as e:
+        raise _erro(409, "web.transfer.error.destination_used") from e
+    if not ok:
         raise _erro(500, "web.transfer.error.undo_failed")
     return {"ok": True}

@@ -156,7 +156,8 @@ def test_externa_editar_e_anular(ctx):
     reg = _exec("SELECT destinatario_externo, tipo, quantidade, atualizado FROM transferencias_externas"
                 " WHERE estoque_id = %s", (ctx["l1"],))
     assert reg == [("Haras Y", "Doação", 10, True)]
-    assert _exec("SELECT COUNT(*) FROM historico_edicoes WHERE utilizador_nome = %s", (ctx["user"],))[0][0] == 1
+    # A versão anterior fica guardada ("editado") e a edição registada.
+    assert _exec("SELECT COUNT(*) FROM historico_edicoes WHERE utilizador_nome = %s", (ctx["user"],))[0][0] == 2
 
     hist = c.get("/api/transferencias/historico", params={"dia": date.today().isoformat()}).json()
     linha = next(h for h in hist if h["tipo"] == "transfer_external" and "Haras Y" in (h["detalhe"] or ""))
@@ -178,3 +179,23 @@ def test_editar_interna_mudar_destino(ctx):
     assert _exist(ctx["l1"]) == 8
     assert _lotes_de(ctx["b"]) == []
     assert _exec("SELECT COUNT(*) FROM transferencias WHERE estoque_id = %s", (ctx["l1"],))[0][0] == 0
+
+
+def test_anular_interna_com_destino_ja_usado_e_recusado(ctx):
+    c = ctx["c"]
+    r = c.post("/api/transferencias", json={"tipo": "interna", "destino_id": ctx["b"], "linhas": [{"stock_id": ctx["l1"], "quantidade": 3}]})
+    op = r.json()["operation_id"]
+    destino = _um("SELECT id FROM estoque_dono WHERE dono_id = %s", (ctx["b"],))[0]
+    # 2 das 3 palhetas foram usadas no destino.
+    _exec("UPDATE estoque_dono SET existencia_atual = 1 WHERE id = %s", (destino,))
+    tid = _um("SELECT id FROM transferencias WHERE operation_id = %s::uuid LIMIT 1", (op,))[0]
+    r = c.post("/api/transferencias/anular", json={"tipo": "transfer_internal", "action_id": tid, "operation_id": op})
+    assert r.json()["detail"]["code"] == "web.transfer.error.destination_used"
+    # Nada mudou: nem palhetas inventadas na origem, nem lote apagado.
+    assert (_exist(ctx["l1"]), _exist(destino)) == (7, 1)
+    # Com o destino intacto anula-se, e fica o rasto.
+    _exec("UPDATE estoque_dono SET existencia_atual = 3 WHERE id = %s", (destino,))
+    assert c.post("/api/transferencias/anular", json={"tipo": "transfer_internal", "action_id": tid, "operation_id": op}).status_code == 200
+    assert _exist(ctx["l1"]) == 10
+    rasto = _exec("SELECT dados_novos FROM historico_edicoes WHERE tabela_nome = 'transferencias' AND utilizador_nome = %s", (ctx["user"],))
+    assert rasto and rasto[0][0] == {"acao": "anulado"}

@@ -209,9 +209,9 @@ def editar_registo(animal_id: int, rid: int, d: RegistoIn, _user: dict = Depends
 
 
 @router.delete("/{animal_id:int}/diario/{rid:int}")
-def apagar_registo(animal_id: int, rid: int, _user: dict = Depends(get_current_user)):
+def apagar_registo(animal_id: int, rid: int, user: dict = Depends(get_current_user)):
     _registo_do_animal(animal_id, rid)
-    _apagar_diario_clinico(rid)
+    _apagar_diario_clinico(rid, user["username"])
     return {"ok": True}
 
 

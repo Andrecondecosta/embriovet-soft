@@ -588,11 +588,17 @@ def transferir_palhetas_parcial(stock_origem_id, proprietario_destino_id, quanti
                 return False
             
             # Atualizar stock origem (diminuir)
+            # Desconta só se houver palhetas (dois pedidos ao mesmo tempo não
+            # deixam o lote negativo).
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
+                WHERE id = %s AND existencia_atual >= %s
+            """, (quantidade_int, to_py(stock_origem_id), quantidade_int))
+            if cur.rowcount == 0:
+                conn.rollback()
+                st.error("❌ Quantidade insuficiente (o lote mudou entretanto).")
+                return False
             
             # Verificar se já existe lote do destino com mesmo garanhão e mesma localização
             cur.execute("""
@@ -704,11 +710,17 @@ def transferir_stock_interno_com_localizacao(prop_origem_id, prop_destino_id, st
                 return False
             
             # Atualizar stock origem (diminuir)
+            # Desconta só se houver palhetas (dois pedidos ao mesmo tempo não
+            # deixam o lote negativo).
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
+                WHERE id = %s AND existencia_atual >= %s
+            """, (quantidade_int, to_py(stock_origem_id), quantidade_int))
+            if cur.rowcount == 0:
+                conn.rollback()
+                st.error("❌ Quantidade insuficiente (o lote mudou entretanto).")
+                return False
             
             # Verificar se já existe lote do destino com mesmo garanhão e mesma NOVA localização
             cur.execute("""
@@ -884,11 +896,17 @@ def mover_palhetas_localizacao(stock_origem_id, quantidade, canister_destino, an
                 # na origem e soma/cria no destino (dono inalterado; o
                 # contentor pode ser outro — é só mais uma coluna na
                 # mesma transação, não muda nada na atomicidade).
+                # Desconta só se houver palhetas (dois pedidos ao mesmo tempo não
+                # deixam o lote negativo).
                 cur.execute("""
                     UPDATE estoque_dono
                     SET existencia_atual = existencia_atual - %s
-                    WHERE id = %s
-                """, (quantidade_int, to_py(stock_origem_id)))
+                    WHERE id = %s AND existencia_atual >= %s
+                """, (quantidade_int, to_py(stock_origem_id), quantidade_int))
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    st.error("❌ Quantidade insuficiente (o lote mudou entretanto).")
+                    return False
 
                 if lote_destino:
                     cur.execute("""
@@ -960,11 +978,17 @@ def transferir_palhetas_externo(stock_origem_id, destinatario_externo, quantidad
                 return False
             
             # Atualizar stock origem (diminuir)
+            # Desconta só se houver palhetas (dois pedidos ao mesmo tempo não
+            # deixam o lote negativo).
             cur.execute("""
-                UPDATE estoque_dono 
+                UPDATE estoque_dono
                 SET existencia_atual = existencia_atual - %s
-                WHERE id = %s
-            """, (quantidade_int, to_py(stock_origem_id)))
+                WHERE id = %s AND existencia_atual >= %s
+            """, (quantidade_int, to_py(stock_origem_id), quantidade_int))
+            if cur.rowcount == 0:
+                conn.rollback()
+                st.error("❌ Quantidade insuficiente (o lote mudou entretanto).")
+                return False
             
             # Registrar transferência externa
             cur.execute("""

@@ -25,6 +25,7 @@ import logging
 from typing import Optional
 
 from modules.db import get_connection, invalidate_data_cache
+from modules.repositories.audit_repo import auditar_apagadas
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,17 @@ logger = logging.getLogger(__name__)
 TIPOS_VALIDOS = {"transfer_internal", "transfer_external", "insemination"}
 
 
+class DestinoJaUsado(Exception):
+    """A transferência não se pode anular: o lote de destino já não tem as
+    palhetas que recebeu (foram usadas ou movidas)."""
+
+
 def reverter_operacao(
     tipo: str,
     action_id: Optional[int] = None,
     operation_id: Optional[str] = None,
+    utilizador: Optional[str] = None,
+    motivo: str = "anulado",
 ) -> bool:
     """Reverte uma operação e elimina o(s) seu(s) registo(s).
 
@@ -64,6 +72,12 @@ def reverter_operacao(
         with get_connection() as conn:
             cur = conn.cursor()
             try:
+                # Rasto do que se anula (mesma transação).
+                tabela = {"transfer_internal": "transferencias", "transfer_external": "transferencias_externas"}.get(tipo, "inseminacoes")
+                if operation_id:
+                    auditar_apagadas(cur, tabela, "operation_id = %s::uuid", (operation_id,), utilizador, motivo)
+                else:
+                    auditar_apagadas(cur, tabela, "id = %s", (int(action_id),), utilizador, motivo)
                 if tipo == "transfer_internal":
                     _reverter_transfer_internal(cur, action_id, operation_id)
                 elif tipo == "transfer_external":
@@ -76,6 +90,8 @@ def reverter_operacao(
                 raise
             finally:
                 cur.close()
+    except DestinoJaUsado:
+        raise
     except Exception as e:
         logger.error(f"reverter_operacao falhou (tipo={tipo}): {e}")
         return False
@@ -136,16 +152,22 @@ def _reverter_transfer_internal(cur, action_id, operation_id) -> None:
             (dest_id, e_id),
         )
         lote_dest = cur.fetchone()
-        if lote_dest:
-            dest_id_row, dest_exist = int(lote_dest[0]), int(lote_dest[1] or 0)
-            nova = dest_exist - qtd
-            if nova <= 0:
-                cur.execute("DELETE FROM estoque_dono WHERE id = %s", (dest_id_row,))
-            else:
-                cur.execute(
-                    "UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s",
-                    (nova, dest_id_row),
-                )
+        # As palhetas têm de estar todas no destino: se já foram usadas ou
+        # movidas, anular devolvia à origem palhetas que já não existem.
+        if not lote_dest or int(lote_dest[1] or 0) < qtd:
+            raise DestinoJaUsado(str(row_id))
+        dest_id_row, dest_exist = int(lote_dest[0]), int(lote_dest[1] or 0)
+        nova = dest_exist - qtd
+        cur.execute("UPDATE estoque_dono SET existencia_atual = %s WHERE id = %s", (nova, dest_id_row))
+        # O lote destino só desaparece se ficou vazio e nada aponta para ele.
+        if nova == 0:
+            cur.execute(
+                """DELETE FROM estoque_dono e WHERE e.id = %s
+                   AND NOT EXISTS (SELECT 1 FROM inseminacoes i WHERE i.estoque_id = e.id)
+                   AND NOT EXISTS (SELECT 1 FROM transferencias t WHERE t.estoque_id = e.id)
+                   AND NOT EXISTS (SELECT 1 FROM transferencias_externas x WHERE x.estoque_id = e.id)""",
+                (dest_id_row,),
+            )
 
     if operation_id:
         cur.execute(

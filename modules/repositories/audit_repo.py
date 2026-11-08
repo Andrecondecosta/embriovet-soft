@@ -43,3 +43,20 @@ def registar_historico_edicao(tabela, record_id, dados_antigos, dados_novos, uti
             cur.close()
     except Exception as e:
         logger.error(f"Erro ao registar histórico de edição: {e}")
+
+
+def auditar_apagadas(cur, tabela: str, where: str, params: tuple, utilizador: str | None, motivo: str = "apagado") -> int:
+    """Antes de um DELETE: guarda em `historico_edicoes` uma cópia de cada
+    linha que vai ser apagada (e quem apagou), na MESMA transação do
+    DELETE — se o apagar falhar, a cópia também não fica; se ficar, há
+    rasto do que estava lá. `tabela`/`where` são fixos no código (nunca
+    input do utilizador)."""
+    cur.execute(f"SELECT id, to_jsonb(t) FROM {tabela} t WHERE {where}", params)
+    linhas = cur.fetchall()
+    for rid, dados in linhas:
+        cur.execute(
+            """INSERT INTO historico_edicoes (tabela_nome, record_id, dados_antigos, dados_novos, utilizador_nome)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (tabela, rid, json.dumps(dados, default=str), json.dumps({"acao": motivo}), (utilizador or "—")[:255]),
+        )
+    return len(linhas)

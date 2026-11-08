@@ -277,3 +277,13 @@ def test_inseminar_egua_gestante_pede_confirmacao(ctx):
     assert r.json()["detail"]["params"]["data"] == (date.today() - timedelta(days=20)).strftime("%d/%m/%Y")
     assert ctx["c"].post("/api/inseminacoes", json={**corpo, "confirmar_gestante": True}).status_code == 201
     assert _historial(ctx)[a]["resultado"] == "falhou"
+
+
+def test_stock_nunca_negativo_com_pedidos_ao_mesmo_tempo(ctx):
+    from concurrent.futures import ThreadPoolExecutor
+
+    _um("UPDATE estoque_dono SET existencia_atual = 1 WHERE id = %s", (ctx["lote"],))
+    with ThreadPoolExecutor(8) as ex:
+        estados = list(ex.map(lambda _: ctx["c"].post("/api/inseminacoes", json=_corpo(ctx, 1)).status_code, range(8)))
+    assert estados.count(201) == 1, estados
+    assert _stock(ctx["lote"]) == 0

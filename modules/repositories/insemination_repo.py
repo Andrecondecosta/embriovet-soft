@@ -344,9 +344,12 @@ def registar_inseminacao_completa(
                 cur.execute(
                     "UPDATE estoque_dono "
                     "SET existencia_atual = existencia_atual - %s "
-                    "WHERE id = %s",
-                    (palhetas, stock_id),
+                    "WHERE id = %s AND existencia_atual >= %s",
+                    (palhetas, stock_id, palhetas),
                 )
+                if cur.rowcount == 0:
+                    # Outro pedido gastou estas palhetas entretanto.
+                    raise InseminacaoError(f"Stock insuficiente no lote #{stock_id}.")
 
             # 3. UPSERT acompanhamento (uma linha por estadia) — mesma
             #    implementação partilhada usada pela ficha da égua.
@@ -1087,9 +1090,13 @@ def registrar_inseminacao_multiplas(
                         if first_new_id is None and new_row:
                             first_new_id = new_row[0]
                         cur.execute(
-                            "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                            (palhetas, stock_id)
+                            "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s AND existencia_atual >= %s",
+                            (palhetas, stock_id, palhetas)
                         )
+                        if cur.rowcount == 0:
+                            conn.rollback()
+                            st.error(f"❌ Stock insuficiente no lote #{stock_id}")
+                            return False
 
                     conn.commit()
 
@@ -1183,9 +1190,13 @@ def registrar_inseminacao_multiplas(
                         st.error(f"❌ Stock insuficiente! Disponível: {int(result[0] or 0)}")
                         return False
                     cur.execute(
-                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                        (palhetas, stock_id)
+                        "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s AND existencia_atual >= %s",
+                        (palhetas, stock_id, palhetas)
                     )
+                    if cur.rowcount == 0:
+                        conn.rollback()
+                        st.error(f"❌ Stock insuficiente no lote #{stock_id}")
+                        return False
 
                 conn.commit()
 
@@ -1240,9 +1251,13 @@ def registrar_inseminacao_multiplas(
                     stock_id, new_operation_id,
                 ))
                 cur.execute(
-                    "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s",
-                    (palhetas, stock_id)
+                    "UPDATE estoque_dono SET existencia_atual = existencia_atual - %s WHERE id = %s AND existencia_atual >= %s",
+                    (palhetas, stock_id, palhetas)
                 )
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    st.error(f"❌ Stock insuficiente no lote #{stock_id}")
+                    return False
 
             conn.commit()
             cur.close()

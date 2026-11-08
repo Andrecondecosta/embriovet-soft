@@ -266,3 +266,12 @@ def test_dg_cedo_demais_nao_grava_o_registo(ctx):
     r = c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo"))
     assert r.json()["detail"]["code"] == "web.registo.error.dg_too_early"
     assert _todas("SELECT id FROM registo_clinico WHERE animal_id = %s", (aid,)) == []
+
+
+def test_apagar_registo_deixa_rasto(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    rid = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 2})).json()["id"]
+    assert c.delete(f"/api/animais/{aid}/registos/{rid}").status_code == 200
+    rasto = _todas("SELECT dados_antigos->'dados', dados_novos FROM historico_edicoes WHERE tabela_nome = 'registo_clinico' AND record_id = %s", (rid,))
+    assert rasto == [({"CER": {"grau": 2}}, {"acao": "apagado"})]
+    _exec("DELETE FROM historico_edicoes WHERE tabela_nome = 'registo_clinico' AND record_id = %s", (rid,))

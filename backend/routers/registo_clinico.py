@@ -28,6 +28,7 @@ from backend.deps import get_current_user
 from backend.serial import valor
 from modules.db import get_connection
 from modules.pages.animal_page import _carregar_animal, _concluir_tarefas_animal_hoje, _obter_estadia_activa
+from modules.repositories.audit_repo import auditar_apagadas
 from modules.repositories.insemination_repo import DIAS_MIN_DG, InseminacaoError, registar_diagnostico, registar_resultado
 
 router = APIRouter(prefix="/api/animais", tags=["registo_clinico"])
@@ -501,10 +502,12 @@ def editar(animal_id: int, rid: int, d: RegistoIn, _user: dict = Depends(get_cur
 
 
 @router.delete("/{animal_id:int}/registos/{rid:int}")
-def apagar(animal_id: int, rid: int, _user: dict = Depends(get_current_user)):
+def apagar(animal_id: int, rid: int, user: dict = Depends(get_current_user)):
     _do_animal(animal_id, rid)
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Fica cópia do registo apagado (e de quem apagou).
+            auditar_apagadas(cur, "registo_clinico", "id = %s", (rid,), user["username"])
             cur.execute("DELETE FROM registo_clinico WHERE id = %s", (rid,))
         conn.commit()
     return {"ok": True}
