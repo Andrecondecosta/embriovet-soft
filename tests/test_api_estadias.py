@@ -181,3 +181,23 @@ def test_box_cheia_e_garanhao_pedido(client, base):
     assert aloj["ocupados"] == 1
     r = _nova(client, base, animal={"nome": f"{PREFIXO}{uuid.uuid4().hex[:6]}", "tipo": "egua"})
     assert r.json()["detail"]["code"] == "web.stays.error.housing_full"
+
+
+def test_clinica_sem_alojamentos(client, base):
+    from modules.repositories.settings_repo import guardar_usar_alojamentos, usar_alojamentos
+
+    assert client.get("/api/estadias/opcoes").json()["usar_alojamentos"] is True
+    guardar_usar_alojamentos(False)
+    try:
+        assert client.get("/api/estadias/opcoes").json()["usar_alojamentos"] is False
+        r = _nova(client, base, alojamento_id=None)
+        assert r.status_code == 201, r.text
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT alojamento_id FROM estadias WHERE id = %s", (r.json()["id"],))
+                assert cur.fetchone()[0] is None
+        # Mudar a opção é só para Administrador.
+        assert client.put("/api/definicoes/alojamentos/uso", json={"usar": True}).status_code == 403
+    finally:
+        guardar_usar_alojamentos(True)
+    assert usar_alojamentos() is True

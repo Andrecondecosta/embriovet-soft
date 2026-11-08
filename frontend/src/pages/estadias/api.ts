@@ -97,7 +97,7 @@ export const useOpcoesEstadia = () =>
   useQuery({
     queryKey: ["estadias", "opcoes"],
     queryFn: () =>
-      api<{ donos: { id: number; nome: string }[]; alojamentos: { id: number; nome: string; tipo: string; capacidade: number; ocupados: number }[] }>(
+      api<{ donos: { id: number; nome: string }[]; alojamentos: { id: number; nome: string; tipo: string; capacidade: number; ocupados: number }[]; usar_alojamentos: boolean }>(
         "/estadias/opcoes",
       ),
   });

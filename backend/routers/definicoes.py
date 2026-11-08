@@ -20,7 +20,7 @@ from pydantic import BaseModel, field_validator
 from backend.serial import anexo
 from backend.deps import get_current_user, require_nivel
 from modules.db import get_connection
-from modules.repositories.settings_repo import get_app_settings, update_branding_settings
+from modules.repositories.settings_repo import get_app_settings, guardar_usar_alojamentos, update_branding_settings, usar_alojamentos
 from modules.services.auth_service import (
     adicionar_usuario,
     alterar_password,
@@ -134,6 +134,22 @@ def _obter_alojamento(cur, aid: int) -> dict:
     if not row:
         raise _erro(404, "web.settings.error.housing_not_found")
     return dict(zip(_COL_ALOJ, row))
+
+
+class UsoAlojamentosIn(BaseModel):
+    usar: bool
+
+
+@router.get("/alojamentos/uso")
+def uso_alojamentos(_user: dict = Depends(get_current_user)):
+    """A clínica usa boxes/paddocks? Desligado, as estadias não pedem alojamento."""
+    return {"usar": usar_alojamentos()}
+
+
+@router.put("/alojamentos/uso")
+def mudar_uso_alojamentos(d: UsoAlojamentosIn, _user: dict = Depends(require_nivel("Administrador"))):
+    guardar_usar_alojamentos(d.usar)
+    return {"usar": d.usar}
 
 
 @router.get("/alojamentos")

@@ -23,6 +23,7 @@ from pydantic import BaseModel, field_validator
 from backend.deps import get_current_user
 from backend.serial import registos
 from modules.db import get_connection
+from modules.repositories.settings_repo import usar_alojamentos
 from modules.pages.estadias_page import (
     _carregar_estadias,
     _ensure_externo_constraints,
@@ -144,7 +145,7 @@ def opcoes(_user: dict = Depends(get_current_user)):
                    FROM alojamentos a WHERE a.ativo = TRUE ORDER BY a.tipo, LOWER(a.nome)"""
             )
             aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3], "ocupados": r[4]} for r in cur.fetchall()]
-    return {"donos": donos, "alojamentos": aloj, "motivos_por_tipo": MOTIVOS_POR_TIPO}
+    return {"donos": donos, "alojamentos": aloj, "motivos_por_tipo": MOTIVOS_POR_TIPO, "usar_alojamentos": usar_alojamentos()}
 
 
 # ── Nova estadia / visita / externo ───────────────────────────────────────
@@ -229,7 +230,10 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
         raise _erro(422, "web.stays.error.kind_required")
     if not d.dono_id:
         raise _erro(422, "web.stays.error.owner_required")
-    if d.tipo_registo == "estadia" and not d.alojamento_id:
+    # Clínicas que não usam boxes/paddocks: a estadia não leva alojamento.
+    if not usar_alojamentos():
+        d.alojamento_id = None
+    elif d.tipo_registo == "estadia" and not d.alojamento_id:
         raise _erro(422, "web.stays.error.housing_required")
     if d.tipo_registo == "externo":
         _ensure_externo_constraints()

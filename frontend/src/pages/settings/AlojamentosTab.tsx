@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Table, Tag, Typography } from "antd";
+import { Alert, Button, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Switch, Table, Tag, Typography } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   DotLoading,
@@ -10,12 +10,14 @@ import {
   List,
   Selector,
   SwipeAction,
+  Switch as MSwitch,
   Tag as MTag,
 } from "antd-mobile";
 import { AddOutline } from "antd-mobile-icons";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
+import { useIsAdmin } from "../../components/User";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
 import { FolhaEcraInteiro, NumeroCampo, irParaErro } from "../../components/mobile";
 import {
@@ -24,6 +26,8 @@ import {
   useAlternarAlojamento,
   useCriarAlojamento,
   useEditarAlojamento,
+  useMudarUsoAlojamentos,
+  useUsoAlojamentos,
   type Alojamento,
   type AlojamentoIn,
 } from "./api";
@@ -60,6 +64,20 @@ function useAcoesAlojamento(fechar: () => void) {
   return { guardar, aGuardar: criar.isPending || editar.isPending, fazerAlternar };
 }
 
+/** Interruptor "Usar alojamentos" (só Administrador): clínicas que não
+ *  localizam as éguas em boxes/paddocks desligam-no. */
+function useUso() {
+  const notifyError = useNotifyError();
+  const uso = useUsoAlojamentos();
+  const mudar = useMudarUsoAlojamentos();
+  return {
+    usar: uso.data?.usar ?? true,
+    carregando: uso.isPending || mudar.isPending,
+    podeMudar: useIsAdmin(),
+    mudar: (v: boolean) => mudar.mutate(v, { onError: notifyError }),
+  };
+}
+
 export function AlojamentosTab() {
   return useIsMobile() ? <AlojamentosMobile /> : <AlojamentosDesktop />;
 }
@@ -71,10 +89,17 @@ function AlojamentosDesktop() {
   const [aberto, setAberto] = useState<Aberto>(null);
   const { guardar, aGuardar, fazerAlternar } = useAcoesAlojamento(() => setAberto(null));
 
+  const uso = useUso();
+
   if (isError) return <Alert type="error" showIcon title={errorMessage(error)} />;
 
   return (
     <>
+      <Flex gap={8} align="center" style={{ marginBottom: 12 }}>
+        <Switch checked={uso.usar} loading={uso.carregando} disabled={!uso.podeMudar} onChange={uso.mudar} />
+        <Typography.Text strong>{t("web.housing.use")}</Typography.Text>
+        <Typography.Text type="secondary">{t(uso.usar ? "web.housing.use_on" : "web.housing.use_off")}</Typography.Text>
+      </Flex>
       <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
         <Typography.Text type="secondary">{t("web.housing.help")}</Typography.Text>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setAberto({ aloj: null })}>
@@ -208,11 +233,20 @@ function AlojamentosMobile() {
   const [form] = MForm.useForm<AlojamentoIn>();
   const aloj = aberto?.aloj ?? null;
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
+  const uso = useUso();
 
   if (isError) return <ErrorBlock status="default" title={errorMessage(error)} description="" />;
 
   return (
     <>
+      <List>
+        <List.Item
+          description={t(uso.usar ? "web.housing.use_on" : "web.housing.use_off")}
+          extra={<MSwitch checked={uso.usar} loading={uso.carregando} disabled={!uso.podeMudar} onChange={uso.mudar} />}
+        >
+          {t("web.housing.use")}
+        </List.Item>
+      </List>
       <List header={t("web.housing.help")}>
         {isPending ? (
           <List.Item>

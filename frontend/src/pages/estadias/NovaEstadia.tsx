@@ -195,6 +195,8 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
   const aviso = useAvisoNome(Form.useWatch(["novo", "nome"], form), Form.useWatch("dono_id", form) ?? null);
   const alojamentos = opcoes.data?.alojamentos ?? [];
   const rotuloAlojamento = useRotuloAlojamento();
+  // Clínicas que não usam boxes/paddocks: sem campo de alojamento.
+  const usarAloj = opcoes.data?.usar_alojamentos ?? true;
   const r = (msg: string) => [{ required: true, message: t(msg) }];
 
   return (
@@ -350,7 +352,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
               <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          {tipoRegisto && tipoRegisto !== "externo" && (
+          {tipoRegisto && tipoRegisto !== "externo" && usarAloj && (
             <Col xs={24} sm={12}>
               {opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
                 <Alert type="warning" showIcon title={t("web.stays.form.no_housing")} style={{ marginTop: 22 }} />
@@ -447,6 +449,8 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
   const umSo = { getValueProps: (v: unknown) => ({ value: v == null ? [] : [v] }), normalize: (v: unknown[]) => v[0] };
   const alojamentos = opcoes.data?.alojamentos ?? [];
   const rotuloAlojamento = useRotuloAlojamento();
+  // Clínicas que não usam boxes/paddocks: sem campo de alojamento.
+  const usarAloj = opcoes.data?.usar_alojamentos ?? true;
 
   return (
     <FolhaEcraInteiro
@@ -592,6 +596,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         </MForm.Item>
         {tipoRegisto &&
           tipoRegisto !== "externo" &&
+          usarAloj &&
           (opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
             <MForm.Item key="sem-alojamento">
               <span style={{ color: "var(--adm-color-warning)" }}>{t("web.stays.form.no_housing")}</span>

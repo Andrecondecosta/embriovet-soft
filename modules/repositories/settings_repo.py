@@ -164,3 +164,22 @@ def update_welcome_completed(completed=True):
     except Exception as e:
         logger.error(f"Erro ao atualizar welcome_completed: {e}")
         return False
+
+
+def usar_alojamentos() -> bool:
+    """A clínica usa alojamentos (boxes/paddocks) nas estadias? Por omissão sim."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT usar_alojamentos FROM app_settings ORDER BY id LIMIT 1")
+                row = cur.fetchone()
+        return True if row is None or row[0] is None else bool(row[0])
+    except Exception:
+        return True  # coluna ainda não criada (migração por aplicar)
+
+
+def guardar_usar_alojamentos(valor: bool) -> None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE app_settings SET usar_alojamentos = %s, updated_at = NOW()", (bool(valor),))
+        conn.commit()

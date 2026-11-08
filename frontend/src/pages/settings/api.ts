@@ -55,6 +55,21 @@ function useAlojMutation<V>(fn: (v: V) => Promise<Alojamento>) {
   return useMutation({ mutationFn: fn, onSuccess: () => queryClient.invalidateQueries({ queryKey: ["definicoes", "alojamentos"] }) });
 }
 
+/** A clínica usa boxes/paddocks nas estadias? (desligado: a entrada não pede alojamento) */
+export const useUsoAlojamentos = () =>
+  useQuery({ queryKey: ["definicoes", "alojamentos", "uso"], queryFn: () => api<{ usar: boolean }>("/definicoes/alojamentos/uso") });
+
+export function useMudarUsoAlojamentos() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (usar: boolean) => api<{ usar: boolean }>("/definicoes/alojamentos/uso", "PUT", { usar }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["definicoes", "alojamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["estadias"] });
+    },
+  });
+}
+
 export const useCriarAlojamento = () => useAlojMutation((d: AlojamentoIn) => api<Alojamento>("/definicoes/alojamentos", "POST", d));
 export const useEditarAlojamento = () =>
   useAlojMutation(({ id, ...d }: AlojamentoIn & { id: number }) => api<Alojamento>(`/definicoes/alojamentos/${id}`, "PUT", d));

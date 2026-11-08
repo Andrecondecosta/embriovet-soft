@@ -32,6 +32,7 @@ import {
   useHistoricoEstadias,
   useInternadas,
   useMovimentos,
+  useOpcoesEstadia,
   usePendentesSaida,
   useRegistarSaida,
   type Estadia,
@@ -54,6 +55,8 @@ function useEstadias() {
   const { tab } = useParams();
   const [params, setParams] = useSearchParams();
   const tipo = (TIPOS_ANIMAL.find((x) => x === params.get("tipo")) ?? null) as TipoAnimal | null;
+  // Clínicas que não usam boxes/paddocks: sem coluna nem ordenação por box.
+  const usarAloj = useOpcoesEstadia().data?.usar_alojamentos ?? true;
   const ordem = (["dias", "nome", "box"].find((x) => x === params.get("ordem")) ?? "dias") as Ordem;
   const mes = /^\d{4}-\d{2}$/.test(params.get("mes") ?? "") ? dayjs(`${params.get("mes")}-01`) : dayjs().startOf("month");
   const atualizar = (k: string, v: string | null) =>
@@ -82,6 +85,7 @@ function useEstadias() {
     tab,
     tipo,
     ordem,
+    usarAloj,
     mes,
     nova,
     setNova,
@@ -194,7 +198,7 @@ function colunasBase(e: E) {
       render: (v: string | null) => <Typography.Text strong>{v ?? "—"}</Typography.Text>,
     },
     { title: t("web.stays.col.owner"), dataIndex: "proprietario", render: (v: string | null) => v ?? "—" },
-    { title: t("web.stays.col.box"), dataIndex: "alojamento_nome", render: (v: string | null) => v ?? "—" },
+    ...(e.usarAloj ? [{ title: t("web.stays.col.box"), dataIndex: "alojamento_nome", render: (v: string | null) => v ?? "—" }] : []),
     { title: t("web.stays.col.reason"), dataIndex: "motivo", render: e.motivo },
   ];
 }
@@ -219,7 +223,7 @@ function InternadasDesktop({ e }: { e: E }) {
             style={{ width: 170 }}
             value={e.ordem}
             onChange={e.mudarOrdem}
-            options={(["dias", "nome", "box"] as const).map((o) => ({
+            options={(e.usarAloj ? (["dias", "nome", "box"] as const) : (["dias", "nome"] as const)).map((o) => ({
               value: o,
               label: `${t("web.stays.filter.sort")}: ${t(`web.stays.sort.${CHAVE_ORDEM[o]}`)}`,
             }))}
