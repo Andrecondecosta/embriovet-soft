@@ -22,10 +22,10 @@ import { PlusOutlined } from "@ant-design/icons";
 import type { Owner } from "../../api/types";
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
-import { notifySuccess, useNotifyError } from "../../components/errors";
+import { notifySuccess, notifyWarning, useNotifyError } from "../../components/errors";
 import { OwnerFormModal } from "../owners/OwnerFormModal";
 import { EditarLoteMobile } from "./LoteFormMobile";
-import { useEditarLote, useOpcoes, type Lote, type LoteCampos, type LoteEdicao } from "./api";
+import { externoSemQualidade, useEditarLote, useOpcoes, type Lote, type LoteCampos, type LoteEdicao } from "./api";
 import { DataProducaoCampo } from "./DataProducaoCampo";
 
 export const CANISTERS = Array.from({ length: 10 }, (_, i) => String(i + 1));
@@ -269,8 +269,10 @@ export function useGuardarEdicao(lote: Lote, onClose: () => void) {
   const [, setParams] = useSearchParams();
   const guardar = async (dados: LoteEdicao) => {
     try {
-      const atualizado = await editar.mutateAsync({ id: lote.id, ...inicialEdicao(lote), ...dados });
+      const novo = { ...inicialEdicao(lote), ...dados };
+      const atualizado = await editar.mutateAsync({ id: lote.id, ...novo });
       notifySuccess(t("web.stock.updated"));
+      if (externoSemQualidade(novo)) notifyWarning(t("web.stock.warn_external_no_quality"));
       onClose();
       // Mudou de garanhão: a lista passa para o garanhão novo, com o lote aberto.
       if (atualizado.garanhao_nome !== lote.garanhao_nome) {

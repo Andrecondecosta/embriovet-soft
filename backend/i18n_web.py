@@ -1690,6 +1690,11 @@ for _k, *_txt in [
      "Exams, inseminations (per lot) and diagnoses by stage, with codes instead of names. Includes a legend sheet.",
      "Examens, inséminations (par lot) et diagnostics par étape, avec des codes au lieu des noms. Avec une feuille de légende.",
      "Untersuchungen, Besamungen (pro Charge) und Diagnosen pro Etappe, mit Codes statt Namen. Mit Legende."),
+    ("web.stock.warn_external_no_quality",
+     "Lote de fora sem concentração e/ou motilidade: preencha-as quando as souber (fazem falta para o estudo).",
+     "External lot without concentration and/or motility: fill them in when known (needed for the study).",
+     "Lot externe sans concentration et/ou motilité : complétez-les dès que possible (nécessaires pour l’étude).",
+     "Externe Charge ohne Konzentration und/oder Motilität: bitte nachtragen (für die Studie nötig)."),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v

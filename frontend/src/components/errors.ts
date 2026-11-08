@@ -17,6 +17,7 @@ export function ligarFeedback(m: AppApi["message"], md: AppApi["modal"]) {
 }
 
 export const notifySuccess = (texto: string) => mensagens?.success(texto);
+export const notifyWarning = (texto: string) => mensagens?.warning(texto, 8);
 
 /** Mensagem traduzida para um erro da API (ou genérica). */
 export function useErrorMessage() {

@@ -4,9 +4,9 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
-import { notifySuccess, useNotifyError } from "../../components/errors";
+import { notifySuccess, notifyWarning, useNotifyError } from "../../components/errors";
 import { PageHeader } from "../../components/ds";
-import { useCriarLote, type LoteNovo } from "./api";
+import { externoSemQualidade, useCriarLote, type LoteNovo } from "./api";
 import { NovoLoteMobile } from "./LoteFormMobile";
 import { CamposLote, DonoSelect, GaranhaoInput, Secao, camposVazios, useAjudaGaranhao } from "./LoteForm";
 import { DataProducaoCampo } from "./DataProducaoCampo";
@@ -22,8 +22,10 @@ export function useGuardarNovo() {
   const criar = useCriarLote();
   const guardar = async (dados: LoteNovo) => {
     try {
-      const lote = await criar.mutateAsync({ ...camposVazios(), ...dados });
+      const novo = { ...camposVazios(), ...dados };
+      const lote = await criar.mutateAsync(novo);
       notifySuccess(t("web.stock.added"));
+      if (externoSemQualidade(novo)) notifyWarning(t("web.stock.warn_external_no_quality"));
       // Como na app atual: volta aos Lotes, no garanhão do lote novo, com
       // o lote aberto.
       navigate(`/stock-semen/lotes?garanhao=${encodeURIComponent(lote.garanhao_nome)}&lote=${lote.id}`, { replace: true });

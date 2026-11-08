@@ -185,6 +185,13 @@ export function localizacao(l: Pick<Lote, "contentor_codigo" | "canister" | "and
 // isso não identifica o lote, por isso não serve de referência.
 const SIM_NAO = /^(sim|n[ãa]o|s|n|yes|no|x)$/i;
 
+/** Lote vindo de fora (origem externa preenchida e não "Não") sem
+ *  concentração ou motilidade — só avisa, não impede de gravar. */
+export const externoSemQualidade = (l: Pick<LoteCampos, "origem_externa" | "concentracao" | "motilidade">) => {
+  const origem = l.origem_externa?.trim() ?? "";
+  return origem !== "" && !/^(n[ãa]o|n|no)$/i.test(origem) && (!l.concentracao || !l.motilidade);
+};
+
 /** Referência do lote: origem externa (se for mesmo um texto), ou data de produção. */
 export const referencia = (l: Pick<Lote, "origem_externa" | "data_embriovet">) => {
   const origem = l.origem_externa?.trim();
