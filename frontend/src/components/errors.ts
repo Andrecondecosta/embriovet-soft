@@ -47,6 +47,7 @@ export function confirmar(o: {
   cancelar: string;
   perigo?: boolean;
   onOk: () => Promise<unknown> | void;
+  onCancel?: () => void;
 }) {
   modais?.confirm({
     title: o.titulo,
@@ -55,5 +56,6 @@ export function confirmar(o: {
     cancelText: o.cancelar,
     okButtonProps: o.perigo ? { danger: true } : undefined,
     onOk: o.onOk,
+    onCancel: o.onCancel,
   });
 }

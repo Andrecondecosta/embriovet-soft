@@ -265,3 +265,15 @@ def test_inseminacao_fecha_a_tarefa_inseminar(ctx):
     )
     _inseminar(ctx, 0)
     assert _um("SELECT concluida, cancelada FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (ctx["egua"],)) == (True, False)
+
+
+def test_inseminar_egua_gestante_pede_confirmacao(ctx):
+    a = _inseminar(ctx, 20)
+    assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"
+    corpo = _corpo(ctx, 1)
+    r = ctx["c"].post("/api/inseminacoes", json=corpo)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "web.insem.error.mare_pregnant"
+    assert r.json()["detail"]["params"]["data"] == (date.today() - timedelta(days=20)).strftime("%d/%m/%Y")
+    assert ctx["c"].post("/api/inseminacoes", json={**corpo, "confirmar_gestante": True}).status_code == 201
+    assert _historial(ctx)[a]["resultado"] == "falhou"

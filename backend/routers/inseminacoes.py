@@ -8,7 +8,7 @@ app atual (repõe as palhetas antigas e grava as novas).
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +18,7 @@ from backend.deps import get_current_user
 from backend.serial import registos, valor
 from modules.db import get_connection
 from modules.repositories.insemination_repo import (
+    DIAS_MESMO_CIO,
     InseminacaoDuplicada,
     InseminacaoError,
     listar_eguas_com_estadia_ativa,
@@ -75,6 +76,8 @@ class InseminacaoIn(BaseModel):
     criar_tarefa_d1: bool = True
     # Id do envio do formulário (anti-duplicados).
     pedido_id: UUID | None = None
+    # A égua está dada como gestante: só se insemina com confirmação explícita.
+    confirmar_gestante: bool = False
 
     @field_validator("observacoes", "garanhao", mode="before")
     @classmethod
@@ -103,6 +106,19 @@ def _validar_linhas(linhas: list[Linha], extra: dict[int, int] | None = None):
             raise _erro(409, "web.insem.error.not_enough", id=l.stock_id, max=disponivel)
 
 
+def _gestacao_confirmada(animal_id: int, dia: date) -> date | None:
+    """Data da inseminação de uma gestação confirmada desta égua, de um cio
+    anterior (as do mesmo cio não contam)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT MAX(data_inseminacao) FROM inseminacoes
+                   WHERE animal_id_egua = %s AND resultado = 'gestacao_confirmada' AND data_inseminacao < %s""",
+                (animal_id, dia - timedelta(days=DIAS_MESMO_CIO)),
+            )
+            return cur.fetchone()[0]
+
+
 @router.post("", status_code=201)
 def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
     with get_connection() as conn:
@@ -119,6 +135,9 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
     if d.hora_inseminacao is None:
         raise _erro(422, "web.insem.error.time_required")
     _validar_linhas(d.linhas)
+    if not d.confirmar_gestante and (gestante := _gestacao_confirmada(d.animal_id_egua, d.data_inseminacao)):
+        # Ao confirmar, essa gestação fica "falhou" (a égua voltou a ser inseminada).
+        raise _erro(409, "web.insem.error.mare_pregnant", data=gestante.strftime("%d/%m/%Y"))
     try:
         ret = registar_inseminacao_completa(
             animal_id_egua=d.animal_id_egua,

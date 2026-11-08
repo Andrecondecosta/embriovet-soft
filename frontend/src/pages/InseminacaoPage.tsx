@@ -24,6 +24,7 @@ import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
   Checkbox as MCheckbox,
+  Dialog,
   DotLoading,
   ErrorBlock,
   List,
@@ -36,11 +37,11 @@ import {
 } from "antd-mobile";
 import { AddOutline } from "antd-mobile-icons";
 
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import { useT } from "../i18n/I18n";
 import { useIsMobile } from "../components/responsive";
 import { dataCurta } from "../components/csv";
-import { notifySuccess, useErrorMessage, useNotifyError } from "../components/errors";
+import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../components/errors";
 import { Cabecalho, DataCampo, PickerCampo, SeletorPesquisa } from "../components/mobile";
 import { localizacao, referencia, type Lote } from "./stock/api";
 import { QtdPalhetas, SelecionarLotesModal } from "./stock/transfer/TransferenciasTab";
@@ -176,7 +177,8 @@ function useInseminacao() {
   }, [operacao.data, lotes.data]);
 
   const total = linhas.reduce((s, l) => s + l.qty, 0);
-  const corpo = () => ({
+  const isMobile = useIsMobile();
+  const corpo = (confirmarGestante = false) => ({
     animal_id_egua: egua,
     garanhao: garanhaoAtual,
     data_inseminacao: data,
@@ -185,24 +187,52 @@ function useInseminacao() {
     linhas: linhas.filter((l) => l.qty > 0).map((l) => ({ stock_id: l.stock_id, palhetas: l.qty })),
     observacoes,
     criar_tarefa_d1: d1,
+    confirmar_gestante: confirmarGestante,
   });
   const invalidar = () => {
     for (const k of ["inseminacoes", "trabalho", "dashboard", "animal", "stock", "transferencias"])
       queryClient.invalidateQueries({ queryKey: [k] });
   };
   const gravar = useMutation({
-    mutationFn: () =>
-      editarRef ? api(`/inseminacoes/operacao/${editarRef}`, "PUT", corpo()) : api<Confirmacao>("/inseminacoes", "POST", corpo()),
+    mutationFn: (confirmarGestante: boolean) =>
+      editarRef
+        ? api(`/inseminacoes/operacao/${editarRef}`, "PUT", corpo())
+        : api<Confirmacao>("/inseminacoes", "POST", corpo(confirmarGestante)),
     onSuccess: invalidar,
   });
 
-  const submeter = async () => {
+  /** A égua está dada como gestante: pergunta antes de inseminar (ao confirmar,
+   *  essa gestação passa a "falhou"). */
+  const perguntarGestante = (dataGestacao: string) =>
+    new Promise<boolean>((resolve) => {
+      const texto = t("web.insem.confirm_pregnant", { data: dataGestacao });
+      if (isMobile)
+        void Dialog.confirm({
+          content: texto,
+          confirmText: t("web.insem.confirm_pregnant_ok"),
+          cancelText: t("web.common.cancel"),
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      else
+        confirmar({
+          titulo: t("web.insem.pregnant_title"),
+          texto,
+          ok: t("web.insem.confirm_pregnant_ok"),
+          cancelar: t("web.common.cancel"),
+          perigo: true,
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+    });
+
+  const submeter = async (confirmarGestante = false) => {
     setErro(null);
     if (!linhas.some((l) => l.qty > 0)) return setErro(t("error.select_lot_line"));
     if (!egua) return setErro(t("error.mare_required"));
     if (!hora && !editarRef) return setErro(t("web.insem.error.time_required"));
     try {
-      const r = await gravar.mutateAsync();
+      const r = await gravar.mutateAsync(confirmarGestante);
       if (editarRef) {
         notifySuccess(t("web.insem.updated"));
         navigate("/atividade");
@@ -214,6 +244,10 @@ function useInseminacao() {
         setObservacoes("");
       }
     } catch (err) {
+      if (err instanceof ApiError && err.code === "web.insem.error.mare_pregnant") {
+        if (await perguntarGestante(String(err.params.data ?? ""))) return submeter(true);
+        return;
+      }
       notifyError(err);
     }
   };
@@ -463,7 +497,7 @@ function InseminacaoDesktop({ x }: { x: X }) {
           </div>
 
           {x.erro && <Alert type="error" showIcon title={x.erro} />}
-          <Button type="primary" size="large" block loading={x.aGravar} onClick={x.submeter}>
+          <Button type="primary" size="large" block loading={x.aGravar} onClick={() => x.submeter()}>
             {x.editarRef ? t("web.insem.update") : t("web.insem.title")}
           </Button>
         </Space>
@@ -615,7 +649,7 @@ function InseminacaoMobile({ x }: { x: X }) {
       </List>
       <div style={{ position: "sticky", bottom: 0, zIndex: 2, padding: 12, background: "#f5f5f5", borderTop: "1px solid #eee" }}>
         {x.erro && <div style={{ color: "var(--adm-color-danger)", marginBottom: 8 }}>{x.erro}</div>}
-        <MButton block color="primary" size="large" loading={x.aGravar} onClick={x.submeter}>
+        <MButton block color="primary" size="large" loading={x.aGravar} onClick={() => x.submeter()}>
           {x.editarRef ? t("web.insem.update") : t("web.insem.title")}
         </MButton>
       </div>
