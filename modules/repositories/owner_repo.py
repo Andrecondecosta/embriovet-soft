@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 def atualizar_status_proprietarios():
     """
-    Desativa automaticamente proprietários quando stock chega a 0.
+    Desativa automaticamente proprietários de sémen quando o stock chega a 0.
+    Só quem tem (ou teve) lotes: um dono que só tem éguas/animais nunca
+    tem stock e não deve ficar inativo por isso.
     NUNCA reativa automaticamente - controle manual após desativação.
     """
     try:
@@ -35,6 +37,9 @@ def atualizar_status_proprietarios():
                         GROUP BY dono_id
                     ) s ON d.id = s.dono_id
                     WHERE COALESCE(s.total_stock, 0) = 0
+                      AND EXISTS (SELECT 1 FROM estoque_dono e WHERE e.dono_id = d.id)
+                      AND NOT EXISTS (SELECT 1 FROM animais a WHERE a.dono_id = d.id AND a.tipo <> 'garanhao')
+                      AND NOT EXISTS (SELECT 1 FROM estadias es WHERE es.dono_id = d.id AND es.data_saida IS NULL)
                 )
             """)
             

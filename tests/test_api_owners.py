@@ -185,3 +185,35 @@ def test_nao_apaga_com_stock(client):
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM estoque_dono WHERE dono_id = %s", (owner_id,))
             conn.commit()
+
+
+def test_nome_quase_igual_e_duplicado(client):
+    base = _nome()
+    assert client.post("/api/owners", json={"nome": f"{base} Coudelaria Agrícola do Sado"}).status_code == 201
+    r = client.post("/api/owners", json={"nome": f"{base} Coud. Agricola do Sado"})
+    assert r.status_code == 409
+    assert r.json()["detail"]["params"]["name"] == f"{base} Coudelaria Agrícola do Sado"
+    # Pesquisa sem ligar a acentos.
+    itens = client.get("/api/owners", params={"q": f"{base} Coudelaria Agricola"}).json()["items"]
+    assert [o["nome"] for o in itens] == [f"{base} Coudelaria Agrícola do Sado"]
+
+
+def test_dono_de_eguas_nao_fica_inativo_sem_stock(client):
+    from modules.repositories.owner_repo import atualizar_status_proprietarios
+
+    so_eguas = client.post("/api/owners", json={"nome": _nome()}).json()["id"]
+    de_semen = client.post("/api/owners", json={"nome": _nome()}).json()["id"]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual) VALUES (%s, %s, 0)", (f"{PREFIXO}g", de_semen))
+        conn.commit()
+    try:
+        atualizar_status_proprietarios()
+        ativos = {o["id"]: o["ativo"] for o in client.get("/api/owners", params={"q": PREFIXO, "por_pagina": 200}).json()["items"]}
+        assert ativos[so_eguas] is True
+        assert ativos[de_semen] is False
+    finally:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM estoque_dono WHERE dono_id = %s", (de_semen,))
+            conn.commit()

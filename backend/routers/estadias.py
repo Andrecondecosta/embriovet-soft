@@ -131,10 +131,11 @@ def historico(
 
 @router.get("/estadias/opcoes")
 def opcoes(_user: dict = Depends(get_current_user)):
-    """Donos ativos e alojamentos ativos para o formulário."""
+    """Donos e alojamentos ativos para o formulário. Os donos vão todos:
+    "inativo" diz respeito ao stock de sémen, não a quem traz éguas."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, nome FROM dono WHERE ativo = TRUE ORDER BY LOWER(nome)")
+            cur.execute("SELECT id, nome FROM dono ORDER BY LOWER(nome)")
             donos = [{"id": r[0], "nome": r[1]} for r in cur.fetchall()]
             cur.execute("SELECT id, nome, tipo, capacidade FROM alojamentos WHERE ativo = TRUE ORDER BY tipo, LOWER(nome)")
             aloj = [{"id": r[0], "nome": r[1], "tipo": r[2], "capacidade": r[3]} for r in cur.fetchall()]

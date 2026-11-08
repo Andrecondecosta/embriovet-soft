@@ -79,14 +79,27 @@ def _obter(owner_id: int) -> dict | None:
     return _linha(row) if row else None
 
 
-def _nome_em_uso(nome: str, excluir_id: int | None = None) -> bool:
+# Abreviaturas comuns nos nomes de proprietários ("Coud. do Sado").
+_ABREV = {"coud": "coudelaria", "qta": "quinta", "hdade": "herdade", "hd": "herdade", "soc": "sociedade",
+          "agr": "agricola", "sr": "", "sra": "", "d": "", "dr": "", "dra": "", "eng": ""}
+_SEM_ACENTOS = ("áàâãäéèêëíìîïóòôõöúùûüç", "aaaaaeeeeiiiiooooouuuuc")
+
+
+def _nome_normal(nome: str) -> str:
+    """Nome para comparar: sem acentos, maiúsculas, pontuação nem abreviaturas."""
+    s = (nome or "").lower().translate(str.maketrans(*_SEM_ACENTOS))
+    s = "".join(c if c.isalnum() else " " for c in s)
+    return " ".join(_ABREV.get(p, p) for p in s.split() if _ABREV.get(p, p))
+
+
+def _nome_em_uso(nome: str, excluir_id: int | None = None) -> str | None:
+    """Nome de um proprietário já existente igual ou quase igual (acentos,
+    abreviaturas), ou None."""
+    alvo = _nome_normal(nome)
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM dono WHERE LOWER(nome) = LOWER(%s) AND id <> %s",
-                (nome, excluir_id or -1),
-            )
-            return cur.fetchone() is not None
+            cur.execute("SELECT nome FROM dono WHERE id <> %s", (excluir_id or -1,))
+            return next((n for (n,) in cur.fetchall() if _nome_normal(n) == alvo), None)
 
 
 @router.get("")
@@ -101,11 +114,13 @@ def listar(
     where, params = [], []
     termo = q.strip()
     if termo:
+        # Nome sem ligar a acentos ("Agricola" encontra "Agrícola").
+        sem = "translate(lower({}), %s, %s)"
         where.append(
-            "(nome ILIKE %s OR nome_completo ILIKE %s OR email ILIKE %s"
-            " OR nif ILIKE %s OR cidade ILIKE %s OR telemovel ILIKE %s)"
+            f"({sem.format('nome')} LIKE {sem.format('%s')} OR {sem.format('nome_completo')} LIKE {sem.format('%s')}"
+            " OR email ILIKE %s OR nif ILIKE %s OR cidade ILIKE %s OR telemovel ILIKE %s)"
         )
-        params += [f"%{termo}%"] * 6
+        params += [*_SEM_ACENTOS, f"%{termo}%", *_SEM_ACENTOS] * 2 + [f"%{termo}%"] * 4
     if estado == "ativos":
         where.append("ativo = TRUE")
     elif estado == "inativos":
@@ -136,8 +151,8 @@ def obter(owner_id: int, _user: dict = Depends(get_current_user)):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def criar(body: OwnerIn, _user: dict = Depends(get_current_user)):
-    if _nome_em_uso(body.nome):
-        raise _erro(409, "web.owners.error.duplicate", name=body.nome)
+    if existente := _nome_em_uso(body.nome):
+        raise _erro(409, "web.owners.error.duplicate", name=existente)
     novo_id = adicionar_proprietario(body.model_dump())
     if not novo_id:
         raise _erro(500, "web.error.generic")
@@ -148,8 +163,8 @@ def criar(body: OwnerIn, _user: dict = Depends(get_current_user)):
 def editar(owner_id: int, body: OwnerIn, _user: dict = Depends(get_current_user)):
     if not _obter(owner_id):
         raise _erro(404, "web.owners.error.not_found")
-    if _nome_em_uso(body.nome, excluir_id=owner_id):
-        raise _erro(409, "web.owners.error.duplicate", name=body.nome)
+    if existente := _nome_em_uso(body.nome, excluir_id=owner_id):
+        raise _erro(409, "web.owners.error.duplicate", name=existente)
     if not editar_proprietario(owner_id, body.model_dump()):
         raise _erro(500, "web.error.generic")
     return _obter(owner_id)
