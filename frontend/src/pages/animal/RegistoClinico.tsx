@@ -481,7 +481,7 @@ function FichaDG({ atual, onGuardar }: { atual?: string; onGuardar: (v: string |
   return (
     <>
       <Escolha
-        opcoes={[...DGS.map((d) => ({ label: t(`web.registo.dg.${d}`), value: d })), { label: "—", value: "" }]}
+        opcoes={[...DGS.map((d) => ({ label: t(`web.registo.dg.${d}`), value: d })), { label: t("web.registo.dg.none"), value: "" }]}
         valor={v}
         onChange={setV}
       />
@@ -909,7 +909,20 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   if (!novo) {
     const ultimos = todos ? r.historico : r.historico.slice(0, 5);
     const verTodos = todos ? t("web.registo.show_less") : t("web.registo.show_all");
-    const semEstadia = <Alert type="warning" showIcon title={t("web.animal.error.no_active_stay")} />;
+    // Sem estadia aberta não há registo: leva logo à entrada (não fica num beco).
+    const criarEstadia = () => navigate("/estadias/internadas?nova=1");
+    const semEstadia = (
+      <Alert
+        type="warning"
+        showIcon
+        title={t("web.animal.error.no_active_stay")}
+        action={
+          <Button size="small" onClick={criarEstadia}>
+            {t("web.stays.new")}
+          </Button>
+        }
+      />
+    );
 
     if (isMobile)
       return (
@@ -948,7 +961,12 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
                 + {t("web.registo.new_button")}
               </MButton>
             ) : (
-              <div style={{ color: "var(--adm-color-warning)", fontSize: 13 }}>{t("web.animal.error.no_active_stay")}</div>
+              <>
+                <div style={{ color: "var(--adm-color-warning)", fontSize: 13, marginBottom: 8 }}>{t("web.animal.error.no_active_stay")}</div>
+                <MButton block onClick={criarEstadia}>
+                  {t("web.stays.new")}
+                </MButton>
+              </>
             )}
           </div>
           <Popup

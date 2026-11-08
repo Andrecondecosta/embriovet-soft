@@ -70,7 +70,8 @@ function useEstadias() {
       },
       { replace: true },
     );
-  const [nova, setNova] = useState(false);
+  // ?nova=1 abre logo o formulário de entrada (ex.: vindo de uma ficha sem estadia).
+  const [nova, setNova] = useState(params.get("nova") === "1");
   const [saida, setSaida] = useState<Estadia | null>(null);
   // Pesquisa por nome do animal ou do proprietário — vale para os três separadores.
   const [pesquisa, setPesquisa] = useState("");

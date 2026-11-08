@@ -5,6 +5,7 @@ import { Button as MButton, CheckList, Checkbox as MCheckbox, List, Popup, Searc
 import { useT } from "../i18n/I18n";
 import { useIsMobile } from "../components/responsive";
 import { Cabecalho } from "../components/mobile";
+import { notifySuccess } from "../components/errors";
 
 export type Formato = "csv" | "pdf" | "xlsx";
 export type Linha = Record<string, string | number | null>;
@@ -91,6 +92,7 @@ interface Props {
 
 /** Estado da janela + o que se manda à API — comum ao computador e ao telemóvel. */
 function useExportar(p: Props) {
+  const t = useT();
   const [e, setE] = useState<Estado | null>(null);
 
   const selecionadas = (tab: Tabela) => {
@@ -150,6 +152,7 @@ function useExportar(p: Props) {
         }
       : undefined;
     await p.exportar(e.formato, corpo);
+    notifySuccess(t("web.reports.downloaded"));
     p.fechar();
   };
 

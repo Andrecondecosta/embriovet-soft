@@ -519,7 +519,10 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
                e.id AS estadia_id, e.data_entrada, e.motivo,
                e.alojamento_id, al.nome AS alojamento_nome,
                al.tipo AS alojamento_tipo,
-               e.dono_id, d.nome AS dono_nome, e.garanhao AS garanhao_pedido
+               e.dono_id, d.nome AS dono_nome,
+               -- Garanhão pedido pelo dono na estadia (coluna da estadia,
+               -- não a coluna texto antiga dos lotes).
+               (SELECT est.garanhao FROM estadias est WHERE est.id = e.id) AS garanhao_pedido
         FROM animais a
         JOIN estadias e     ON e.animal_id = a.id
         LEFT JOIN alojamentos al ON al.id = e.alojamento_id

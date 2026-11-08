@@ -61,8 +61,8 @@ type LoteLike = Pick<
 function paraLinha(l: LoteLike & { stock_id: number; existencia_atual: number | null }, qty?: number): LinhaSel {
   const c = [
     l.qualidade ? `Q: ${l.qualidade}` : null,
-    l.concentracao ? `C: ${l.concentracao}` : null,
-    l.motilidade ? `M: ${l.motilidade}%` : null,
+    l.concentracao ? `Conc. ${l.concentracao}` : null,
+    l.motilidade ? `Mot. ${l.motilidade}%` : null,
   ].filter(Boolean);
   const max = l.existencia_atual ?? 0;
   return {
@@ -668,8 +668,8 @@ export function SelecionarLotesModal({
                     <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
                       {l.proprietario_nome ?? t("common.no_owner")}
                       {l.qualidade ? ` · Q: ${l.qualidade}` : ""}
-                      {l.concentracao ? ` · C: ${l.concentracao}` : ""}
-                      {l.motilidade ? ` · M: ${l.motilidade}%` : ""}
+                      {l.concentracao ? ` · Conc. ${l.concentracao}` : ""}
+                      {l.motilidade ? ` · Mot. ${l.motilidade}%` : ""}
                     </Typography.Text>
                   </div>
                   <Tag color="red" style={{ marginInlineEnd: 0 }}>

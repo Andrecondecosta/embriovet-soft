@@ -34,6 +34,40 @@ export const FUSOS = [
   "UTC",
 ];
 
+const CIDADES: Record<string, string> = {
+  "Europe/Lisbon": "Lisboa",
+  "Atlantic/Madeira": "Madeira",
+  "Atlantic/Azores": "Açores",
+  "Europe/London": "Londres",
+  "Europe/Madrid": "Madrid",
+  "Europe/Paris": "Paris",
+  "Europe/Brussels": "Bruxelas",
+  "Europe/Berlin": "Berlim",
+  "Europe/Rome": "Roma",
+  "Europe/Zurich": "Zurique",
+  "America/Sao_Paulo": "São Paulo",
+  "America/New_York": "Nova Iorque",
+  "Africa/Luanda": "Luanda",
+  "Africa/Maputo": "Maputo",
+};
+
+/** "Lisboa (UTC+0)" em vez de "Europe/Lisbon" — com a diferença de hoje. */
+export function rotuloFuso(fuso: string): string {
+  let desvio = "";
+  try {
+    desvio =
+      new Intl.DateTimeFormat("en", { timeZone: fuso, timeZoneName: "shortOffset" })
+        .formatToParts(new Date())
+        .find((p) => p.type === "timeZoneName")
+        ?.value.replace("GMT", "UTC") ?? "";
+  } catch {
+    /* fuso desconhecido do browser: só o nome */
+  }
+  if (desvio === "UTC") desvio = "UTC+0";
+  const nome = CIDADES[fuso] ?? fuso.replace("_", " ");
+  return fuso === "UTC" ? "UTC" : desvio ? `${nome} (${desvio})` : nome;
+}
+
 export const useMarca = () => useQuery({ queryKey: ["definicoes", "marca"], queryFn: () => api<Marca>("/definicoes/marca") });
 
 /** Grava e atualiza logo a marca/idioma em toda a app (menu, título, traduções). */

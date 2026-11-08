@@ -7,7 +7,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
 import { Cabecalho } from "../../components/mobile";
-import { FUSOS, IDIOMAS, useGravarMarca, useMarca, useReporMarca, type Marca } from "./api";
+import { FUSOS, IDIOMAS, rotuloFuso, useGravarMarca, useMarca, useReporMarca, type Marca } from "./api";
 
 /** Cores para escolher depressa (a primeira é a de origem). */
 const CORES = ["#E85D4A", "#1677FF", "#13A8A8", "#52C41A", "#FA8C16", "#722ED1", "#EB2F96", "#262626"];
@@ -382,7 +382,7 @@ export function IdiomaTab() {
         <CheckList value={[fusoAtual]} onChange={(v) => v[0] && escolherFuso(String(v[0]))}>
           {fusos.map((f) => (
             <CheckList.Item key={f} value={f} disabled={gravar.isPending}>
-              {f.replace("_", " ")}
+              {rotuloFuso(f)}
             </CheckList.Item>
           ))}
         </CheckList>
@@ -409,7 +409,7 @@ export function IdiomaTab() {
         value={fusoAtual}
         onChange={escolherFuso}
         disabled={gravar.isPending}
-        options={fusos.map((f) => ({ value: f, label: f.replace("_", " ") }))}
+        options={fusos.map((f) => ({ value: f, label: rotuloFuso(f) }))}
       />
     </Space>
   );

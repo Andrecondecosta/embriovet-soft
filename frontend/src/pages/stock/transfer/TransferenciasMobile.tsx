@@ -323,8 +323,8 @@ export function SelecionarLotesMobile({
                     <>
                       {l.proprietario_nome ?? t("common.no_owner")}
                       {l.qualidade ? ` · Q: ${l.qualidade}` : ""}
-                      {l.concentracao ? ` · C: ${l.concentracao}` : ""}
-                      {l.motilidade ? ` · M: ${l.motilidade}%` : ""}
+                      {l.concentracao ? ` · Conc. ${l.concentracao}` : ""}
+                      {l.motilidade ? ` · Mot. ${l.motilidade}%` : ""}
                       {qty !== undefined && (
                         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
                           <span>{rotuloQtd ?? t("web.transfer.qty_to_send")}</span>
