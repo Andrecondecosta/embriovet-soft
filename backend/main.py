@@ -37,10 +37,8 @@ async def cabecalhos_seguranca(request: Request, call_next):
     r.headers.setdefault("X-Content-Type-Options", "nosniff")
     r.headers.setdefault("X-Frame-Options", "DENY")
     r.headers.setdefault("Referrer-Policy", "same-origin")
-    # Por agora só relatório (o browser avisa na consola, não bloqueia):
-    # passa a "Content-Security-Policy" depois de confirmado que nada parte.
     r.headers.setdefault(
-        "Content-Security-Policy-Report-Only",
+        "Content-Security-Policy",
         "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; "
         "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     )
