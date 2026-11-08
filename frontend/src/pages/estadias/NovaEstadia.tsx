@@ -134,8 +134,14 @@ function useAvisoNome(nome: string | undefined, donoId: number | null) {
   return n.length > 1 && (pesquisa.data ?? []).some((a) => a.nome.toLowerCase() === n.toLowerCase() && a.dono_id !== donoId);
 }
 
-export function NovaEstadia({ aberto, onClose }: { aberto: boolean; onClose: () => void }) {
-  return useIsMobile() ? <NovaEstadiaMobile aberto={aberto} onClose={onClose} /> : <NovaEstadiaDesktop aberto={aberto} onClose={onClose} />;
+export function NovaEstadia({ aberto, onClose, inicial }: { aberto: boolean; onClose: () => void; inicial?: AnimalPesquisa | null }) {
+  // Animal já escolhido (ex.: vindo da ficha de uma égua sem estadia).
+  const valores: Valores = inicial ? { ...INICIAIS, modo: "existente", animal: inicial, dono_id: inicial.dono_id } : INICIAIS;
+  return useIsMobile() ? (
+    <NovaEstadiaMobile aberto={aberto} onClose={onClose} valores={valores} />
+  ) : (
+    <NovaEstadiaDesktop aberto={aberto} onClose={onClose} valores={valores} />
+  );
 }
 
 // ── Computador ──────────────────────────────────────────────────────────────
@@ -177,7 +183,7 @@ function PesquisaAnimal({ value, onChange }: { value?: AnimalPesquisa | null; on
   );
 }
 
-function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () => void }) {
+function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onClose: () => void; valores: Valores }) {
   const t = useT();
   const [form] = Form.useForm<Valores>();
   const opcoes = useOpcoesEstadia();
@@ -211,7 +217,7 @@ function NovaEstadiaDesktop({ aberto, onClose }: { aberto: boolean; onClose: () 
       width={760}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" preserve={false} initialValues={INICIAIS} onFinish={guardar}>
+      <Form form={form} layout="vertical" preserve={false} initialValues={valores} onFinish={guardar}>
         <Form.Item name="modo" style={{ marginBottom: 12 }}>
           <Segmented
             options={[
@@ -427,7 +433,7 @@ function PesquisaAnimalMobile({ value, onChange }: { value?: AnimalPesquisa | nu
   );
 }
 
-function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () => void }) {
+function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onClose: () => void; valores: Valores }) {
   const t = useT();
   const [form] = MForm.useForm<Valores>();
   const garanhoes = useOpcoes("garanhoes");
@@ -465,7 +471,7 @@ function NovaEstadiaMobile({ aberto, onClose }: { aberto: boolean; onClose: () =
         form={form}
         layout="horizontal"
         style={{ "--prefix-width": "7.5em" } as React.CSSProperties}
-        initialValues={{ ...INICIAIS, data_entrada: dayjs().format("YYYY-MM-DD") }}
+        initialValues={{ ...valores, data_entrada: dayjs().format("YYYY-MM-DD") }}
         onFinish={(v: Valores) => guardar({ ...form.getFieldsValue(true), ...v })}
         onFinishFailed={irParaErro}
       >

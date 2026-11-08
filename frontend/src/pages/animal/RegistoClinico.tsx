@@ -480,11 +480,15 @@ function FichaDG({ atual, onGuardar }: { atual?: string; onGuardar: (v: string |
   const [v, setV] = useState(atual ?? "");
   return (
     <>
-      <Escolha
-        opcoes={[...DGS.map((d) => ({ label: t(`web.registo.dg.${d}`), value: d })), { label: t("web.registo.dg.none"), value: "" }]}
-        valor={v}
-        onChange={setV}
-      />
+      {/* Sem escolha nada fica destacado; "Não registar DG" é só um botão para limpar. */}
+      <Escolha opcoes={DGS.map((d) => ({ label: t(`web.registo.dg.${d}`), value: d }))} valor={v || undefined} onChange={setV} />
+      {v && (
+        <div style={{ marginTop: 6 }}>
+          <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setV("")}>
+            {t("web.registo.dg.none")}
+          </Button>
+        </div>
+      )}
       <Ajuda>{t("web.registo.dg_help")}</Ajuda>
       <Guardar onClick={() => onGuardar(v || undefined)} />
     </>
@@ -910,7 +914,18 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
     const ultimos = todos ? r.historico : r.historico.slice(0, 5);
     const verTodos = todos ? t("web.registo.show_less") : t("web.registo.show_all");
     // Sem estadia aberta não há registo: leva logo à entrada (não fica num beco).
-    const criarEstadia = () => navigate("/estadias/internadas?nova=1");
+    // Abre a entrada já com esta égua e o dono escolhidos.
+    const criarEstadia = () =>
+      navigate(
+        `/estadias/internadas?${new URLSearchParams({
+          nova: "1",
+          animal: String(animal.id),
+          nome: animal.nome,
+          tipo: animal.tipo,
+          dono: String(animal.dono_id ?? ""),
+          proprietario: animal.proprietario ?? "",
+        })}`,
+      );
     const semEstadia = (
       <Alert
         type="warning"

@@ -36,6 +36,7 @@ import {
   useOpcoesEstadia,
   usePendentesSaida,
   useRegistarSaida,
+  type AnimalPesquisa,
   type Estadia,
   type EstadoSaida,
   type TipoAnimal,
@@ -72,6 +73,17 @@ function useEstadias() {
     );
   // ?nova=1 abre logo o formulário de entrada (ex.: vindo de uma ficha sem estadia).
   const [nova, setNova] = useState(params.get("nova") === "1");
+  // Vindo de uma ficha: o animal (e o dono) já escolhidos no formulário.
+  const animalInicial: AnimalPesquisa | null = params.get("animal")
+    ? {
+        id: Number(params.get("animal")),
+        nome: params.get("nome") ?? "",
+        tipo: (params.get("tipo") ?? "egua") as TipoAnimal,
+        dono_id: Number(params.get("dono")) || null,
+        proprietario: params.get("proprietario") || null,
+        em_aberto: null,
+      }
+    : null;
   const [saida, setSaida] = useState<Estadia | null>(null);
   // Pesquisa por nome do animal ou do proprietário — vale para os três separadores.
   const [pesquisa, setPesquisa] = useState("");
@@ -91,6 +103,7 @@ function useEstadias() {
     mes,
     nova,
     setNova,
+    animalInicial,
     saida,
     setSaida,
     mudarTab: (id: string) => navigate(`/estadias/${id}?${params}`),
@@ -126,7 +139,7 @@ export function EstadiasPage() {
   return (
     <>
       {isMobile ? <EstadiasMobile e={e} /> : <EstadiasDesktop e={e} />}
-      <NovaEstadia aberto={e.nova} onClose={() => e.setNova(false)} />
+      <NovaEstadia aberto={e.nova} onClose={() => e.setNova(false)} inicial={e.animalInicial} />
       <RegistarSaida estadia={e.saida} onClose={() => e.setSaida(null)} />
     </>
   );

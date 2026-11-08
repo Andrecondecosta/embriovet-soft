@@ -73,7 +73,7 @@ function useTrabalho() {
     mutationFn: () => api<{ criadas: number }>("/trabalho/gerar", "POST"),
     onSuccess: (r) => {
       if (r.criadas > 0) {
-        notifySuccess(t("web.daily.created_auto", { n: r.criadas }));
+        notifySuccess(t("web.daily.created_auto", { n: r.criadas, count: r.criadas }));
         queryClient.invalidateQueries({ queryKey: ["trabalho"] });
       }
     },
@@ -98,6 +98,12 @@ function useTrabalho() {
       queryClient.setQueriesData<Trabalho>({ queryKey: ["trabalho"] }, (d) =>
         d && {
           ...d,
+          // Os números do topo também mudam logo.
+          resumo: {
+            ...d.resumo,
+            por_fazer: Math.max(0, d.resumo.por_fazer - 1),
+            atrasadas: Math.max(0, d.resumo.atrasadas - (tarefa.dias_atraso ? 1 : 0)),
+          },
           por_fazer: d.por_fazer.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
           atrasadas: d.atrasadas.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
         },
