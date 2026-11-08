@@ -29,3 +29,8 @@ body {
 .adm-popup-body .adm-list {
   max-width: 100%;
 }
+.adm-popup-body .adm-text-area,
+.adm-popup-body textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+}

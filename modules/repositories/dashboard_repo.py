@@ -486,7 +486,7 @@ def _agrupar_operacoes(rows: list[tuple], limit: int | None = None) -> list[dict
     result: list[dict] = []
     for k in ordem:
         g = grupos[k]
-        suffix = f"{g['quantidade']} palhetas"
+        suffix = f"{g['quantidade']} {'palheta' if g['quantidade'] == 1 else 'palhetas'}"
         if g["num_lotes"] > 1:
             suffix += f" ({g['num_lotes']} lotes)"
         g["detalhe"] = f"{g['detalhe_base']} · {suffix}"

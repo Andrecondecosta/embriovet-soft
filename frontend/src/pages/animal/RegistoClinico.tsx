@@ -921,7 +921,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
           nova: "1",
           animal: String(animal.id),
           nome: animal.nome,
-          tipo: animal.tipo,
+          animal_tipo: animal.tipo,
           dono: String(animal.dono_id ?? ""),
           proprietario: animal.proprietario ?? "",
         })}`,

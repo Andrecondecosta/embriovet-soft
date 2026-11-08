@@ -78,7 +78,7 @@ function useEstadias() {
     ? {
         id: Number(params.get("animal")),
         nome: params.get("nome") ?? "",
-        tipo: (params.get("tipo") ?? "egua") as TipoAnimal,
+        tipo: (params.get("animal_tipo") ?? "egua") as TipoAnimal,
         dono_id: Number(params.get("dono")) || null,
         proprietario: params.get("proprietario") || null,
         em_aberto: null,
