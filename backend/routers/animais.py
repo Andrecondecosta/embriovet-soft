@@ -230,16 +230,22 @@ def _etapa(data_inseminacao: date | None, resultado: str | None, feitas=(), em: 
 
 
 def _etapas_feitas(animal_id: int) -> dict[str, set]:
-    """Etapas de diagnóstico já registadas, por operação."""
+    """Etapas de diagnóstico já feitas, por operação: só contam resultados
+    (positivo/negativo). "Inconclusivo" e "sem exame" não fazem a etapa —
+    ela continua por fazer. Um D+45 positivo fica como "fim" (acompanhamento
+    concluído)."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT operation_id::text, etapa FROM diagnosticos_gestacao WHERE animal_id = %s AND operation_id IS NOT NULL",
+                """SELECT operation_id::text, etapa, resultado FROM diagnosticos_gestacao
+                   WHERE animal_id = %s AND operation_id IS NOT NULL AND resultado IN ('positivo', 'negativo')""",
                 (animal_id,),
             )
             feitas: dict[str, set] = {}
-            for op, etapa in cur.fetchall():
+            for op, etapa, res in cur.fetchall():
                 feitas.setdefault(op, set()).add(etapa)
+                if etapa == "D+45" and res == "positivo":
+                    feitas[op].add("fim")
     return feitas
 
 
@@ -263,10 +269,13 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
         # Só operações reais (não linhas antigas "solo_") podem receber
         # resultado aqui; depois de um positivo continua a dar, para as
         # confirmações D+28 e D+45.
+        # Depois do D+45 positivo o acompanhamento está concluído: não se
+        # reabre com um diagnóstico novo.
         r["pode_resultado"] = (
             r["resultado"] in ("pendente", "gestacao_confirmada")
             and not str(r["op_key"]).startswith("solo_")
             and r["data_inseminacao"] is not None
+            and "fim" not in feitas.get(r["op_key"], ())
         )
         r["etapa"] = _etapa(_como_data(r["data_inseminacao"]), r["resultado"], feitas.get(r["op_key"], ()))[1]
     total = len(ins)

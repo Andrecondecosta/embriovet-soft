@@ -223,3 +223,20 @@ def test_primeiro_dg_feito_tarde_e_d14_e_agenda_confirmacoes(ctx):
     )[0] is True
     # A seguir é a confirmação D+28.
     assert _historial(ctx)[a]["etapa"] == "D+28"
+
+
+def test_inconclusivo_nao_faz_a_etapa_e_d45_positivo_fecha(ctx):
+    a = _inseminar(ctx, 46)
+    assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
+    assert _resultado(ctx, a, "inconclusivo").status_code == 200  # D+28 inconclusivo
+    assert _historial(ctx)[a]["etapa"] == "D+45"  # passou o D+45, mas por dias
+    _um("DELETE FROM diagnosticos_gestacao WHERE operation_id = %s::uuid AND resultado = 'inconclusivo'", (a,))
+    b = _inseminar(ctx, 30)
+    assert _resultado(ctx, b, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
+    assert _resultado(ctx, b, "sem_exame").status_code == 200  # D+28 sem exame
+    assert _historial(ctx)[b]["etapa"] == "D+28"  # continua por fazer
+    assert _resultado(ctx, b, "positivo").status_code == 200  # D+28 feito
+    assert _historial(ctx)[b]["etapa"] == "D+45"
+    assert _resultado(ctx, a, "positivo").status_code == 200  # D+45 positivo de a
+    assert _historial(ctx)[a]["pode_resultado"] is False
+    assert _resultado(ctx, a, "negativo").json()["detail"]["code"] == "web.animal.error.result_not_allowed"
