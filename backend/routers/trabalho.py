@@ -61,10 +61,19 @@ class ConcluirIn(BaseModel):
     observacoes: str | None = None
 
 
+# Estas fecham-se com a resposta (registo clínico, DG ou a inseminação),
+# não com "concluir": senão a ovulação / o diagnóstico ficam por saber.
+PEDEM_RESPOSTA = ("verificar_ovulacao", "diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "inseminar")
+
+
 @router.post("/{tarefa_id:int}/concluir")
 def concluir(tarefa_id: int, d: ConcluirIn, user: dict = Depends(get_current_user)):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT tipo FROM trabalho_diario WHERE id = %s", (tarefa_id,))
+            row = cur.fetchone()
+            if row and row[0] in PEDEM_RESPOSTA:
+                raise HTTPException(409, {"code": "web.work.error.needs_answer", "params": {}})
             cur.execute(
                 """
                 UPDATE trabalho_diario

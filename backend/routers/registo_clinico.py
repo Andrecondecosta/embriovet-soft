@@ -28,7 +28,7 @@ from backend.deps import get_current_user
 from backend.serial import valor
 from modules.db import get_connection
 from modules.pages.animal_page import _carregar_animal, _concluir_tarefas_animal_hoje, _obter_estadia_activa
-from modules.repositories.insemination_repo import InseminacaoError, registar_diagnostico, registar_resultado
+from modules.repositories.insemination_repo import DIAS_MIN_DG, InseminacaoError, registar_diagnostico, registar_resultado
 
 router = APIRouter(prefix="/api/animais", tags=["registo_clinico"])
 
@@ -332,24 +332,23 @@ def _urgencia(dia: date) -> str:
     return "hoje" if falta <= 0 else "amanha" if falta == 1 else "observacao"
 
 
-def _tarefa(cur, animal_id: int, estadia_id: int, dia: date, motivo: str, utilizador: str) -> int:
+def _tarefa(cur, animal_id: int, estadia_id: int, dia: date, motivo: str, utilizador: str, tipo: str = "tratamento") -> int:
     cur.execute(
         """
         INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia, criado_automaticamente, utilizador)
-        VALUES (%s, %s, %s, 'tratamento', %s, %s, FALSE, %s) RETURNING id
+        VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id
         """,
-        (animal_id, estadia_id, dia, motivo[:500], _urgencia(dia), utilizador[:50]),
+        (animal_id, estadia_id, dia, tipo, motivo[:500], _urgencia(dia), utilizador[:50]),
     )
     return cur.fetchone()[0]
 
 
-def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str, registo_id: int) -> str | None:
-    """Guarda o DG na etapa certa (D+14/D+28/D+45) da inseminação mais
-    recente da égua, com a data e hora do exame. Positivo/negativo também
-    atualizam o resultado da inseminação (tarefas seguintes, como antes)."""
+def _alvo_dg(animal_id: int, dia: date) -> tuple[dict, str] | None:
+    """A inseminação a que um DG feito em `dia` pertence (a mais recente
+    ainda em aberto) e a etapa. Recusa um DG antes do D+12 (a vesícula
+    ainda não se vê: seria de outra inseminação ou um engano)."""
     from backend.routers.animais import _como_data, _etapa, _etapas_feitas, reprodutivo
 
-    dia = data_exame.date()
     ops = [
         r for r in reprodutivo(animal_id)["inseminacoes"]
         # Só inseminações ainda em aberto (pendente ou positiva à espera das
@@ -357,9 +356,22 @@ def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str
         if r["pode_resultado"] and _como_data(r["data_inseminacao"]) <= dia
     ]
     if not ops:
-        return "sem_inseminacao"
+        return None
     alvo = max(ops, key=lambda r: _como_data(r["data_inseminacao"]))
+    if (dia - _como_data(alvo["data_inseminacao"])).days < DIAS_MIN_DG:
+        raise _erro(422, "web.registo.error.dg_too_early", dias=DIAS_MIN_DG)
     tipo, _ = _etapa(_como_data(alvo["data_inseminacao"]), alvo["resultado"], _etapas_feitas(animal_id).get(alvo["op_key"], ()), dia)
+    return alvo, tipo
+
+
+def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str, registo_id: int, alvo_tipo) -> str | None:
+    """Guarda o DG na etapa certa (D+14/D+28/D+45) da inseminação, com a
+    data e hora do exame. Positivo/negativo também atualizam o resultado
+    da inseminação (tarefas seguintes, como antes)."""
+    if not alvo_tipo:
+        return "sem_inseminacao"
+    alvo, tipo = alvo_tipo
+    dia = data_exame.date()
     try:
         registar_diagnostico(
             animal_id=animal_id,
@@ -399,6 +411,8 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
         raise _erro(422, "web.registo.error.dg_required")
     if dados.TX and dados.TX.marcar and dados.TX.marcar.dias == "agenda" and not dados.TX.marcar.data:
         raise _erro(422, "web.registo.error.agenda_date")
+    # O DG valida-se antes de gravar (não fica um registo gravado com erro).
+    alvo_dg = _alvo_dg(animal_id, d.data_registo.date()) if dados.DG else None
 
     criadas: list[int] = []
     with get_connection() as conn:
@@ -420,14 +434,20 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                     dias = (
                         [t.marcar.data]
                         if t.marcar.dias == "agenda"
-                        else [date.today() + timedelta(days=i) for i in range(1, int(t.marcar.dias) + 1)]
+                        else [d.data_registo.date() + timedelta(days=i) for i in range(1, int(t.marcar.dias) + 1)]
                     )
                     for dia in dias:
                         criadas.append(_tarefa(cur, animal_id, estadia_id, dia, motivo, user["username"]))
                 if t and t.inducao:
-                    produto = f" ({t.inducao.produto})" if t.inducao.produto else ""
+                    # Passagem de turno: quem vem a seguir vê no Trabalho
+                    # diário que esta égua tem de ser inseminada (a tarefa
+                    # fecha-se ao registar a inseminação).
+                    produto = f" {t.inducao.produto}" if t.inducao.produto else ""
                     criadas.append(
-                        _tarefa(cur, animal_id, estadia_id, t.inducao.data.date(), f"Indução{produto} às {t.inducao.data:%H:%M}", user["username"])
+                        _tarefa(
+                            cur, animal_id, estadia_id, (t.inducao.data + timedelta(hours=24)).date(),
+                            f"Inseminar — indução{produto} a {t.inducao.data:%d/%m %H:%M}", user["username"], tipo="inseminar",
+                        )
                     )
                 conn.commit()
             except Exception:
@@ -435,7 +455,7 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                 raise
 
     concluidas = _concluir_tarefas_animal_hoje(animal_id, user["username"])
-    resultado = _resultado_dg(animal_id, dados.DG, d.data_registo, user["username"], rid) if dados.DG else None
+    resultado = _resultado_dg(animal_id, dados.DG, d.data_registo, user["username"], rid, alvo_dg) if dados.DG else None
     if d.prioritario:
         # A próxima tarefa por fazer desta égua passa a urgente.
         with get_connection() as conn:

@@ -127,12 +127,14 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
             }
         ),
     )
-    assert r.json()["tarefas_criadas"] == 3  # 2 dias de tratamento + indução
+    assert r.json()["tarefas_criadas"] == 3  # 2 dias de tratamento + inseminar (da indução)
     tarefas = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'tratamento' ORDER BY id", (aid,))
     hoje = date.today()
-    assert [t[0] for t in tarefas] == [hoje + timedelta(days=1), hoje + timedelta(days=2), inducao.date()]
+    assert [t[0] for t in tarefas] == [hoje + timedelta(days=1), hoje + timedelta(days=2)]
     assert "Ocitocina 2× 8h" in tarefas[0][1] and "Genta" in tarefas[0][1]
-    assert tarefas[2][1] == "Indução às 20:00"
+    # A indução deixa a tarefa "inseminar" para o dia seguinte (passagem de turno).
+    ins = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (aid,))
+    assert ins == [(inducao.date() + timedelta(days=1), f"Inseminar — indução a {inducao:%d/%m} 20:00")]
     lista = c.get(f"/api/animais/{aid}/registos").json()
     assert outro in lista["antibioticos"]
     assert lista["tratamentos_anteriores"][0]["texto"].startswith("Ocitocina 2× 8h")
@@ -256,3 +258,11 @@ def test_registo_fecha_observacoes_em_atraso_mas_nao_tratamentos(ctx):
     assert r.status_code == 201, r.text
     abertas = _todas("SELECT tipo FROM trabalho_diario WHERE animal_id = %s AND concluida = FALSE", (aid,))
     assert abertas == [("tratamento",)]
+
+
+def test_dg_cedo_demais_nao_grava_o_registo(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    _inseminada_ha(aid, 5)
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo"))
+    assert r.json()["detail"]["code"] == "web.registo.error.dg_too_early"
+    assert _todas("SELECT id FROM registo_clinico WHERE animal_id = %s", (aid,)) == []

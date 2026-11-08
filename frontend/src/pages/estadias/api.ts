@@ -121,6 +121,14 @@ function useEstadiaMutation<V, R>(fn: (v: V) => Promise<R>) {
 }
 
 export const useCriarEstadia = () => useEstadiaMutation((d: EstadiaIn) => api<{ id: number; animal_id: number }>("/estadias", "POST", d));
+/** O que fica em curso se a égua sair (aviso no formulário de saída). */
+export const usePendentesSaida = (id: number | null) =>
+  useQuery({
+    queryKey: ["estadias", "pendentes", id],
+    queryFn: () => api<{ tarefas: Record<string, number>; inseminacoes_sem_resultado: string[] }>(`/estadias/${id}/pendentes`),
+    enabled: id !== null,
+  });
+
 export const useRegistarSaida = () =>
   useEstadiaMutation(({ id, ...d }: { id: number; data_saida: string; estado: EstadoSaida; observacoes?: string }) =>
     api<{ ok: boolean }>(`/estadias/${id}/saida`, "POST", d),

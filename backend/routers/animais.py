@@ -47,7 +47,7 @@ from modules.pages.animal_page import (
     _upsert_acompanhamento,
 )
 from modules.repositories.colheita_repo import agendar_colheita, cancelar_colheita, listar_colheitas_futuras
-from modules.repositories.insemination_repo import InseminacaoError, registar_diagnostico, registar_resultado
+from modules.repositories.insemination_repo import DIAS_MIN_DG, InseminacaoError, registar_diagnostico, registar_resultado
 
 router = APIRouter(prefix="/api/animais", tags=["animais"])
 
@@ -299,6 +299,8 @@ def resultado(animal_id: int, d: ResultadoIn, user: dict = Depends(get_current_u
     dia = d.data_exame or date.today()
     if dia > date.today() or dia < _como_data(linha["data_inseminacao"]):
         raise _erro(422, "web.animal.error.result_bad_date")
+    if (dia - _como_data(linha["data_inseminacao"])).days < DIAS_MIN_DG:
+        raise _erro(422, "web.registo.error.dg_too_early", dias=DIAS_MIN_DG)
     tipo_tarefa, _ = _etapa(_como_data(linha["data_inseminacao"]), linha["resultado"], _etapas_feitas(animal_id).get(d.op_key, ()), dia)
     try:
         registar_diagnostico(

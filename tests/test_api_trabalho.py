@@ -43,7 +43,7 @@ def client():
         conn.commit()
 
 
-def _tarefa(dias_atras: int) -> int:
+def _tarefa(dias_atras: int, tipo: str = "verificar_ovulacao") -> int:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("INSERT INTO animais (nome, tipo, ativo) VALUES (%s, 'egua', TRUE) RETURNING id", (f"{PREFIXO}{uuid.uuid4().hex[:6]}",))
@@ -51,9 +51,9 @@ def _tarefa(dias_atras: int) -> int:
             cur.execute(
                 """
                 INSERT INTO trabalho_diario (animal_id, data_tarefa, tipo, motivo, urgencia)
-                VALUES (%s, %s, 'verificar_ovulacao', 'teste', 'hoje') RETURNING id
+                VALUES (%s, %s, %s, 'teste', 'hoje') RETURNING id
                 """,
-                (aid, date.today() - timedelta(days=dias_atras)),
+                (aid, date.today() - timedelta(days=dias_atras), tipo),
             )
             tid = cur.fetchone()[0]
         conn.commit()
@@ -129,7 +129,9 @@ def _ids(r):
 
 
 def test_concluir_e_cancelar_a_mao(client):
-    hoje, atrasada = _tarefa(0), _tarefa(4)
+    hoje, atrasada = _tarefa(0), _tarefa(4, "observacao_clinica")
+    # O D+1 fecha-se com a resposta (ovulação), não com "concluir".
+    assert client.post(f"/api/trabalho/{hoje}/concluir", json={}).json()["detail"]["code"] == "web.work.error.needs_answer"
     feitas_antes = client.get("/api/trabalho").json()["resumo"]["feitas"]
     assert client.post(f"/api/trabalho/{atrasada}/concluir", json={}).status_code == 200
     assert client.post(f"/api/trabalho/{hoje}/cancelar").status_code == 200
@@ -173,6 +175,8 @@ def test_saida_cancela_tarefas_menos_as_da_gestacao(client):
                 )
                 ids[tipo] = cur.fetchone()[0]
         conn.commit()
+    p = client.get(f"/api/estadias/{eid}/pendentes").json()
+    assert sum(p["tarefas"].values()) == 4 and p["inseminacoes_sem_resultado"] == []
     r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": date.today().isoformat(), "estado": "alta"})
     assert r.status_code == 200, r.text
     assert r.json()["tarefas_canceladas"] == 2

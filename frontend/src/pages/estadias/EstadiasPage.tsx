@@ -32,6 +32,7 @@ import {
   useHistoricoEstadias,
   useInternadas,
   useMovimentos,
+  usePendentesSaida,
   useRegistarSaida,
   type Estadia,
   type EstadoSaida,
@@ -376,6 +377,19 @@ function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; onClose:
   const [obs, setObs] = useState("");
   const [calendario, setCalendario] = useState(false);
   const nome = estadia?.animal ?? "—";
+  // O que fica em curso se a égua sair agora (indução, DG, tarefas).
+  const pend = usePendentesSaida(estadia?.id ?? null).data;
+  const avisos = pend
+    ? [
+        pend.tarefas.inseminar ? t("web.stays.exit.pending_insem") : null,
+        pend.inseminacoes_sem_resultado.length
+          ? t("web.stays.exit.pending_result", { datas: pend.inseminacoes_sem_resultado.map((d) => dataCurta(d)).join(", ") })
+          : null,
+        Object.values(pend.tarefas).reduce((a, b) => a + b, 0)
+          ? t("web.stays.exit.pending_tasks", { n: Object.values(pend.tarefas).reduce((a, b) => a + b, 0) })
+          : null,
+      ].filter(Boolean)
+    : [];
 
   const guardar = async (v: SaidaForm) => {
     if (!estadia) return;
@@ -415,6 +429,13 @@ function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; onClose:
       >
         <div style={{ fontWeight: 600, fontSize: 15 }}>{t("web.stays.exit.title")}</div>
         <div style={{ color: "#999", marginBottom: 8 }}>{t("web.stays.exit.of", { name: nome })}</div>
+        {avisos.length > 0 && (
+          <div style={{ background: "#fffbe6", color: "#ad6800", borderRadius: 6, padding: 8, marginBottom: 8, fontSize: 13 }}>
+            {avisos.map((a) => (
+              <div key={a}>{a}</div>
+            ))}
+          </div>
+        )}
         <List style={{ "--border-top": "none", "--prefix-width": "7.5em" } as React.CSSProperties}>
           <List.Item prefix={t("web.stays.exit.date")} arrow onClick={() => setCalendario(true)}>
             {dayjs(dataSaida).format("DD/MM/YYYY")}
@@ -467,6 +488,16 @@ function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; onClose:
       destroyOnHidden
     >
       <Typography.Paragraph type="secondary">{t("web.stays.exit.of", { name: nome })}</Typography.Paragraph>
+      {avisos.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={avisos.map((a) => (
+            <div key={a}>{a}</div>
+          ))}
+        />
+      )}
       <Form form={form} layout="vertical" preserve={false} initialValues={{ data_saida: dayjs(), estado: "alta" }} onFinish={guardar}>
         <Row gutter={12}>
           <Col span={12}>

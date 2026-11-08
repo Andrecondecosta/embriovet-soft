@@ -226,17 +226,42 @@ def test_primeiro_dg_feito_tarde_e_d14_e_agenda_confirmacoes(ctx):
 
 
 def test_inconclusivo_nao_faz_a_etapa_e_d45_positivo_fecha(ctx):
-    a = _inseminar(ctx, 46)
-    assert _resultado(ctx, a, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
-    assert _resultado(ctx, a, "inconclusivo").status_code == 200  # D+28 inconclusivo
-    assert _historial(ctx)[a]["etapa"] == "D+45"  # passou o D+45, mas por dias
-    _um("DELETE FROM diagnosticos_gestacao WHERE operation_id = %s::uuid AND resultado = 'inconclusivo'", (a,))
     b = _inseminar(ctx, 30)
     assert _resultado(ctx, b, "positivo").json()["resultado"] == "gestacao_confirmada"  # D+14
     assert _resultado(ctx, b, "sem_exame").status_code == 200  # D+28 sem exame
     assert _historial(ctx)[b]["etapa"] == "D+28"  # continua por fazer
+    # Sem exame marca outra confirmação daqui a 2 dias.
+    assert _um(
+        "SELECT data_tarefa FROM trabalho_diario WHERE animal_id = %s AND tipo = 'confirmacao_gestacao' AND NOT concluida",
+        (ctx["egua"],),
+    )[0] == date.today() + timedelta(days=2)
     assert _resultado(ctx, b, "positivo").status_code == 200  # D+28 feito
     assert _historial(ctx)[b]["etapa"] == "D+45"
-    assert _resultado(ctx, a, "positivo").status_code == 200  # D+45 positivo de a
-    assert _historial(ctx)[a]["pode_resultado"] is False
-    assert _resultado(ctx, a, "negativo").json()["detail"]["code"] == "web.animal.error.result_not_allowed"
+    assert _resultado(ctx, b, "positivo").status_code == 200  # D+45 positivo
+    assert _historial(ctx)[b]["pode_resultado"] is False
+    assert _resultado(ctx, b, "negativo").json()["detail"]["code"] == "web.animal.error.result_not_allowed"
+
+
+def test_nova_inseminacao_fecha_o_ciclo_anterior_e_dg_cedo_recusado(ctx):
+    a = _inseminar(ctx, 20)
+    b = _inseminar(ctx, 0)
+    h = _historial(ctx)
+    assert h[a]["resultado"] == "falhou" and h[a]["pode_resultado"] is False
+    # As tarefas de DG que eram de "a" ficam canceladas; fica só o D+14 de "b".
+    abertas = _um(
+        "SELECT array_agg(data_tarefa ORDER BY data_tarefa) FROM trabalho_diario WHERE animal_id = %s AND NOT concluida AND tipo = 'diagnostico_gestacao'",
+        (ctx["egua"],),
+    )[0]
+    assert abertas == [date.today() + timedelta(days=14)]
+    assert _resultado(ctx, b, "positivo").json()["detail"]["code"] == "web.registo.error.dg_too_early"
+
+
+def test_inseminacao_fecha_a_tarefa_inseminar(ctx):
+    eid = _um("SELECT id FROM estadias WHERE animal_id = %s", (ctx["egua"],))[0]
+    _um(
+        """INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo)
+           VALUES (%s, %s, CURRENT_DATE, 'inseminar', 'Inseminar — indução') RETURNING id""",
+        (ctx["egua"], eid),
+    )
+    _inseminar(ctx, 0)
+    assert _um("SELECT concluida, cancelada FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (ctx["egua"],)) == (True, False)

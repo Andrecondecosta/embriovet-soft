@@ -295,6 +295,26 @@ class SaidaIn(BaseModel):
 TAREFAS_GESTACAO = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "pre_parto", "parto_previsto")
 
 
+@router.get("/estadias/{estadia_id}/pendentes")
+def pendentes(estadia_id: int, _user: dict = Depends(get_current_user)):
+    """O que fica em curso se a égua sair agora (aviso no formulário de saída)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT tipo, count(*) FROM trabalho_diario WHERE estadia_id = %s AND concluida = FALSE GROUP BY tipo",
+                (estadia_id,),
+            )
+            tarefas = dict(cur.fetchall())
+            cur.execute(
+                """SELECT MIN(i.data_inseminacao) FROM inseminacoes i
+                   WHERE i.estadia_id = %s AND COALESCE(i.resultado, 'pendente') = 'pendente'
+                   GROUP BY COALESCE(i.operation_id::text, i.id::text) ORDER BY 1""",
+                (estadia_id,),
+            )
+            sem_resultado = [r[0].isoformat() for r in cur.fetchall() if r[0]]
+    return {"tarefas": tarefas, "inseminacoes_sem_resultado": sem_resultado}
+
+
 @router.post("/estadias/{estadia_id}/saida")
 def registar_saida(estadia_id: int, d: SaidaIn, user: dict = Depends(get_current_user)):
     # "Outro" exige descrição, como na app atual.

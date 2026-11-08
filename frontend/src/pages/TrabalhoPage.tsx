@@ -47,6 +47,9 @@ interface Trabalho {
   feitas: Tarefa[];
 }
 
+// Fecham-se com a resposta (registo clínico, DG, inseminação): sem "Concluir".
+const PEDEM_RESPOSTA = new Set(["verificar_ovulacao", "diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "inseminar"]);
+
 const COR_URGENCIA: Record<string, string> = { urgente: "#dc2626", hoje: "#b45309", amanha: "#94a3b8", observacao: "#cbd5e1" };
 const FMT = "YYYY-MM-DD";
 
@@ -171,9 +174,11 @@ function TrabalhoDesktop({ x }: { x: T }) {
     width: 76,
     render: (_: unknown, a: Tarefa) => (
       <Space size={2} onClick={(e) => e.stopPropagation()}>
-        <Tooltip title={t("web.daily.complete")}>
-          <Button size="small" type="text" icon={<CheckOutlined />} aria-label={t("web.daily.complete")} onClick={() => x.concluir(a)} />
-        </Tooltip>
+        {!PEDEM_RESPOSTA.has(a.tipo) && (
+          <Tooltip title={t("web.daily.complete")}>
+            <Button size="small" type="text" icon={<CheckOutlined />} aria-label={t("web.daily.complete")} onClick={() => x.concluir(a)} />
+          </Tooltip>
+        )}
         <Tooltip title={t("web.daily.cancel_task")}>
           <Button
             size="small"
@@ -375,7 +380,7 @@ function TrabalhoMobile({ x }: { x: T }) {
     <SwipeAction
       key={a.tarefa_id}
       rightActions={[
-        { key: "concluir", text: t("web.daily.complete"), color: "primary", onClick: () => x.concluir(a) },
+        ...(PEDEM_RESPOSTA.has(a.tipo) ? [] : [{ key: "concluir", text: t("web.daily.complete"), color: "primary", onClick: () => x.concluir(a) }]),
         {
           key: "cancelar",
           text: t("web.daily.cancel_task"),

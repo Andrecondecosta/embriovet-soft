@@ -42,6 +42,12 @@ DIAS_PRE_PARTO = 14  # antecedência da tarefa "preparar acompanhamento"
 # Inseminações da mesma égua até este intervalo são do mesmo cio: um
 # diagnóstico vale para todas as que ainda estão pendentes.
 DIAS_MESMO_CIO = 7
+# Diagnóstico antes disto não se aceita (vesícula ainda não visível).
+DIAS_MIN_DG = 12
+# Inconclusivo / sem exame: repete o diagnóstico daqui a N dias.
+DIAS_REPETIR_DG = 2
+TAREFAS_DG = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao")
+TAREFAS_CICLO = TAREFAS_DG + ("pre_parto", "parto_previsto")
 
 
 class InseminacaoDuplicada(Exception):
@@ -368,6 +374,42 @@ def registar_inseminacao_completa(
                 (gar_nome, int(estadia_id)),
             )
 
+            # 4b. Ciclo novo: as tarefas de diagnóstico/parto que estavam
+            #     abertas eram de uma inseminação anterior — ficam canceladas
+            #     (as desta criam-se a seguir); a tarefa "inseminar" (da
+            #     indução) fica feita.
+            cur.execute(
+                """
+                UPDATE trabalho_diario
+                SET concluida = TRUE, cancelada = TRUE, data_conclusao = CURRENT_DATE,
+                    concluida_por = %s, observacoes_conclusao = 'Nova inseminação'
+                WHERE animal_id = %s AND concluida = FALSE AND tipo = ANY(%s)
+                """,
+                (utilizador[:50], int(animal_id_egua), list(TAREFAS_CICLO)),
+            )
+            cur.execute(
+                """
+                UPDATE trabalho_diario
+                SET concluida = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s,
+                    observacoes_conclusao = 'Inseminada'
+                WHERE animal_id = %s AND concluida = FALSE AND tipo = 'inseminar'
+                """,
+                (utilizador[:50], int(animal_id_egua)),
+            )
+            #     Inseminações de cios anteriores ainda em aberto não deram
+            #     gestação (a égua voltou a ser inseminada): ficam "falhou".
+            cur.execute(
+                """
+                UPDATE inseminacoes
+                SET resultado = 'falhou', data_resultado = %s, atualizado = TRUE
+                WHERE animal_id_egua = %s
+                  AND operation_id IS DISTINCT FROM %s::uuid
+                  AND COALESCE(resultado, 'pendente') IN ('pendente', 'gestacao_confirmada')
+                  AND data_inseminacao < %s
+                """,
+                (data_inseminacao, int(animal_id_egua), operation_id, data_inseminacao - timedelta(days=DIAS_MESMO_CIO)),
+            )
+
             # 5. Tarefa em `trabalho_diario` para D+14 (idempotente).
             cur.execute(
                 """
@@ -533,8 +575,43 @@ def registar_diagnostico(
                  registo_clinico_id, (utilizador or "—")[:50]),
             )
             novo = int(cur.fetchone()[0])
+            if resultado in ("inconclusivo", "sem_exame"):
+                _repetir_diagnostico(cur, animal_id, tipo_tarefa, resultado, data_exame.date(), utilizador)
         conn.commit()
     return novo
+
+
+def _repetir_diagnostico(cur, animal_id: int, tipo_tarefa: str, resultado: str, dia: date, utilizador: str):
+    """Inconclusivo ou sem exame não fecham a etapa: a tarefa desse
+    diagnóstico fica respondida e marca-se outra daqui a DIAS_REPETIR_DG
+    dias (se a égua ainda está na clínica)."""
+    cur.execute("SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY data_entrada LIMIT 1", (animal_id,))
+    row = cur.fetchone()
+    if not row:
+        return
+    estadia_id = row[0]
+    etapa = ETAPAS.get(tipo_tarefa, "D+14")
+    cur.execute(
+        """
+        UPDATE trabalho_diario
+        SET concluida = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s, observacoes_conclusao = %s
+        WHERE animal_id = %s AND concluida = FALSE AND tipo = %s AND data_tarefa <= %s
+        """,
+        ((utilizador or "—")[:50], f"DG {etapa}: {resultado.replace('_', ' ')}", animal_id, tipo_tarefa, dia),
+    )
+    cur.execute(
+        """
+        INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia, criado_automaticamente, utilizador)
+        SELECT %s, %s, %s, %s, %s, 'hoje', TRUE, %s
+        WHERE NOT EXISTS (
+            SELECT 1 FROM trabalho_diario
+            WHERE animal_id = %s AND concluida = FALSE AND tipo = %s AND data_tarefa > %s
+        )
+        """,
+        (animal_id, estadia_id, dia + timedelta(days=DIAS_REPETIR_DG), tipo_tarefa,
+         f"Repetir DG {etapa} ({resultado.replace('_', ' ')} a {dia:%d/%m})", (utilizador or "—")[:50],
+         animal_id, tipo_tarefa, dia),
+    )
 
 
 RESULTADO_POSITIVO = "positivo"
