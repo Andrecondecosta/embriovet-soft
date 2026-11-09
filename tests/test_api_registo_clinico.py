@@ -140,6 +140,15 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
     assert lista["tratamentos_anteriores"][0]["texto"].startswith("Ocitocina 2× 8h")
 
 
+def test_registo_nao_fecha_tarefa_inseminar(ctx):
+    # A égua tem hoje "Inseminar": um exame qualquer não a dá por inseminada.
+    c, aid = ctx["c"], ctx["animal"](tarefa="inseminar")
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 2}))
+    assert r.status_code == 201, r.text
+    assert r.json()["tarefas_concluidas"] == 0
+    assert _todas("SELECT concluida FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (aid,)) == [(False,)]
+
+
 def test_prioritario_passa_proxima_tarefa_a_urgente(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     corpo = _registo(TX={"lavagem": 1, "marcar": {"dias": "1"}})
@@ -260,6 +269,29 @@ def test_registo_fecha_observacoes_em_atraso_mas_nao_tratamentos(ctx):
     assert abertas == [("tratamento",)]
 
 
+def test_exame_ao_dia_16_depois_de_positivo_nao_e_d28(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 16)
+    _exec("UPDATE inseminacoes SET resultado = 'gestacao_confirmada' WHERE operation_id = %s::uuid", (op,))
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo")).json()["resultado"] == "registado"
+    assert _todas("SELECT etapa FROM diagnosticos_gestacao WHERE animal_id = %s", (aid,)) == [("D+14",)]
+    # O ecrã continua a mostrar o D+28 como próxima etapa.
+    assert c.get(f"/api/animais/{aid}/reprodutivo").json()["inseminacoes"][0]["etapa"] == "D+28"
+
+
+def test_inconclusivo_repete_no_maximo_3_vezes(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    _inseminada_ha(aid, 22)
+    # Exames inconclusivos nos dias 14, 16, 18, 20 e 22 (cada um no dia da repetição marcada).
+    for atras in (8, 6, 4, 2, 0):
+        corpo = _registo(DG="Inconclusivo")
+        corpo["data_registo"] = (datetime.now() - timedelta(days=atras)).isoformat(timespec="minutes")
+        assert c.post(f"/api/animais/{aid}/registos", json=corpo).status_code == 201
+    repetir = _todas("SELECT concluida FROM trabalho_diario WHERE animal_id = %s AND motivo LIKE 'Repetir DG%%'", (aid,))
+    assert repetir == [(True,)] * 3
+    assert _todas("SELECT id FROM trabalho_diario WHERE animal_id = %s AND concluida = FALSE", (aid,)) == []
+
+
 def test_dg_cedo_demais_nao_grava_o_registo(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     _inseminada_ha(aid, 5)
@@ -275,3 +307,50 @@ def test_apagar_registo_deixa_rasto(ctx):
     rasto = _todas("SELECT dados_antigos->'dados', dados_novos FROM historico_edicoes WHERE tabela_nome = 'registo_clinico' AND record_id = %s", (rid,))
     assert rasto == [({"CER": {"grau": 2}}, {"acao": "apagado"})]
     _exec("DELETE FROM historico_edicoes WHERE tabela_nome = 'registo_clinico' AND record_id = %s", (rid,))
+
+
+def test_registo_com_dg_nao_muda_o_dg_nem_apaga_resultado(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 14)
+    corpo = _registo(DG="Positivo", CER={"grau": 1})
+    rid = c.post(f"/api/animais/{aid}/registos", json=corpo).json()["id"]
+    # Corrigir o resto do registo pode; mudar o DG não.
+    assert c.put(f"/api/animais/{aid}/registos/{rid}", json={**corpo, "dados": {"DG": "Positivo", "CER": {"grau": 2}}}).status_code == 200
+    r = c.put(f"/api/animais/{aid}/registos/{rid}", json={**corpo, "dados": {"DG": "Negativo"}})
+    assert r.json()["detail"]["code"] == "web.registo.error.dg_locked"
+    r = c.delete(f"/api/animais/{aid}/registos/{rid}")
+    assert r.json()["detail"]["code"] == "web.registo.error.dg_locked_delete"
+    assert _exec("SELECT resultado FROM inseminacoes WHERE operation_id = %s::uuid", (op,))[0] == "gestacao_confirmada"
+
+
+def test_apagar_registo_com_dg_inconclusivo_leva_o_dg(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    _inseminada_ha(aid, 14)
+    rid = c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Inconclusivo")).json()["id"]
+    assert c.delete(f"/api/animais/{aid}/registos/{rid}").status_code == 200
+    assert _todas("SELECT id FROM diagnosticos_gestacao WHERE animal_id = %s", (aid,)) == []
+
+
+def test_pg_em_egua_gestante_ou_inseminada_pede_confirmacao(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    op = _inseminada_ha(aid, 5)
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"pg": 1}))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "web.registo.confirm_pg_inseminated"
+    _exec("UPDATE inseminacoes SET resultado = 'gestacao_confirmada' WHERE operation_id = %s::uuid", (op,))
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"pg": 1}))
+    assert r.json()["detail"]["code"] == "web.registo.confirm_pg_pregnant"
+    assert _todas("SELECT id FROM registo_clinico WHERE animal_id = %s", (aid,)) == []
+    # Confirmado no ecrã: grava.
+    assert c.post(f"/api/animais/{aid}/registos", json={**_registo(TX={"pg": 1}), "confirmar_pg": True}).status_code == 201
+
+
+def test_pg_sem_inseminacao_nao_pergunta(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"pg": 1})).status_code == 201
+
+
+def test_dg_repetido_no_mesmo_dia_avisa(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    _inseminada_ha(aid, 14)
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Inconclusivo")).json()["dg_mesmo_dia"] is False
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo")).json()["dg_mesmo_dia"] is True

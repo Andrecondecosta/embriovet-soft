@@ -30,40 +30,9 @@ MOTIVOS = ["inseminacao", "colheita", "diagnostico", "tratamento", "embriao"]
 
 
 def _ensure_externo_constraints() -> None:
-    """Garante que as CHECK constraints de `estadias` aceitam 'externo'.
-
-    O spec menciona explicitamente o `estado`, mas a coluna `tipo_registo`
-    também tem uma CHECK constraint que bloquearia o INSERT, pelo que ambas
-    são actualizadas. Idempotente — pode ser chamada múltiplas vezes.
-    """
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_estado_check"
-            )
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD CONSTRAINT estadias_estado_check
-                CHECK (estado IN (
-                    'internado', 'visitante', 'gestante',
-                    'alta', 'sem_resultado', 'externo'
-                ))
-            """)
-            cur.execute(
-                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_tipo_registo_check"
-            )
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD CONSTRAINT estadias_tipo_registo_check
-                CHECK (tipo_registo IN ('estadia', 'visita', 'externo'))
-            """)
-            conn.commit()
-            cur.close()
-    except Exception:
-        # Falha silenciosa para não bloquear a UI; será tentada novamente
-        # no próximo INSERT.
-        pass
+    """Sem efeito: os estados/tipos das estadias ('externo', 'transferido')
+    e `observacoes_saida` vêm da migração 041. Antes eram criados aqui, em
+    tempo de execução — e as duas versões apagavam o estado uma da outra."""
 
 
 def _carregar_donos() -> pd.DataFrame:

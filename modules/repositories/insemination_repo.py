@@ -44,8 +44,14 @@ DIAS_PRE_PARTO = 14  # antecedência da tarefa "preparar acompanhamento"
 DIAS_MESMO_CIO = 7
 # Diagnóstico antes disto não se aceita (vesícula ainda não visível).
 DIAS_MIN_DG = 12
-# Inconclusivo / sem exame: repete o diagnóstico daqui a N dias.
+# Inconclusivo / sem exame: repete o diagnóstico daqui a N dias, no
+# máximo MAX_REPETIR_DG vezes por etapa (depois fica nos alertas do painel
+# "sem DG" — não se marca indefinidamente).
 DIAS_REPETIR_DG = 2
+MAX_REPETIR_DG = 3
+# Um exame depois de um D+14 positivo só conta como D+28 a partir deste
+# dia; antes disso é uma repetição do D+14 (ex.: ver gémeos ao dia 16).
+DIAS_MIN_CONFIRMACAO = 24
 TAREFAS_DG = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao")
 TAREFAS_CICLO = TAREFAS_DG + ("pre_parto", "parto_previsto")
 
@@ -582,15 +588,16 @@ def registar_diagnostico(
             )
             novo = int(cur.fetchone()[0])
             if resultado in ("inconclusivo", "sem_exame"):
-                _repetir_diagnostico(cur, animal_id, tipo_tarefa, resultado, data_exame.date(), utilizador)
+                _repetir_diagnostico(cur, animal_id, operation_id, tipo_tarefa, resultado, data_exame.date(), utilizador)
         conn.commit()
     return novo
 
 
-def _repetir_diagnostico(cur, animal_id: int, tipo_tarefa: str, resultado: str, dia: date, utilizador: str):
+def _repetir_diagnostico(cur, animal_id: int, operation_id: Optional[str], tipo_tarefa: str, resultado: str, dia: date, utilizador: str):
     """Inconclusivo ou sem exame não fecham a etapa: a tarefa desse
     diagnóstico fica respondida e marca-se outra daqui a DIAS_REPETIR_DG
-    dias (se a égua ainda está na clínica)."""
+    dias (se a égua ainda está na clínica e ainda não se repetiu
+    MAX_REPETIR_DG vezes nesta etapa)."""
     cur.execute("SELECT id FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY data_entrada LIMIT 1", (animal_id,))
     row = cur.fetchone()
     if not row:
@@ -605,6 +612,16 @@ def _repetir_diagnostico(cur, animal_id: int, tipo_tarefa: str, resultado: str, 
         """,
         ((utilizador or "—")[:50], f"DG {etapa}: {resultado.replace('_', ' ')}", animal_id, tipo_tarefa, dia),
     )
+    cur.execute(
+        """
+        SELECT count(*) FROM diagnosticos_gestacao
+        WHERE animal_id = %s AND operation_id IS NOT DISTINCT FROM %s::uuid AND etapa = %s
+          AND resultado IN ('inconclusivo', 'sem_exame')
+        """,
+        (animal_id, operation_id, etapa),
+    )
+    if cur.fetchone()[0] > MAX_REPETIR_DG:
+        return
     cur.execute(
         """
         INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia, criado_automaticamente, utilizador)

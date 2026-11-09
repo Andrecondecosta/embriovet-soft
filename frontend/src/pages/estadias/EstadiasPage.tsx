@@ -403,8 +403,14 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
   const nome = estadia?.animal ?? "—";
   // O que fica em curso se a égua sair agora (indução, DG, tarefas).
   const pend = usePendentesSaida(estadia?.id ?? null).data;
+  const estadoForm = Form.useWatch("estado", form);
+  const estadoAtual = isMobile ? estado : estadoForm;
+  const minimo = pend?.ultimo_registo ? dayjs(pend.ultimo_registo) : null;
   const avisos = pend
     ? [
+        pend.gestante && (estadoAtual === "alta" || estadoAtual === "sem_resultado")
+          ? t("web.stays.exit.pregnant", { estado: t(`web.stays.state.${estadoAtual}`) })
+          : null,
         pend.tarefas.inseminar ? t("web.stays.exit.pending_insem") : null,
         pend.inseminacoes_sem_resultado.length
           ? t("web.stays.exit.pending_result", { datas: pend.inseminacoes_sem_resultado.map((d) => dataCurta(d)).join(", ") })
@@ -494,6 +500,7 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
           visible={calendario}
           onClose={() => setCalendario(false)}
           value={dataSaida}
+          min={minimo?.toDate()}
           max={dayjs().add(1, "year").toDate()}
           onConfirm={setDataSaida}
         />
@@ -525,8 +532,25 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
       <Form form={form} layout="vertical" preserve={false} initialValues={{ data_saida: dayjs(), estado: "alta" }} onFinish={guardar}>
         <Row gutter={12}>
           <Col span={12}>
-            <Form.Item name="data_saida" label={t("web.stays.exit.date")} rules={[{ required: true }]}>
-              <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
+            <Form.Item
+              name="data_saida"
+              label={t("web.stays.exit.date")}
+              rules={[
+                { required: true },
+                {
+                  validator: (_, v: Dayjs | null) =>
+                    v && minimo && v.isBefore(minimo, "day")
+                      ? Promise.reject(t("web.stays.exit.min_date", { data: minimo.format("DD/MM/YYYY") }))
+                      : Promise.resolve(),
+                },
+              ]}
+            >
+              <DatePicker
+                format="DD/MM/YYYY"
+                allowClear={false}
+                style={{ width: "100%" }}
+                disabledDate={(d) => !!minimo && d.isBefore(minimo, "day")}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>

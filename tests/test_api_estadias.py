@@ -36,6 +36,8 @@ def client():
     yield c
     with get_connection() as conn:
         with conn.cursor() as cur:
+            for t, col in (("registo_clinico", "animal_id"), ("inseminacoes", "animal_id_egua"), ("trabalho_diario", "animal_id")):
+                cur.execute(f"DELETE FROM {t} WHERE {col} IN (SELECT id FROM animais WHERE nome LIKE %s)", (f"{PREFIXO}%",))
             cur.execute("DELETE FROM estadias WHERE animal_id IN (SELECT id FROM animais WHERE nome LIKE %s)", (f"{PREFIXO}%",))
             cur.execute("DELETE FROM animais WHERE nome LIKE %s", (f"{PREFIXO}%",))
             cur.execute("DELETE FROM alojamentos WHERE nome LIKE %s", (f"{PREFIXO}%",))
@@ -102,6 +104,28 @@ def test_nova_estadia_com_animal_novo_e_saida(client, base):
     assert next(x for x in hist["itens"] if x["id"] == eid)["estado"] == "transferido"
     r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": hoje.isoformat(), "estado": "alta"})
     assert r.json()["detail"]["code"] == "web.stays.error.already_closed"
+
+
+def test_saida_nao_antes_do_ultimo_registo_e_aviso_gestante(client, base):
+    hoje = date.today()
+    r = _nova(client, base, data_entrada=(hoje - timedelta(days=10)).isoformat())
+    eid, aid = r.json()["id"], r.json()["animal_id"]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO registo_clinico (animal_id, estadia_id, data_registo) VALUES (%s, %s, %s)",
+                        (aid, eid, hoje - timedelta(days=3)))
+            cur.execute(
+                """INSERT INTO inseminacoes (egua, garanhao, data_inseminacao, animal_id_egua, estadia_id, resultado)
+                   VALUES ('x', 'y', %s, %s, %s, 'gestacao_confirmada')""",
+                (hoje - timedelta(days=5), aid, eid),
+            )
+        conn.commit()
+    p = client.get(f"/api/estadias/{eid}/pendentes").json()
+    assert p["ultimo_registo"] == (hoje - timedelta(days=3)).isoformat() and p["gestante"] is True
+    r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": (hoje - timedelta(days=4)).isoformat(), "estado": "gestante"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.stays.error.exit_before_records"
+    r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": (hoje - timedelta(days=3)).isoformat(), "estado": "gestante"})
+    assert r.status_code == 200
 
 
 def test_validacoes_nova(client, base):

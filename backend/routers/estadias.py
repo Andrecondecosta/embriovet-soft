@@ -6,9 +6,8 @@ próximos 7 dias) e Histórico (passagens de um mês). Ações: nova estadia /
 visita / externo (com um animal existente ou criando-o na hora, numa só
 transação, como o modal da app atual) e registar saída.
 
-As regras da tabela `estadias` que a app atual mexe em tempo de execução
-(`_ensure_*_constraints`) são chamadas nos mesmos momentos, para as duas
-apps se comportarem igual enquanto coexistem.
+As regras da tabela `estadias` (estados 'externo'/'transferido') vêm da
+migração 041.
 """
 
 from __future__ import annotations
@@ -24,11 +23,7 @@ from backend.deps import get_current_user
 from backend.serial import registos
 from modules.db import get_connection
 from modules.repositories.settings_repo import usar_alojamentos
-from modules.pages.estadias_page import (
-    _carregar_estadias,
-    _ensure_externo_constraints,
-    _ensure_saida_constraints,
-)
+from modules.pages.estadias_page import _carregar_estadias
 
 router = APIRouter(prefix="/api", tags=["estadias"])
 
@@ -270,8 +265,6 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
         d.alojamento_id = None
     elif d.tipo_registo == "estadia" and not d.alojamento_id:
         raise _erro(422, "web.stays.error.housing_required")
-    if d.tipo_registo == "externo":
-        _ensure_externo_constraints()
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -356,11 +349,29 @@ class SaidaIn(BaseModel):
 TAREFAS_GESTACAO = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "pre_parto", "parto_previsto")
 
 
+def _ultimo_registo(cur, estadia_id: int) -> date | None:
+    """Dia do último exame/diário/inseminação desta estadia: a saída não
+    pode ser antes (o DG feito fora, depois da saída, não conta)."""
+    cur.execute(
+        """
+        SELECT GREATEST(
+            (SELECT MAX(data_registo::date) FROM registo_clinico WHERE estadia_id = %(e)s),
+            (SELECT MAX(data_registo::date) FROM diario_clinico WHERE estadia_id = %(e)s),
+            (SELECT MAX(data_inseminacao) FROM inseminacoes WHERE estadia_id = %(e)s))
+        """,
+        {"e": estadia_id},
+    )
+    return cur.fetchone()[0]
+
+
 @router.get("/estadias/{estadia_id}/pendentes")
 def pendentes(estadia_id: int, _user: dict = Depends(get_current_user)):
     """O que fica em curso se a égua sair agora (aviso no formulário de saída)."""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            ultimo = _ultimo_registo(cur, estadia_id)
+            cur.execute("SELECT animal_id FROM estadias WHERE id = %s", (estadia_id,))
+            row = cur.fetchone()
             cur.execute(
                 "SELECT tipo, count(*) FROM trabalho_diario WHERE estadia_id = %s AND concluida = FALSE GROUP BY tipo",
                 (estadia_id,),
@@ -373,7 +384,14 @@ def pendentes(estadia_id: int, _user: dict = Depends(get_current_user)):
                 (estadia_id,),
             )
             sem_resultado = [r[0].isoformat() for r in cur.fetchall() if r[0]]
-    return {"tarefas": tarefas, "inseminacoes_sem_resultado": sem_resultado}
+    repro = estado_reprodutivo([row[0]]).get(row[0]) if row else None
+    return {
+        "tarefas": tarefas,
+        "inseminacoes_sem_resultado": sem_resultado,
+        "ultimo_registo": ultimo.isoformat() if ultimo else None,
+        # Para avisar se sair como "alta"/"sem resultado" estando gestante.
+        "gestante": bool(repro and repro["resultado"] == "gestacao_confirmada"),
+    }
 
 
 @router.post("/estadias/{estadia_id}/saida")
@@ -385,13 +403,15 @@ def registar_saida(estadia_id: int, d: SaidaIn, user: dict = Depends(get_current
         with conn.cursor() as cur:
             cur.execute("SELECT data_entrada, data_saida FROM estadias WHERE id = %s", (estadia_id,))
             row = cur.fetchone()
+            ultimo = _ultimo_registo(cur, estadia_id) if row else None
     if not row:
         raise _erro(404, "web.stays.error.not_found")
     if row[1] is not None:
         raise _erro(409, "web.stays.error.already_closed")
     if d.data_saida < row[0]:
         raise _erro(422, "web.stays.error.exit_before_entry")
-    _ensure_saida_constraints()
+    if ultimo and d.data_saida < ultimo:
+        raise _erro(422, "web.stays.error.exit_before_records", data=ultimo.strftime("%d/%m/%Y"))
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(

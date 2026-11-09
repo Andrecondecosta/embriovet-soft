@@ -47,7 +47,13 @@ from modules.pages.animal_page import (
     _upsert_acompanhamento,
 )
 from modules.repositories.colheita_repo import agendar_colheita, cancelar_colheita, listar_colheitas_futuras
-from modules.repositories.insemination_repo import DIAS_MIN_DG, InseminacaoError, registar_diagnostico, registar_resultado
+from modules.repositories.insemination_repo import (
+    DIAS_MIN_CONFIRMACAO,
+    DIAS_MIN_DG,
+    InseminacaoError,
+    registar_diagnostico,
+    registar_resultado,
+)
 
 router = APIRouter(prefix="/api/animais", tags=["animais"])
 
@@ -228,6 +234,10 @@ def _etapa(data_inseminacao: date | None, resultado: str | None, feitas=(), em: 
     # D+45. Um exame feito antes do dia 40 conta ainda como (repetir) D+28.
     if dias >= 45 or ("D+28" in feitas and (em is None or dias >= 40)):
         return "segunda_confirmacao", "D+45"
+    # Um exame logo a seguir ao D+14 positivo (ex.: ver gémeos ao dia 16)
+    # ainda não é o D+28: conta como repetir o D+14.
+    if em is not None and dias < DIAS_MIN_CONFIRMACAO:
+        return "diagnostico_gestacao", "D+14"
     return "confirmacao_gestacao", "D+28"
 
 

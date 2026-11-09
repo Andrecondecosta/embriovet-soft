@@ -38,12 +38,12 @@ import {
   TextArea,
 } from "antd-mobile";
 
-import { api } from "../../api/client";
+import { api, ApiError } from "../../api/client";
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { useBrand } from "../../components/Brand";
 import { useUser } from "../../components/User";
-import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
+import { confirmar, notifySuccess, notifyWarning, useNotifyError } from "../../components/errors";
 import { Cabecalho } from "../../components/mobile";
 import type { Animal } from "./api";
 
@@ -854,11 +854,11 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
     for (const k of [["animal", animal.id], ["trabalho"], ["dashboard"]]) queryClient.invalidateQueries({ queryKey: k });
   };
   const gravar = useMutation({
-    mutationFn: (n: Novo) => {
-      const corpo = { data_registo: n.data, dados: n.dados, prioritario: n.prioritario };
+    mutationFn: ({ n, confirmarPg }: { n: Novo; confirmarPg: boolean }) => {
+      const corpo = { data_registo: n.data, dados: n.dados, prioritario: n.prioritario, confirmar_pg: confirmarPg };
       return n.id
         ? api(`/animais/${animal.id}/registos/${n.id}`, "PUT", corpo)
-        : api<{ tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null }>(
+        : api<{ tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean }>(
             `/animais/${animal.id}/registos`,
             "POST",
             corpo,
@@ -1108,12 +1108,34 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
     setNovo((n) => n && { ...n, dados: { ...n.dados, [f]: v } });
     setAberto(null);
   };
-  const submeter = async () => {
+  /** PG numa égua gestante/inseminada: pergunta antes de gravar. */
+  const perguntarPg = (texto: string) =>
+    new Promise<boolean>((resolve) => {
+      if (isMobile)
+        void Dialog.confirm({
+          content: texto,
+          confirmText: t("web.registo.confirm_pg_ok"),
+          cancelText: t("web.common.cancel"),
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      else
+        confirmar({
+          titulo: "PG",
+          texto,
+          ok: t("web.registo.confirm_pg_ok"),
+          cancelar: t("web.common.cancel"),
+          perigo: true,
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+    });
+  const submeter = async (confirmarPg = false): Promise<void> => {
     try {
-      const res = await gravar.mutateAsync(novo);
+      const res = await gravar.mutateAsync({ n: novo, confirmarPg });
       if (novo.id) notifySuccess(t("web.animal.record_updated"));
       else {
-        const x = res as { tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null };
+        const x = res as { tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean };
         notifySuccess(
           [
             t("web.animal.record_saved"),
@@ -1125,9 +1147,14 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
             .filter(Boolean)
             .join(" "),
         );
+        if (x.dg_mesmo_dia) notifyWarning(t("web.registo.dg_same_day"));
       }
       setNovo(null);
     } catch (err) {
+      if (err instanceof ApiError && err.code.startsWith("web.registo.confirm_pg_")) {
+        if (await perguntarPg(t(err.code, err.params))) return submeter(true);
+        return;
+      }
       notifyError(err);
     }
   };
@@ -1251,7 +1278,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
             color="primary"
             disabled={!temAlgo || faltaHoje.length > 0}
             loading={gravar.isPending}
-            onClick={submeter}
+            onClick={() => submeter()}
           >
             {novo.id ? t("btn.save_changes") : t("web.registo.save")}
           </MButton>
@@ -1336,7 +1363,7 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
                   aparece o resumo de OVU/DG/TX por baixo. */}
               <Space>
                 <Button onClick={() => setNovo(null)}>{t("web.common.cancel")}</Button>
-                <Button type="primary" disabled={!temAlgo || faltaHoje.length > 0} loading={gravar.isPending} onClick={submeter}>
+                <Button type="primary" disabled={!temAlgo || faltaHoje.length > 0} loading={gravar.isPending} onClick={() => submeter()}>
                   {novo.id ? t("btn.save_changes") : t("web.registo.save")}
                 </Button>
               </Space>

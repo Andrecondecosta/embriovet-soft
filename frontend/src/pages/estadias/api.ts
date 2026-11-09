@@ -130,7 +130,7 @@ export const useCriarEstadia = () => useEstadiaMutation((d: EstadiaIn) => api<{ 
 export const usePendentesSaida = (id: number | null) =>
   useQuery({
     queryKey: ["estadias", "pendentes", id],
-    queryFn: () => api<{ tarefas: Record<string, number>; inseminacoes_sem_resultado: string[] }>(`/estadias/${id}/pendentes`),
+    queryFn: () => api<{ tarefas: Record<string, number>; inseminacoes_sem_resultado: string[]; ultimo_registo: string | null; gestante: boolean }>(`/estadias/${id}/pendentes`),
     enabled: id !== null,
   });
 

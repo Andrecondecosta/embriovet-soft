@@ -103,34 +103,9 @@ def _label_estado(e: str | None) -> str:
 
 
 def _ensure_saida_constraints() -> None:
-    """Garante que `estadias.estado` aceita os estados de saída (incl. 'transferido').
-
-    Idempotente. Mantemos os estados existentes (`internado`, `visitante`,
-    `gestante`, `alta`, `sem_resultado`, `externo`) e acrescentamos
-    `transferido`.
-    """
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_estado_check"
-            )
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD CONSTRAINT estadias_estado_check
-                CHECK (estado IN (
-                    'internado', 'visitante', 'gestante',
-                    'alta', 'sem_resultado', 'externo', 'transferido'
-                ))
-            """)
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD COLUMN IF NOT EXISTS observacoes_saida TEXT
-            """)
-            conn.commit()
-            cur.close()
-    except Exception:
-        pass
+    """Sem efeito: os estados/tipos das estadias ('externo', 'transferido')
+    e `observacoes_saida` vêm da migração 041. Antes eram criados aqui, em
+    tempo de execução — e as duas versões apagavam o estado uma da outra."""
 
 
 def _registar_saida_estadia(
@@ -245,33 +220,9 @@ def _has_animais_resultados(termo: str) -> bool:
 
 
 def _ensure_externo_constraints() -> None:
-    """Garante que `estadias.estado` e `estadias.tipo_registo` aceitam 'externo'."""
-    try:
-        with get_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_estado_check"
-            )
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD CONSTRAINT estadias_estado_check
-                CHECK (estado IN (
-                    'internado', 'visitante', 'gestante',
-                    'alta', 'sem_resultado', 'externo'
-                ))
-            """)
-            cur.execute(
-                "ALTER TABLE estadias DROP CONSTRAINT IF EXISTS estadias_tipo_registo_check"
-            )
-            cur.execute("""
-                ALTER TABLE estadias
-                ADD CONSTRAINT estadias_tipo_registo_check
-                CHECK (tipo_registo IN ('estadia', 'visita', 'externo'))
-            """)
-            conn.commit()
-            cur.close()
-    except Exception:
-        pass
+    """Sem efeito: os estados/tipos das estadias ('externo', 'transferido')
+    e `observacoes_saida` vêm da migração 041. Antes eram criados aqui, em
+    tempo de execução — e as duas versões apagavam o estado uma da outra."""
 
 
 def _criar_estadia_apenas(payload: dict) -> int:

@@ -41,6 +41,8 @@ CERVIX = ("1 · fechado", "2 · intermédio", "3 · aberto")
 # Tarefas de hoje que obrigam a responder no registo (o registo fecha-as).
 TAREFAS_OVULACAO = ("verificar_ovulacao",)
 TAREFAS_DG = ("diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao")
+# PG numa égua inseminada há menos disto (e ainda sem DG) pede confirmação.
+DIAS_PG_INSEMINADA = 45
 
 
 def _erro(http_status: int, chave: str, **params):
@@ -159,6 +161,8 @@ class RegistoIn(BaseModel):
     data_registo: datetime
     dados: Dados
     prioritario: bool = False
+    # PG numa égua gestante/inseminada: só depois de confirmar no ecrã.
+    confirmar_pg: bool = False
 
 
 # ── Textos curtos (tarefas e histórico) ───────────────────────────────────
@@ -400,6 +404,38 @@ def _resultado_dg(animal_id: int, dg: str, data_exame: datetime, utilizador: str
     return "registado"
 
 
+def _dg_no_dia(op_key: str, dia: date) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM diagnosticos_gestacao WHERE operation_id::text = %s AND data_exame::date = %s LIMIT 1",
+                (op_key, dia),
+            )
+            return cur.fetchone() is not None
+
+
+def _avisar_pg(animal_id: int, dia: date) -> None:
+    """A prostaglandina faz luteólise: numa égua gestante (ou inseminada há
+    menos de DIAS_PG_INSEMINADA dias, ainda sem DG) pode acabar com a
+    gestação. Pede confirmação (409) — o ecrã pergunta e volta a enviar."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT data_inseminacao, COALESCE(resultado, 'pendente') FROM inseminacoes
+                   WHERE animal_id_egua = %s AND data_inseminacao <= %s
+                   ORDER BY data_inseminacao DESC, id DESC LIMIT 1""",
+                (animal_id, dia),
+            )
+            row = cur.fetchone()
+    if not row:
+        return
+    data_ins, resultado = row
+    if resultado == "gestacao_confirmada":
+        raise _erro(409, "web.registo.confirm_pg_pregnant", data=data_ins.strftime("%d/%m/%Y"))
+    if resultado == "pendente" and (dia - data_ins).days < DIAS_PG_INSEMINADA:
+        raise _erro(409, "web.registo.confirm_pg_inseminated", data=data_ins.strftime("%d/%m/%Y"))
+
+
 @router.post("/{animal_id:int}/registos", status_code=201)
 def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
     _egua(animal_id)
@@ -418,6 +454,11 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
         raise _erro(422, "web.registo.error.agenda_date")
     # O DG valida-se antes de gravar (não fica um registo gravado com erro).
     alvo_dg = _alvo_dg(animal_id, d.data_registo.date()) if dados.DG else None
+    if dados.TX and dados.TX.pg and not d.confirmar_pg and dados.DG != "Negativo":
+        _avisar_pg(animal_id, d.data_registo.date())
+    # Já havia um DG desta inseminação no mesmo dia (provável duplicado):
+    # grava na mesma, mas o ecrã avisa.
+    dg_mesmo_dia = bool(alvo_dg) and _dg_no_dia(alvo_dg[0]["op_key"], d.data_registo.date())
 
     criadas: list[int] = []
     with get_connection() as conn:
@@ -474,7 +515,8 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                     (animal_id,),
                 )
             conn.commit()
-    return {"id": rid, "tarefas_concluidas": concluidas, "tarefas_criadas": len(criadas), "resultado": resultado}
+    return {"id": rid, "tarefas_concluidas": concluidas, "tarefas_criadas": len(criadas), "resultado": resultado,
+            "dg_mesmo_dia": dg_mesmo_dia}
 
 
 def _do_animal(animal_id: int, rid: int):
@@ -485,14 +527,26 @@ def _do_animal(animal_id: int, rid: int):
                 raise _erro(404, "web.animal.error.record_not_found")
 
 
+def _dg_do_registo(cur, rid: int) -> list[str]:
+    """Resultados dos diagnósticos de gestação gravados por este registo."""
+    cur.execute("SELECT resultado FROM diagnosticos_gestacao WHERE registo_clinico_id = %s", (rid,))
+    return [r[0] for r in cur.fetchall()]
+
+
 @router.put("/{animal_id:int}/registos/{rid:int}")
 def editar(animal_id: int, rid: int, d: RegistoIn, _user: dict = Depends(get_current_user)):
     """Corrigir um registo: só os dados (não volta a criar tarefas nem a
-    registar resultados — isso acontece uma vez, ao gravar)."""
+    registar resultados — isso acontece uma vez, ao gravar). Por isso, se
+    o registo gravou um DG, o DG e o dia do exame não se mudam aqui."""
     _egua(animal_id)
     _do_animal(animal_id, rid)
     with get_connection() as conn:
         with conn.cursor() as cur:
+            if _dg_do_registo(cur, rid):
+                cur.execute("SELECT data_registo, dados->>'DG' FROM registo_clinico WHERE id = %s", (rid,))
+                dia, dg = cur.fetchone()
+                if dg != d.dados.DG or dia.date() != d.data_registo.date():
+                    raise _erro(409, "web.registo.error.dg_locked")
             cur.execute(
                 "UPDATE registo_clinico SET data_registo = %s, dados = %s::jsonb, prioritario = %s, updated_at = NOW() WHERE id = %s",
                 (d.data_registo, json.dumps(d.dados.model_dump(mode="json", exclude_none=True)), d.prioritario, rid),
@@ -507,8 +561,15 @@ def apagar(animal_id: int, rid: int, user: dict = Depends(get_current_user)):
     _do_animal(animal_id, rid)
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Fica cópia do registo apagado (e de quem apagou).
+            # Um DG positivo/negativo já mudou o resultado da inseminação e as
+            # tarefas seguintes: apagar o registo não desfaz isso.
+            if {"positivo", "negativo"} & set(_dg_do_registo(cur, rid)):
+                raise _erro(409, "web.registo.error.dg_locked_delete")
+            # Fica cópia do registo apagado (e de quem apagou); um DG
+            # inconclusivo/sem exame vai com ele.
             auditar_apagadas(cur, "registo_clinico", "id = %s", (rid,), user["username"])
+            auditar_apagadas(cur, "diagnosticos_gestacao", "registo_clinico_id = %s", (rid,), user["username"])
+            cur.execute("DELETE FROM diagnosticos_gestacao WHERE registo_clinico_id = %s", (rid,))
             cur.execute("DELETE FROM registo_clinico WHERE id = %s", (rid,))
         conn.commit()
     return {"ok": True}

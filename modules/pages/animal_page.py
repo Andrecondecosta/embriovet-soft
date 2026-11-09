@@ -193,8 +193,8 @@ def _criar_tarefa_proxima_observacao(
 
 
 def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None) -> int:
-    """Marca como concluídas todas as tarefas pendentes do animal para hoje,
-    e as observações em atraso (o exame de hoje cumpre-as; tratamentos e
+    """Marca como concluídas as tarefas pendentes do animal para hoje (menos
+    as que pedem resposta: DG e "Inseminar"), e as observações em atraso (o exame de hoje cumpre-as; tratamentos e
     diagnósticos em atraso não, ficam para fechar à mão ou com o resultado).
     Devolve o número de tarefas concluídas.
 
@@ -213,6 +213,9 @@ def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None)
           AND (data_tarefa = CURRENT_DATE
                OR (data_tarefa < CURRENT_DATE
                    AND tipo IN ('observacao_clinica', 'primeira_observacao', 'verificar_ovulacao')))
+          -- Estas fecham-se com a resposta (o DG com o resultado, "Inseminar"
+          -- com a inseminação), não por haver um registo nesse dia.
+          AND tipo NOT IN ('inseminar', 'diagnostico_gestacao', 'confirmacao_gestacao', 'segunda_confirmacao')
     """
     with get_connection() as conn:
         cur = conn.cursor()
