@@ -61,6 +61,20 @@ import {
 
 const TABS = ["anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
+// "Tudo até": desde o início (antes de qualquer registo) até à data escolhida.
+const INICIO = "1990-01-01";
+const desdeInicio = (p: [Dayjs, Dayjs]) => p[0].format(ISO) === INICIO;
+
+/** Atalhos de "Tudo até": hoje, fim do mês passado e fim dos últimos anos
+ *  (ex.: faturar agora tudo até ao fim de 2024; 2025 e 2026 ficam para depois). */
+const ATE = () => {
+  const ano = dayjs().year();
+  return [
+    { id: "hoje", data: dayjs() },
+    { id: "mes", data: dayjs().subtract(1, "month").endOf("month") },
+    ...[1, 2, 3].map((n) => ({ id: String(ano - n), data: dayjs(`${ano - n}-12-31`) })),
+  ];
+};
 
 // Períodos rápidos (pode faturar-se ao mês, ao ano ou à medida).
 const PERIODOS = [
@@ -145,18 +159,46 @@ function usePeriodo() {
   return { periodo, setPeriodo, dono, setDono, filtro: { inicio: periodo[0].format(ISO), fim: periodo[1].format(ISO), dono_id: dono } };
 }
 
+function useRotuloAte() {
+  const t = useT();
+  return (id: string) =>
+    id === "hoje" ? t("web.billing.until_today") : id === "mes" ? t("web.billing.until_last_month") : t("web.billing.until_end_of", { ano: id });
+}
+
 function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; children?: React.ReactNode }) {
   const t = useT();
+  const rotuloAte = useRotuloAte();
   const donos = useOpcoes("proprietarios");
+  const ate = desdeInicio(p.periodo);
   return (
     <Flex gap={8} wrap align="center" style={{ marginBottom: 12 }}>
-      <DatePicker.RangePicker
-        format="DD/MM/YYYY"
-        allowClear={false}
-        value={p.periodo}
-        onChange={(v) => v?.[0] && v[1] && p.setPeriodo([v[0], v[1]])}
-        presets={PERIODOS.map((x) => ({ label: t(`web.billing.${x.id}`), value: [x.de(), x.ate()] as [Dayjs, Dayjs] }))}
+      <Segmented<"periodo" | "ate">
+        value={ate ? "ate" : "periodo"}
+        onChange={(v) =>
+          p.setPeriodo(v === "ate" ? [dayjs(INICIO), dayjs()] : [PERIODOS[0].de(), PERIODOS[0].ate()])
+        }
+        options={[
+          { value: "periodo", label: t("web.billing.mode.period") },
+          { value: "ate", label: t("web.billing.mode.until") },
+        ]}
       />
+      {ate ? (
+        <DatePicker
+          format="DD/MM/YYYY"
+          allowClear={false}
+          value={p.periodo[1]}
+          onChange={(v) => v && p.setPeriodo([dayjs(INICIO), v])}
+          presets={ATE().map((x) => ({ label: rotuloAte(x.id), value: x.data }))}
+        />
+      ) : (
+        <DatePicker.RangePicker
+          format="DD/MM/YYYY"
+          allowClear={false}
+          value={p.periodo}
+          onChange={(v) => v?.[0] && v[1] && p.setPeriodo([v[0], v[1]])}
+          presets={PERIODOS.map((x) => ({ label: t(`web.billing.${x.id}`), value: [x.de(), x.ate()] as [Dayjs, Dayjs] }))}
+        />
+      )}
       <Select
         showSearch
         allowClear
@@ -172,20 +214,26 @@ function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; chi
   );
 }
 
-/** Telemóvel: só os períodos rápidos (o período à medida faz-se no computador). */
+/** Telemóvel: só os períodos rápidos e os "Tudo até" (o período à medida
+ *  faz-se no computador). */
 function PeriodoMobile({ p }: { p: ReturnType<typeof usePeriodo> }) {
   const t = useT();
-  const atual = PERIODOS.find((x) => x.de().isSame(p.periodo[0], "day") && x.ate().isSame(p.periodo[1], "day"))?.id;
+  const rotuloAte = useRotuloAte();
+  const opcoes = [
+    ...PERIODOS.map((x) => ({ value: x.id, label: t(`web.billing.${x.id}`), de: x.de(), ate: x.ate() })),
+    ...ATE().map((x) => ({ value: `ate-${x.id}`, label: rotuloAte(x.id), de: dayjs(INICIO), ate: x.data })),
+  ];
+  const atual = opcoes.find((x) => x.de.isSame(p.periodo[0], "day") && x.ate.isSame(p.periodo[1], "day"))?.value;
   return (
     <Selector
       columns={2}
       showCheckMark={false}
       value={atual ? [atual] : []}
       onChange={(v) => {
-        const x = PERIODOS.find((y) => y.id === v[0]);
-        if (x) p.setPeriodo([x.de(), x.ate()]);
+        const x = opcoes.find((y) => y.value === v[0]);
+        if (x) p.setPeriodo([x.de, x.ate]);
       }}
-      options={PERIODOS.map((x) => ({ value: x.id, label: t(`web.billing.${x.id}`) }))}
+      options={opcoes.map(({ value, label }) => ({ value, label }))}
     />
   );
 }
@@ -661,7 +709,7 @@ function AnosTab() {
 
   const rotulo = (k: string) => (k === "antes" ? t("web.billing.before", { ano: desde }) : k);
   const abrir = (l: LinhaAno, k: string) => {
-    const inicio = k === "antes" ? "1990-01-01" : `${k}-01-01`;
+    const inicio = k === "antes" ? INICIO : `${k}-01-01`;
     const fim = k === "antes" ? `${desde - 1}-12-31` : k === String(dayjs().year()) ? dayjs().format(ISO) : `${k}-12-31`;
     const dono = l.dono_id != null ? `&dono=${l.dono_id}` : "";
     navigate(`/faturacao/por-faturar?inicio=${inicio}&fim=${fim}${dono}`);

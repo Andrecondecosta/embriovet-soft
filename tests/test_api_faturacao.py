@@ -177,3 +177,28 @@ def test_quadro_por_ano(ctx):
     assert linha["celulas"]["antes"] == {"atividade": True, "dias": 0, "pd": 0}
 
     assert ctx["sem"].get("/api/faturacao/anos").status_code == 403
+
+
+def test_tudo_ate_fim_de_2024_deixa_2025_em_diante(ctx):
+    c = ctx["fat"]
+    # Sémen guardado desde junho de 2024 (5 palhetas, nunca saiu): aluguer de espaço, conta sempre.
+    lote = _exec(
+        """INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual, quantidade_inicial, data_criacao)
+           VALUES (%s, %s, 5, 5, '2024-06-01') RETURNING id""",
+        (f"{P}Velho", ctx["dono"]),
+    )[0]
+    try:
+        ate_2024 = {"inicio": "1990-01-01", "fim": "2024-12-31", "dono_id": ctx["dono"], "tipo": "armazenamento"}
+        linhas = c.get("/api/faturacao/por-faturar", params=ate_2024).json()
+        l = next(x for x in linhas if x["ref_id"] == lote)
+        assert (l["inicio"], l["fim"], l["quantidade"]) == ("2024-06-01", "2024-12-31", 214 * 5)
+        corpo = {"fatura_numero": "FT 7/2026", "fatura_data": HOJE.isoformat(),
+                 "linhas": [{"tipo": "armazenamento", "ref_id": lote, "inicio": l["inicio"], "fim": l["fim"]}]}
+        assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
+        # Falta de 1/1/2025 até hoje, e continua a contar.
+        tudo = c.get("/api/faturacao/por-faturar", params={**ate_2024, "fim": HOJE.isoformat()}).json()
+        resto = [x for x in tudo if x["ref_id"] == lote]
+        assert [(x["inicio"], x["fim"]) for x in resto] == [("2025-01-01", HOJE.isoformat())]
+    finally:
+        _exec("DELETE FROM faturacao_linhas WHERE ref_id = %s AND tipo = 'armazenamento'", (lote,))
+        _exec("DELETE FROM estoque_dono WHERE id = %s", (lote,))
