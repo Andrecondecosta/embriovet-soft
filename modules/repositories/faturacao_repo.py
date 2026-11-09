@@ -220,44 +220,100 @@ def _palhetas_fixas(item: dict, a: date, b: date) -> int | None:
     return tracos[0][2] if len(tracos) == 1 else None
 
 
-def faturar(linhas: list[dict], fatura_numero: str, fatura_data: date, observacoes: str | None, utilizador: str) -> int:
-    """Marca como faturadas as linhas pedidas ({tipo, ref_id, inicio, fim}).
-    As quantidades recalculam-se aqui (não se confia no ecrã) e tudo fica
-    numa só transação: se alguma parte já estiver faturada (por exemplo,
-    outra pessoa ao mesmo tempo), nada é gravado."""
+class OutroDono(Exception):
+    pass
+
+
+def faturar(faturas: list[dict], utilizador: str) -> int:
+    """Marca como faturadas as linhas de cada fatura ({dono_id, fatura_numero,
+    fatura_data, acerto_inicial, observacoes, linhas: [{tipo, ref_id, inicio,
+    fim}]}). Uma fatura é de um só proprietário. As quantidades recalculam-se
+    aqui (não se confia no ecrã) e tudo fica numa só transação: se alguma
+    parte já estiver faturada (por exemplo, outra pessoa ao mesmo tempo),
+    nada é gravado."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Uma marcação de cada vez (evita faturar o mesmo dia duas vezes).
             cur.execute("SELECT pg_advisory_xact_lock(hashtext('faturacao_linhas'))")
             n = 0
-            for l in linhas:
-                a, b = l["inicio"], l["fim"]
-                busca = _estadias if l["tipo"] == "estadia" else _lotes
-                itens = busca(cur, a, b, None, [l["ref_id"]])
-                if not itens or itens[0]["limite"] != (a, b):
-                    # Fora das datas da estadia/lote (ou ainda no futuro).
-                    raise JaFaturado()
-                it = itens[0]
-                if _menos((a, b), _faturados(cur, l["tipo"], [l["ref_id"]]).get(l["ref_id"], [])) != [(a, b)]:
-                    raise JaFaturado()
-                cur.execute(
-                    """
-                    INSERT INTO faturacao_linhas
-                        (tipo, ref_id, dono_id, dono_nome, descricao, inicio, fim, quantidade, palhetas,
-                         fatura_numero, fatura_data, observacoes, criado_por)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (l["tipo"], l["ref_id"], it["dono_id"], it["dono_nome"], it["descricao"], a, b,
-                     _QTD[l["tipo"]](it, a, b), _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else None,
-                     fatura_numero, fatura_data, observacoes, (utilizador or "—")[:50]),
-                )
-                n += 1
+            for f in faturas:
+                for l in f["linhas"]:
+                    a, b = l["inicio"], l["fim"]
+                    busca = _estadias if l["tipo"] == "estadia" else _lotes
+                    itens = busca(cur, a, b, None, [l["ref_id"]])
+                    if not itens or itens[0]["limite"] != (a, b):
+                        # Fora das datas da estadia/lote (ou ainda no futuro).
+                        raise JaFaturado()
+                    it = itens[0]
+                    if it["dono_id"] != f["dono_id"]:
+                        raise OutroDono()
+                    if _menos((a, b), _faturados(cur, l["tipo"], [l["ref_id"]]).get(l["ref_id"], [])) != [(a, b)]:
+                        raise JaFaturado()
+                    cur.execute(
+                        """
+                        INSERT INTO faturacao_linhas
+                            (tipo, ref_id, dono_id, dono_nome, descricao, inicio, fim, quantidade, palhetas,
+                             fatura_numero, fatura_data, acerto_inicial, observacoes, criado_por)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (l["tipo"], l["ref_id"], it["dono_id"], it["dono_nome"], it["descricao"], a, b,
+                         _QTD[l["tipo"]](it, a, b), _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else None,
+                         f["fatura_numero"] or "", f["fatura_data"], bool(f.get("acerto_inicial")),
+                         f.get("observacoes"), (utilizador or "—")[:50]),
+                    )
+                    n += 1
         conn.commit()
     return n
 
 
+def movimentos(lotes: list[dict]) -> list[dict]:
+    """Saídas de palhetas de cada lote no período ({ref_id, inicio, fim}),
+    com o porquê — para o resumo explicar cada mudança de palhetas."""
+    out: list[dict] = []
+    if not lotes:
+        return out
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for l in lotes:
+                cur.execute(
+                    """
+                    SELECT dia, q, tipo, detalhe FROM (
+                        SELECT data_inseminacao AS dia, palhetas_gastas AS q, 'inseminacao' AS tipo,
+                               COALESCE(a.nome, i.egua) AS detalhe
+                        FROM inseminacoes i LEFT JOIN animais a ON a.id = i.animal_id_egua
+                        WHERE i.estoque_id = %(id)s
+                        UNION ALL
+                        SELECT t.data_transferencia::date, t.quantidade, 'transferencia', d.nome
+                        FROM transferencias t LEFT JOIN dono d ON d.id = t.proprietario_destino_id
+                        WHERE t.estoque_id = %(id)s
+                        UNION ALL
+                        SELECT x.data_transferencia::date, x.quantidade, 'externa',
+                               concat_ws(' — ', x.tipo, x.destinatario_externo)
+                        FROM transferencias_externas x WHERE x.estoque_id = %(id)s
+                    ) m
+                    WHERE q > 0 AND dia BETWEEN %(a)s AND %(b)s
+                    ORDER BY dia
+                    """,
+                    {"id": l["ref_id"], "a": l["inicio"], "b": l["fim"]},
+                )
+                out += [{"ref_id": l["ref_id"], "data": d, "quantidade": q, "tipo": t, "detalhe": x}
+                        for d, q, t, x in cur.fetchall()]
+            return out
+
+
+def donos(ids: list[int]) -> list[dict]:
+    """Dados do proprietário para o cabeçalho do resumo (PDF)."""
+    if not ids:
+        return []
+    cols = ["id", "nome", "nome_completo", "nif", "morada", "codigo_postal", "cidade", "email", "telemovel"]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT {', '.join(cols)} FROM dono WHERE id = ANY(%s)", (ids,))
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
 _COLS = ["id", "tipo", "ref_id", "dono_id", "dono_nome", "descricao", "inicio", "fim", "quantidade", "palhetas",
-         "fatura_numero", "fatura_data", "observacoes", "criado_por", "created_at",
+         "fatura_numero", "fatura_data", "acerto_inicial", "observacoes", "criado_por", "created_at",
          "anulada", "anulada_por", "anulada_em", "motivo_anulacao"]
 
 
@@ -352,8 +408,13 @@ def resumo_anual(desde: int) -> dict:
                                 for ta, tb, n in _tracos(it, a, b) if n
                                 for i in range((tb - ta).days + 1)
                             )
+            # Até onde já se faturou cada proprietário (a última data faturada).
+            cur.execute("SELECT dono_id, MAX(fim) FROM faturacao_linhas WHERE NOT anulada GROUP BY dono_id")
+            ate = dict(cur.fetchall())
     for (dono_id, k), dias in dias_semen.items():
         donos[dono_id]["celulas"][k].update(dias_semen=len(dias), lotes=len(lotes[(dono_id, k)]))
+    for d in donos.values():
+        d["faturado_ate"] = ate.get(d["dono_id"])
     linhas = sorted(donos.values(), key=lambda d: (d["dono_nome"] is None, (d["dono_nome"] or "").lower()))
     return {"anos": chaves, "linhas": linhas}
 

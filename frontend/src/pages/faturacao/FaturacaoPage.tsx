@@ -8,7 +8,6 @@ import {
   Checkbox,
   DatePicker,
   Flex,
-  Form,
   Input,
   InputNumber,
   Modal,
@@ -27,8 +26,6 @@ import {
   Checkbox as MCheckbox,
   DotLoading,
   ErrorBlock,
-  Form as MForm,
-  Input as MInput,
   List,
   SearchBar,
   Selector,
@@ -38,19 +35,18 @@ import {
   TextArea,
 } from "antd-mobile";
 
-import { ApiError } from "../../api/client";
 import { useT } from "../../i18n/I18n";
 import { PageHeader } from "../../components/ds";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
-import { DataCampo, FolhaEcraInteiro, abrirAoTocar, irParaErro } from "../../components/mobile";
+import { FolhaEcraInteiro } from "../../components/mobile";
 import { baixarCsv, dataCurta } from "../../components/csv";
 import { useOpcoes } from "../stock/api";
+import { ResumoFaturar } from "./ResumoFaturar";
 import {
   useAnos,
   useAnularFaturada,
   useFaturado,
-  useFaturar,
   usePorFaturar,
   type CelulaAno,
   type Faturada,
@@ -290,7 +286,7 @@ function PorFaturarTab() {
     );
 
   const janela = (
-    <MarcarFaturado
+    <ResumoFaturar
       aberto={marcar}
       linhas={escolhidas}
       onClose={(feito) => {
@@ -308,7 +304,7 @@ function PorFaturarTab() {
           <SearchBar style={{ marginTop: 8 }} placeholder={t("web.common.search")} value={pesquisa} onChange={setPesquisa} />
           <div style={{ color: "#999", fontSize: 13, margin: "8px 0" }}>{resumo}</div>
           <MButton block color="primary" disabled={!escolhidas.length} onClick={() => setMarcar(true)}>
-            {t("web.billing.mark")}
+            {t("web.billing.review")}
           </MButton>
         </div>
         {q.isPending ? (
@@ -358,7 +354,7 @@ function PorFaturarTab() {
             {t("web.billing.export")}
           </Button>
           <Button type="primary" icon={<CheckOutlined />} disabled={!escolhidas.length} onClick={() => setMarcar(true)}>
-            {t("web.billing.mark")}
+            {t("web.billing.review")}
           </Button>
         </Space>
       </Flex>
@@ -393,98 +389,6 @@ function PorFaturarTab() {
       />
       {janela}
     </>
-  );
-}
-
-function MarcarFaturado({ aberto, linhas, onClose }: { aberto: boolean; linhas: PorFaturar[]; onClose: (feito: boolean) => void }) {
-  const t = useT();
-  const isMobile = useIsMobile();
-  const faturar = useFaturar();
-  const notifyError = useNotifyError();
-  const [form] = Form.useForm<{ fatura_numero: string; fatura_data: Dayjs; observacoes?: string }>();
-  const [mform] = MForm.useForm<{ fatura_numero: string; fatura_data: string; observacoes?: string }>();
-  const tot = totais(linhas);
-
-  const guardar = async (v: { fatura_numero: string; fatura_data: string; observacoes?: string }) => {
-    try {
-      const r = await faturar.mutateAsync({
-        ...v,
-        linhas: linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })),
-      });
-      notifySuccess(t("web.billing.marked", { n: r.linhas }));
-      onClose(true);
-    } catch (err) {
-      notifyError(err);
-      // Já faturado entretanto: a lista atualiza (onSettled) e escolhe-se de novo.
-      if (err instanceof ApiError && err.code === "web.billing.error.changed") onClose(true);
-    }
-  };
-  const resumo = t("web.billing.summary", { linhas: linhas.length, dias: tot.dias, ds: tot.ds });
-  const regraNumero = [{ required: true, whitespace: true, message: t("web.billing.error.invoice_required") }];
-
-  if (isMobile)
-    return (
-      <FolhaEcraInteiro
-        visible={aberto}
-        titulo={t("web.billing.mark")}
-        onCancel={() => onClose(false)}
-        onOk={() => mform.submit()}
-        okText={t("web.billing.mark")}
-        loading={faturar.isPending}
-      >
-        <MForm
-          form={mform}
-          onFinish={guardar}
-          onFinishFailed={irParaErro}
-          footer={null}
-          initialValues={{ fatura_data: dayjs().format(ISO) }}
-        >
-          <MForm.Header>{resumo}</MForm.Header>
-          <MForm.Item name="fatura_numero" label={t("web.billing.invoice_number")} rules={regraNumero}>
-            <MInput clearable />
-          </MForm.Item>
-          <MForm.Item name="fatura_data" label={t("web.billing.invoice_date")} rules={[{ required: true }]} arrow onClick={abrirAoTocar}>
-            <DataCampo />
-          </MForm.Item>
-          <MForm.Item name="observacoes" label={t("web.billing.notes")}>
-            <TextArea autoSize={{ minRows: 2 }} />
-          </MForm.Item>
-        </MForm>
-      </FolhaEcraInteiro>
-    );
-
-  return (
-    <Modal
-      open={aberto}
-      title={t("web.billing.mark")}
-      okText={t("web.billing.mark")}
-      cancelText={t("web.common.cancel")}
-      onOk={() => form.submit()}
-      onCancel={() => onClose(false)}
-      confirmLoading={faturar.isPending}
-      destroyOnHidden
-    >
-      <Typography.Paragraph type="secondary">{resumo}</Typography.Paragraph>
-      <Form
-        form={form}
-        layout="vertical"
-        preserve={false}
-        initialValues={{ fatura_data: dayjs() }}
-        onFinish={(v) => guardar({ ...v, fatura_data: v.fatura_data.format(ISO) })}
-      >
-        <Flex gap={12}>
-          <Form.Item name="fatura_numero" label={t("web.billing.invoice_number")} rules={regraNumero} style={{ flex: 1 }}>
-            <Input autoFocus maxLength={60} />
-          </Form.Item>
-          <Form.Item name="fatura_data" label={t("web.billing.invoice_date")} rules={[{ required: true }]}>
-            <DatePicker format="DD/MM/YYYY" allowClear={false} />
-          </Form.Item>
-        </Flex>
-        <Form.Item name="observacoes" label={t("web.billing.notes")}>
-          <Input.TextArea autoSize={{ minRows: 2 }} />
-        </Form.Item>
-      </Form>
-    </Modal>
   );
 }
 
@@ -591,6 +495,7 @@ function FaturadoTab() {
                 <Typography.Text strong delete={l.anulada}>
                   {l.fatura_numero}
                 </Typography.Text>
+                {l.acerto_inicial && <Tag style={{ marginLeft: 8 }}>{t("web.billing.initial_tag")}</Tag>}
                 {l.anulada && (
                   <Tag color="red" style={{ marginLeft: 8 }} title={l.motivo_anulacao ?? undefined}>
                     {t("web.billing.cancelled")}
@@ -769,6 +674,7 @@ function AnosTab() {
                       ))}
                   </MSpace>
                 }
+                extra={l.faturado_ate ? `${t("web.billing.billed_until")} ${dataCurta(l.faturado_ate)}` : t("web.billing.never")}
               >
                 {nome(l)}
               </List.Item>
@@ -803,6 +709,11 @@ function AnosTab() {
         scroll={{ x: "max-content" }}
         columns={[
           { title: t("label.owner"), fixed: "left", render: (_, l) => <Typography.Text strong>{nome(l)}</Typography.Text> },
+          {
+            title: t("web.billing.billed_until"),
+            align: "center",
+            render: (_, l) => (l.faturado_ate ? dataCurta(l.faturado_ate) : <Typography.Text type="secondary">{t("web.billing.never")}</Typography.Text>),
+          },
           ...anos.map((k) => ({
             title: rotulo(k),
             key: k,

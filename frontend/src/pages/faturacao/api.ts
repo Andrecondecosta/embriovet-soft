@@ -35,6 +35,8 @@ export interface Faturada {
   palhetas: number | null;
   fatura_numero: string;
   fatura_data: string;
+  /** Primeiro fecho, de antes da app (pode não ter número). */
+  acerto_inicial: boolean;
   observacoes: string | null;
   criado_por: string | null;
   created_at: string;
@@ -71,15 +73,49 @@ function useFatMutation<V, R>(fn: (v: V) => Promise<R>) {
   return useMutation({ mutationFn: fn, onSettled: () => queryClient.invalidateQueries({ queryKey: ["faturacao"] }) });
 }
 
+export type LinhaRef = { tipo: TipoFat; ref_id: number; inicio: string; fim: string };
+
+/** Uma fatura por proprietário, todas numa só gravação. */
 export const useFaturar = () =>
   useFatMutation(
     (d: {
-      fatura_numero: string;
-      fatura_data: string;
-      observacoes?: string;
-      linhas: { tipo: TipoFat; ref_id: number; inicio: string; fim: string }[];
+      faturas: {
+        dono_id: number | null;
+        fatura_numero: string;
+        fatura_data: string;
+        acerto_inicial: boolean;
+        observacoes?: string;
+        linhas: LinhaRef[];
+      }[];
     }) => api<{ linhas: number }>("/faturacao/faturar", "POST", d),
   );
+
+export interface Movimento {
+  ref_id: number;
+  data: string;
+  quantidade: number;
+  tipo: "inseminacao" | "transferencia" | "externa";
+  detalhe: string | null;
+}
+export interface DonoFat {
+  id: number;
+  nome: string;
+  nome_completo: string | null;
+  nif: string | null;
+  morada: string | null;
+  codigo_postal: string | null;
+  cidade: string | null;
+  email: string | null;
+  telemovel: string | null;
+}
+
+/** Resumo antes de faturar: porquê de cada mudança de palhetas e dados dos donos. */
+export const useResumo = (linhas: LinhaRef[], donoIds: number[], ativo: boolean) =>
+  useQuery({
+    queryKey: ["faturacao", "resumo", linhas, donoIds],
+    enabled: ativo && linhas.length > 0,
+    queryFn: () => api<{ movimentos: Movimento[]; donos: DonoFat[] }>("/faturacao/resumo", "POST", { linhas, dono_ids: donoIds }),
+  });
 
 export const useAnularFaturada = () =>
   useFatMutation(({ id, motivo }: { id: number; motivo: string }) => api<{ ok: boolean }>(`/faturacao/linhas/${id}/anular`, "POST", { motivo }));
@@ -95,6 +131,8 @@ export interface CelulaAno {
 export interface LinhaAno {
   dono_id: number | null;
   dono_nome: string | null;
+  /** Última data já faturada deste proprietário. */
+  faturado_ate: string | null;
   celulas: Record<string, CelulaAno>;
 }
 

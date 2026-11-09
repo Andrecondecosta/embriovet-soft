@@ -34,3 +34,16 @@ body {
   box-sizing: border-box;
   max-width: 100%;
 }
+
+/* Faturação → resumo em PDF: ao imprimir, só a folha do resumo aparece. */
+.folha-impressao {
+  display: none;
+}
+@media print {
+  body.a-imprimir > *:not(.folha-impressao) {
+    display: none !important;
+  }
+  body.a-imprimir .folha-impressao {
+    display: block;
+  }
+}

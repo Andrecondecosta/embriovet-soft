@@ -86,6 +86,10 @@ def ctx():
     _exec("DELETE FROM usuarios WHERE username LIKE %s", (f"{P}%",))
 
 
+def _fatura(dono, numero, data, linhas, **extra):
+    return {"faturas": [{"dono_id": dono, "fatura_numero": numero, "fatura_data": data, "linhas": linhas, **extra}]}
+
+
 def _por_faturar(c, ctx, **p):
     params = {"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "dono_id": ctx["dono"], **p}
     return c.get("/api/faturacao/por-faturar", params=params)
@@ -120,10 +124,8 @@ def test_dias_de_estadia_e_palhetas_x_dias(ctx):
 
 def test_faturar_parte_nao_repete_e_anular_devolve(ctx):
     c = ctx["fat"]
-    corpo = {
-        "fatura_numero": " FT 2026/15 ", "fatura_data": HOJE.isoformat(),
-        "linhas": [{"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(10).isoformat(), "fim": d(6).isoformat()}],
-    }
+    linha = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(10).isoformat(), "fim": d(6).isoformat()}
+    corpo = _fatura(ctx["dono"], " FT 2026/15 ", HOJE.isoformat(), [linha])
     # Um Visualizador com acesso à faturação pode marcar.
     assert c.post("/api/faturacao/faturar", json=corpo).json() == {"linhas": 1}
     # Fica o resto do período: de há 5 dias até hoje (6 × ... = 65 − 5 × 7).
@@ -134,7 +136,7 @@ def test_faturar_parte_nao_repete_e_anular_devolve(ctx):
     r = c.post("/api/faturacao/faturar", json=corpo)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "web.billing.error.changed"
     # Fora das datas do lote (antes de existir) também.
-    fora = {**corpo, "linhas": [{**corpo["linhas"][0], "inicio": d(20).isoformat()}]}
+    fora = _fatura(ctx["dono"], "FT 2026/16", HOJE.isoformat(), [{**linha, "inicio": d(20).isoformat()}])
     assert c.post("/api/faturacao/faturar", json=fora).status_code == 409
 
     feitas = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "fatura": "2026/15"}).json()
@@ -173,8 +175,8 @@ def test_quadro_por_ano(ctx):
     # A estadia que passa a passagem de ano divide-se: 2 dias em 2024 ("antes") e 2 em 2025.
     assert (linha["celulas"]["antes"]["dias"], linha["celulas"]["2025"]["dias"]) == (2, 2)
     # Faturar 2024 deixa "antes" com atividade mas nada por faturar.
-    corpo = {"fatura_numero": "FT 2024/9", "fatura_data": "2025-01-10",
-             "linhas": [{"tipo": "estadia", "ref_id": velha, "inicio": "2024-12-30", "fim": "2024-12-31"}]}
+    corpo = _fatura(ctx["dono"], "FT 2024/9", "2025-01-10",
+                    [{"tipo": "estadia", "ref_id": velha, "inicio": "2024-12-30", "fim": "2024-12-31"}])
     assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
     linha = next(l for l in c.get("/api/faturacao/anos", params={"desde": 2025}).json()["linhas"] if l["dono_id"] == ctx["dono"])
     assert (linha["celulas"]["antes"]["atividade"], linha["celulas"]["antes"]["dias"]) == (True, 0)
@@ -199,8 +201,8 @@ def test_tudo_ate_fim_de_2024_deixa_2025_em_diante(ctx):
         linhas = c.get("/api/faturacao/por-faturar", params=ate_2024).json()
         l = next(x for x in linhas if x["ref_id"] == lote)
         assert (l["inicio"], l["fim"], l["quantidade"]) == ("2024-06-01", "2024-12-31", 214 * 5)
-        corpo = {"fatura_numero": "FT 7/2026", "fatura_data": HOJE.isoformat(),
-                 "linhas": [{"tipo": "armazenamento", "ref_id": lote, "inicio": l["inicio"], "fim": l["fim"]}]}
+        corpo = _fatura(ctx["dono"], "", HOJE.isoformat(),
+                        [{"tipo": "armazenamento", "ref_id": lote, "inicio": l["inicio"], "fim": l["fim"]}], acerto_inicial=True)
         assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
         # Falta de 1/1/2025 até hoje, e continua a contar.
         tudo = c.get("/api/faturacao/por-faturar", params={**ate_2024, "fim": HOJE.isoformat()}).json()
@@ -209,3 +211,27 @@ def test_tudo_ate_fim_de_2024_deixa_2025_em_diante(ctx):
     finally:
         _exec("DELETE FROM faturacao_linhas WHERE ref_id = %s AND tipo = 'armazenamento'", (lote,))
         _exec("DELETE FROM estoque_dono WHERE id = %s", (lote,))
+
+
+def test_uma_fatura_por_proprietario_numero_obrigatorio_e_resumo(ctx):
+    c = ctx["fat"]
+    linha = {"tipo": "estadia", "ref_id": ctx["fechada"], "inicio": d(10).isoformat(), "fim": d(3).isoformat()}
+    # Sem número (e sem ser acerto inicial): recusado.
+    r = c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "", HOJE.isoformat(), [linha]))
+    assert r.json()["detail"]["code"] == "web.billing.error.invoice_required"
+    # Linha de um proprietário numa fatura de outro: recusado, nada gravado.
+    r = c.post("/api/faturacao/faturar", json=_fatura(ctx["outro"], "FT 1", HOJE.isoformat(), [linha]))
+    assert r.json()["detail"]["code"] == "web.billing.error.one_owner"
+    # O resumo explica cada mudança de palhetas e traz os dados do proprietário.
+    lote = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(10).isoformat(), "fim": HOJE.isoformat()}
+    r = c.post("/api/faturacao/resumo", json={"linhas": [linha, lote], "dono_ids": [ctx["dono"]]}).json()
+    assert [(m["data"], m["quantidade"], m["tipo"]) for m in r["movimentos"]] == [
+        (d(5).isoformat(), 2, "inseminacao"), (d(2).isoformat(), 1, "externa")]
+    assert r["movimentos"][1]["detalhe"] == "Fora"
+    assert r["donos"][0]["id"] == ctx["dono"]
+    # Acerto inicial: sem número, fica marcado como tal; "Faturado até" no quadro.
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "", HOJE.isoformat(), [linha], acerto_inicial=True)).status_code == 200
+    f = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "dono_id": ctx["dono"]}).json()
+    assert [(x["acerto_inicial"], x["fatura_numero"]) for x in f] == [(True, "")]
+    anos = c.get("/api/faturacao/anos").json()["linhas"]
+    assert next(l for l in anos if l["dono_id"] == ctx["dono"])["faturado_ate"] == d(3).isoformat()

@@ -393,7 +393,8 @@ def test_stock_atencao_usa_fk_garanhao_nome(db):
     db.commit()
     cur.close()
 
-    df = carregar_stock_atencao(limite=5, top=100)
+    # `top` grande: a base de teste acumula outros lotes com pouco stock.
+    df = carregar_stock_atencao(limite=5, top=100_000)
     matched = df[df["lote_id"] == stock_id]
     assert not matched.empty, "lote com existência 3 devia aparecer"
     assert matched.iloc[0]["garanhao_nome"] == novo_nome, (

@@ -43,9 +43,13 @@ class LinhaIn(BaseModel):
     fim: date
 
 
-class FaturarIn(BaseModel):
-    fatura_numero: str = Field(max_length=60)
+class FaturaIn(BaseModel):
+    """Uma fatura = um proprietário (`dono_id` None = lotes sem proprietário)."""
+    dono_id: int | None
+    fatura_numero: str = Field(default="", max_length=60)
     fatura_data: date
+    # Primeiro fecho, de antes da app: o número da fatura pode não se saber.
+    acerto_inicial: bool = False
     observacoes: str | None = None
     linhas: list[LinhaIn] = Field(min_length=1, max_length=2000)
 
@@ -55,17 +59,34 @@ class FaturarIn(BaseModel):
         return v.strip() if isinstance(v, str) else v
 
 
+class FaturarIn(BaseModel):
+    faturas: list[FaturaIn] = Field(min_length=1, max_length=500)
+
+
 @router.post("/faturar")
 def faturar(d: FaturarIn, user: dict = Depends(acesso_faturacao)):
-    if not d.fatura_numero:
+    if any(not f.fatura_numero and not f.acerto_inicial for f in d.faturas):
         raise _erro(422, "web.billing.error.invoice_required")
     try:
-        n = faturacao_repo.faturar(
-            [l.model_dump() for l in d.linhas], d.fatura_numero, d.fatura_data, d.observacoes or None, user["username"]
-        )
+        n = faturacao_repo.faturar([f.model_dump() for f in d.faturas], user["username"])
     except faturacao_repo.JaFaturado:
         raise _erro(409, "web.billing.error.changed")
+    except faturacao_repo.OutroDono:
+        raise _erro(422, "web.billing.error.one_owner")
     return {"linhas": n}
+
+
+class ResumoIn(BaseModel):
+    linhas: list[LinhaIn] = Field(min_length=1, max_length=2000)
+    dono_ids: list[int] = Field(default_factory=list, max_length=500)
+
+
+@router.post("/resumo")
+def resumo(d: ResumoIn):
+    """Para o resumo antes de faturar (e o PDF): o porquê de cada mudança de
+    palhetas nos lotes e os dados de cada proprietário."""
+    lotes = [l.model_dump() for l in d.linhas if l.tipo == "armazenamento"]
+    return {"movimentos": faturacao_repo.movimentos(lotes), "donos": faturacao_repo.donos(d.dono_ids)}
 
 
 @router.get("/faturado")
