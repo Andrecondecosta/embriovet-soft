@@ -146,6 +146,7 @@ export interface Utilizador {
   ativo: boolean;
   created_at: string | null;
   last_login: string | null;
+  acesso_faturacao: boolean;
 }
 export interface UtilizadorIn {
   username: string;
@@ -167,6 +168,17 @@ export const useAtivarUtilizador = () =>
   useUsrMutation(({ id, ativar }: { id: number; ativar: boolean }) =>
     api<Utilizador>(`/definicoes/utilizadores/${id}/${ativar ? "ativar" : "desativar"}`, "POST"),
   );
+/** Acesso ao separador Faturação. Se for o próprio, o menu atualiza logo. */
+export function useAcessoFaturacao() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ativo }: { id: number; ativo: boolean }) => api<Utilizador>(`/definicoes/utilizadores/${id}/faturacao`, "PUT", { ativo }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["definicoes", "utilizadores"] });
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
 export const useMudarPassword = () =>
   useUsrMutation(({ id, password }: { id: number; password: string }) =>
     api<{ ok: boolean }>(`/definicoes/utilizadores/${id}/password`, "POST", { password }),

@@ -6,6 +6,8 @@ export interface User {
   nome: string;
   nivel: Nivel;
   must_change_password: boolean;
+  /** Vê o separador Faturação (autorização própria, não o nível). */
+  acesso_faturacao?: boolean;
 }
 
 export interface PublicSettings {

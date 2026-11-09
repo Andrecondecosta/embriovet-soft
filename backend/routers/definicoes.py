@@ -234,7 +234,7 @@ class PasswordIn(BaseModel):
     password: str
 
 
-_COL_USR = ["id", "username", "nome_completo", "nivel", "ativo", "created_at", "last_login"]
+_COL_USR = ["id", "username", "nome_completo", "nivel", "ativo", "created_at", "last_login", "acesso_faturacao"]
 
 
 def _validar_password(p: str):
@@ -299,6 +299,21 @@ def desativar(uid: int, user: dict = Depends(require_nivel("Administrador"))):
     if uid == user["id"]:
         raise _erro(409, "web.settings.error.self_deactivate")
     desativar_usuario(uid)
+    return _obter_utilizador(uid)
+
+
+class FaturacaoIn(BaseModel):
+    ativo: bool
+
+
+@router.put("/utilizadores/{uid}/faturacao")
+def acesso_faturacao(uid: int, d: FaturacaoIn, _user: dict = Depends(require_nivel("Administrador"))):
+    """Dá ou tira o acesso ao separador Faturação (independente do nível)."""
+    _obter_utilizador(uid)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE usuarios SET acesso_faturacao = %s, updated_at = NOW() WHERE id = %s", (d.ativo, uid))
+        conn.commit()
     return _obter_utilizador(uid)
 
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Collapse, Flex, Form, Input, Modal, Segmented, Select, Table, Tag, Typography } from "antd";
+import { Alert, Button, Collapse, Flex, Form, Input, Modal, Segmented, Select, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import { KeyOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
@@ -12,6 +12,7 @@ import {
   List,
   Popup,
   Selector,
+  Switch as MSwitch,
   Tabs,
   Tag as MTag,
 } from "antd-mobile";
@@ -25,6 +26,7 @@ import { notifySuccess, useErrorMessage, useNotifyError } from "../../components
 import { Cabecalho, FolhaEcraInteiro, irParaErro } from "../../components/mobile";
 import {
   NIVEIS,
+  useAcessoFaturacao,
   useAtivarUtilizador,
   useCriarUtilizador,
   useMudarPassword,
@@ -46,6 +48,7 @@ function useUtilizadoresTab() {
   const lista = useUtilizadores();
   const criar = useCriarUtilizador();
   const ativar = useAtivarUtilizador();
+  const faturacao = useAcessoFaturacao();
   const mudarPw = useMudarPassword();
   const [nivel, setNivel] = useState<string | null>(null);
   const [estado, setEstado] = useState<Estado>("todos");
@@ -77,6 +80,14 @@ function useUtilizadoresTab() {
       return null;
     }
   };
+  const alternarFaturacao = async (u: Utilizador, ativo: boolean) => {
+    try {
+      return await faturacao.mutateAsync({ id: u.id, ativo });
+    } catch (err) {
+      notifyError(err);
+      return null;
+    }
+  };
   const mudarPassword = async (u: Utilizador, password: string) => {
     try {
       await mudarPw.mutateAsync({ id: u.id, password });
@@ -100,6 +111,8 @@ function useUtilizadoresTab() {
     criarUtilizador,
     aCriar: criar.isPending,
     alternar,
+    alternarFaturacao,
+    aMudarFaturacao: faturacao.isPending,
     mudarPassword,
     aMudarPw: mudarPw.isPending,
   };
@@ -214,6 +227,19 @@ function UtilizadoresDesktop() {
             dataIndex: "ativo",
             width: 100,
             render: (v) => <Tag color={v ? "success" : "default"}>{v ? t("web.common.active") : t("web.common.inactive")}</Tag>,
+          },
+          {
+            title: (
+              <Tooltip title={t("web.settings.users.billing_help")}>
+                <span>{t("web.settings.users.billing")}</span>
+              </Tooltip>
+            ),
+            dataIndex: "acesso_faturacao",
+            width: 100,
+            align: "center",
+            render: (v, u) => (
+              <Switch size="small" checked={v} loading={x.aMudarFaturacao} onChange={(ativo) => void x.alternarFaturacao(u, ativo)} />
+            ),
           },
           { title: t("label.last_login"), dataIndex: "last_login", width: 150, render: (v) => (v ? dataHora(v) : t("web.users.never")) },
           { title: t("label.created_at"), dataIndex: "created_at", width: 150, responsive: ["lg"], render: (v) => (v ? dataHora(v) : "—") },
@@ -384,6 +410,18 @@ function UtilizadoresMobile() {
             <List>
               <List.Item extra={x.nomeNivel(aberto.nivel)}>{t("web.users.level")}</List.Item>
               <List.Item extra={aberto.ativo ? t("web.common.active") : t("web.common.inactive")}>{t("web.common.status")}</List.Item>
+              <List.Item
+                description={t("web.settings.users.billing_help")}
+                extra={
+                  <MSwitch
+                    checked={aberto.acesso_faturacao}
+                    loading={x.aMudarFaturacao}
+                    onChange={(ativo) => void x.alternarFaturacao(aberto, ativo).then((r) => r && setAberto(r))}
+                  />
+                }
+              >
+                {t("web.settings.users.billing")}
+              </List.Item>
               <List.Item extra={aberto.last_login ? dataHora(aberto.last_login) : t("web.users.never")}>{t("label.last_login")}</List.Item>
               <List.Item extra={aberto.created_at ? dataHora(aberto.created_at) : "—"}>{t("label.created_at")}</List.Item>
             </List>

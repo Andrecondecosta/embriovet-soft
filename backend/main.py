@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.config import FRONTEND_DIST, IS_RENDER
 from backend.deps import pode_escrever
-from backend.routers import animais, auth, registo_clinico, dashboard, definicoes, estadias, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
+from backend.routers import animais, auth, registo_clinico, dashboard, definicoes, estadias, faturacao, importar, inseminacoes, relatorios, trabalho, mapa, opcoes, owners, public, stock, transferencias
 
 # A documentação da API só fora do Render (em produção não fica pública).
 _DOCS = not IS_RENDER
@@ -65,6 +65,8 @@ app.include_router(animais.router, dependencies=ESCRITA)
 app.include_router(registo_clinico.router, dependencies=ESCRITA)
 app.include_router(inseminacoes.router, dependencies=ESCRITA)
 app.include_router(importar.router, dependencies=ESCRITA)
+# Faturação: autorização própria (não o nível) — ver `acesso_faturacao`.
+app.include_router(faturacao.router)
 
 
 @app.get("/api/health")

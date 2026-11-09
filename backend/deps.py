@@ -19,7 +19,7 @@ def _utilizador_atual(user_id: int):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, username, nome_completo, nivel, must_change_password
+                SELECT id, username, nome_completo, nivel, must_change_password, acesso_faturacao
                 FROM usuarios
                 WHERE id = %s AND ativo = TRUE
                 """,
@@ -34,6 +34,7 @@ def _utilizador_atual(user_id: int):
         "nome": row[2],
         "nivel": row[3],
         "must_change_password": bool(row[4]),
+        "acesso_faturacao": bool(row[5]),
     }
 
 
@@ -90,4 +91,12 @@ def pode_escrever(request: Request, user: dict = Depends(get_current_user)) -> d
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path not in POST_SO_LEITURA:
         if NIVEIS.get(user["nivel"], 0) < NIVEIS["Gestor"]:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
+    return user
+
+
+def acesso_faturacao(user: dict = Depends(get_current_user)) -> dict:
+    """Faturação: só quem tem a autorização própria (dada em Definições →
+    Utilizadores), seja qual for o nível. Os outros nem veem o separador."""
+    if not user.get("acesso_faturacao"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
     return user

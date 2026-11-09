@@ -1,0 +1,622 @@
+import { useMemo, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import dayjs, { type Dayjs } from "dayjs";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  Modal,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from "antd";
+import { CheckOutlined, DownloadOutlined } from "@ant-design/icons";
+import {
+  Button as MButton,
+  CapsuleTabs,
+  Checkbox as MCheckbox,
+  DotLoading,
+  ErrorBlock,
+  Form as MForm,
+  Input as MInput,
+  List,
+  SearchBar,
+  Selector,
+  Tag as MTag,
+  TextArea,
+} from "antd-mobile";
+
+import { ApiError } from "../../api/client";
+import { useT } from "../../i18n/I18n";
+import { PageHeader } from "../../components/ds";
+import { useIsMobile } from "../../components/responsive";
+import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
+import { DataCampo, FolhaEcraInteiro, abrirAoTocar, irParaErro } from "../../components/mobile";
+import { baixarCsv, dataCurta } from "../../components/csv";
+import { useOpcoes } from "../stock/api";
+import {
+  useAnularFaturada,
+  useFaturado,
+  useFaturar,
+  usePorFaturar,
+  type Faturada,
+  type PorFaturar,
+  type TipoFat,
+} from "./api";
+
+const TABS = ["por-faturar", "faturado"] as const;
+const ISO = "YYYY-MM-DD";
+
+// Períodos rápidos (pode faturar-se ao mês, ao ano ou à medida).
+const PERIODOS = [
+  { id: "this_month", de: () => dayjs().startOf("month"), ate: () => dayjs() },
+  { id: "last_month", de: () => dayjs().subtract(1, "month").startOf("month"), ate: () => dayjs().subtract(1, "month").endOf("month") },
+  { id: "this_year", de: () => dayjs().startOf("year"), ate: () => dayjs() },
+  { id: "last_year", de: () => dayjs().subtract(1, "year").startOf("year"), ate: () => dayjs().subtract(1, "year").endOf("year") },
+] as const;
+
+/** Evita que um nome começado por "=" vire fórmula no Excel. */
+const seguro = (v: string | number | null | undefined) => (typeof v === "string" && /^[=+\-@]/.test(v) ? `'${v}` : v);
+
+function useTextos() {
+  const t = useT();
+  return {
+    dono: (l: { dono_nome: string | null }) => l.dono_nome ?? t("web.billing.no_owner"),
+    tipo: (x: TipoFat) => t(`web.billing.type.${x}`),
+    qtd: (l: { tipo: TipoFat; quantidade: number }) =>
+      t(l.tipo === "estadia" ? "web.billing.days" : "web.billing.straw_days", { count: l.quantidade }),
+    periodo: (l: { inicio: string; fim: string; tipo: TipoFat; saida?: string | null }) =>
+      `${dataCurta(l.inicio)} – ${dataCurta(l.fim)}` +
+      (l.tipo === "estadia" && l.saida === null && l.fim === dayjs().format(ISO) ? ` (${t("web.billing.ongoing")})` : ""),
+  };
+}
+
+const chave = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
+
+function totais(linhas: { tipo: TipoFat; quantidade: number }[]) {
+  const soma = (tipo: TipoFat) => linhas.filter((l) => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
+  return { dias: soma("estadia"), pd: soma("armazenamento") };
+}
+
+export function FaturacaoPage() {
+  const t = useT();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const { tab } = useParams();
+  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/por-faturar" replace />;
+  const conteudo = tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
+
+  if (isMobile)
+    return (
+      <>
+        <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/faturacao/${v}`)} style={{ background: "#fff" }}>
+          <CapsuleTabs.Tab key="por-faturar" title={t("web.billing.tab.pending")} />
+          <CapsuleTabs.Tab key="faturado" title={t("web.billing.tab.done")} />
+        </CapsuleTabs>
+        {conteudo}
+      </>
+    );
+
+  return (
+    <Card size="small">
+      <PageHeader titulo={t("web.nav.faturacao")} />
+      <Typography.Paragraph type="secondary">{t("web.billing.help")}</Typography.Paragraph>
+      <Tabs
+        activeKey={tab}
+        onChange={(v) => navigate(`/faturacao/${v}`)}
+        destroyOnHidden
+        items={[
+          { key: "por-faturar", label: t("web.billing.tab.pending"), children: tab === "por-faturar" && conteudo },
+          { key: "faturado", label: t("web.billing.tab.done"), children: tab === "faturado" && conteudo },
+        ]}
+      />
+    </Card>
+  );
+}
+
+// ── Filtros comuns ───────────────────────────────────────────────────────────
+
+function usePeriodo() {
+  const [periodo, setPeriodo] = useState<[Dayjs, Dayjs]>([PERIODOS[0].de(), PERIODOS[0].ate()]);
+  const [dono, setDono] = useState<number | null>(null);
+  return { periodo, setPeriodo, dono, setDono, filtro: { inicio: periodo[0].format(ISO), fim: periodo[1].format(ISO), dono_id: dono } };
+}
+
+function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; children?: React.ReactNode }) {
+  const t = useT();
+  const donos = useOpcoes("proprietarios");
+  return (
+    <Flex gap={8} wrap align="center" style={{ marginBottom: 12 }}>
+      <DatePicker.RangePicker
+        format="DD/MM/YYYY"
+        allowClear={false}
+        value={p.periodo}
+        onChange={(v) => v?.[0] && v[1] && p.setPeriodo([v[0], v[1]])}
+        presets={PERIODOS.map((x) => ({ label: t(`web.billing.${x.id}`), value: [x.de(), x.ate()] as [Dayjs, Dayjs] }))}
+      />
+      <Select
+        showSearch
+        allowClear
+        optionFilterProp="label"
+        placeholder={t("web.billing.all_owners")}
+        value={p.dono ?? undefined}
+        onChange={(v) => p.setDono(v ?? null)}
+        options={(donos.data ?? []).map((d) => ({ value: d.id, label: d.nome }))}
+        style={{ width: 260 }}
+      />
+      {children}
+    </Flex>
+  );
+}
+
+/** Telemóvel: só os períodos rápidos (o período à medida faz-se no computador). */
+function PeriodoMobile({ p }: { p: ReturnType<typeof usePeriodo> }) {
+  const t = useT();
+  const atual = PERIODOS.find((x) => x.de().isSame(p.periodo[0], "day") && x.ate().isSame(p.periodo[1], "day"))?.id;
+  return (
+    <Selector
+      columns={2}
+      showCheckMark={false}
+      value={atual ? [atual] : []}
+      onChange={(v) => {
+        const x = PERIODOS.find((y) => y.id === v[0]);
+        if (x) p.setPeriodo([x.de(), x.ate()]);
+      }}
+      options={PERIODOS.map((x) => ({ value: x.id, label: t(`web.billing.${x.id}`) }))}
+    />
+  );
+}
+
+// ── Por faturar ──────────────────────────────────────────────────────────────
+
+function PorFaturarTab() {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const errorMessage = useErrorMessage();
+  const tx = useTextos();
+  const p = usePeriodo();
+  const [tipo, setTipo] = useState<TipoFat | null>(null);
+  const [pesquisa, setPesquisa] = useState("");
+  const q = usePorFaturar({ ...p.filtro, tipo });
+  const [sel, setSel] = useState<string[]>([]);
+  const [marcar, setMarcar] = useState(false);
+
+  const linhas = useMemo(() => {
+    const s = pesquisa.trim().toLowerCase();
+    return (q.data ?? []).filter((l) => !s || `${l.dono_nome ?? ""} ${l.descricao}`.toLowerCase().includes(s));
+  }, [q.data, pesquisa]);
+  // Só contam as escolhidas que ainda estão na lista (o período/filtro pode ter mudado).
+  const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
+  const tot = totais(escolhidas.length ? escolhidas : linhas);
+  const resumo = escolhidas.length
+    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, pd: tot.pd })
+    : t("web.billing.total", { dias: tot.dias, pd: tot.pd });
+
+  const exportar = () =>
+    baixarCsv(
+      `por-faturar_${p.filtro.inicio}_${p.filtro.fim}.csv`,
+      [t("label.owner"), t("web.billing.col.what"), t("web.billing.type.all"), t("web.billing.col.period"), "", t("web.billing.col.qty"), t("web.billing.col.straws")],
+      linhas.map((l) => [
+        seguro(tx.dono(l)),
+        seguro(l.descricao),
+        tx.tipo(l.tipo),
+        l.inicio,
+        l.fim,
+        tx.qtd(l),
+        l.tipo === "armazenamento" ? `${l.palhetas_inicio} → ${l.palhetas_fim}` : "",
+      ]),
+    );
+
+  const janela = (
+    <MarcarFaturado
+      aberto={marcar}
+      linhas={escolhidas}
+      onClose={(feito) => {
+        setMarcar(false);
+        if (feito) setSel([]);
+      }}
+    />
+  );
+
+  if (isMobile)
+    return (
+      <>
+        <div style={{ padding: 8, background: "#fff" }}>
+          <PeriodoMobile p={p} />
+          <SearchBar style={{ marginTop: 8 }} placeholder={t("web.common.search")} value={pesquisa} onChange={setPesquisa} />
+          <div style={{ color: "#999", fontSize: 13, margin: "8px 0" }}>{resumo}</div>
+          <MButton block color="primary" disabled={!escolhidas.length} onClick={() => setMarcar(true)}>
+            {t("web.billing.mark")}
+          </MButton>
+        </div>
+        {q.isPending ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <DotLoading color="primary" />
+          </div>
+        ) : !linhas.length ? (
+          <ErrorBlock status="empty" title={t("web.billing.empty_pending")} description="" />
+        ) : (
+          <MCheckbox.Group value={sel} onChange={(v) => setSel(v as string[])}>
+            <List>
+              {linhas.map((l) => (
+                <List.Item
+                  key={chave(l)}
+                  prefix={<MCheckbox value={chave(l)} />}
+                  description={`${tx.dono(l)} · ${tx.periodo(l)}`}
+                  extra={tx.qtd(l)}
+                >
+                  {l.descricao}
+                </List.Item>
+              ))}
+            </List>
+          </MCheckbox.Group>
+        )}
+        {janela}
+      </>
+    );
+
+  return (
+    <>
+      <FiltrosDesktop p={p}>
+        <Segmented<TipoFat | "todos">
+          value={tipo ?? "todos"}
+          onChange={(v) => setTipo(v === "todos" ? null : v)}
+          options={[
+            { value: "todos", label: t("web.billing.type.all") },
+            { value: "estadia", label: t("web.billing.type.estadia") },
+            { value: "armazenamento", label: t("web.billing.type.armazenamento") },
+          ]}
+        />
+      </FiltrosDesktop>
+      {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 8 }}>
+        <Typography.Text type="secondary">{resumo}</Typography.Text>
+        <Space>
+          <Button icon={<DownloadOutlined />} disabled={!linhas.length} onClick={exportar}>
+            {t("web.billing.export")}
+          </Button>
+          <Button type="primary" icon={<CheckOutlined />} disabled={!escolhidas.length} onClick={() => setMarcar(true)}>
+            {t("web.billing.mark")}
+          </Button>
+        </Space>
+      </Flex>
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
+        {t("web.billing.mark_help")}
+      </Typography.Paragraph>
+      <Table<PorFaturar>
+        size="small"
+        bordered
+        loading={q.isFetching}
+        rowKey={chave}
+        dataSource={linhas}
+        locale={{ emptyText: t("web.billing.empty_pending") }}
+        pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
+        rowSelection={{ selectedRowKeys: sel, onChange: (k) => setSel(k as string[]) }}
+        columns={[
+          { title: t("label.owner"), render: (_, l) => tx.dono(l), sorter: (a, b) => tx.dono(a).localeCompare(tx.dono(b)), defaultSortOrder: "ascend" },
+          {
+            title: t("web.billing.col.what"),
+            render: (_, l) => (
+              <>
+                <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l.tipo)}</Tag>
+                {l.descricao}
+                {l.local && <Typography.Text type="secondary"> · {l.local}</Typography.Text>}
+              </>
+            ),
+          },
+          { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
+          { title: t("web.billing.col.qty"), align: "right", render: (_, l) => <Typography.Text strong>{tx.qtd(l)}</Typography.Text> },
+          {
+            title: t("web.billing.col.straws"),
+            align: "right",
+            render: (_, l) => (l.tipo === "armazenamento" ? `${l.palhetas_inicio} → ${l.palhetas_fim}` : ""),
+          },
+        ]}
+      />
+      {janela}
+    </>
+  );
+}
+
+function MarcarFaturado({ aberto, linhas, onClose }: { aberto: boolean; linhas: PorFaturar[]; onClose: (feito: boolean) => void }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const faturar = useFaturar();
+  const notifyError = useNotifyError();
+  const [form] = Form.useForm<{ fatura_numero: string; fatura_data: Dayjs; observacoes?: string }>();
+  const [mform] = MForm.useForm<{ fatura_numero: string; fatura_data: string; observacoes?: string }>();
+  const tot = totais(linhas);
+
+  const guardar = async (v: { fatura_numero: string; fatura_data: string; observacoes?: string }) => {
+    try {
+      const r = await faturar.mutateAsync({
+        ...v,
+        linhas: linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })),
+      });
+      notifySuccess(t("web.billing.marked", { n: r.linhas }));
+      onClose(true);
+    } catch (err) {
+      notifyError(err);
+      // Já faturado entretanto: a lista atualiza (onSettled) e escolhe-se de novo.
+      if (err instanceof ApiError && err.code === "web.billing.error.changed") onClose(true);
+    }
+  };
+  const resumo = t("web.billing.summary", { linhas: linhas.length, dias: tot.dias, pd: tot.pd });
+  const regraNumero = [{ required: true, whitespace: true, message: t("web.billing.error.invoice_required") }];
+
+  if (isMobile)
+    return (
+      <FolhaEcraInteiro
+        visible={aberto}
+        titulo={t("web.billing.mark")}
+        onCancel={() => onClose(false)}
+        onOk={() => mform.submit()}
+        okText={t("web.billing.mark")}
+        loading={faturar.isPending}
+      >
+        <MForm
+          form={mform}
+          onFinish={guardar}
+          onFinishFailed={irParaErro}
+          footer={null}
+          initialValues={{ fatura_data: dayjs().format(ISO) }}
+        >
+          <MForm.Header>{resumo}</MForm.Header>
+          <MForm.Item name="fatura_numero" label={t("web.billing.invoice_number")} rules={regraNumero}>
+            <MInput clearable />
+          </MForm.Item>
+          <MForm.Item name="fatura_data" label={t("web.billing.invoice_date")} rules={[{ required: true }]} arrow onClick={abrirAoTocar}>
+            <DataCampo />
+          </MForm.Item>
+          <MForm.Item name="observacoes" label={t("web.billing.notes")}>
+            <TextArea autoSize={{ minRows: 2 }} />
+          </MForm.Item>
+        </MForm>
+      </FolhaEcraInteiro>
+    );
+
+  return (
+    <Modal
+      open={aberto}
+      title={t("web.billing.mark")}
+      okText={t("web.billing.mark")}
+      cancelText={t("web.common.cancel")}
+      onOk={() => form.submit()}
+      onCancel={() => onClose(false)}
+      confirmLoading={faturar.isPending}
+      destroyOnHidden
+    >
+      <Typography.Paragraph type="secondary">{resumo}</Typography.Paragraph>
+      <Form
+        form={form}
+        layout="vertical"
+        preserve={false}
+        initialValues={{ fatura_data: dayjs() }}
+        onFinish={(v) => guardar({ ...v, fatura_data: v.fatura_data.format(ISO) })}
+      >
+        <Flex gap={12}>
+          <Form.Item name="fatura_numero" label={t("web.billing.invoice_number")} rules={regraNumero} style={{ flex: 1 }}>
+            <Input autoFocus maxLength={60} />
+          </Form.Item>
+          <Form.Item name="fatura_data" label={t("web.billing.invoice_date")} rules={[{ required: true }]}>
+            <DatePicker format="DD/MM/YYYY" allowClear={false} />
+          </Form.Item>
+        </Flex>
+        <Form.Item name="observacoes" label={t("web.billing.notes")}>
+          <Input.TextArea autoSize={{ minRows: 2 }} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+// ── Faturado ─────────────────────────────────────────────────────────────────
+
+function FaturadoTab() {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const errorMessage = useErrorMessage();
+  const tx = useTextos();
+  const p = usePeriodo();
+  const [fatura, setFatura] = useState("");
+  const [anuladas, setAnuladas] = useState(false);
+  const q = useFaturado({ ...p.filtro, fatura, anuladas });
+  const [anular, setAnular] = useState<Faturada | null>(null);
+  const linhas = q.data ?? [];
+  const tot = totais(linhas.filter((l) => !l.anulada));
+
+  const exportar = () =>
+    baixarCsv(
+      `faturado_${p.filtro.inicio}_${p.filtro.fim}.csv`,
+      [t("web.billing.col.invoice"), t("web.billing.col.invoice_date"), t("label.owner"), t("web.billing.col.what"), t("web.billing.col.period"), "", t("web.billing.col.qty"), t("web.billing.col.by"), t("web.billing.cancelled")],
+      linhas.map((l) => [
+        seguro(l.fatura_numero),
+        l.fatura_data,
+        seguro(tx.dono(l)),
+        seguro(l.descricao),
+        l.inicio,
+        l.fim,
+        tx.qtd(l),
+        l.criado_por,
+        l.anulada ? l.motivo_anulacao : "",
+      ]),
+    );
+  const janela = <AnularLinha linha={anular} onClose={() => setAnular(null)} />;
+
+  if (isMobile)
+    return (
+      <>
+        <div style={{ padding: 8, background: "#fff" }}>
+          <PeriodoMobile p={p} />
+          <SearchBar style={{ marginTop: 8 }} placeholder={t("web.billing.search_invoice")} value={fatura} onChange={setFatura} />
+          <div style={{ color: "#999", fontSize: 13, marginTop: 8 }}>{t("web.billing.total", tot)}</div>
+        </div>
+        {q.isPending ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <DotLoading color="primary" />
+          </div>
+        ) : !linhas.length ? (
+          <ErrorBlock status="empty" title={t("web.billing.empty_done")} description="" />
+        ) : (
+          <List>
+            {linhas.map((l) => (
+              <List.Item
+                key={l.id}
+                description={`${l.fatura_numero} · ${dataCurta(l.fatura_data)} · ${tx.dono(l)} · ${tx.periodo(l)}`}
+                extra={tx.qtd(l)}
+                onClick={l.anulada ? undefined : () => setAnular(l)}
+                arrow={!l.anulada}
+              >
+                {l.descricao}
+                {l.anulada && (
+                  <MTag color="danger" fill="outline" style={{ marginLeft: 6 }}>
+                    {t("web.billing.cancelled")}
+                  </MTag>
+                )}
+              </List.Item>
+            ))}
+          </List>
+        )}
+        {janela}
+      </>
+    );
+
+  return (
+    <>
+      <FiltrosDesktop p={p}>
+        <Input.Search allowClear placeholder={t("web.billing.search_invoice")} onSearch={setFatura} style={{ width: 220 }} />
+        <Checkbox checked={anuladas} onChange={(e) => setAnuladas(e.target.checked)}>
+          {t("web.billing.show_cancelled")}
+        </Checkbox>
+      </FiltrosDesktop>
+      {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 8 }}>
+        <Typography.Text type="secondary">{t("web.billing.total", tot)}</Typography.Text>
+        <Button icon={<DownloadOutlined />} disabled={!linhas.length} onClick={exportar}>
+          {t("web.billing.export")}
+        </Button>
+      </Flex>
+      <Table<Faturada>
+        size="small"
+        bordered
+        loading={q.isFetching}
+        rowKey="id"
+        dataSource={linhas}
+        locale={{ emptyText: t("web.billing.empty_done") }}
+        pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
+        columns={[
+          {
+            title: t("web.billing.col.invoice"),
+            render: (_, l) => (
+              <>
+                <Typography.Text strong delete={l.anulada}>
+                  {l.fatura_numero}
+                </Typography.Text>
+                {l.anulada && (
+                  <Tag color="red" style={{ marginLeft: 8 }} title={l.motivo_anulacao ?? undefined}>
+                    {t("web.billing.cancelled")}
+                  </Tag>
+                )}
+              </>
+            ),
+          },
+          { title: t("web.billing.col.invoice_date"), render: (_, l) => dataCurta(l.fatura_data) },
+          { title: t("label.owner"), render: (_, l) => tx.dono(l) },
+          {
+            title: t("web.billing.col.what"),
+            render: (_, l) => (
+              <>
+                <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l.tipo)}</Tag>
+                {l.descricao}
+              </>
+            ),
+          },
+          { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
+          { title: t("web.billing.col.qty"), align: "right", render: (_, l) => tx.qtd(l) },
+          { title: t("web.billing.col.by"), dataIndex: "criado_por" },
+          {
+            title: "",
+            width: 90,
+            render: (_, l) =>
+              !l.anulada && (
+                <Button size="small" danger type="link" onClick={() => setAnular(l)}>
+                  {t("web.billing.cancel")}
+                </Button>
+              ),
+          },
+        ]}
+      />
+      {janela}
+    </>
+  );
+}
+
+function AnularLinha({ linha, onClose }: { linha: Faturada | null; onClose: () => void }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const anular = useAnularFaturada();
+  const notifyError = useNotifyError();
+  const [motivo, setMotivo] = useState("");
+  const fazer = async () => {
+    if (!linha || !motivo.trim()) return;
+    try {
+      await anular.mutateAsync({ id: linha.id, motivo: motivo.trim() });
+      notifySuccess(t("web.billing.cancel_done"));
+      setMotivo("");
+      onClose();
+    } catch (err) {
+      notifyError(err);
+    }
+  };
+  const corpo = linha && (
+    <>
+      <p>
+        {linha.fatura_numero} · {linha.descricao} · {dataCurta(linha.inicio)} – {dataCurta(linha.fim)}
+      </p>
+      <p style={{ color: "#999" }}>{t("web.billing.cancel_help")}</p>
+    </>
+  );
+
+  if (isMobile)
+    return (
+      <FolhaEcraInteiro
+        visible={linha !== null}
+        titulo={t("web.billing.cancel_title")}
+        onCancel={onClose}
+        onOk={fazer}
+        okText={t("web.billing.cancel")}
+        loading={anular.isPending}
+      >
+        <div style={{ padding: 12 }}>
+          {corpo}
+          <TextArea placeholder={t("web.billing.reason")} value={motivo} onChange={setMotivo} autoSize={{ minRows: 2 }} />
+        </div>
+      </FolhaEcraInteiro>
+    );
+
+  return (
+    <Modal
+      open={linha !== null}
+      title={t("web.billing.cancel_title")}
+      okText={t("web.billing.cancel")}
+      okButtonProps={{ danger: true, disabled: !motivo.trim() }}
+      cancelText={t("web.common.cancel")}
+      onOk={fazer}
+      onCancel={onClose}
+      confirmLoading={anular.isPending}
+      destroyOnHidden
+    >
+      {corpo}
+      <Input.TextArea placeholder={t("web.billing.reason")} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoSize={{ minRows: 2 }} />
+    </Modal>
+  );
+}

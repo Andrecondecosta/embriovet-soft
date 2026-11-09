@@ -8,7 +8,7 @@ import { api } from "../api/client";
 import type { User } from "../api/types";
 import { useT } from "../i18n/I18n";
 import { BrandMark, ProductSignature, useBrand } from "./Brand";
-import { NAV } from "./Shell";
+import { NAV, navDe } from "./Shell";
 
 // Barra de baixo: só cabem 5. As restantes secções ficam em "Mais".
 const BARRA = ["/dashboard", "/estadias", "/trabalho-diario", "/stock-semen"];
@@ -20,7 +20,7 @@ function tituloDaRota(pathname: string, t: (k: string) => string): { titulo: str
   if (pathname === "/stock-semen/importar") return { titulo: t("import.title"), voltar: true };
   if (pathname === "/trabalho-diario/inseminacao") return { titulo: t("web.insem.title"), voltar: true };
   if (pathname.startsWith("/animais/")) return { titulo: t("web.stays.form.animal"), voltar: true };
-  const n = NAV.find((x) => pathname.startsWith(x.path));
+  const n = [...NAV, { path: "/faturacao", label: "web.nav.faturacao" }].find((x) => pathname.startsWith(x.path));
   return { titulo: n ? t(n.label) : "", voltar: false };
 }
 
@@ -94,7 +94,7 @@ export function MobileShell({ user }: { user: User }) {
           </div>
         </div>
         <List>
-          {NAV.filter((n) => !BARRA.includes(n.path)).map((n) => (
+          {navDe(user).filter((n) => !BARRA.includes(n.path)).map((n) => (
             <List.Item
               key={n.path}
               prefix={n.icon}

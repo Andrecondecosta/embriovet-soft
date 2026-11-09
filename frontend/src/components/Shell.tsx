@@ -6,6 +6,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   CalendarOutlined,
+  EuroOutlined,
   ExperimentOutlined,
   HomeOutlined,
   LineChartOutlined,
@@ -31,6 +32,11 @@ export const NAV = [
   { path: "/relatorios", label: "web.nav.relatorios", icon: <BarChartOutlined /> },
   { path: "/definicoes", label: "web.nav.definicoes", icon: <SettingOutlined /> },
 ];
+const FATURACAO = { path: "/faturacao", label: "web.nav.faturacao", icon: <EuroOutlined /> };
+
+/** Menu deste utilizador: "Faturação" só para quem tem acesso (os outros
+ *  nem a veem), antes das Definições. */
+export const navDe = (user: User) => (user.acesso_faturacao ? [...NAV.slice(0, -1), FATURACAO, NAV[NAV.length - 1]] : NAV);
 
 export function Shell({ user }: { user: User }) {
   // No telemóvel, moldura de app (Ant Design Mobile); no resto, a de computador.
@@ -61,13 +67,14 @@ function DesktopShell({ user }: { user: User }) {
     }
   };
 
-  const ativo = NAV.find((n) => location.pathname.startsWith(n.path))?.path;
+  const nav = navDe(user);
+  const ativo = nav.find((n) => location.pathname.startsWith(n.path))?.path;
   const menu = (
     <Menu
       theme="dark"
       mode="inline"
       selectedKeys={ativo ? [ativo] : []}
-      items={NAV.map((n) => ({ key: n.path, icon: n.icon, label: t(n.label) }))}
+      items={nav.map((n) => ({ key: n.path, icon: n.icon, label: t(n.label) }))}
       onClick={({ key }) => navigate(key)}
     />
   );
