@@ -235,3 +235,19 @@ def test_uma_fatura_por_proprietario_numero_obrigatorio_e_resumo(ctx):
     assert [(x["acerto_inicial"], x["fatura_numero"]) for x in f] == [(True, "")]
     anos = c.get("/api/faturacao/anos").json()["linhas"]
     assert next(l for l in anos if l["dono_id"] == ctx["dono"])["faturado_ate"] == d(3).isoformat()
+
+
+def test_em_atraso_e_numeros_usados(ctx):
+    c = ctx["fat"]
+    linha = next(l for l in c.get("/api/faturacao/atraso").json() if l["dono_id"] == ctx["dono"])
+    # Estadias: a mais antiga por faturar entrou há 10 dias; 8 + 3 dias, 2 estadias.
+    assert linha["estadia"] == {"desde": d(10).isoformat(), "dias": 11, "itens": 2}
+    # Sémen: 11 dias do calendário, 1 lote.
+    assert linha["armazenamento"] == {"desde": d(10).isoformat(), "dias": 11, "itens": 1}
+    est = {"tipo": "estadia", "ref_id": ctx["fechada"], "inicio": d(10).isoformat(), "fim": d(3).isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 99/2026", HOJE.isoformat(), [est])).status_code == 200
+    # O mesmo número (escrito de outra maneira) já foi usado — e para quem.
+    usados = c.get("/api/faturacao/numeros", params={"n": [" ft 99/2026 ", "FT 100"]}).json()
+    assert usados == [{"fatura_numero": "FT 99/2026", "dono_id": ctx["dono"], "dono_nome": usados[0]["dono_nome"]}]
+    linha = next(l for l in c.get("/api/faturacao/atraso").json() if l["dono_id"] == ctx["dono"])
+    assert linha["estadia"] == {"desde": d(2).isoformat(), "dias": 3, "itens": 1}

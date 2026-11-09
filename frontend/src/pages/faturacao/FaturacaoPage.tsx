@@ -6,14 +6,17 @@ import {
   Button,
   Card,
   Checkbox,
+  Col,
   DatePicker,
   Flex,
   Input,
   InputNumber,
   Modal,
   Segmented,
+  Row,
   Select,
   Space,
+  Statistic,
   Table,
   Tabs,
   Tag,
@@ -44,10 +47,14 @@ import { baixarCsv, dataCurta } from "../../components/csv";
 import { useOpcoes } from "../stock/api";
 import { ResumoFaturar } from "./ResumoFaturar";
 import {
+  escalao,
+  useAtraso,
   useAnos,
   useAnularFaturada,
   useFaturado,
   usePorFaturar,
+  type Atraso,
+  type AtrasoTipo,
   type CelulaAno,
   type Faturada,
   type LinhaAno,
@@ -55,7 +62,7 @@ import {
   type TipoFat,
 } from "./api";
 
-const TABS = ["anos", "por-faturar", "faturado"] as const;
+const TABS = ["atraso", "anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
 // "Tudo até": desde o início (antes de qualquer registo) até à data escolhida.
 const INICIO = "1990-01-01";
@@ -118,13 +125,14 @@ export function FaturacaoPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { tab } = useParams();
-  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/anos" replace />;
-  const conteudo = tab === "anos" ? <AnosTab /> : tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
+  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/atraso" replace />;
+  const conteudo = tab === "atraso" ? <AtrasoTab /> : tab === "anos" ? <AnosTab /> : tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
 
   if (isMobile)
     return (
       <>
         <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/faturacao/${v}`)} style={{ background: "#fff" }}>
+          <CapsuleTabs.Tab key="atraso" title={t("web.billing.tab.overdue")} />
           <CapsuleTabs.Tab key="anos" title={t("web.billing.tab.years")} />
           <CapsuleTabs.Tab key="por-faturar" title={t("web.billing.tab.pending")} />
           <CapsuleTabs.Tab key="faturado" title={t("web.billing.tab.done")} />
@@ -142,6 +150,7 @@ export function FaturacaoPage() {
         onChange={(v) => navigate(`/faturacao/${v}`)}
         destroyOnHidden
         items={[
+          { key: "atraso", label: t("web.billing.tab.overdue"), children: tab === "atraso" && conteudo },
           { key: "anos", label: t("web.billing.tab.years"), children: tab === "anos" && conteudo },
           { key: "por-faturar", label: t("web.billing.tab.pending"), children: tab === "por-faturar" && conteudo },
           { key: "faturado", label: t("web.billing.tab.done"), children: tab === "faturado" && conteudo },
@@ -734,6 +743,169 @@ function AnosTab() {
               );
             },
           })),
+        ]}
+      />
+    </>
+  );
+}
+
+// ── Em atraso ────────────────────────────────────────────────────────────────
+
+const ESCALOES = [3, 6, 12] as const;
+const COR_ESCALAO: Record<number, string> = { 3: "gold", 6: "orange", 12: "red" };
+const TIPOS_ATRASO = ["estadia", "armazenamento"] as const;
+
+/** Quem tem dias por faturar há mais de 3 / 6 / 12 meses (a contar do dia
+ *  mais antigo por faturar), estadias e sémen à parte. */
+function AtrasoTab() {
+  const t = useT();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const errorMessage = useErrorMessage();
+  const tx = useTextos();
+  const q = useAtraso();
+  const [minimo, setMinimo] = useState<number>(3);
+  const [tipo, setTipo] = useState<TipoFat | null>(null);
+
+  const conta = (k: TipoFat, m: number) => (q.data ?? []).filter((l) => escalao(l[k]?.desde) >= m).length;
+  const linhas = (q.data ?? []).filter((l) => (tipo ? [tipo] : TIPOS_ATRASO).some((k) => escalao(l[k]?.desde) >= minimo));
+  const ver = (l: Atraso) =>
+    navigate(`/faturacao/por-faturar?inicio=1990-01-01&fim=${dayjs().format(ISO)}${l.dono_id != null ? `&dono=${l.dono_id}` : ""}`);
+  const rotuloEscalao = (m: number) => t(m === 12 ? "web.billing.over_12" : m === 6 ? "web.billing.over_6" : "web.billing.over_3");
+  const meses = (desde: string) => dayjs().diff(dayjs(desde), "month");
+  const detalhe = (k: TipoFat, c: AtrasoTipo) =>
+    `${t("web.billing.days", { count: c.dias })} · ${k === "estadia" ? t("web.billing.stays_n", { count: c.itens }) : t("web.stock.n_lots", { count: c.itens })}`;
+  const celula = (k: TipoFat, c: AtrasoTipo | null) => {
+    const e = escalao(c?.desde);
+    if (!c) return <Typography.Text type="secondary">—</Typography.Text>;
+    return (
+      <>
+        <Tag color={e ? COR_ESCALAO[e] : undefined}>{t("web.billing.ago_months", { count: meses(c.desde) })}</Tag>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t("web.billing.since_date", { data: dataCurta(c.desde) })}
+        </Typography.Text>
+        <div style={{ fontSize: 12 }}>{detalhe(k, c)}</div>
+      </>
+    );
+  };
+
+  const cartoes = (
+    <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+      {TIPOS_ATRASO.map((k) => (
+        <Col xs={24} md={12} key={k}>
+          <Card size="small" title={tx.tipo(k)}>
+            <Row gutter={8}>
+              {ESCALOES.map((m) => (
+                <Col span={8} key={m}>
+                  <div
+                    role="button"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      setTipo(k);
+                      setMinimo(m);
+                    }}
+                  >
+                    <Statistic
+                      title={rotuloEscalao(m)}
+                      value={conta(k, m)}
+                      valueStyle={{ color: conta(k, m) ? (m === 12 ? "#cf1322" : m === 6 ? "#d46b08" : "#d48806") : undefined }}
+                    />
+                  </div>
+                </Col>
+              ))}
+            </Row>
+          </Card>
+        </Col>
+      ))}
+    </Row>
+  );
+  const filtros = (
+    <Flex gap={8} wrap align="center" style={{ marginBottom: 12 }}>
+      <Segmented<number>
+        value={minimo}
+        onChange={setMinimo}
+        options={ESCALOES.map((m) => ({ value: m, label: rotuloEscalao(m) }))}
+      />
+      <Segmented<TipoFat | "todos">
+        value={tipo ?? "todos"}
+        onChange={(v) => setTipo(v === "todos" ? null : v)}
+        options={[
+          { value: "todos", label: t("web.billing.type.all") },
+          { value: "estadia", label: t("web.billing.type.estadia") },
+          { value: "armazenamento", label: t("web.billing.type.armazenamento") },
+        ]}
+      />
+    </Flex>
+  );
+
+  if (isMobile)
+    return (
+      <>
+        <div style={{ padding: 8, background: "#fff" }}>
+          <div style={{ color: "#999", fontSize: 13, marginBottom: 8 }}>{t("web.billing.overdue_help")}</div>
+          <Selector
+            columns={3}
+            showCheckMark={false}
+            value={[String(minimo)]}
+            onChange={(v) => v[0] && setMinimo(Number(v[0]))}
+            options={ESCALOES.map((m) => ({ value: String(m), label: `${rotuloEscalao(m)}` }))}
+          />
+        </div>
+        {q.isPending ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <DotLoading color="primary" />
+          </div>
+        ) : !linhas.length ? (
+          <ErrorBlock status="empty" title={t("web.billing.nothing_overdue")} description="" />
+        ) : (
+          <List header={t("web.billing.owners_n", { count: linhas.length })}>
+            {linhas.map((l) => (
+              <List.Item
+                key={l.dono_id ?? "sem"}
+                arrow
+                onClick={() => ver(l)}
+                description={TIPOS_ATRASO.filter((k) => l[k]).map((k) => (
+                  <div key={k}>
+                    {tx.tipo(k)}: {t("web.billing.ago_months", { count: meses(l[k]!.desde) })} · {detalhe(k, l[k]!)}
+                  </div>
+                ))}
+              >
+                {tx.dono(l)}
+              </List.Item>
+            ))}
+          </List>
+        )}
+      </>
+    );
+
+  return (
+    <>
+      <Typography.Paragraph type="secondary">{t("web.billing.overdue_help")}</Typography.Paragraph>
+      {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
+      {cartoes}
+      {filtros}
+      <Table<Atraso>
+        size="small"
+        bordered
+        loading={q.isFetching}
+        rowKey={(l) => l.dono_id ?? "sem"}
+        dataSource={linhas}
+        locale={{ emptyText: t("web.billing.nothing_overdue") }}
+        pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
+        title={() => <Typography.Text type="secondary">{t("web.billing.owners_n", { count: linhas.length })}</Typography.Text>}
+        columns={[
+          { title: t("label.owner"), render: (_, l) => <Typography.Text strong>{tx.dono(l)}</Typography.Text> },
+          { title: t("web.billing.type.estadia"), render: (_, l) => celula("estadia", l.estadia) },
+          { title: t("web.billing.type.armazenamento"), render: (_, l) => celula("armazenamento", l.armazenamento) },
+          {
+            title: "",
+            width: 140,
+            render: (_, l) => (
+              <Button size="small" type="link" onClick={() => ver(l)}>
+                {t("web.billing.see")}
+              </Button>
+            ),
+          },
         ]}
       />
     </>

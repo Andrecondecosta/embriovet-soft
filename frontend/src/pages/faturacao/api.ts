@@ -143,3 +143,32 @@ export const useAnos = (desde: number) =>
     placeholderData: keepPreviousData,
     queryFn: () => api<{ anos: string[]; linhas: LinhaAno[] }>(`/faturacao/anos?desde=${desde}`),
   });
+
+export interface AtrasoTipo {
+  /** Dia mais antigo ainda por faturar. */
+  desde: string;
+  dias: number;
+  itens: number;
+}
+export interface Atraso {
+  dono_id: number | null;
+  dono_nome: string | null;
+  estadia: AtrasoTipo | null;
+  armazenamento: AtrasoTipo | null;
+}
+
+export const useAtraso = (ativo = true) =>
+  useQuery({ queryKey: ["faturacao", "atraso"], enabled: ativo, queryFn: () => api<Atraso[]>("/faturacao/atraso") });
+
+/** Números de fatura já usados (para avisar de um engano; não bloqueia). */
+export const numerosUsados = (numeros: string[]) =>
+  api<{ fatura_numero: string; dono_id: number | null; dono_nome: string | null }[]>(
+    `/faturacao/numeros?${new URLSearchParams(numeros.map((n) => ["n", n]))}`,
+  );
+
+/** Meses desde `desde` → escalão de atraso (3, 6 ou 12 meses), ou 0. */
+export const escalao = (desde?: string | null) => {
+  if (!desde) return 0;
+  const meses = Math.floor((Date.now() - new Date(desde).getTime()) / (30.44 * 864e5));
+  return meses >= 12 ? 12 : meses >= 6 ? 6 : meses >= 3 ? 3 : 0;
+};

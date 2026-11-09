@@ -6,6 +6,7 @@ import { FilePdfOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
   Checkbox as MCheckbox,
+  Dialog,
   Input as MInput,
   List,
   TextArea,
@@ -15,10 +16,10 @@ import { ApiError } from "../../api/client";
 import { useT } from "../../i18n/I18n";
 import { useBrand } from "../../components/Brand";
 import { useIsMobile } from "../../components/responsive";
-import { notifySuccess, useNotifyError } from "../../components/errors";
+import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
 import { DataCampo, FolhaEcraInteiro } from "../../components/mobile";
 import { dataCurta } from "../../components/csv";
-import { useFaturar, useResumo, type DonoFat, type Movimento, type PorFaturar } from "./api";
+import { numerosUsados, useFaturar, useResumo, type DonoFat, type Movimento, type PorFaturar } from "./api";
 
 const ISO = "YYYY-MM-DD";
 const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
@@ -104,9 +105,62 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
     return [...porDono.values()].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [linhas, q.data, t]);
 
+  /** Número repetido (já usado noutro proprietário, ou escrito para dois
+   *  nesta janela): normalmente é engano de escrita. Avisa e pergunta. */
+  const repetidos = async (): Promise<string[]> => {
+    const escritos = grupos.map((g) => ({ g, n: (numeros[g.chave] ?? "").trim() })).filter((x) => x.n);
+    if (!escritos.length) return [];
+    const norm = (n: string) => n.toLowerCase();
+    const avisos: string[] = [];
+    const vezes = new Map<string, number>();
+    for (const { n } of escritos) vezes.set(norm(n), (vezes.get(norm(n)) ?? 0) + 1);
+    for (const [n, k] of vezes) if (k > 1) avisos.push(t("web.billing.dup_same", { numero: escritos.find((x) => norm(x.n) === n)!.n }));
+    try {
+      for (const u of await numerosUsados(escritos.map((x) => x.n))) {
+        const meu = escritos.find((x) => norm(x.n) === norm(u.fatura_numero));
+        if (meu && meu.g.dono_id !== u.dono_id)
+          avisos.push(t("web.billing.dup_used", { numero: u.fatura_numero, dono: u.dono_nome ?? t("web.billing.no_owner") }));
+      }
+    } catch {
+      // Sem a verificação não se impede a gravação: é só um aviso.
+    }
+    return avisos;
+  };
+  const perguntar = (avisos: string[]) =>
+    new Promise<boolean>((resolve) => {
+      const texto = (
+        <>
+          {avisos.map((a) => (
+            <div key={a}>{a}</div>
+          ))}
+          <div style={{ marginTop: 8 }}>{t("web.billing.dup_question")}</div>
+        </>
+      );
+      if (isMobile)
+        void Dialog.confirm({
+          title: t("web.billing.dup_title"),
+          content: texto,
+          confirmText: t("web.billing.dup_ok"),
+          cancelText: t("web.common.cancel"),
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      else
+        confirmar({
+          titulo: t("web.billing.dup_title"),
+          texto,
+          ok: t("web.billing.dup_ok"),
+          cancelar: t("web.common.cancel"),
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+    });
+
   const guardar = async () => {
     setErro(null);
     if (!acerto && grupos.some((g) => !numeros[g.chave]?.trim())) return setErro(t("web.billing.invoice_each"));
+    const avisos = await repetidos();
+    if (avisos.length && !(await perguntar(avisos))) return;
     try {
       const r = await faturar.mutateAsync({
         faturas: grupos.map((g) => ({

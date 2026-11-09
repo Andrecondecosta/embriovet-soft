@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Alert, Button, Card, Col, Flex, Row, Spin, Statistic, Table, Tag, Typography } from "antd";
 import { ArrowRightOutlined } from "@ant-design/icons";
-import { Button as MButton, DotLoading, ErrorBlock, Grid, List, Tag as MTag } from "antd-mobile";
+import { Button as MButton, DotLoading, ErrorBlock, Grid, List, NoticeBar, Tag as MTag } from "antd-mobile";
 
 import { api } from "../api/client";
 import { useT } from "../i18n/I18n";
@@ -11,6 +11,8 @@ import { useIsMobile } from "../components/responsive";
 import { useErrorMessage } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { Cabecalho } from "../components/mobile";
+import { useUser } from "../components/User";
+import { escalao, useAtraso } from "./faturacao/api";
 
 interface Dashboard {
   stock: { total_palhetas: number; lotes_ativos: number; stock_critico: number };
@@ -130,6 +132,24 @@ function Barras({ itens }: { itens: { nome: string; palhetas: number }[] }) {
   );
 }
 
+/** Só para quem tem acesso à faturação: quantos proprietários têm dias por
+ *  faturar há mais de 3 meses (e de 1 ano). Nada para os outros. */
+function useAvisoFaturacao() {
+  const t = useT();
+  const navigate = useNavigate();
+  const acesso = !!useUser().acesso_faturacao;
+  const q = useAtraso(acesso);
+  const conta = (m: number) =>
+    (q.data ?? []).filter((l) => Math.max(escalao(l.estadia?.desde), escalao(l.armazenamento?.desde)) >= m).length;
+  const n3 = conta(3);
+  return {
+    mostrar: acesso && n3 > 0,
+    titulo: t("web.billing.dash_title"),
+    texto: t("web.billing.dash_text", { n3, n12: conta(12) }),
+    abrir: () => navigate("/faturacao/atraso"),
+  };
+}
+
 export function DashboardPage() {
   return useIsMobile() ? <DashboardMobile /> : <DashboardDesktop />;
 }
@@ -140,6 +160,7 @@ function DashboardDesktop() {
   const x = useDashboard();
   const alertas = useLinhasAlertas(x.q.data?.alertas);
   const d = x.q.data;
+  const fat = useAvisoFaturacao();
 
   if (x.q.isError) return <Alert type="error" showIcon title={errorMessage(x.q.error)} />;
   if (!d) return <Spin style={{ display: "block", margin: 48 }} />;
@@ -148,6 +169,19 @@ function DashboardDesktop() {
 
   return (
     <Flex vertical gap={12}>
+      {fat.mostrar && (
+        <Alert
+          type="warning"
+          showIcon
+          title={fat.titulo}
+          description={fat.texto}
+          action={
+            <Button size="small" onClick={fat.abrir}>
+              {t("web.billing.see")}
+            </Button>
+          }
+        />
+      )}
       <Row gutter={[12, 12]}>
         <Col xs={24} md={12}>
           <Card size="small" title={t("reports.section.stock")}>
@@ -335,6 +369,7 @@ function DashboardMobile() {
   const x = useDashboard();
   const alertas = useLinhasAlertas(x.q.data?.alertas);
   const d = x.q.data;
+  const fat = useAvisoFaturacao();
 
   if (x.q.isError) return <ErrorBlock status="default" title={errorMessage(x.q.error)} description="" />;
   if (!d)
@@ -361,6 +396,9 @@ function DashboardMobile() {
 
   return (
     <>
+      {fat.mostrar && (
+        <NoticeBar color="alert" wrap content={`${fat.titulo}: ${fat.texto}`} onClick={fat.abrir} extra={<span>›</span>} />
+      )}
       <Grid columns={2} gap={8} style={{ padding: 8 }}>
         {kpis.map(([label, n, extra]) => (
           <Grid.Item key={label} style={{ background: "#fff", borderRadius: 8, padding: "10px 12px" }}>

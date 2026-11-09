@@ -114,3 +114,15 @@ def anular(linha_id: int, d: AnularIn, user: dict = Depends(acesso_faturacao)):
 def anos(desde: int = Query(2025, ge=1990, le=2100)):
     return faturacao_repo.resumo_anual(min(desde, date.today().year))
 
+
+
+@router.get("/atraso")
+def atraso():
+    """Quem tem estadias/sémen por faturar e desde quando (dashboard)."""
+    return faturacao_repo.em_atraso()
+
+
+@router.get("/numeros")
+def numeros(n: list[str] = Query(default=[], max_length=500)):
+    """Números de fatura já usados (e para que proprietário)."""
+    return faturacao_repo.numeros_usados([x for x in n if x.strip()])

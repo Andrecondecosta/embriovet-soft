@@ -418,3 +418,46 @@ def resumo_anual(desde: int) -> dict:
     linhas = sorted(donos.values(), key=lambda d: (d["dono_nome"] is None, (d["dono_nome"] or "").lower()))
     return {"anos": chaves, "linhas": linhas}
 
+
+
+# ── Em atraso (há quanto tempo cada proprietário tem dias por faturar) ──────
+
+def em_atraso() -> list[dict]:
+    """Por proprietário, estadias e sémen à parte: o dia mais antigo ainda
+    por faturar ("desde") e quantos dias faltam (no sémen, dias do
+    calendário com algum lote por faturar, e quantos lotes)."""
+    hoje = date.today()
+    donos: dict = {}
+    dias_semen: dict = defaultdict(set)
+    for l in por_faturar(INICIO_HISTORICO, hoje):
+        d = donos.setdefault(l["dono_id"], {"dono_id": l["dono_id"], "dono_nome": l["dono_nome"],
+                                            "estadia": None, "armazenamento": None})
+        c = d[l["tipo"]] = d[l["tipo"]] or {"desde": l["inicio"], "dias": 0, "itens": set()}
+        c["desde"] = min(c["desde"], l["inicio"])
+        c["itens"].add(l["ref_id"])
+        if l["tipo"] == "estadia":
+            c["dias"] += l["dias"]
+        else:
+            dias_semen[l["dono_id"]].update(range(l["inicio"].toordinal(), l["fim"].toordinal() + 1))
+    for dono_id, dias in dias_semen.items():
+        donos[dono_id]["armazenamento"]["dias"] = len(dias)
+    for d in donos.values():
+        for k in TIPOS:
+            if d[k]:
+                d[k]["itens"] = len(d[k]["itens"])
+    return sorted(donos.values(), key=lambda d: min(d[k]["desde"] for k in TIPOS if d[k]))
+
+
+def numeros_usados(numeros: list[str]) -> list[dict]:
+    """Proprietários a quem cada número de fatura já foi dado (para avisar
+    de um provável engano de escrita; não bloqueia)."""
+    if not numeros:
+        return []
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT DISTINCT fatura_numero, dono_id, dono_nome FROM faturacao_linhas
+                   WHERE NOT anulada AND fatura_numero <> '' AND LOWER(TRIM(fatura_numero)) = ANY(%s)""",
+                ([n.strip().lower() for n in numeros],),
+            )
+            return [{"fatura_numero": a, "dono_id": b, "dono_nome": c} for a, b, c in cur.fetchall()]
