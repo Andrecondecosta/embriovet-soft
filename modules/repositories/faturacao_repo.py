@@ -273,3 +273,47 @@ def anular(linha_id: int, motivo: str, utilizador: str) -> bool:
             ok = cur.rowcount == 1
         conn.commit()
     return ok
+
+
+# ── Quadro por ano (proprietário × ano) ──────────────────────────────────────
+
+INICIO_HISTORICO = date(1990, 1, 1)
+
+
+def _por_ano(a: date, b: date):
+    """Parte [a, b] pelos anos civis."""
+    while a <= b:
+        fim_ano = date(a.year, 12, 31)
+        yield a.year, a, min(b, fim_ano)
+        a = fim_ano + timedelta(days=1)
+
+
+def resumo_anual(desde: int) -> dict:
+    """Para cada proprietário e ano (os anteriores a `desde` juntos em
+    "antes"): se houve estadias/sémen, o que falta faturar (dias e palhetas
+    × dia). Só o que está na app (estadias e lotes)."""
+    hoje = date.today()
+    chaves = ["antes"] + [str(y) for y in range(desde, hoje.year + 1)]
+    chave = lambda ano: "antes" if ano < desde else str(ano)  # noqa: E731
+    donos: dict = {}
+
+    def celula(dono_id, dono_nome, k):
+        d = donos.setdefault(dono_id, {"dono_id": dono_id, "dono_nome": dono_nome, "celulas": {}})
+        return d["celulas"].setdefault(k, {"atividade": False, "dias": 0, "pd": 0})
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for tipo, busca in (("estadia", _estadias), ("armazenamento", _lotes)):
+                itens = busca(cur, INICIO_HISTORICO, hoje, None)
+                faturados = _faturados(cur, tipo, [i["ref_id"] for i in itens])
+                for it in itens:
+                    for ano, a, b in _por_ano(*it["limite"]):
+                        if _QTD[tipo](it, a, b):
+                            celula(it["dono_id"], it["dono_nome"], chave(ano))["atividade"] = True
+                    for livre in _menos(it["limite"], faturados.get(it["ref_id"], [])):
+                        for ano, a, b in _por_ano(*livre):
+                            c = celula(it["dono_id"], it["dono_nome"], chave(ano))
+                            c["dias" if tipo == "estadia" else "pd"] += _QTD[tipo](it, a, b)
+    linhas = sorted(donos.values(), key=lambda d: (d["dono_nome"] is None, (d["dono_nome"] or "").lower()))
+    return {"anos": chaves, "linhas": linhas}
+

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import dayjs, { type Dayjs } from "dayjs";
 import {
   Alert,
@@ -10,6 +10,7 @@ import {
   Flex,
   Form,
   Input,
+  InputNumber,
   Modal,
   Segmented,
   Select,
@@ -31,6 +32,8 @@ import {
   List,
   SearchBar,
   Selector,
+  Space as MSpace,
+  Switch as MSwitch,
   Tag as MTag,
   TextArea,
 } from "antd-mobile";
@@ -44,16 +47,19 @@ import { DataCampo, FolhaEcraInteiro, abrirAoTocar, irParaErro } from "../../com
 import { baixarCsv, dataCurta } from "../../components/csv";
 import { useOpcoes } from "../stock/api";
 import {
+  useAnos,
   useAnularFaturada,
   useFaturado,
   useFaturar,
   usePorFaturar,
+  type CelulaAno,
   type Faturada,
+  type LinhaAno,
   type PorFaturar,
   type TipoFat,
 } from "./api";
 
-const TABS = ["por-faturar", "faturado"] as const;
+const TABS = ["anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
 
 // Períodos rápidos (pode faturar-se ao mês, ao ano ou à medida).
@@ -92,13 +98,14 @@ export function FaturacaoPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { tab } = useParams();
-  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/por-faturar" replace />;
-  const conteudo = tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
+  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/anos" replace />;
+  const conteudo = tab === "anos" ? <AnosTab /> : tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
 
   if (isMobile)
     return (
       <>
         <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/faturacao/${v}`)} style={{ background: "#fff" }}>
+          <CapsuleTabs.Tab key="anos" title={t("web.billing.tab.years")} />
           <CapsuleTabs.Tab key="por-faturar" title={t("web.billing.tab.pending")} />
           <CapsuleTabs.Tab key="faturado" title={t("web.billing.tab.done")} />
         </CapsuleTabs>
@@ -115,6 +122,7 @@ export function FaturacaoPage() {
         onChange={(v) => navigate(`/faturacao/${v}`)}
         destroyOnHidden
         items={[
+          { key: "anos", label: t("web.billing.tab.years"), children: tab === "anos" && conteudo },
           { key: "por-faturar", label: t("web.billing.tab.pending"), children: tab === "por-faturar" && conteudo },
           { key: "faturado", label: t("web.billing.tab.done"), children: tab === "faturado" && conteudo },
         ]}
@@ -126,8 +134,14 @@ export function FaturacaoPage() {
 // ── Filtros comuns ───────────────────────────────────────────────────────────
 
 function usePeriodo() {
-  const [periodo, setPeriodo] = useState<[Dayjs, Dayjs]>([PERIODOS[0].de(), PERIODOS[0].ate()]);
-  const [dono, setDono] = useState<number | null>(null);
+  // Vindo do quadro "Por ano": período e proprietário já escolhidos no endereço.
+  const [params] = useSearchParams();
+  const [periodo, setPeriodo] = useState<[Dayjs, Dayjs]>(() =>
+    params.get("inicio") && params.get("fim")
+      ? [dayjs(params.get("inicio")), dayjs(params.get("fim"))]
+      : [PERIODOS[0].de(), PERIODOS[0].ate()],
+  );
+  const [dono, setDono] = useState<number | null>(() => (params.get("dono") ? Number(params.get("dono")) : null));
   return { periodo, setPeriodo, dono, setDono, filtro: { inicio: periodo[0].format(ISO), fim: periodo[1].format(ISO), dono_id: dono } };
 }
 
@@ -618,5 +632,139 @@ function AnularLinha({ linha, onClose }: { linha: Faturada | null; onClose: () =
       {corpo}
       <Input.TextArea placeholder={t("web.billing.reason")} value={motivo} onChange={(e) => setMotivo(e.target.value)} autoSize={{ minRows: 2 }} />
     </Modal>
+  );
+}
+
+// ── Por ano ──────────────────────────────────────────────────────────────────
+
+/** Proprietário × ano: tudo faturado (verde), algo por faturar (vermelho,
+ *  com as quantidades) ou sem nada nesse ano (—). Clicar abre as linhas. */
+function AnosTab() {
+  const t = useT();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const errorMessage = useErrorMessage();
+  const [desde, setDesde] = useState(2025);
+  const [soPendentes, setSoPendentes] = useState(true);
+  const [pesquisa, setPesquisa] = useState("");
+  const q = useAnos(desde);
+  const anos = q.data?.anos ?? [];
+  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.pd > 0);
+  const linhas = useMemo(() => {
+    const s = pesquisa.trim().toLowerCase();
+    return (q.data?.linhas ?? []).filter(
+      (l) =>
+        (!s || (l.dono_nome ?? "").toLowerCase().includes(s)) &&
+        (!soPendentes || Object.values(l.celulas).some(pendente)),
+    );
+  }, [q.data, pesquisa, soPendentes]);
+
+  const rotulo = (k: string) => (k === "antes" ? t("web.billing.before", { ano: desde }) : k);
+  const abrir = (l: LinhaAno, k: string) => {
+    const inicio = k === "antes" ? "1990-01-01" : `${k}-01-01`;
+    const fim = k === "antes" ? `${desde - 1}-12-31` : k === String(dayjs().year()) ? dayjs().format(ISO) : `${k}-12-31`;
+    const dono = l.dono_id != null ? `&dono=${l.dono_id}` : "";
+    navigate(`/faturacao/por-faturar?inicio=${inicio}&fim=${fim}${dono}`);
+  };
+  const falta = (c: CelulaAno) =>
+    [c.dias > 0 && t("web.billing.days", { count: c.dias }), c.pd > 0 && t("web.billing.straw_days", { count: c.pd })]
+      .filter(Boolean)
+      .join(" · ");
+  const nome = (l: LinhaAno) => l.dono_nome ?? t("web.billing.no_owner");
+
+  if (isMobile)
+    return (
+      <>
+        <div style={{ padding: 8, background: "#fff" }}>
+          <SearchBar placeholder={t("web.common.search")} value={pesquisa} onChange={setPesquisa} />
+          <Flex justify="space-between" align="center" style={{ marginTop: 8, fontSize: 13 }}>
+            <span>{t("web.billing.only_pending")}</span>
+            <MSwitch checked={soPendentes} onChange={setSoPendentes} />
+          </Flex>
+        </div>
+        {q.isPending ? (
+          <div style={{ textAlign: "center", padding: 24 }}>
+            <DotLoading color="primary" />
+          </div>
+        ) : !linhas.length ? (
+          <ErrorBlock status="empty" title={t("web.billing.empty_years")} description="" />
+        ) : (
+          <List>
+            {linhas.map((l) => (
+              <List.Item
+                key={l.dono_id ?? "sem"}
+                description={
+                  <MSpace wrap style={{ marginTop: 4 }}>
+                    {anos
+                      .filter((k) => l.celulas[k]?.atividade)
+                      .map((k) => (
+                        <MTag
+                          key={k}
+                          color={pendente(l.celulas[k]) ? "danger" : "success"}
+                          fill="outline"
+                          onClick={() => abrir(l, k)}
+                        >
+                          {rotulo(k)} {pendente(l.celulas[k]) ? `· ${falta(l.celulas[k])}` : "✓"}
+                        </MTag>
+                      ))}
+                  </MSpace>
+                }
+              >
+                {nome(l)}
+              </List.Item>
+            ))}
+          </List>
+        )}
+      </>
+    );
+
+  return (
+    <>
+      <Typography.Paragraph type="secondary">{t("web.billing.years_help")}</Typography.Paragraph>
+      <Flex gap={12} wrap align="center" style={{ marginBottom: 12 }}>
+        <Input.Search allowClear placeholder={t("web.common.search")} onChange={(e) => setPesquisa(e.target.value)} style={{ width: 260 }} />
+        <Space>
+          {t("web.billing.since")}
+          <InputNumber min={1990} max={dayjs().year()} value={desde} onChange={(v) => v && setDesde(v)} style={{ width: 90 }} />
+        </Space>
+        <Checkbox checked={soPendentes} onChange={(e) => setSoPendentes(e.target.checked)}>
+          {t("web.billing.only_pending")}
+        </Checkbox>
+      </Flex>
+      {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
+      <Table<LinhaAno>
+        size="small"
+        bordered
+        loading={q.isFetching}
+        rowKey={(l) => l.dono_id ?? "sem"}
+        dataSource={linhas}
+        locale={{ emptyText: t("web.billing.empty_years") }}
+        pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
+        scroll={{ x: "max-content" }}
+        columns={[
+          { title: t("label.owner"), fixed: "left", render: (_, l) => <Typography.Text strong>{nome(l)}</Typography.Text> },
+          ...anos.map((k) => ({
+            title: rotulo(k),
+            key: k,
+            align: "center" as const,
+            onCell: (l: LinhaAno) => ({
+              onClick: l.celulas[k]?.atividade ? () => abrir(l, k) : undefined,
+              style: { cursor: l.celulas[k]?.atividade ? "pointer" : undefined },
+            }),
+            render: (_: unknown, l: LinhaAno) => {
+              const c = l.celulas[k];
+              if (!c?.atividade) return <Typography.Text type="secondary">—</Typography.Text>;
+              if (!pendente(c)) return <Tag color="success">✓ {t("web.billing.billed")}</Tag>;
+              return (
+                <>
+                  <Tag color="error">{t("web.billing.pending")}</Tag>
+                  <div style={{ fontSize: 12 }}>{falta(c)}</div>
+                </>
+              );
+            },
+          })),
+        ]}
+      />
+    </>
   );
 }

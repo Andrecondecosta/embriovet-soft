@@ -152,3 +152,28 @@ def test_admin_da_e_tira_acesso(ctx):
     assert _por_faturar(ctx["fat"], ctx).status_code == 403
     # Quem não é Administrador não muda acessos.
     assert ctx["fat"].put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"ativo": True}).status_code == 403
+
+
+def test_quadro_por_ano(ctx):
+    c = ctx["fat"]
+    ano = HOJE.year
+    # Uma estadia de 2023 já faturada e outra de 2024 por faturar ficam juntas em "antes" (desde o ano atual).
+    egua = _exec("SELECT animal_id FROM estadias WHERE id = %s", (ctx["fechada"],))[0]
+    velha = _exec(
+        """INSERT INTO estadias (tipo_registo, animal_id, dono_id, data_entrada, data_saida, motivo, estado)
+           VALUES ('estadia', %s, %s, '2024-12-30', '2025-01-02', 'inseminacao', 'alta') RETURNING id""",
+        (egua, ctx["dono"]),
+    )[0]
+    r = c.get("/api/faturacao/anos", params={"desde": 2025}).json()
+    assert r["anos"][0] == "antes" and r["anos"][1] == "2025" and r["anos"][-1] == str(ano)
+    linha = next(l for l in r["linhas"] if l["dono_id"] == ctx["dono"])
+    # A estadia que passa a passagem de ano divide-se: 2 dias em 2024 ("antes") e 2 em 2025.
+    assert (linha["celulas"]["antes"]["dias"], linha["celulas"]["2025"]["dias"]) == (2, 2)
+    # Faturar 2024 deixa "antes" com atividade mas nada por faturar.
+    corpo = {"fatura_numero": "FT 2024/9", "fatura_data": "2025-01-10",
+             "linhas": [{"tipo": "estadia", "ref_id": velha, "inicio": "2024-12-30", "fim": "2024-12-31"}]}
+    assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
+    linha = next(l for l in c.get("/api/faturacao/anos", params={"desde": 2025}).json()["linhas"] if l["dono_id"] == ctx["dono"])
+    assert linha["celulas"]["antes"] == {"atividade": True, "dias": 0, "pd": 0}
+
+    assert ctx["sem"].get("/api/faturacao/anos").status_code == 403

@@ -83,3 +83,22 @@ export const useFaturar = () =>
 
 export const useAnularFaturada = () =>
   useFatMutation(({ id, motivo }: { id: number; motivo: string }) => api<{ ok: boolean }>(`/faturacao/linhas/${id}/anular`, "POST", { motivo }));
+
+export interface CelulaAno {
+  atividade: boolean;
+  dias: number;
+  pd: number;
+}
+export interface LinhaAno {
+  dono_id: number | null;
+  dono_nome: string | null;
+  celulas: Record<string, CelulaAno>;
+}
+
+/** Proprietário × ano ("antes" = anos anteriores a `desde`). */
+export const useAnos = (desde: number) =>
+  useQuery({
+    queryKey: ["faturacao", "anos", desde],
+    placeholderData: keepPreviousData,
+    queryFn: () => api<{ anos: string[]; linhas: LinhaAno[] }>(`/faturacao/anos?desde=${desde}`),
+  });

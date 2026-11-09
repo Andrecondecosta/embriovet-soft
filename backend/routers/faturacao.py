@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from backend.deps import acesso_faturacao
@@ -85,3 +85,11 @@ def anular(linha_id: int, d: AnularIn, user: dict = Depends(acesso_faturacao)):
     if not faturacao_repo.anular(linha_id, d.motivo.strip(), user["username"]):
         raise _erro(404, "web.billing.error.not_found")
     return {"ok": True}
+
+
+# ── Por ano (proprietário × ano) ──────────────────────────────────────────
+
+@router.get("/anos")
+def anos(desde: int = Query(2025, ge=1990, le=2100)):
+    return faturacao_repo.resumo_anual(min(desde, date.today().year))
+
