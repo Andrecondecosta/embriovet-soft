@@ -186,6 +186,27 @@ def test_garanhoes(ctx):
     assert (g["palhetas"], g["lotes"], g["donos"], g["no_seletor"]) == (4, 1, 1, True)
 
 
+def test_novo_garanhao_sem_lote_nem_estadia(ctx):
+    c = ctx["gestor"]
+    r = c.post("/api/stock/garanhoes", json={"nome": f"  {ctx['garanhao']}  "})
+    assert r.status_code == 201, r.text
+    animal = r.json()["animal_id"]
+    assert _exec("SELECT tipo FROM animais WHERE id = %s", (animal,))[0] == "garanhao"
+    assert _exec("SELECT COUNT(*) FROM estadias WHERE animal_id = %s", (animal,))[0] == 0
+    # Aparece no separador Garanhões (sem lotes, sem "Pouco stock"), não no seletor dos Lotes.
+    g = next(x for x in c.get("/api/stock/garanhoes?incluir_vazios=true").json() if x["animal_id"] == animal)
+    assert (g["lotes"], g["palhetas"], g["pouco"]) == (0, 0, False)
+    assert all(x["animal_id"] != animal for x in c.get("/api/stock/garanhoes").json())
+    # O mesmo nome sem acento/maiúsculas: já existe.
+    r = c.post("/api/stock/garanhoes", json={"nome": ctx["garanhao"].upper().replace("Ã", "A")})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "web.stock.error.stallion_exists"
+    assert c.post("/api/stock/garanhoes", json={"nome": "   "}).status_code == 422
+    # O primeiro lote fica ligado ao mesmo animal e ele deixa de aparecer como "sem lotes".
+    assert _novo(ctx).json()["animal_id"] == animal
+    linhas = [x for x in c.get("/api/stock/garanhoes?incluir_vazios=true").json() if x["animal_id"] == animal]
+    assert [x["lotes"] for x in linhas] == [1]
+
+
 def test_editar_gestor_e_apagar_so_admin(ctx):
     lote = _novo(ctx).json()
     body = {

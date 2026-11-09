@@ -98,20 +98,33 @@ MINIMO_PALHETAS_GARANHAO = 10
 def garanhoes(incluir_vazios: bool = False, _user: dict = Depends(get_current_user)):
     """Garanhões com stock: alimenta o seletor dos Lotes e o separador
     Garanhões. `no_seletor` = tem stock visível na lista de Lotes (donos
-    ativos ou sem dono), como o selectbox da app atual."""
+    ativos ou sem dono), como o selectbox da app atual. Com
+    `incluir_vazios`, também os que estão a zero e os que ainda não têm
+    nenhum lote (ex.: acabados de criar em "Novo garanhão")."""
+    sem_lotes = """
+        UNION ALL
+        SELECT a.id, a.nome, 0, 0, 0, FALSE
+        FROM animais a
+        WHERE a.tipo = 'garanhao' AND COALESCE(a.ativo, TRUE)
+          AND NOT EXISTS (SELECT 1 FROM estoque_dono e
+                          WHERE e.animal_id = a.id OR LOWER(e.garanhao) = LOWER(a.nome))
+    """
     sql = f"""
-        SELECT a.id AS animal_id,
-               COALESCE(a.nome, e.garanhao) AS garanhao,
-               SUM(e.existencia_atual)::int AS palhetas,
-               COUNT(DISTINCT e.id)::int AS lotes,
-               COUNT(DISTINCT e.dono_id)::int AS donos,
-               BOOL_OR({_SO_DONOS_ATIVOS}) AS no_seletor
-        FROM estoque_dono e
-        LEFT JOIN animais a ON a.id = e.animal_id
-        LEFT JOIN dono d ON d.id = e.dono_id
-        {"" if incluir_vazios else "WHERE e.existencia_atual > 0"}
-        GROUP BY 1, 2
-        ORDER BY LOWER(COALESCE(a.nome, e.garanhao)) ASC
+        SELECT * FROM (
+            SELECT a.id AS animal_id,
+                   COALESCE(a.nome, e.garanhao) AS garanhao,
+                   SUM(e.existencia_atual)::int AS palhetas,
+                   COUNT(DISTINCT e.id)::int AS lotes,
+                   COUNT(DISTINCT e.dono_id)::int AS donos,
+                   BOOL_OR({_SO_DONOS_ATIVOS}) AS no_seletor
+            FROM estoque_dono e
+            LEFT JOIN animais a ON a.id = e.animal_id
+            LEFT JOIN dono d ON d.id = e.dono_id
+            {"" if incluir_vazios else "WHERE e.existencia_atual > 0"}
+            GROUP BY 1, 2
+            {sem_lotes if incluir_vazios else ""}
+        ) g
+        ORDER BY LOWER(g.garanhao) ASC
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -119,9 +132,33 @@ def garanhoes(incluir_vazios: bool = False, _user: dict = Depends(get_current_us
             rows = cur.fetchall()
     return [
         {"animal_id": r[0], "garanhao": r[1], "palhetas": r[2] or 0, "lotes": r[3],
-         "donos": r[4], "no_seletor": bool(r[5]), "pouco": (r[2] or 0) < MINIMO_PALHETAS_GARANHAO}
+         "donos": r[4], "no_seletor": bool(r[5]),
+         "pouco": r[3] > 0 and (r[2] or 0) < MINIMO_PALHETAS_GARANHAO}
         for r in rows
     ]
+
+
+class GaranhaoNovo(BaseModel):
+    nome: str = Field(max_length=100)
+
+
+@router.post("/garanhoes", status_code=status.HTTP_201_CREATED)
+def criar_garanhao(body: GaranhaoNovo, _user: dict = Depends(get_current_user)):
+    """Cria só o garanhão (sem lote nem entrada na clínica)."""
+    nome = " ".join(body.nome.split())
+    if not nome:
+        raise _erro(422, "error.stallion_required")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT nome FROM animais WHERE tipo = 'garanhao'"
+                " AND LOWER(f_unaccent(TRIM(REGEXP_REPLACE(nome, '\\s+', ' ', 'g')))) = LOWER(f_unaccent(%s)) LIMIT 1",
+                (nome,),
+            )
+            existe = cur.fetchone()
+    if existe:
+        raise _erro(409, "web.stock.error.stallion_exists", name=existe[0])
+    return {"animal_id": get_or_create_garanhao(nome), "garanhao": nome}
 
 
 @router.get("/lotes")

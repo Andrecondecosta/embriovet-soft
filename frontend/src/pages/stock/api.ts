@@ -229,3 +229,6 @@ export function mostrarProducao(texto: string | null | undefined): string | null
   const dia = diaProducao(texto);
   return dia ? dayjs(dia).format("DD/MM/YYYY") : texto?.trim() || null;
 }
+
+export const useCriarGaranhao = () =>
+  useStockMutation((nome: string) => api<{ animal_id: number; garanhao: string }>("/stock/garanhoes", "POST", { nome }));

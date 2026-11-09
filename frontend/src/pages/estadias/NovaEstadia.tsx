@@ -127,6 +127,16 @@ function useTipoRegisto(tipo: TipoAnimal | undefined, atual: TipoRegisto | undef
   }, [tipo]);
 }
 
+/** Ajuda do "Tipo": o que cada um quer dizer; num garanhão, lembra que
+ *  para guardar sémen não é preciso entrada (basta o lote no Stock). */
+function useAjudaTipo() {
+  const t = useT();
+  return (tipo: TipoRegisto | undefined, animal: TipoAnimal | undefined) =>
+    [animal === "garanhao" && tipo !== "externo" && t("web.stays.stallion_stock_hint"), tipo && t(`web.stays.kind_help.${tipo}`)]
+      .filter(Boolean)
+      .join(" ") || undefined;
+}
+
 /** Aviso (não bloqueia): o mesmo nome já existe noutro proprietário. */
 function useAvisoNome(nome: string | undefined, donoId: number | null) {
   const n = (nome ?? "").trim();
@@ -195,6 +205,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, Form.useWatch("motivo", form), (m) =>
     form.setFieldValue("motivo", m),
   );
+  const ajudaTipo = useAjudaTipo();
   useTipoRegisto(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, tipoRegisto, (v) =>
     form.setFields([{ name: "tipo_registo", value: v, errors: [] }]),
   );
@@ -326,7 +337,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
         <Form.Item
           name="tipo_registo"
           label={t("web.stays.form.kind")}
-          extra={tipoRegisto && t(`web.stays.kind_help.${tipoRegisto}`)}
+          extra={ajudaTipo(tipoRegisto, modo === "novo" ? tipoNovo : animalSel?.tipo)}
           rules={r("web.stays.error.kind_required")}
         >
           <Segmented block options={TIPOS_REGISTO.map((x) => ({ value: x, label: t(`web.stays.kind.${x}`) }))} />
@@ -446,6 +457,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, MForm.useWatch("motivo", form), (m) =>
     form.setFieldValue("motivo", m),
   );
+  const ajudaTipo = useAjudaTipo();
   useTipoRegisto(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, tipoRegisto, (v) =>
     form.setFields([{ name: "tipo_registo", value: v, errors: [] }]),
   );
@@ -555,7 +567,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
         <MForm.Item
           name="tipo_registo"
           label={t("web.stays.form.kind")}
-          description={tipoRegisto && t(`web.stays.kind_help.${tipoRegisto}`)}
+          description={ajudaTipo(tipoRegisto, modo === "novo" ? tipoNovo : animalSel?.tipo)}
           rules={[{ required: true, message: t("web.stays.error.kind_required") }]}
           {...umSo}
         >
