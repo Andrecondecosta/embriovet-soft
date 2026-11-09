@@ -92,8 +92,15 @@ function useTextos() {
   return {
     dono: (l: { dono_nome: string | null }) => l.dono_nome ?? t("web.billing.no_owner"),
     tipo: (x: TipoFat) => t(`web.billing.type.${x}`),
-    qtd: (l: { tipo: TipoFat; quantidade: number }) =>
-      t(l.tipo === "estadia" ? "web.billing.days" : "web.billing.straw_days", { count: l.quantidade }),
+    dias: (l: Linha) => t("web.billing.days", { count: nDias(l) }),
+    palhetas: (l: Linha) => (l.tipo === "armazenamento" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
+    /** "4 dias" na estadia; "10 palhetas · 4 dias" no sémen. */
+    qtd: (l: Linha) =>
+      l.tipo === "armazenamento" && l.palhetas == null
+        ? t("web.billing.straw_days", { count: l.quantidade })
+        : [l.tipo === "armazenamento" && t("web.billing.straws", { count: l.palhetas! }), t("web.billing.days", { count: nDias(l) })]
+            .filter(Boolean)
+            .join(" · "),
     periodo: (l: { inicio: string; fim: string; tipo: TipoFat; saida?: string | null }) =>
       `${dataCurta(l.inicio)} – ${dataCurta(l.fim)}` +
       (l.tipo === "estadia" && l.saida === null && l.fim === dayjs().format(ISO) ? ` (${t("web.billing.ongoing")})` : ""),
@@ -102,9 +109,12 @@ function useTextos() {
 
 const chave = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
 
-function totais(linhas: { tipo: TipoFat; quantidade: number }[]) {
-  const soma = (tipo: TipoFat) => linhas.filter((l) => l.tipo === tipo).reduce((s, l) => s + l.quantidade, 0);
-  return { dias: soma("estadia"), pd: soma("armazenamento") };
+type Linha = { tipo: TipoFat; inicio: string; fim: string; quantidade: number; palhetas?: number | null };
+const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
+
+function totais(linhas: Linha[]) {
+  const soma = (tipo: TipoFat) => linhas.filter((l) => l.tipo === tipo).reduce((s, l) => s + nDias(l), 0);
+  return { dias: soma("estadia"), ds: soma("armazenamento") };
 }
 
 export function FaturacaoPage() {
@@ -260,21 +270,22 @@ function PorFaturarTab() {
   const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
   const tot = totais(escolhidas.length ? escolhidas : linhas);
   const resumo = escolhidas.length
-    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, pd: tot.pd })
-    : t("web.billing.total", { dias: tot.dias, pd: tot.pd });
+    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, ds: tot.ds })
+    : t("web.billing.total", { dias: tot.dias, ds: tot.ds });
 
   const exportar = () =>
     baixarCsv(
       `por-faturar_${p.filtro.inicio}_${p.filtro.fim}.csv`,
-      [t("label.owner"), t("web.billing.col.what"), t("web.billing.type.all"), t("web.billing.col.period"), "", t("web.billing.col.qty"), t("web.billing.col.straws")],
+      [t("label.owner"), t("web.billing.col.what"), t("web.billing.type.all"), t("web.billing.col.period"), "", t("web.billing.col.straws"), t("web.billing.col.days"), t("web.billing.col.qty")],
       linhas.map((l) => [
         seguro(tx.dono(l)),
         seguro(l.descricao),
         tx.tipo(l.tipo),
         l.inicio,
         l.fim,
-        tx.qtd(l),
-        l.tipo === "armazenamento" ? `${l.palhetas_inicio} → ${l.palhetas_fim}` : "",
+        l.tipo === "armazenamento" ? l.palhetas : "",
+        nDias(l),
+        l.tipo === "armazenamento" ? t("web.billing.straw_days", { count: l.quantidade }) : "",
       ]),
     );
 
@@ -376,12 +387,8 @@ function PorFaturarTab() {
             ),
           },
           { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
-          { title: t("web.billing.col.qty"), align: "right", render: (_, l) => <Typography.Text strong>{tx.qtd(l)}</Typography.Text> },
-          {
-            title: t("web.billing.col.straws"),
-            align: "right",
-            render: (_, l) => (l.tipo === "armazenamento" ? `${l.palhetas_inicio} → ${l.palhetas_fim}` : ""),
-          },
+          { title: t("web.billing.col.straws"), align: "right", render: (_, l) => tx.palhetas(l) },
+          { title: t("web.billing.col.days"), align: "right", render: (_, l) => <Typography.Text strong>{tx.dias(l)}</Typography.Text> },
         ]}
       />
       {janela}
@@ -412,7 +419,7 @@ function MarcarFaturado({ aberto, linhas, onClose }: { aberto: boolean; linhas: 
       if (err instanceof ApiError && err.code === "web.billing.error.changed") onClose(true);
     }
   };
-  const resumo = t("web.billing.summary", { linhas: linhas.length, dias: tot.dias, pd: tot.pd });
+  const resumo = t("web.billing.summary", { linhas: linhas.length, dias: tot.dias, ds: tot.ds });
   const regraNumero = [{ required: true, whitespace: true, message: t("web.billing.error.invoice_required") }];
 
   if (isMobile)
@@ -499,7 +506,7 @@ function FaturadoTab() {
   const exportar = () =>
     baixarCsv(
       `faturado_${p.filtro.inicio}_${p.filtro.fim}.csv`,
-      [t("web.billing.col.invoice"), t("web.billing.col.invoice_date"), t("label.owner"), t("web.billing.col.what"), t("web.billing.col.period"), "", t("web.billing.col.qty"), t("web.billing.col.by"), t("web.billing.cancelled")],
+      [t("web.billing.col.invoice"), t("web.billing.col.invoice_date"), t("label.owner"), t("web.billing.col.what"), t("web.billing.col.period"), "", t("web.billing.col.straws"), t("web.billing.col.days"), t("web.billing.col.by"), t("web.billing.cancelled")],
       linhas.map((l) => [
         seguro(l.fatura_numero),
         l.fatura_data,
@@ -507,7 +514,8 @@ function FaturadoTab() {
         seguro(l.descricao),
         l.inicio,
         l.fim,
-        tx.qtd(l),
+        l.tipo === "armazenamento" ? (l.palhetas ?? t("web.billing.straw_days", { count: l.quantidade })) : "",
+        nDias(l),
         l.criado_por,
         l.anulada ? l.motivo_anulacao : "",
       ]),
@@ -603,7 +611,8 @@ function FaturadoTab() {
             ),
           },
           { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
-          { title: t("web.billing.col.qty"), align: "right", render: (_, l) => tx.qtd(l) },
+          { title: t("web.billing.col.straws"), align: "right", render: (_, l) => (l.palhetas == null && l.tipo === "armazenamento" ? t("web.billing.straw_days", { count: l.quantidade }) : tx.palhetas(l)) },
+          { title: t("web.billing.col.days"), align: "right", render: (_, l) => tx.dias(l) },
           { title: t("web.billing.col.by"), dataIndex: "criado_por" },
           {
             title: "",
@@ -697,7 +706,7 @@ function AnosTab() {
   const [pesquisa, setPesquisa] = useState("");
   const q = useAnos(desde);
   const anos = q.data?.anos ?? [];
-  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.pd > 0);
+  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0);
   const linhas = useMemo(() => {
     const s = pesquisa.trim().toLowerCase();
     return (q.data?.linhas ?? []).filter(
@@ -715,7 +724,10 @@ function AnosTab() {
     navigate(`/faturacao/por-faturar?inicio=${inicio}&fim=${fim}${dono}`);
   };
   const falta = (c: CelulaAno) =>
-    [c.dias > 0 && t("web.billing.days", { count: c.dias }), c.pd > 0 && t("web.billing.straw_days", { count: c.pd })]
+    [
+      c.dias > 0 && t("web.billing.stay_days", { count: c.dias }),
+      c.dias_semen > 0 && `${t("web.billing.semen_days", { count: c.dias_semen })} (${t("web.stock.n_lots", { count: c.lotes })})`,
+    ]
       .filter(Boolean)
       .join(" · ");
   const nome = (l: LinhaAno) => l.dono_nome ?? t("web.billing.no_owner");

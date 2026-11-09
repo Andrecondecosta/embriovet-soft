@@ -17,10 +17,9 @@ export interface PorFaturar {
   // Estadia
   entrada?: string;
   saida?: string | null;
-  // Lote
+  // Lote: as palhetas deste troço (a linha divide-se quando mudam).
   local?: string | null;
-  palhetas_inicio?: number;
-  palhetas_fim?: number;
+  palhetas: number | null;
 }
 
 export interface Faturada {
@@ -33,6 +32,7 @@ export interface Faturada {
   inicio: string;
   fim: string;
   quantidade: number;
+  palhetas: number | null;
   fatura_numero: string;
   fatura_data: string;
   observacoes: string | null;
@@ -87,6 +87,9 @@ export const useAnularFaturada = () =>
 export interface CelulaAno {
   atividade: boolean;
   dias: number;
+  /** Dias do calendário com sémen por faturar, e em quantos lotes. */
+  dias_semen: number;
+  lotes: number;
   pd: number;
 }
 export interface LinhaAno {

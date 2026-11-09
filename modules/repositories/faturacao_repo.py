@@ -167,18 +167,30 @@ def _qtd_lote(item: dict, a: date, b: date) -> int:
 _QTD = {"estadia": _qtd_estadia, "armazenamento": _qtd_lote}
 
 
+def _tracos(item: dict, a: date, b: date):
+    """Parte [a, b] onde o número de palhetas do lote é sempre o mesmo
+    (muda no dia a seguir a cada saída): (início, fim, palhetas)."""
+    cortes = sorted({d for d, _ in item["saidas"] if a <= d < b})
+    inicio = a
+    for d in cortes + [b]:
+        yield inicio, d, _nivel(item, inicio)
+        inicio = d + timedelta(days=1)
+
+
 def _linhas(itens: list[dict], faturados: dict[int, list], tipo: str) -> list[dict]:
+    """Linhas por faturar. No sémen, uma por cada troço com o mesmo número
+    de palhetas ("10 palhetas, 4 dias" + "6 palhetas, 5 dias")."""
     out = []
     for it in itens:
+        base = {k: v for k, v in it.items() if k not in ("limite", "saidas", "atual")}
         for a, b in _menos(it["limite"], faturados.get(it["ref_id"], [])):
-            qtd = _QTD[tipo](it, a, b)
-            if not qtd:
-                continue
-            linha = {k: v for k, v in it.items() if k not in ("limite", "saidas", "atual")}
-            linha.update(inicio=a, fim=b, dias=(b - a).days + 1, quantidade=qtd)
-            if tipo == "armazenamento":
-                linha.update(palhetas_inicio=_nivel(it, a), palhetas_fim=_nivel(it, b + timedelta(days=1)))
-            out.append(linha)
+            tracos = _tracos(it, a, b) if tipo == "armazenamento" else [(a, b, None)]
+            for ta, tb, palhetas in tracos:
+                dias = (tb - ta).days + 1
+                if palhetas == 0:
+                    continue
+                out.append({**base, "inicio": ta, "fim": tb, "dias": dias, "palhetas": palhetas,
+                            "quantidade": dias * palhetas if palhetas else dias})
     return out
 
 
@@ -199,6 +211,13 @@ def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: str |
 
 class JaFaturado(Exception):
     pass
+
+
+def _palhetas_fixas(item: dict, a: date, b: date) -> int | None:
+    """Palhetas do troço, se forem as mesmas em todos os dias (o ecrã manda
+    sempre troços assim); senão None (fica só o total palhetas × dia)."""
+    tracos = list(_tracos(item, a, b))
+    return tracos[0][2] if len(tracos) == 1 else None
 
 
 def faturar(linhas: list[dict], fatura_numero: str, fatura_data: date, observacoes: str | None, utilizador: str) -> int:
@@ -224,19 +243,20 @@ def faturar(linhas: list[dict], fatura_numero: str, fatura_data: date, observaco
                 cur.execute(
                     """
                     INSERT INTO faturacao_linhas
-                        (tipo, ref_id, dono_id, dono_nome, descricao, inicio, fim, quantidade,
+                        (tipo, ref_id, dono_id, dono_nome, descricao, inicio, fim, quantidade, palhetas,
                          fatura_numero, fatura_data, observacoes, criado_por)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (l["tipo"], l["ref_id"], it["dono_id"], it["dono_nome"], it["descricao"], a, b,
-                     _QTD[l["tipo"]](it, a, b), fatura_numero, fatura_data, observacoes, (utilizador or "—")[:50]),
+                     _QTD[l["tipo"]](it, a, b), _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else None,
+                     fatura_numero, fatura_data, observacoes, (utilizador or "—")[:50]),
                 )
                 n += 1
         conn.commit()
     return n
 
 
-_COLS = ["id", "tipo", "ref_id", "dono_id", "dono_nome", "descricao", "inicio", "fim", "quantidade",
+_COLS = ["id", "tipo", "ref_id", "dono_id", "dono_nome", "descricao", "inicio", "fim", "quantidade", "palhetas",
          "fatura_numero", "fatura_data", "observacoes", "criado_por", "created_at",
          "anulada", "anulada_por", "anulada_em", "motivo_anulacao"]
 
@@ -299,7 +319,12 @@ def resumo_anual(desde: int) -> dict:
 
     def celula(dono_id, dono_nome, k):
         d = donos.setdefault(dono_id, {"dono_id": dono_id, "dono_nome": dono_nome, "celulas": {}})
-        return d["celulas"].setdefault(k, {"atividade": False, "dias": 0, "pd": 0})
+        return d["celulas"].setdefault(k, {"atividade": False, "dias": 0, "dias_semen": 0, "lotes": 0, "pd": 0})
+
+    # Sémen: dias do calendário com algum lote por faturar (vários lotes no
+    # mesmo dia contam um dia), e quantos lotes.
+    dias_semen: dict = defaultdict(set)
+    lotes: dict = defaultdict(set)
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -312,8 +337,23 @@ def resumo_anual(desde: int) -> dict:
                             celula(it["dono_id"], it["dono_nome"], chave(ano))["atividade"] = True
                     for livre in _menos(it["limite"], faturados.get(it["ref_id"], [])):
                         for ano, a, b in _por_ano(*livre):
+                            qtd = _QTD[tipo](it, a, b)
+                            if not qtd:
+                                continue
                             c = celula(it["dono_id"], it["dono_nome"], chave(ano))
-                            c["dias" if tipo == "estadia" else "pd"] += _QTD[tipo](it, a, b)
+                            if tipo == "estadia":
+                                c["dias"] += qtd
+                                continue
+                            c["pd"] += qtd
+                            k = (it["dono_id"], chave(ano))
+                            lotes[k].add(it["ref_id"])
+                            dias_semen[k].update(
+                                ta + timedelta(days=i)
+                                for ta, tb, n in _tracos(it, a, b) if n
+                                for i in range((tb - ta).days + 1)
+                            )
+    for (dono_id, k), dias in dias_semen.items():
+        donos[dono_id]["celulas"][k].update(dias_semen=len(dias), lotes=len(lotes[(dono_id, k)]))
     linhas = sorted(donos.values(), key=lambda d: (d["dono_nome"] is None, (d["dono_nome"] or "").lower()))
     return {"anos": chaves, "linhas": linhas}
 

@@ -105,9 +105,11 @@ def test_dias_de_estadia_e_palhetas_x_dias(ctx):
     # Entrada e saída contam: de há 10 a há 3 dias = 8 dias; aberta desde há 2 = 3 dias (até hoje).
     assert por_ref[("estadia", ctx["fechada"])]["quantidade"] == 8
     assert por_ref[("estadia", ctx["aberta"])]["quantidade"] == 3
-    # 6 dias com 7 + 3 dias com 5 + 2 dias com 4 = 65 (o dia em que saem ainda conta).
-    lote = por_ref[("armazenamento", ctx["lote"])]
-    assert (lote["quantidade"], lote["dias"], lote["palhetas_inicio"], lote["palhetas_fim"]) == (65, 11, 7, 4)
+    # Uma linha por troço com as mesmas palhetas: 6 dias com 7, 3 com 5, 2 com 4
+    # (o dia em que saem ainda conta) = 65 palhetas × dia.
+    lote = [(l["inicio"], l["dias"], l["palhetas"]) for l in linhas if l["tipo"] == "armazenamento"]
+    assert lote == [(d(10).isoformat(), 6, 7), (d(4).isoformat(), 3, 5), (d(1).isoformat(), 2, 4)]
+    assert sum(l["quantidade"] for l in linhas if l["tipo"] == "armazenamento") == 65
     # "Externo" não está no centro: não conta. Nem aparece no filtro de outro dono.
     todos = ctx["fat"].get("/api/faturacao/por-faturar", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat()}).json()
     assert all(l["ref_id"] != ctx["externa"] for l in todos if l["tipo"] == "estadia")
@@ -126,7 +128,8 @@ def test_faturar_parte_nao_repete_e_anular_devolve(ctx):
     assert c.post("/api/faturacao/faturar", json=corpo).json() == {"linhas": 1}
     # Fica o resto do período: de há 5 dias até hoje (6 × ... = 65 − 5 × 7).
     resto = [l for l in _por_faturar(c, ctx).json() if l["tipo"] == "armazenamento"]
-    assert [(l["inicio"], l["quantidade"]) for l in resto] == [(d(5).isoformat(), 30)]
+    assert [(l["inicio"], l["dias"], l["palhetas"]) for l in resto] == [
+        (d(5).isoformat(), 1, 7), (d(4).isoformat(), 3, 5), (d(1).isoformat(), 2, 4)]
     # Os mesmos dias outra vez: recusado, nada gravado.
     r = c.post("/api/faturacao/faturar", json=corpo)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "web.billing.error.changed"
@@ -135,10 +138,10 @@ def test_faturar_parte_nao_repete_e_anular_devolve(ctx):
     assert c.post("/api/faturacao/faturar", json=fora).status_code == 409
 
     feitas = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "fatura": "2026/15"}).json()
-    assert [(f["fatura_numero"], f["quantidade"], f["dono_id"]) for f in feitas] == [("FT 2026/15", 35, ctx["dono"])]
+    assert [(f["fatura_numero"], f["quantidade"], f["palhetas"], f["dono_id"]) for f in feitas] == [("FT 2026/15", 35, 7, ctx["dono"])]
     assert c.post(f"/api/faturacao/linhas/{feitas[0]['id']}/anular", json={"motivo": "engano"}).status_code == 200
     lote = [l for l in _por_faturar(c, ctx).json() if l["tipo"] == "armazenamento"]
-    assert [l["quantidade"] for l in lote] == [65]
+    assert sum(l["quantidade"] for l in lote) == 65 and lote[0]["inicio"] == d(10).isoformat()
     # A anulada fica guardada.
     com = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "anuladas": True}).json()
     assert any(f["id"] == feitas[0]["id"] and f["anulada"] for f in com)
@@ -174,7 +177,11 @@ def test_quadro_por_ano(ctx):
              "linhas": [{"tipo": "estadia", "ref_id": velha, "inicio": "2024-12-30", "fim": "2024-12-31"}]}
     assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
     linha = next(l for l in c.get("/api/faturacao/anos", params={"desde": 2025}).json()["linhas"] if l["dono_id"] == ctx["dono"])
-    assert linha["celulas"]["antes"] == {"atividade": True, "dias": 0, "pd": 0}
+    assert (linha["celulas"]["antes"]["atividade"], linha["celulas"]["antes"]["dias"]) == (True, 0)
+    # Sémen deste ano: os 11 dias do lote por faturar (contados uma vez), 1 lote.
+    este = linha["celulas"][str(HOJE.year)] if d(10).year == HOJE.year else None
+    if este:
+        assert (este["dias_semen"], este["lotes"]) == (11, 1)
 
     assert ctx["sem"].get("/api/faturacao/anos").status_code == 403
 

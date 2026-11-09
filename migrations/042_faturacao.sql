@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS faturacao_linhas (
     descricao TEXT NOT NULL,
     inicio DATE NOT NULL,
     fim DATE NOT NULL CHECK (fim >= inicio),
+    -- Estadia: dias. Sémen: palhetas × dias (e `palhetas` = as do troço).
     quantidade INTEGER NOT NULL,
+    palhetas INTEGER,
     fatura_numero VARCHAR(60) NOT NULL,
     fatura_data DATE NOT NULL,
     observacoes TEXT,
