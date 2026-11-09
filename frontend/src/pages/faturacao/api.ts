@@ -20,6 +20,10 @@ export interface PorFaturar {
   // Lote: as palhetas deste troço (a linha divide-se quando mudam).
   local?: string | null;
   palhetas: number | null;
+  /** Dia em que o lote entrou na app. */
+  entrada_app?: string;
+  /** O lote nunca foi faturado: a primeira fatura pode começar antes da entrada. */
+  pode_mudar_inicio?: boolean;
 }
 
 export interface Faturada {

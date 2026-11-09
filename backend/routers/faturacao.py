@@ -126,3 +126,4 @@ def atraso():
 def numeros(n: list[str] = Query(default=[], max_length=500)):
     """Números de fatura já usados (e para que proprietário)."""
     return faturacao_repo.numeros_usados([x for x in n if x.strip()])
+

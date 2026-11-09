@@ -251,3 +251,22 @@ def test_em_atraso_e_numeros_usados(ctx):
     assert usados == [{"fatura_numero": "FT 99/2026", "dono_id": ctx["dono"], "dono_nome": usados[0]["dono_nome"]}]
     linha = next(l for l in c.get("/api/faturacao/atraso").json() if l["dono_id"] == ctx["dono"])
     assert linha["estadia"] == {"desde": d(2).isoformat(), "dias": 3, "itens": 1}
+
+
+def test_primeira_fatura_pode_comecar_antes_da_entrada_sem_mudar_o_lote(ctx):
+    c = ctx["fat"]
+    params = {"inicio": "1990-01-01", "fim": HOJE.isoformat(), "dono_id": ctx["dono"], "tipo": "armazenamento"}
+    l = c.get("/api/faturacao/por-faturar", params=params).json()[0]
+    assert (l["inicio"], l["entrada_app"], l["pode_mudar_inicio"]) == (d(10).isoformat(), d(10).isoformat(), True)
+    # O sémen já estava guardado 20 dias antes de entrar na app: 26 dias com as 7 palhetas iniciais.
+    linha = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(30).isoformat(), "fim": l["fim"]}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 1/2026", HOJE.isoformat(), [linha])).status_code == 200
+    f = c.get("/api/faturacao/faturado", params={"inicio": "1990-01-01", "fim": HOJE.isoformat(), "dono_id": ctx["dono"]}).json()
+    assert [(x["inicio"], x["quantidade"], x["palhetas"]) for x in f] == [(d(30).isoformat(), 26 * 7, 7)]
+    # O lote não mudou.
+    assert str(_exec("SELECT data_criacao::date FROM estoque_dono WHERE id = %s", (ctx["lote"],))[0]) == d(10).isoformat()
+    # Só na primeira vez: depois já não pode começar antes da entrada.
+    resto = c.get("/api/faturacao/por-faturar", params=params).json()
+    assert all(not x["pode_mudar_inicio"] for x in resto)
+    outra = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(40).isoformat(), "fim": d(31).isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 2/2026", HOJE.isoformat(), [outra])).status_code == 409

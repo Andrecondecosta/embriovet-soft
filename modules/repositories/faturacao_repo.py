@@ -101,7 +101,8 @@ def _lotes(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | N
     hoje = date.today()
     cur.execute(
         """
-        SELECT l.id, l.dono_id, d.nome, COALESCE(a.nome, l.garanhao), l.data_criacao::date,
+        SELECT l.id, l.dono_id, d.nome, COALESCE(a.nome, l.garanhao),
+               l.data_criacao::date,
                l.existencia_atual, l.origem_externa, l.data_embriovet, c.codigo, l.canister, l.andar
         FROM estoque_dono l
         LEFT JOIN dono d ON d.id = l.dono_id
@@ -146,6 +147,7 @@ def _lotes(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | N
             "tipo": "armazenamento", "ref_id": lid, "dono_id": dono, "dono_nome": dono_nome,
             "descricao": f"{garanhao} · lote {lid}",
             "garanhao": garanhao, "origem": origem, "data_producao": data_prod,
+            "entrada_app": criado,
             "local": f"{cont} · C{can} · A{andar}" if cont else None,
             "atual": max(atual or 0, 0), "saidas": saidas.get(lid, []), "limite": (a, b),
         }
@@ -183,6 +185,9 @@ def _linhas(itens: list[dict], faturados: dict[int, list], tipo: str) -> list[di
     out = []
     for it in itens:
         base = {k: v for k, v in it.items() if k not in ("limite", "saidas", "atual")}
+        if tipo == "armazenamento":
+            # O início do armazenamento só se acerta antes da primeira fatura.
+            base["pode_mudar_inicio"] = it["ref_id"] not in faturados
         for a, b in _menos(it["limite"], faturados.get(it["ref_id"], [])):
             tracos = _tracos(it, a, b) if tipo == "armazenamento" else [(a, b, None)]
             for ta, tb, palhetas in tracos:
@@ -241,10 +246,18 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
                     a, b = l["inicio"], l["fim"]
                     busca = _estadias if l["tipo"] == "estadia" else _lotes
                     itens = busca(cur, a, b, None, [l["ref_id"]])
-                    if not itens or itens[0]["limite"] != (a, b):
-                        # Fora das datas da estadia/lote (ou ainda no futuro).
+                    if not itens:
                         raise JaFaturado()
                     it = itens[0]
+                    if it["limite"] != (a, b) and not (
+                        # Primeira fatura de um lote: pode começar antes da
+                        # entrada na app (o sémen já estava guardado). O lote
+                        # não muda; fica só nesta linha faturada.
+                        l["tipo"] == "armazenamento" and it["limite"][1] == b and a < it["limite"][0]
+                        and not _faturados(cur, "armazenamento", [l["ref_id"]]).get(l["ref_id"])
+                    ):
+                        # Fora das datas da estadia/lote (ou ainda no futuro).
+                        raise JaFaturado()
                     if it["dono_id"] != f["dono_id"]:
                         raise OutroDono()
                     if _menos((a, b), _faturados(cur, l["tipo"], [l["ref_id"]]).get(l["ref_id"], [])) != [(a, b)]:
@@ -461,3 +474,4 @@ def numeros_usados(numeros: list[str]) -> list[dict]:
                 ([n.strip().lower() for n in numeros],),
             )
             return [{"fatura_numero": a, "dono_id": b, "dono_nome": c} for a, b, c in cur.fetchall()]
+
