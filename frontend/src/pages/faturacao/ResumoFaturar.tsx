@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dayjs, { type Dayjs } from "dayjs";
-import { Alert, Button, Card, Checkbox, DatePicker, Flex, Input, Modal, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, DatePicker, Flex, Input, Modal, Space, Spin, Table, Tag, Typography } from "antd";
 import { FilePdfOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
-  Checkbox as MCheckbox,
   Dialog,
   Input as MInput,
   List,
@@ -74,7 +73,6 @@ export function ResumoFaturar({
   const notifyError = useNotifyError();
   const [numeros, setNumeros] = useState<Record<string, string>>({});
   const [data, setData] = useState<Dayjs>(dayjs());
-  const [acerto, setAcerto] = useState(false);
   const [obs, setObs] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [imprimir, setImprimir] = useState(false);
@@ -130,7 +128,6 @@ export function ResumoFaturar({
     setEditar(null);
     setNumeros({});
     setData(dayjs());
-    setAcerto(false);
     setObs("");
     setErro(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,16 +232,15 @@ export function ResumoFaturar({
   const guardar = async () => {
     setErro(null);
     if (!linhas.length) return setErro(t("web.billing.nothing_in_period"));
-    if (!acerto && grupos.some((g) => !numeros[g.chave]?.trim())) return setErro(t("web.billing.invoice_each"));
+    if (grupos.some((g) => !numeros[g.chave]?.trim())) return setErro(t("web.billing.invoice_each"));
     const avisos = await repetidos();
     if (avisos.length && !(await perguntar(avisos))) return;
     try {
       const r = await faturar.mutateAsync({
         faturas: grupos.map((g) => ({
           dono_id: g.dono_id,
-          fatura_numero: acerto ? (numeros[g.chave] ?? "").trim() : numeros[g.chave].trim(),
+          fatura_numero: numeros[g.chave].trim(),
           fatura_data: data.format(ISO),
-          acerto_inicial: acerto,
           observacoes: obs.trim() || undefined,
           linhas: g.linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })),
         })),
@@ -340,19 +336,12 @@ export function ResumoFaturar({
                   {lote} — {tx.mov(m)}
                 </List.Item>
               ))}
-              {!acerto && (
-                <List.Item title={t("web.billing.invoice_number")}>
-                  <MInput clearable value={numero(g)} onChange={(v) => mudarNumero(g, v)} />
-                </List.Item>
-              )}
+              <List.Item title={t("web.billing.invoice_number")}>
+                <MInput clearable value={numero(g)} onChange={(v) => mudarNumero(g, v)} />
+              </List.Item>
             </List>
           ))}
           <List>
-            <List.Item>
-              <MCheckbox checked={acerto} onChange={setAcerto}>
-                {t("web.billing.initial")}
-              </MCheckbox>
-            </List.Item>
             <DataMobile titulo={t("web.billing.invoice_date")} data={data} onChange={setData} />
             <List.Item title={t("web.billing.notes")}>
               <TextArea value={obs} onChange={setObs} autoSize={{ minRows: 1 }} />
@@ -380,9 +369,6 @@ export function ResumoFaturar({
         footer={
           <Flex justify="space-between" align="center" wrap gap={8}>
             <Space wrap>
-              <Checkbox checked={acerto} onChange={(e) => setAcerto(e.target.checked)}>
-                {t("web.billing.initial")}
-              </Checkbox>
               <Typography.Text type="secondary">{t("web.billing.invoice_date")}</Typography.Text>
               <DatePicker format="DD/MM/YYYY" allowClear={false} value={data} onChange={(v) => v && setData(v)} />
             </Space>
@@ -430,18 +416,14 @@ export function ResumoFaturar({
                   </>
                 }
                 extra={
-                  acerto ? (
-                    <Tag>{t("web.billing.initial_tag")}</Tag>
-                  ) : (
-                    <Input
-                      placeholder={t("web.billing.invoice_number")}
-                      value={numero(g)}
-                      onChange={(e) => mudarNumero(g, e.target.value)}
-                      maxLength={60}
-                      status={erro && !numero(g).trim() ? "error" : undefined}
-                      style={{ width: 200 }}
-                    />
-                  )
+                  <Input
+                    placeholder={t("web.billing.invoice_number")}
+                    value={numero(g)}
+                    onChange={(e) => mudarNumero(g, e.target.value)}
+                    maxLength={60}
+                    status={erro && !numero(g).trim() ? "error" : undefined}
+                    style={{ width: 200 }}
+                  />
                 }
               >
                 <Table<LinhaResumo>

@@ -20,8 +20,6 @@ CREATE TABLE IF NOT EXISTS faturacao_linhas (
     palhetas INTEGER,
     fatura_numero VARCHAR(60) NOT NULL,
     fatura_data DATE NOT NULL,
-    -- Primeiro fecho, de antes da app (pode não ter número de fatura).
-    acerto_inicial BOOLEAN NOT NULL DEFAULT FALSE,
     observacoes TEXT,
     criado_por VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),

@@ -504,7 +504,6 @@ function FaturadoTab() {
                 <Typography.Text strong delete={l.anulada}>
                   {l.fatura_numero}
                 </Typography.Text>
-                {l.acerto_inicial && <Tag style={{ marginLeft: 8 }}>{t("web.billing.initial_tag")}</Tag>}
                 {l.anulada && (
                   <Tag color="red" style={{ marginLeft: 8 }} title={l.motivo_anulacao ?? undefined}>
                     {t("web.billing.cancelled")}

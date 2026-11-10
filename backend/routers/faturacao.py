@@ -48,8 +48,6 @@ class FaturaIn(BaseModel):
     dono_id: int | None
     fatura_numero: str = Field(default="", max_length=60)
     fatura_data: date
-    # Primeiro fecho, de antes da app: o número da fatura pode não se saber.
-    acerto_inicial: bool = False
     observacoes: str | None = None
     linhas: list[LinhaIn] = Field(min_length=1, max_length=2000)
 
@@ -65,7 +63,7 @@ class FaturarIn(BaseModel):
 
 @router.post("/faturar")
 def faturar(d: FaturarIn, user: dict = Depends(acesso_faturacao)):
-    if any(not f.fatura_numero and not f.acerto_inicial for f in d.faturas):
+    if any(not f.fatura_numero for f in d.faturas):
         raise _erro(422, "web.billing.error.invoice_required")
     try:
         n = faturacao_repo.faturar([f.model_dump() for f in d.faturas], user["username"])

@@ -231,7 +231,7 @@ class OutroDono(Exception):
 
 def faturar(faturas: list[dict], utilizador: str) -> int:
     """Marca como faturadas as linhas de cada fatura ({dono_id, fatura_numero,
-    fatura_data, acerto_inicial, observacoes, linhas: [{tipo, ref_id, inicio,
+    fatura_data, observacoes, linhas: [{tipo, ref_id, inicio,
     fim}]}). Uma fatura é de um só proprietário. As quantidades recalculam-se
     aqui (não se confia no ecrã) e tudo fica numa só transação: se alguma
     parte já estiver faturada (por exemplo, outra pessoa ao mesmo tempo),
@@ -266,13 +266,12 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
                         """
                         INSERT INTO faturacao_linhas
                             (tipo, ref_id, dono_id, dono_nome, descricao, inicio, fim, quantidade, palhetas,
-                             fatura_numero, fatura_data, acerto_inicial, observacoes, criado_por)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             fatura_numero, fatura_data, observacoes, criado_por)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (l["tipo"], l["ref_id"], it["dono_id"], it["dono_nome"], it["descricao"], a, b,
                          _QTD[l["tipo"]](it, a, b), _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else None,
-                         f["fatura_numero"] or "", f["fatura_data"], bool(f.get("acerto_inicial")),
-                         f.get("observacoes"), (utilizador or "—")[:50]),
+                         f["fatura_numero"], f["fatura_data"], f.get("observacoes"), (utilizador or "—")[:50]),
                     )
                     n += 1
         conn.commit()
@@ -326,7 +325,7 @@ def donos(ids: list[int]) -> list[dict]:
 
 
 _COLS = ["id", "tipo", "ref_id", "dono_id", "dono_nome", "descricao", "inicio", "fim", "quantidade", "palhetas",
-         "fatura_numero", "fatura_data", "acerto_inicial", "observacoes", "criado_por", "created_at",
+         "fatura_numero", "fatura_data", "observacoes", "criado_por", "created_at",
          "anulada", "anulada_por", "anulada_em", "motivo_anulacao"]
 
 

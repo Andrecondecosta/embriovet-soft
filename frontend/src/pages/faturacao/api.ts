@@ -39,8 +39,6 @@ export interface Faturada {
   palhetas: number | null;
   fatura_numero: string;
   fatura_data: string;
-  /** Primeiro fecho, de antes da app (pode não ter número). */
-  acerto_inicial: boolean;
   observacoes: string | null;
   criado_por: string | null;
   created_at: string;
@@ -87,7 +85,6 @@ export const useFaturar = () =>
         dono_id: number | null;
         fatura_numero: string;
         fatura_data: string;
-        acerto_inicial: boolean;
         observacoes?: string;
         linhas: LinhaRef[];
       }[];
