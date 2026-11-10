@@ -162,7 +162,7 @@ def test_admin_da_e_tira_acesso(ctx):
 def test_quadro_por_ano(ctx):
     c = ctx["fat"]
     ano = HOJE.year
-    # Uma estadia de 2023 já faturada e outra de 2024 por faturar ficam juntas em "antes" (desde o ano atual).
+    # Estadia de 30/12/2024 a 02/01/2025: só conta a parte de 2025 (não há coluna "antes").
     egua = _exec("SELECT animal_id FROM estadias WHERE id = %s", (ctx["fechada"],))[0]
     velha = _exec(
         """INSERT INTO estadias (tipo_registo, animal_id, dono_id, data_entrada, data_saida, motivo, estado)
@@ -170,19 +170,20 @@ def test_quadro_por_ano(ctx):
         (egua, ctx["dono"]),
     )[0]
     r = c.get("/api/faturacao/anos", params={"desde": 2025}).json()
-    assert r["anos"][0] == "antes" and r["anos"][1] == "2025" and r["anos"][-1] == str(ano)
+    # Uma coluna por ano, de 2025 até ao ano atual.
+    assert r["anos"] == [str(y) for y in range(2025, ano + 1)]
     linha = next(l for l in r["linhas"] if l["dono_id"] == ctx["dono"])
-    # A estadia que passa a passagem de ano divide-se: 2 dias em 2024 ("antes") e 2 em 2025.
-    assert (linha["celulas"]["antes"]["dias"], linha["celulas"]["2025"]["dias"]) == (2, 2)
-    # Faturar 2024 deixa "antes" com atividade mas nada por faturar.
-    corpo = _fatura(ctx["dono"], "FT 2024/9", "2025-01-10",
-                    [{"tipo": "estadia", "ref_id": velha, "inicio": "2024-12-30", "fim": "2024-12-31"}])
+    assert linha["celulas"]["2025"]["dias"] == 2 and linha["celulas"]["2025"]["faturado_ate"] is None
+    # Faturada a parte de 2025: fica tudo faturado nesse ano, e até que dia.
+    corpo = _fatura(ctx["dono"], "FT 2025/9", "2025-01-10",
+                    [{"tipo": "estadia", "ref_id": velha, "inicio": "2025-01-01", "fim": "2025-01-02"}])
     assert c.post("/api/faturacao/faturar", json=corpo).status_code == 200
     linha = next(l for l in c.get("/api/faturacao/anos", params={"desde": 2025}).json()["linhas"] if l["dono_id"] == ctx["dono"])
-    assert (linha["celulas"]["antes"]["atividade"], linha["celulas"]["antes"]["dias"]) == (True, 0)
+    assert (linha["celulas"]["2025"]["atividade"], linha["celulas"]["2025"]["dias"]) == (True, 0)
+    assert linha["celulas"]["2025"]["faturado_ate"] == "2025-01-02"
     # Sémen deste ano: os 11 dias do lote por faturar (contados uma vez), 1 lote.
-    este = linha["celulas"][str(HOJE.year)] if d(10).year == HOJE.year else None
-    if este:
+    if d(10).year == ano:
+        este = linha["celulas"][str(ano)]
         assert (este["dias_semen"], este["lotes"]) == (11, 1)
 
     assert ctx["sem"].get("/api/faturacao/anos").status_code == 403
@@ -232,7 +233,7 @@ def test_uma_fatura_por_proprietario_numero_obrigatorio_e_resumo(ctx):
     # Com número: grava; "Faturado até" no quadro.
     assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 5", HOJE.isoformat(), [linha])).status_code == 200
     anos = c.get("/api/faturacao/anos").json()["linhas"]
-    assert next(l for l in anos if l["dono_id"] == ctx["dono"])["faturado_ate"] == d(3).isoformat()
+    assert next(l for l in anos if l["dono_id"] == ctx["dono"])["celulas"][str(d(3).year)]["faturado_ate"] == d(3).isoformat()
 
 
 def test_em_atraso_e_numeros_usados(ctx):

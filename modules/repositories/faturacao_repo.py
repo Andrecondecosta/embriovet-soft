@@ -377,59 +377,66 @@ def _por_ano(a: date, b: date):
 
 
 def resumo_anual(desde: int) -> dict:
-    """Para cada proprietário e ano (os anteriores a `desde` juntos em
-    "antes"): se houve estadias/sémen, o que falta faturar (dias e palhetas
-    × dia). Só o que está na app (estadias e lotes)."""
+    """Para cada proprietário e ano (de `desde` até ao ano atual — cada ano
+    novo acrescenta uma coluna): se houve estadias/sémen, o que falta
+    faturar (dias e palhetas × dia) e até que dia desse ano já se faturou.
+    Só o que está na app (estadias e lotes)."""
     hoje = date.today()
-    chaves = ["antes"] + [str(y) for y in range(desde, hoje.year + 1)]
-    chave = lambda ano: "antes" if ano < desde else str(ano)  # noqa: E731
+    chaves = [str(y) for y in range(desde, hoje.year + 1)]
     donos: dict = {}
 
     def celula(dono_id, dono_nome, k):
         d = donos.setdefault(dono_id, {"dono_id": dono_id, "dono_nome": dono_nome, "celulas": {}})
-        return d["celulas"].setdefault(k, {"atividade": False, "dias": 0, "dias_semen": 0, "lotes": 0, "pd": 0})
+        return d["celulas"].setdefault(
+            k, {"atividade": False, "dias": 0, "dias_semen": 0, "lotes": 0, "pd": 0, "faturado_ate": None}
+        )
 
     # Sémen: dias do calendário com algum lote por faturar (vários lotes no
     # mesmo dia contam um dia), e quantos lotes.
     dias_semen: dict = defaultdict(set)
     lotes: dict = defaultdict(set)
+    inicio = date(desde, 1, 1)
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             for tipo, busca in (("estadia", _estadias), ("armazenamento", _lotes)):
-                itens = busca(cur, INICIO_HISTORICO, hoje, None)
+                itens = busca(cur, inicio, hoje, None)
                 faturados = _faturados(cur, tipo, [i["ref_id"] for i in itens])
                 for it in itens:
                     for ano, a, b in _por_ano(*it["limite"]):
                         if _QTD[tipo](it, a, b):
-                            celula(it["dono_id"], it["dono_nome"], chave(ano))["atividade"] = True
+                            celula(it["dono_id"], it["dono_nome"], str(ano))["atividade"] = True
                     for livre in _menos(it["limite"], faturados.get(it["ref_id"], [])):
                         for ano, a, b in _por_ano(*livre):
                             qtd = _QTD[tipo](it, a, b)
                             if not qtd:
                                 continue
-                            c = celula(it["dono_id"], it["dono_nome"], chave(ano))
+                            c = celula(it["dono_id"], it["dono_nome"], str(ano))
                             if tipo == "estadia":
                                 c["dias"] += qtd
                                 continue
                             c["pd"] += qtd
-                            k = (it["dono_id"], chave(ano))
+                            k = (it["dono_id"], str(ano))
                             lotes[k].add(it["ref_id"])
                             dias_semen[k].update(
                                 ta + timedelta(days=i)
                                 for ta, tb, n in _tracos(it, a, b) if n
                                 for i in range((tb - ta).days + 1)
                             )
-            # Até onde já se faturou cada proprietário (a última data faturada).
-            cur.execute("SELECT dono_id, MAX(fim) FROM faturacao_linhas WHERE NOT anulada GROUP BY dono_id")
-            ate = dict(cur.fetchall())
+            # Até que dia de cada ano já se faturou (a última data faturada nesse ano).
+            cur.execute("SELECT dono_id, inicio, fim FROM faturacao_linhas WHERE NOT anulada AND fim >= %s", (inicio,))
+            faturadas = cur.fetchall()
     for (dono_id, k), dias in dias_semen.items():
         donos[dono_id]["celulas"][k].update(dias_semen=len(dias), lotes=len(lotes[(dono_id, k)]))
-    for d in donos.values():
-        d["faturado_ate"] = ate.get(d["dono_id"])
+    for dono_id, a, b in faturadas:
+        if dono_id not in donos:
+            continue
+        for ano, _, fim in _por_ano(max(a, inicio), b):
+            c = donos[dono_id]["celulas"].get(str(ano))
+            if c is not None and (c["faturado_ate"] is None or fim > c["faturado_ate"]):
+                c["faturado_ate"] = fim
     linhas = sorted(donos.values(), key=lambda d: (d["dono_nome"] is None, (d["dono_nome"] or "").lower()))
     return {"anos": chaves, "linhas": linhas}
-
 
 
 # ── Em atraso (há quanto tempo cada proprietário tem dias por faturar) ──────

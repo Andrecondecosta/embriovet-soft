@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import dayjs, { type Dayjs } from "dayjs";
 import {
@@ -10,7 +10,6 @@ import {
   DatePicker,
   Flex,
   Input,
-  InputNumber,
   Modal,
   Segmented,
   Row,
@@ -64,6 +63,9 @@ import {
 
 const TABS = ["atraso", "anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
+// Primeiro ano do quadro "Por ano" (início da faturação na app); cada ano
+// novo acrescenta uma coluna.
+const ANO_INICIAL = 2025;
 // "Tudo até": desde o início (antes de qualquer registo) até à data escolhida.
 const INICIO = "1990-01-01";
 const desdeInicio = (p: [Dayjs, Dayjs]) => p[0].format(ISO) === INICIO;
@@ -614,10 +616,9 @@ function AnosTab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
-  const [desde, setDesde] = useState(2025);
   const [soPendentes, setSoPendentes] = useState(true);
   const [pesquisa, setPesquisa] = useState("");
-  const q = useAnos(desde);
+  const q = useAnos(ANO_INICIAL);
   const anos = q.data?.anos ?? [];
   const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0);
   const linhas = useMemo(() => {
@@ -629,12 +630,18 @@ function AnosTab() {
     );
   }, [q.data, pesquisa, soPendentes]);
 
-  const rotulo = (k: string) => (k === "antes" ? t("web.billing.before", { ano: desde }) : k);
+  // Muitos anos não cabem no ecrã: a tabela abre no ano mais recente e
+  // anda-se para trás para ver os anteriores.
+  const caixa = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = caixa.current?.querySelector<HTMLElement>(".ant-table-content, .ant-table-body");
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [anos.length, linhas.length]);
+
   const abrir = (l: LinhaAno, k: string) => {
-    const inicio = k === "antes" ? INICIO : `${k}-01-01`;
-    const fim = k === "antes" ? `${desde - 1}-12-31` : k === String(dayjs().year()) ? dayjs().format(ISO) : `${k}-12-31`;
+    const fim = k === String(dayjs().year()) ? dayjs().format(ISO) : `${k}-12-31`;
     const dono = l.dono_id != null ? `&dono=${l.dono_id}` : "";
-    navigate(`/faturacao/por-faturar?inicio=${inicio}&fim=${fim}${dono}`);
+    navigate(`/faturacao/por-faturar?inicio=${k}-01-01&fim=${fim}${dono}`);
   };
   const falta = (c: CelulaAno) =>
     [
@@ -644,6 +651,18 @@ function AnosTab() {
       .filter(Boolean)
       .join(" · ");
   const nome = (l: LinhaAno) => l.dono_nome ?? t("web.billing.no_owner");
+  /** Ano da última fatura deste proprietário: é aí que se mostra a data. */
+  const anoUltima = (l: LinhaAno) => anos.filter((k) => l.celulas[k]?.faturado_ate).at(-1);
+  /** ✓ (ano todo faturado), ✓ + data (ano da última fatura), "até dd/mm/aaaa"
+   *  + o que falta (faturado em parte) ou "Por faturar". */
+  const estado = (l: LinhaAno, k: string) => {
+    const c = l.celulas[k];
+    if (!c?.atividade) return null;
+    if (!pendente(c))
+      return { cor: "success", texto: k === anoUltima(l) && c.faturado_ate ? `✓ ${dataCurta(c.faturado_ate)}` : "✓", falta: "" };
+    if (c.faturado_ate) return { cor: "warning", texto: t("web.billing.until_date", { data: dataCurta(c.faturado_ate) }), falta: falta(c) };
+    return { cor: "error", texto: t("web.billing.pending"), falta: falta(c) };
+  };
 
   if (isMobile)
     return (
@@ -667,22 +686,26 @@ function AnosTab() {
               <List.Item
                 key={l.dono_id ?? "sem"}
                 description={
+                  // O ano mais recente primeiro.
                   <MSpace wrap style={{ marginTop: 4 }}>
-                    {anos
-                      .filter((k) => l.celulas[k]?.atividade)
-                      .map((k) => (
-                        <MTag
-                          key={k}
-                          color={pendente(l.celulas[k]) ? "danger" : "success"}
-                          fill="outline"
-                          onClick={() => abrir(l, k)}
-                        >
-                          {rotulo(k)} {pendente(l.celulas[k]) ? `· ${falta(l.celulas[k])}` : "✓"}
-                        </MTag>
-                      ))}
+                    {[...anos].reverse().map((k) => {
+                      const e = estado(l, k);
+                      return (
+                        e && (
+                          <MTag
+                            key={k}
+                            color={e.cor === "error" ? "danger" : e.cor}
+                            fill="outline"
+                            onClick={() => abrir(l, k)}
+                          >
+                            {k} · {e.texto}
+                            {e.falta && ` · ${e.falta}`}
+                          </MTag>
+                        )
+                      );
+                    })}
                   </MSpace>
                 }
-                extra={l.faturado_ate ? `${t("web.billing.billed_until")} ${dataCurta(l.faturado_ate)}` : t("web.billing.never")}
               >
                 {nome(l)}
               </List.Item>
@@ -697,53 +720,51 @@ function AnosTab() {
       <Typography.Paragraph type="secondary">{t("web.billing.years_help")}</Typography.Paragraph>
       <Flex gap={12} wrap align="center" style={{ marginBottom: 12 }}>
         <Input.Search allowClear placeholder={t("web.common.search")} onChange={(e) => setPesquisa(e.target.value)} style={{ width: 260 }} />
-        <Space>
-          {t("web.billing.since")}
-          <InputNumber min={1990} max={dayjs().year()} value={desde} onChange={(v) => v && setDesde(v)} style={{ width: 90 }} />
-        </Space>
         <Checkbox checked={soPendentes} onChange={(e) => setSoPendentes(e.target.checked)}>
           {t("web.billing.only_pending")}
         </Checkbox>
       </Flex>
       {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
-      <Table<LinhaAno>
-        size="small"
-        bordered
-        loading={q.isFetching}
-        rowKey={(l) => l.dono_id ?? "sem"}
-        dataSource={linhas}
-        locale={{ emptyText: t("web.billing.empty_years") }}
-        pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
-        scroll={{ x: "max-content" }}
-        columns={[
-          { title: t("label.owner"), fixed: "left", render: (_, l) => <Typography.Text strong>{nome(l)}</Typography.Text> },
-          {
-            title: t("web.billing.billed_until"),
-            align: "center",
-            render: (_, l) => (l.faturado_ate ? dataCurta(l.faturado_ate) : <Typography.Text type="secondary">{t("web.billing.never")}</Typography.Text>),
-          },
-          ...anos.map((k) => ({
-            title: rotulo(k),
-            key: k,
-            align: "center" as const,
-            onCell: (l: LinhaAno) => ({
-              onClick: l.celulas[k]?.atividade ? () => abrir(l, k) : undefined,
-              style: { cursor: l.celulas[k]?.atividade ? "pointer" : undefined },
-            }),
-            render: (_: unknown, l: LinhaAno) => {
-              const c = l.celulas[k];
-              if (!c?.atividade) return <Typography.Text type="secondary">—</Typography.Text>;
-              if (!pendente(c)) return <Tag color="success">✓ {t("web.billing.billed")}</Tag>;
-              return (
-                <>
-                  <Tag color="error">{t("web.billing.pending")}</Tag>
-                  <div style={{ fontSize: 12 }}>{falta(c)}</div>
-                </>
-              );
+      <div ref={caixa}>
+        <Table<LinhaAno>
+          size="small"
+          bordered
+          loading={q.isFetching}
+          rowKey={(l) => l.dono_id ?? "sem"}
+          dataSource={linhas}
+          locale={{ emptyText: t("web.billing.empty_years") }}
+          pagination={{ pageSize: 100, hideOnSinglePage: true, size: "small" }}
+          scroll={{ x: "max-content" }}
+          columns={[
+            {
+              title: t("label.owner"),
+              fixed: "left",
+              width: 240,
+              render: (_, l) => <Typography.Text strong>{nome(l)}</Typography.Text>,
             },
-          })),
-        ]}
-      />
+            ...anos.map((k) => ({
+              title: k,
+              key: k,
+              width: 190,
+              align: "center" as const,
+              onCell: (l: LinhaAno) => ({
+                onClick: l.celulas[k]?.atividade ? () => abrir(l, k) : undefined,
+                style: { cursor: l.celulas[k]?.atividade ? "pointer" : undefined },
+              }),
+              render: (_: unknown, l: LinhaAno) => {
+                const e = estado(l, k);
+                if (!e) return <Typography.Text type="secondary">—</Typography.Text>;
+                return (
+                  <>
+                    <Tag color={e.cor}>{e.texto}</Tag>
+                    {e.falta && <div style={{ fontSize: 12 }}>{e.falta}</div>}
+                  </>
+                );
+              },
+            })),
+          ]}
+        />
+      </div>
     </>
   );
 }

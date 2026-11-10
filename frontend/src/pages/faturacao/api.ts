@@ -128,16 +128,16 @@ export interface CelulaAno {
   dias_semen: number;
   lotes: number;
   pd: number;
+  /** Último dia faturado neste ano (ou null). */
+  faturado_ate: string | null;
 }
 export interface LinhaAno {
   dono_id: number | null;
   dono_nome: string | null;
-  /** Última data já faturada deste proprietário. */
-  faturado_ate: string | null;
   celulas: Record<string, CelulaAno>;
 }
 
-/** Proprietário × ano ("antes" = anos anteriores a `desde`). */
+/** Proprietário × ano, de `desde` até ao ano atual. */
 export const useAnos = (desde: number) =>
   useQuery({
     queryKey: ["faturacao", "anos", desde],
