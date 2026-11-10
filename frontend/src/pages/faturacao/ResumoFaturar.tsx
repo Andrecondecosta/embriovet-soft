@@ -23,6 +23,10 @@ import { numerosUsados, useFaturar, useResumo, type DonoFat, type Movimento, typ
 
 const ISO = "YYYY-MM-DD";
 
+/** Linha do resumo: com as datas ajustadas e a linha original (os limites). */
+type LinhaResumo = PorFaturar & { k: string; original: PorFaturar };
+const chaveLinha = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
+
 /** Linha que começa no dia de entrada na app de um lote nunca faturado. */
 const primeiraDoLote = (l: PorFaturar) => l.tipo === "armazenamento" && !!l.pode_mudar_inicio && l.inicio === l.entrada_app;
 /** Linha (já ajustada ao período) que começa antes da entrada na app. */
@@ -33,7 +37,7 @@ interface Grupo {
   chave: string;
   dono_id: number | null;
   nome: string;
-  linhas: PorFaturar[];
+  linhas: LinhaResumo[];
   movimentos: { lote: string; m: Movimento }[];
   dias: number;
   ds: number;
@@ -84,25 +88,46 @@ export function ResumoFaturar({
     return [dayjs(ini), dayjs(fim)];
   }, [selecionadas]);
   const [periodo, setPeriodo] = useState<[Dayjs, Dayjs] | null>(null);
+  const [editar, setEditar] = useState<string | null>(null);
   // Primeira faturação de um lote (nunca faturado): o "De" pode ir para antes
   // da entrada do sémen na app — já estava guardado antes. Só na fatura; o
   // lote não muda. Depois da primeira fatura já não.
   const temPrimeira = selecionadas.some(primeiraDoLote);
-  const linhas = useMemo(() => {
-    if (!periodo) return selecionadas;
-    const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
+  // Datas mudadas numa linha só (clicando nas datas dessa linha). Mudar o
+  // período geral volta a aplicá-lo a todas.
+  const [porLinha, setPorLinha] = useState<Record<string, [string, string]>>({});
+  const mudarPeriodo = (p: [Dayjs, Dayjs]) => {
+    setPeriodo(p);
+    setPorLinha({});
+  };
+  const linhas = useMemo<LinhaResumo[]>(() => {
     return selecionadas.flatMap((l) => {
-      const inicio = primeiraDoLote(l) && de < l.inicio ? de : l.inicio > de ? l.inicio : de;
-      const fim = l.fim < ate ? l.fim : ate;
+      const k = chaveLinha(l);
+      let inicio = l.inicio;
+      let fim = l.fim;
+      if (porLinha[k]) [inicio, fim] = porLinha[k];
+      else if (periodo) {
+        const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
+        inicio = primeiraDoLote(l) && de < l.inicio ? de : l.inicio > de ? l.inicio : de;
+        fim = l.fim < ate ? l.fim : ate;
+      }
       if (inicio > fim) return [];
       const dias = nDias({ inicio, fim });
-      return [{ ...l, inicio, fim, dias, quantidade: l.tipo === "estadia" ? dias : dias * (l.palhetas ?? 0) }];
+      return [{ ...l, k, original: l, inicio, fim, dias, quantidade: l.tipo === "estadia" ? dias : dias * (l.palhetas ?? 0) }];
     });
-  }, [selecionadas, periodo]);
+  }, [selecionadas, periodo, porLinha]);
+  const mudarLinha = (l: LinhaResumo, v: [Dayjs, Dayjs]) =>
+    setPorLinha((x) => ({ ...x, [l.k]: [v[0].format(ISO), v[1].format(ISO)] }));
+  /** Limites de uma linha: só encurta; na primeira fatura de um lote o início
+   *  pode ir para antes da entrada na app. */
+  const foraDaLinha = (l: LinhaResumo) => (d: Dayjs) =>
+    d.isAfter(dayjs(l.original.fim), "day") || (!primeiraDoLote(l.original) && d.isBefore(dayjs(l.original.inicio), "day"));
 
   useEffect(() => {
     if (!aberto) return;
     setPeriodo(limites);
+    setPorLinha({});
+    setEditar(null);
     setNumeros({});
     setData(dayjs());
     setAcerto(false);
@@ -258,14 +283,14 @@ export function ResumoFaturar({
                 data={periodo[0]}
                 min={temPrimeira ? undefined : limites[0]}
                 max={periodo[1]}
-                onChange={(d) => setPeriodo([d, periodo[1]])}
+                onChange={(d) => mudarPeriodo([d, periodo[1]])}
               />
               <DataMobile
                 titulo={t("web.billing.until")}
                 data={periodo[1]}
                 min={periodo[0]}
                 max={limites[1]}
-                onChange={(d) => setPeriodo([periodo[0], d])}
+                onChange={(d) => mudarPeriodo([periodo[0], d])}
               />
             </List>
           )}
@@ -281,13 +306,34 @@ export function ResumoFaturar({
               }
             >
               {g.linhas.map((l) => (
-                <List.Item
-                  key={`${l.tipo}-${l.ref_id}-${l.inicio}`}
-                  description={`${dataCurta(l.inicio)} – ${dataCurta(l.fim)}`}
-                  extra={[tx.palhetas(l), tx.dias(l)].filter(Boolean).join(" · ")}
-                >
-                  {l.descricao}
-                </List.Item>
+                <div key={l.k}>
+                  <List.Item
+                    description={`${dataCurta(l.inicio)} – ${dataCurta(l.fim)}`}
+                    extra={[tx.palhetas(l), tx.dias(l)].filter(Boolean).join(" · ")}
+                    arrow
+                    onClick={() => setEditar(editar === l.k ? null : l.k)}
+                  >
+                    {l.descricao}
+                  </List.Item>
+                  {editar === l.k && (
+                    <>
+                      <DataMobile
+                        titulo={t("web.billing.from")}
+                        data={dayjs(l.inicio)}
+                        min={primeiraDoLote(l.original) ? undefined : dayjs(l.original.inicio)}
+                        max={dayjs(l.fim)}
+                        onChange={(d) => mudarLinha(l, [d, dayjs(l.fim)])}
+                      />
+                      <DataMobile
+                        titulo={t("web.billing.until")}
+                        data={dayjs(l.fim)}
+                        min={dayjs(l.inicio)}
+                        max={dayjs(l.original.fim)}
+                        onChange={(d) => mudarLinha(l, [dayjs(l.inicio), d])}
+                      />
+                    </>
+                  )}
+                </div>
               ))}
               {g.movimentos.map(({ lote, m }, i) => (
                 <List.Item key={`m${i}`} style={{ fontSize: 12, color: "#888" }}>
@@ -362,7 +408,7 @@ export function ResumoFaturar({
               value={periodo}
               disabledDate={foraDosLimites}
               presets={atalhosAte}
-              onChange={(v) => v?.[0] && v[1] && setPeriodo([v[0], v[1]])}
+              onChange={(v) => v?.[0] && v[1] && mudarPeriodo([v[0], v[1]])}
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {t(temPrimeira ? "web.billing.period_help_first" : "web.billing.period_help")}
@@ -398,10 +444,10 @@ export function ResumoFaturar({
                   )
                 }
               >
-                <Table<PorFaturar>
+                <Table<LinhaResumo>
                   size="small"
                   pagination={false}
-                  rowKey={(l) => `${l.tipo}-${l.ref_id}-${l.inicio}`}
+                  rowKey="k"
                   dataSource={g.linhas}
                   columns={[
                     {
@@ -418,7 +464,24 @@ export function ResumoFaturar({
                         </>
                       ),
                     },
-                    { title: t("web.billing.col.period"), render: (_, l) => `${dataCurta(l.inicio)} – ${dataCurta(l.fim)}` },
+                    {
+                      title: t("web.billing.col.period"),
+                      width: 250,
+                      render: (_, l) => (
+                        // Clicar nas datas muda só esta linha.
+                        <DatePicker.RangePicker
+                          size="small"
+                          variant="borderless"
+                          format="DD/MM/YYYY"
+                          allowClear={false}
+                          suffixIcon={null}
+                          value={[dayjs(l.inicio), dayjs(l.fim)]}
+                          disabledDate={foraDaLinha(l)}
+                          onChange={(v) => v?.[0] && v[1] && mudarLinha(l, [v[0], v[1]])}
+                          style={{ padding: 0, width: 200, ...(porLinha[l.k] ? { background: "#e6f4ff" } : {}) }}
+                        />
+                      ),
+                    },
                     { title: t("web.billing.col.straws"), align: "right", render: (_, l) => tx.palhetas(l) },
                     { title: t("web.billing.col.days"), align: "right", render: (_, l) => tx.dias(l) },
                   ]}
