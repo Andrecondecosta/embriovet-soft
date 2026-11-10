@@ -12,7 +12,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Popover,
   Segmented,
   Row,
   Select,
@@ -111,8 +110,7 @@ function useTextos() {
   };
 }
 
-// Chave da linha pelo início calculado (não muda se o início for antecipado).
-const chave = (l: PorFaturar & { k?: string }) => l.k ?? `${l.tipo}-${l.ref_id}-${l.inicio}`;
+const chave = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
 
 type Linha = { tipo: TipoFat; inicio: string; fim: string; quantidade: number; palhetas?: number | null };
 const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
@@ -269,21 +267,10 @@ function PorFaturarTab() {
   const [sel, setSel] = useState<string[]>([]);
   const [marcar, setMarcar] = useState(false);
 
-  // Primeira faturação de um lote: início antecipado (o sémen já estava
-  // guardado antes de entrar na app). Só nesta faturação — o lote não muda.
-  const [inicios, setInicios] = useState<Record<number, string>>({});
   const linhas = useMemo(() => {
     const s = pesquisa.trim().toLowerCase();
-    return (q.data ?? [])
-      .filter((l) => !s || `${l.dono_nome ?? ""} ${l.descricao}`.toLowerCase().includes(s))
-      .map((l) => {
-        const k = chave(l);
-        const novo = primeiraDoLote(l) ? inicios[l.ref_id] : undefined;
-        if (!novo) return { ...l, k };
-        const mais = dayjs(l.inicio).diff(dayjs(novo), "day");
-        return { ...l, k, inicio: novo, dias: l.dias + mais, quantidade: l.quantidade + mais * (l.palhetas ?? 0) };
-      });
-  }, [q.data, pesquisa, inicios]);
+    return (q.data ?? []).filter((l) => !s || `${l.dono_nome ?? ""} ${l.descricao}`.toLowerCase().includes(s));
+  }, [q.data, pesquisa]);
   // Só contam as escolhidas que ainda estão na lista (o período/filtro pode ter mudado).
   const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
   const tot = totais(escolhidas.length ? escolhidas : linhas);
@@ -404,21 +391,7 @@ function PorFaturarTab() {
               </>
             ),
           },
-          {
-            title: t("web.billing.col.period"),
-            render: (_, l) => (
-              <>
-                {tx.periodo(l)}
-                {primeiraDoLote(l) && (
-                  <MudarInicio
-                    l={l}
-                    valor={inicios[l.ref_id]}
-                    onChange={(v) => setInicios((x) => ({ ...x, [l.ref_id]: v ?? "" }))}
-                  />
-                )}
-              </>
-            ),
-          },
+          { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
           { title: t("web.billing.col.straws"), align: "right", render: (_, l) => tx.palhetas(l) },
           { title: t("web.billing.col.days"), align: "right", render: (_, l) => <Typography.Text strong>{tx.dias(l)}</Typography.Text> },
         ]}
@@ -936,64 +909,5 @@ function AtrasoTab() {
         ]}
       />
     </>
-  );
-}
-
-/** Linha que começa no dia de entrada na app de um lote nunca faturado. */
-const primeiraDoLote = (l: PorFaturar & { k?: string }) =>
-  l.tipo === "armazenamento" && !!l.pode_mudar_inicio && (l.k ? l.k.endsWith(`-${l.entrada_app}`) : l.inicio === l.entrada_app);
-
-/** Primeira faturação de um lote: o sémen já estava guardado antes de entrar
- *  na app (a data de entrada ou de produção pode não ser a verdadeira).
- *  Muda só esta faturação; o lote fica como está. Depois da primeira fatura
- *  deixa de aparecer. */
-function MudarInicio({ l, valor, onChange }: { l: PorFaturar; valor?: string; onChange: (v: string | null) => void }) {
-  const t = useT();
-  const [aberto, setAberto] = useState(false);
-  const entrada = dayjs(l.entrada_app);
-  const acertado = !!valor;
-  return (
-    <div>
-      <Popover
-        open={aberto}
-        onOpenChange={setAberto}
-        trigger="click"
-        title={t("web.billing.start_title")}
-        content={
-          <div style={{ maxWidth: 300 }}>
-            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-              {t("web.billing.start_help", { data: entrada.format("DD/MM/YYYY") })}
-            </Typography.Paragraph>
-            <Flex gap={8} wrap>
-              <DatePicker
-                format="DD/MM/YYYY"
-                allowClear={false}
-                value={dayjs(valor || l.entrada_app)}
-                maxDate={entrada}
-                onChange={(v) => {
-                  if (!v) return;
-                  onChange(v.isSame(entrada, "day") ? null : v.format(ISO));
-                  setAberto(false);
-                }}
-              />
-              {acertado && (
-                <Button size="small" type="link" onClick={() => onChange(null)}>
-                  {t("web.billing.start_reset")}
-                </Button>
-              )}
-            </Flex>
-          </div>
-        }
-      >
-        <Button size="small" type="link" style={{ padding: 0, height: "auto", fontSize: 12 }}>
-          {t("web.billing.start_change")}
-        </Button>
-      </Popover>
-      {acertado && (
-        <Tag style={{ marginLeft: 6 }} color="blue">
-          {t("web.billing.start_adjusted", { data: entrada.format("DD/MM/YYYY") })}
-        </Tag>
-      )}
-    </div>
   );
 }

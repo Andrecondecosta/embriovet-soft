@@ -22,6 +22,11 @@ import { dataCurta } from "../../components/csv";
 import { numerosUsados, useFaturar, useResumo, type DonoFat, type Movimento, type PorFaturar } from "./api";
 
 const ISO = "YYYY-MM-DD";
+
+/** Linha que começa no dia de entrada na app de um lote nunca faturado. */
+const primeiraDoLote = (l: PorFaturar) => l.tipo === "armazenamento" && !!l.pode_mudar_inicio && l.inicio === l.entrada_app;
+/** Linha (já ajustada ao período) que começa antes da entrada na app. */
+const antesDaEntrada = (l: PorFaturar) => l.tipo === "armazenamento" && !!l.entrada_app && l.inicio < l.entrada_app;
 const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
 
 interface Grupo {
@@ -79,11 +84,15 @@ export function ResumoFaturar({
     return [dayjs(ini), dayjs(fim)];
   }, [selecionadas]);
   const [periodo, setPeriodo] = useState<[Dayjs, Dayjs] | null>(null);
+  // Primeira faturação de um lote (nunca faturado): o "De" pode ir para antes
+  // da entrada do sémen na app — já estava guardado antes. Só na fatura; o
+  // lote não muda. Depois da primeira fatura já não.
+  const temPrimeira = selecionadas.some(primeiraDoLote);
   const linhas = useMemo(() => {
     if (!periodo) return selecionadas;
     const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
     return selecionadas.flatMap((l) => {
-      const inicio = l.inicio > de ? l.inicio : de;
+      const inicio = primeiraDoLote(l) && de < l.inicio ? de : l.inicio > de ? l.inicio : de;
       const fim = l.fim < ate ? l.fim : ate;
       if (inicio > fim) return [];
       const dias = nDias({ inicio, fim });
@@ -110,7 +119,8 @@ export function ResumoFaturar({
         .filter((x) => !x.data.isBefore(limites[0], "day") && x.data.isBefore(limites[1], "day"))
         .map((x) => ({ label: x.label, value: [limites[0], x.data] as [Dayjs, Dayjs] }))
     : [];
-  const foraDosLimites = (d: Dayjs) => !!limites && (d.isBefore(limites[0], "day") || d.isAfter(limites[1], "day"));
+  const foraDosLimites = (d: Dayjs) =>
+    !!limites && (d.isAfter(limites[1], "day") || (!temPrimeira && d.isBefore(limites[0], "day")));
 
   const refs = useMemo(() => linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })), [linhas]);
   const donoIds = useMemo(() => [...new Set(linhas.map((l) => l.dono_id).filter((x): x is number => x != null))], [linhas]);
@@ -246,7 +256,7 @@ export function ResumoFaturar({
               <DataMobile
                 titulo={t("web.billing.from")}
                 data={periodo[0]}
-                min={limites[0]}
+                min={temPrimeira ? undefined : limites[0]}
                 max={periodo[1]}
                 onChange={(d) => setPeriodo([d, periodo[1]])}
               />
@@ -355,7 +365,7 @@ export function ResumoFaturar({
               onChange={(v) => v?.[0] && v[1] && setPeriodo([v[0], v[1]])}
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t("web.billing.period_help")}
+              {t(temPrimeira ? "web.billing.period_help_first" : "web.billing.period_help")}
             </Typography.Text>
           </Space>
         )}
@@ -400,6 +410,11 @@ export function ResumoFaturar({
                         <>
                           <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l)}</Tag>
                           {l.descricao}
+                          {antesDaEntrada(l) && (
+                            <Tag color="blue" style={{ marginLeft: 6 }}>
+                              {t("web.billing.before_entry", { data: dataCurta(l.entrada_app!) })}
+                            </Tag>
+                          )}
                         </>
                       ),
                     },
