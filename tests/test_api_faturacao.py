@@ -278,3 +278,52 @@ def test_primeira_fatura_pode_comecar_antes_da_entrada_sem_mudar_o_lote(ctx):
     assert all(not x["pode_mudar_inicio"] for x in resto)
     outra = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(40).isoformat(), "fim": d(31).isoformat()}
     assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 2/2026", HOJE.isoformat(), [outra])).status_code == 409
+
+
+def test_saida_com_dias_ja_faturados_avisa(ctx):
+    # A estadia aberta foi faturada até hoje; a saída verdadeira foi há 2 dias.
+    c = ctx["fat"]
+    linha = {"tipo": "estadia", "ref_id": ctx["aberta"], "inicio": d(2).isoformat(), "fim": HOJE.isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 9", HOJE.isoformat(), [linha])).status_code == 200
+    rececao = _login("Gestor", "nenhum")
+    corpo = {"data_saida": d(2).isoformat(), "estado": "alta"}
+    r = rececao.post(f"/api/estadias/{ctx['aberta']}/saida", json=corpo)
+    # 2 dias já faturados depois da saída (ontem e hoje): avisa para os anular.
+    assert r.status_code == 409 and r.json()["detail"]["params"] == {"registos": "", "faturados": 2}
+    assert rececao.post(f"/api/estadias/{ctx['aberta']}/saida", json={**corpo, "confirmar": True}).status_code == 200
+
+
+def test_palhetas_de_cliente_usadas_aparecem_aos_dois(ctx):
+    c = ctx["fat"]
+    # Sémen do "outro" (cliente) usado numa égua do "dono"; o da clínica não conta.
+    clinica = _exec("INSERT INTO dono (nome, ativo, da_clinica) VALUES (%s, TRUE, TRUE) RETURNING id", (f"{P}clinica{uuid.uuid4().hex[:4]}",))[0]
+    l_cli = _exec("INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual, quantidade_inicial, data_criacao) VALUES (%s, %s, 8, 10, %s) RETURNING id",
+                  (f"{P}Zeus", ctx["outro"], d(20)))[0]
+    l_cas = _exec("INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual, quantidade_inicial, data_criacao) VALUES (%s, %s, 8, 10, %s) RETURNING id",
+                  (f"{P}Zeus", clinica, d(20)))[0]
+    egua = _exec("SELECT animal_id FROM estadias WHERE id = %s", (ctx["fechada"],))[0]
+    i_cli = _exec("""INSERT INTO inseminacoes (garanhao, egua, data_inseminacao, palhetas_gastas, estoque_id, animal_id_egua, estadia_id)
+                     VALUES ('z', 'e', %s, 2, %s, %s, %s) RETURNING id""", (d(5), l_cli, egua, ctx["fechada"]))[0]
+    i_cas = _exec("""INSERT INTO inseminacoes (garanhao, egua, data_inseminacao, palhetas_gastas, estoque_id, animal_id_egua, estadia_id)
+                     VALUES ('z', 'e', %s, 2, %s, %s, %s) RETURNING id""", (d(5), l_cas, egua, ctx["fechada"]))[0]
+    try:
+        p = {"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "tipo": "palhetas"}
+        linhas = c.get("/api/faturacao/por-faturar", params=p).json()
+        minhas = sorted((l["tipo"], l["dono_id"], l["palhetas"]) for l in linhas if l["ref_id"] == i_cli)
+        assert minhas == sorted([("palhetas_recebidas", ctx["dono"], 2), ("palhetas_gastas", ctx["outro"], 2)])
+        # O sémen da própria clínica não entra.
+        assert all(l["ref_id"] != i_cas for l in linhas)
+        # Faturar as recebidas ao dono da égua; as gastas continuam para o dono do sémen.
+        rec = {"tipo": "palhetas_recebidas", "ref_id": i_cli, "inicio": d(5).isoformat(), "fim": d(5).isoformat()}
+        assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT P1", HOJE.isoformat(), [rec])).status_code == 200
+        resto = [(l["tipo"], l["dono_id"]) for l in c.get("/api/faturacao/por-faturar", params=p).json() if l["ref_id"] == i_cli]
+        assert resto == [("palhetas_gastas", ctx["outro"])]
+        f = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "fatura": "FT P1"}).json()
+        assert [(x["tipo"], x["quantidade"], x["palhetas"]) for x in f] == [("palhetas_recebidas", 2, 2)]
+        atr = next(x for x in c.get("/api/faturacao/atraso").json() if x["dono_id"] == ctx["outro"])
+        assert atr["palhetas"]["dias"] == 2
+    finally:
+        _exec("DELETE FROM faturacao_linhas WHERE fatura_numero = 'FT P1'")
+        _exec("DELETE FROM inseminacoes WHERE estoque_id IN (%s, %s)", (l_cli, l_cas))
+        _exec("DELETE FROM estoque_dono WHERE id IN (%s, %s)", (l_cli, l_cas))
+        _exec("DELETE FROM dono WHERE id = %s", (clinica,))

@@ -106,7 +106,7 @@ def test_nova_estadia_com_animal_novo_e_saida(client, base):
     assert r.json()["detail"]["code"] == "web.stays.error.already_closed"
 
 
-def test_saida_nao_antes_do_ultimo_registo_e_aviso_gestante(client, base):
+def test_saida_antes_do_ultimo_registo_pede_confirmacao(client, base):
     hoje = date.today()
     r = _nova(client, base, data_entrada=(hoje - timedelta(days=10)).isoformat())
     eid, aid = r.json()["id"], r.json()["animal_id"]
@@ -122,10 +122,12 @@ def test_saida_nao_antes_do_ultimo_registo_e_aviso_gestante(client, base):
         conn.commit()
     p = client.get(f"/api/estadias/{eid}/pendentes").json()
     assert p["ultimo_registo"] == (hoje - timedelta(days=3)).isoformat() and p["gestante"] is True
-    r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": (hoje - timedelta(days=4)).isoformat(), "estado": "gestante"})
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.stays.error.exit_before_records"
-    r = client.post(f"/api/estadias/{eid}/saida", json={"data_saida": (hoje - timedelta(days=3)).isoformat(), "estado": "gestante"})
-    assert r.status_code == 200
+    # Antes do último registo: pede confirmação (o dono pode tê-la levado sem avisar), não recusa.
+    corpo = {"data_saida": (hoje - timedelta(days=4)).isoformat(), "estado": "gestante"}
+    r = client.post(f"/api/estadias/{eid}/saida", json=corpo)
+    assert r.status_code == 409 and r.json()["detail"] == {
+        "code": "web.stays.confirm_exit", "params": {"registos": (hoje - timedelta(days=3)).strftime("%d/%m/%Y"), "faturados": 0}}
+    assert client.post(f"/api/estadias/{eid}/saida", json={**corpo, "confirmar": True}).status_code == 200
 
 
 def test_validacoes_nova(client, base):

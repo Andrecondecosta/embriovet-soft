@@ -5,6 +5,7 @@ import { Alert, Button, Card, Col, DatePicker, Flex, Form, Input, Modal, Row, Se
 import { LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
+  Dialog,
   CapsuleTabs,
   DatePicker as MDatePicker,
   DotLoading,
@@ -23,7 +24,8 @@ import { AddOutline } from "antd-mobile-icons";
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { dataCurta } from "../../components/csv";
-import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
+import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
+import { ApiError } from "../../api/client";
 import { Cabecalho } from "../../components/mobile";
 import { NovaEstadia } from "./NovaEstadia";
 import { TagReprodutivo, useEstadoReprodutivo } from "../../components/EstadoReprodutivo";
@@ -405,7 +407,6 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
   const pend = usePendentesSaida(estadia?.id ?? null).data;
   const estadoForm = Form.useWatch("estado", form);
   const estadoAtual = isMobile ? estado : estadoForm;
-  const minimo = pend?.ultimo_registo ? dayjs(pend.ultimo_registo) : null;
   const avisos = pend
     ? [
         pend.gestante && (estadoAtual === "alta" || estadoAtual === "sem_resultado")
@@ -421,7 +422,36 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
       ].filter(Boolean)
     : [];
 
-  const guardar = async (v: SaidaForm) => {
+  /** Saída antes de registos já feitos, ou com dias já faturados depois:
+   *  pode ser a data verdadeira (o dono levou-a sem avisar). Pergunta. */
+  const perguntar = (params: Record<string, string | number>) =>
+    new Promise<boolean>((resolve) => {
+      const texto = (
+        <>
+          {params.registos ? <p>{t("web.stays.exit.after_records", { data: params.registos })}</p> : null}
+          {Number(params.faturados) > 0 ? <p>{t("web.stays.exit.billed_after", { n: params.faturados })}</p> : null}
+          <p>{t("web.stays.exit.confirm_question")}</p>
+        </>
+      );
+      if (isMobile)
+        void Dialog.confirm({
+          content: texto,
+          confirmText: t("web.stays.exit.save"),
+          cancelText: t("web.common.cancel"),
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      else
+        confirmar({
+          titulo: t("web.stays.exit.title"),
+          texto,
+          ok: t("web.stays.exit.save"),
+          cancelar: t("web.common.cancel"),
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+    });
+  const guardar = async (v: SaidaForm, confirmado = false): Promise<void> => {
     if (!estadia) return;
     try {
       await registar.mutateAsync({
@@ -429,10 +459,15 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
         data_saida: dayjs(v.data_saida).format("YYYY-MM-DD"),
         estado: v.estado,
         observacoes: v.observacoes,
+        confirmar: confirmado,
       });
       notifySuccess(t("web.stays.exit.saved"));
       onClose();
     } catch (err) {
+      if (err instanceof ApiError && err.code === "web.stays.confirm_exit") {
+        if (await perguntar(err.params)) return guardar(v, true);
+        return;
+      }
       notifyError(err);
     }
   };
@@ -500,7 +535,6 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
           visible={calendario}
           onClose={() => setCalendario(false)}
           value={dataSaida}
-          min={minimo?.toDate()}
           max={dayjs().add(1, "year").toDate()}
           onConfirm={setDataSaida}
         />
@@ -532,25 +566,8 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
       <Form form={form} layout="vertical" preserve={false} initialValues={{ data_saida: dayjs(), estado: "alta" }} onFinish={guardar}>
         <Row gutter={12}>
           <Col span={12}>
-            <Form.Item
-              name="data_saida"
-              label={t("web.stays.exit.date")}
-              rules={[
-                { required: true },
-                {
-                  validator: (_, v: Dayjs | null) =>
-                    v && minimo && v.isBefore(minimo, "day")
-                      ? Promise.reject(t("web.stays.exit.min_date", { data: minimo.format("DD/MM/YYYY") }))
-                      : Promise.resolve(),
-                },
-              ]}
-            >
-              <DatePicker
-                format="DD/MM/YYYY"
-                allowClear={false}
-                style={{ width: "100%" }}
-                disabledDate={(d) => !!minimo && d.isBefore(minimo, "day")}
-              />
+            <Form.Item name="data_saida" label={t("web.stays.exit.date")} rules={[{ required: true }]}>
+              <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>

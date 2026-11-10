@@ -244,7 +244,11 @@ class Rececao(Pessoa):
                 if s == 422:
                     s, _ = self.api("POST", f"/estadias/{aberta['id']}/saida", json=corpo)
             else:
-                s, _ = self.api("POST", f"/estadias/{aberta['id']}/saida", json=corpo)
+                s, r = self.api("POST", f"/estadias/{aberta['id']}/saida", json=corpo)
+                if s == 409 and ((r or {}).get("detail") or {}).get("code") == "web.stays.confirm_exit":
+                    # A app avisa que há registos (ou dias faturados) depois desta
+                    # data: é mesmo a data em que o dono a levou — confirma.
+                    s, _ = self.api("POST", f"/estadias/{aberta['id']}/saida", json={**corpo, "confirmar": True})
             if s == 200:
                 x["saiu"] = True
                 if p["data_real"] < rel.hoje:

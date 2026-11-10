@@ -50,12 +50,19 @@ class Hugo(Pessoa):
         donos = self.memoria.setdefault("donos", {})
         if nome not in donos:
             s, r = self.api("GET", "/owners", params={"q": nome, "por_pagina": 50})
-            achado = next((o for o in (r or {}).get("itens", []) if o.get("nome") == nome), None) if s == 200 else None
+            achado = next((o for o in (r or {}).get("items", []) if o.get("nome") == nome), None) if s == 200 else None
             if achado:
                 donos[nome] = achado["id"]
             else:
-                s, r = self.api("POST", "/owners", json={"nome": nome})
-                donos[nome] = (r or {}).get("id") if s == 201 else None
+                # Os donos "Clínica — …" são a própria clínica: não se faturam.
+                s, r = self.api("POST", "/owners", json={"nome": nome, "da_clinica": nome.startswith("Clínica")})
+                if s == 409:  # já existe escrito de outra maneira: a app diz qual é
+                    existente = (((r or {}).get("detail") or {}).get("params") or {}).get("name")
+                    s2, r2 = self.api("GET", "/owners", params={"q": existente, "por_pagina": 50})
+                    achado = next((o for o in (r2 or {}).get("items", []) if o.get("nome") == existente), None) if s2 == 200 else None
+                    donos[nome] = achado["id"] if achado else None
+                else:
+                    donos[nome] = (r or {}).get("id") if s == 201 else None
         return donos[nome]
 
     def _preparar(self):
@@ -83,6 +90,11 @@ class Hugo(Pessoa):
         hoje = rel.hoje
         wd = hoje.weekday()
         # O que chega hoje fica no laboratório (alguém assina a guia, mesmo sem o Hugo).
+        # Sémen de clientes (guardado cá, a faturar) e clientes que vêm buscar palhetas.
+        self.memoria.setdefault("clientes_por_registar", []).extend(self.mundo.semen_cliente_chega(hoje))
+        for lev in self.mundo.semen_cliente_levanta(hoje):
+            self.memoria.setdefault("levantamentos", []).append(lev)
+            self.memoria.setdefault("dia_levantamento", {})[lev] = hoje  # escreve o dia na guia
         for l in self.mundo.semen_chega(hoje):
             self.memoria["por_registar"].append(l)
             # Um terço dos externos sem dados: o fornecedor manda o certificado depois (às vezes).
@@ -106,6 +118,7 @@ class Hugo(Pessoa):
             if l.codigo not in adiar:
                 self._registar(rel, l)
         self._certificados(rel)
+        self._clientes(rel)
         # Verificação de stock (às vezes não há tempo).
         if self.r.random() >= 0.10:
             self._vigiar_stock(rel)
@@ -116,6 +129,45 @@ class Hugo(Pessoa):
             self.memoria["ultima_contagem"] = (hoje.year, hoje.month)
             if rel.d > 0:
                 self._contagem(rel)
+
+    # ── sémen de clientes ────────────────────────────────────────────────
+    def _clientes(self, rel):
+        """Regista o sémen que os clientes trazem e as palhetas que levam.
+        Só em dias úteis: o que acontece ao fim de semana fica para segunda
+        (a app regista a saída com a data em que se escreve)."""
+        cl = self.memoria.setdefault("clientes", {})  # codigo CL -> id do lote na app
+        for l in self.memoria.get("clientes_por_registar", []):
+            contentor, canister = self._local(l.garanhao)
+            s, r = self.api("POST", "/stock/lotes", json={
+                "garanhao": l.garanhao, "dono_id": self._dono(l.dono), "palhetas": l.palhetas,
+                "origem_externa": f"Cliente — {l.dono}", "motilidade": 0, "concentracao": 0, "certificado": "Não",
+                "contentor_id": contentor, "canister": canister, "andar": 2, "observacoes": f"{l.codigo} (guarda de cliente)",
+            })
+            if s == 201:
+                cl[l.codigo] = r["id"]
+            else:
+                self.nota(f"Não consegui registar o sémen do cliente {l.codigo}: erro {s}", corpo=r)
+        self.memoria["clientes_por_registar"] = []
+        ficam = []
+        for codigo, q, motivo in self.memoria.get("levantamentos", []):
+            lid = cl.get(codigo)
+            if not lid:
+                ficam.append((codigo, q, motivo))  # ainda nem está na app
+                continue
+            s, lote = self.api("GET", f"/stock/lotes/{lid}")
+            disp = (lote or {}).get("existencia_atual", 0) if s == 200 else 0
+            q = min(q, disp)
+            if q <= 0:
+                continue
+            dia_real = self.memoria.setdefault("dia_levantamento", {}).get((codigo, q, motivo))
+            s, r = self.api("POST", "/transferencias", json={
+                "tipo": "externa", "destinatario": self.mundo.lotes_cliente[codigo].dono, "motivo": "Devolução",
+                "observacoes": f"Levantado pelo dono ({motivo})", "linhas": [{"stock_id": lid, "quantidade": q}],
+                **({"data": rel.real(dia_real).isoformat()} if dia_real and dia_real < rel.hoje else {}),
+            })
+            if s not in (200, 201):
+                self.nota(f"Não consegui registar o levantamento de {codigo}: erro {s}", corpo=r)
+        self.memoria["levantamentos"] = ficam
 
     # ── registo de lotes ─────────────────────────────────────────────────
     def _registar(self, rel, l):

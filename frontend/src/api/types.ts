@@ -28,6 +28,8 @@ export interface Owner {
   morada: string | null;
   codigo_postal: string | null;
   cidade: string | null;
+  /** A própria clínica: não se fatura (sémen próprio, éguas da casa). */
+  da_clinica?: boolean;
 }
 
 export type OwnerInput = Omit<Owner, "id" | "ativo">;

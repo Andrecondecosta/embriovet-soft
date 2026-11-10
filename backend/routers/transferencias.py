@@ -43,7 +43,7 @@ from modules.repositories.transfer_repo import DestinoJaUsado, reverter_operacao
 router = APIRouter(prefix="/api/transferencias", tags=["transferencias"])
 
 TipoOp = Literal["transfer_internal", "transfer_external", "insemination"]
-MOTIVOS = ("Venda", "Doação", "Exportação", "Outro")
+MOTIVOS = ("Venda", "Doação", "Exportação", "Devolução", "Outro")
 
 
 def _erro(http_status: int, code: str, **params):
@@ -70,8 +70,11 @@ class OperacaoIn(BaseModel):
     destino_id: int | None = None
     nova_localizacao: NovaLocalizacao | None = None
     destinatario: str | None = None
-    motivo: Literal["Venda", "Doação", "Exportação", "Outro"] = "Venda"
+    motivo: Literal["Venda", "Doação", "Exportação", "Devolução", "Outro"] = "Venda"
     observacoes: str | None = None
+    # Saída para fora: dia em que as palhetas saíram de facto (ex.: o dono
+    # veio buscá-las no sábado e regista-se na segunda). Vazio = hoje.
+    data: date | None = None
 
     @field_validator("destinatario", "observacoes", mode="before")
     @classmethod
@@ -101,14 +104,14 @@ def _carregar_lotes(ids: list[int]) -> dict[int, dict]:
             cur.execute(
                 """
                 SELECT e.id, e.dono_id, d.nome, e.existencia_atual,
-                       COALESCE(e.origem_externa, e.data_embriovet, 'Lote #' || e.id)
+                       COALESCE(e.origem_externa, e.data_embriovet, 'Lote #' || e.id), e.data_criacao::date
                 FROM estoque_dono e LEFT JOIN dono d ON d.id = e.dono_id
                 WHERE e.id = ANY(%s)
                 """,
                 (ids,),
             )
             return {
-                r[0]: {"dono_id": r[1], "dono": r[2], "existencia": int(r[3] or 0), "ref": r[4]}
+                r[0]: {"dono_id": r[1], "dono": r[2], "existencia": int(r[3] or 0), "ref": r[4], "criado": r[5]}
                 for r in cur.fetchall()
             }
 
@@ -118,6 +121,13 @@ def _validar(body: OperacaoIn, devolvido: dict[int, int] | None = None) -> dict[
     que está a ser editada (contam como disponíveis)."""
     devolvido = devolvido or {}
     lotes = _carregar_lotes([l.stock_id for l in body.linhas])
+    if body.data is not None:
+        if body.tipo != "externa":
+            raise _erro(422, "web.transfer.error.date_external_only")
+        if body.data > date.today():
+            raise _erro(422, "web.transfer.error.date_future")
+        if any(lt["criado"] and body.data < lt["criado"] for lt in lotes.values()):
+            raise _erro(422, "web.transfer.error.date_before_lot")
     for l in body.linhas:
         lote = lotes.get(l.stock_id)
         if not lote:
@@ -173,7 +183,22 @@ def criar(body: OperacaoIn, user: dict = Depends(get_current_user)):
     lotes = _validar(body)
     op_id = str(uuid.uuid4())
     _executar(body, lotes, op_id, user["username"])
+    _datar(body, op_id)
     return {"operation_id": op_id}
+
+
+def _datar(body: OperacaoIn, op_id: str) -> None:
+    """Saída para fora com o dia verdadeiro (a hora fica a do registo)."""
+    if body.tipo != "externa" or body.data is None or body.data == date.today():
+        return
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE transferencias_externas SET data_transferencia = %s::date + data_transferencia::time
+                   WHERE operation_id = %s::uuid""",
+                (body.data, op_id),
+            )
+        conn.commit()
 
 
 # ── Editar ────────────────────────────────────────────────────────────────
@@ -289,6 +314,7 @@ def editar_operacao(
 
     op_id = op_antigo or str(uuid.uuid4())
     _executar(body, lotes, op_id, user["username"])
+    _datar(body, op_id)
 
     tabela = "transferencias" if body.tipo == "interna" else "transferencias_externas"
     with get_connection() as conn:

@@ -1,7 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 
-export type TipoFat = "estadia" | "armazenamento";
+export type TipoFat = "estadia" | "armazenamento" | "palhetas_recebidas" | "palhetas_gastas";
+/** Filtro da lista: as duas espécies de palhetas usadas vão juntas. */
+export type FiltroTipo = "estadia" | "armazenamento" | "palhetas";
+export const ePalhetas = (t: TipoFat) => t === "palhetas_recebidas" || t === "palhetas_gastas";
 
 /** Uma linha por faturar: uma estadia (dias) ou um lote (palhetas × dias). */
 export interface PorFaturar {
@@ -56,7 +59,7 @@ export interface FiltroFat {
 const params = (o: object) =>
   new URLSearchParams(Object.entries(o as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
 
-export const usePorFaturar = (f: FiltroFat & { tipo: TipoFat | null }) =>
+export const usePorFaturar = (f: FiltroFat & { tipo: FiltroTipo | null }) =>
   useQuery({
     queryKey: ["faturacao", "por-faturar", f],
     placeholderData: keepPreviousData,
@@ -128,6 +131,8 @@ export interface CelulaAno {
   dias_semen: number;
   lotes: number;
   pd: number;
+  /** Palhetas de sémen de clientes usadas, por faturar. */
+  palhetas: number;
   /** Último dia faturado neste ano (ou null). */
   faturado_ate: string | null;
 }
@@ -156,6 +161,8 @@ export interface Atraso {
   dono_nome: string | null;
   estadia: AtrasoTipo | null;
   armazenamento: AtrasoTipo | null;
+  /** Palhetas de sémen de clientes usadas (em "dias" vem o n.º de palhetas). */
+  palhetas: AtrasoTipo | null;
 }
 
 export const useAtraso = (ativo = true) =>

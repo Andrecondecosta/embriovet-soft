@@ -262,3 +262,12 @@ def test_visualizador_so_consulta(client, utilizador):
     assert client.post("/api/transferencias/anular", json={}).status_code == 403
     # Pedidos só de leitura continuam a dar.
     assert client.post("/api/trabalho/gerar").status_code == 200
+
+
+def test_proprietario_da_clinica(client):
+    nome = f"{PREFIXO}clinica{uuid.uuid4().hex[:6]}"
+    r = client.post("/api/owners", json={"nome": nome, "da_clinica": True})
+    assert r.status_code == 201 and r.json()["da_clinica"] is True
+    oid = r.json()["id"]
+    r = client.put(f"/api/owners/{oid}", json={"nome": nome})
+    assert r.status_code == 200 and r.json()["da_clinica"] is False

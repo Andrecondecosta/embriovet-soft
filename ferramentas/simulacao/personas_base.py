@@ -28,7 +28,7 @@ class Rececao(Pessoa):
         cache = self.memoria.setdefault("donos", {})
         if nome not in cache:
             s, r = self.api("GET", "/owners", params={"q": nome, "por_pagina": 50})
-            achado = next((o for o in (r or {}).get("itens", []) if o.get("nome") == nome), None) if s == 200 else None
+            achado = next((o for o in (r or {}).get("items", []) if o.get("nome") == nome), None) if s == 200 else None
             if achado:
                 cache[nome] = achado["id"]
             else:

@@ -135,6 +135,6 @@ export const usePendentesSaida = (id: number | null) =>
   });
 
 export const useRegistarSaida = () =>
-  useEstadiaMutation(({ id, ...d }: { id: number; data_saida: string; estado: EstadoSaida; observacoes?: string }) =>
+  useEstadiaMutation(({ id, ...d }: { id: number; data_saida: string; estado: EstadoSaida; observacoes?: string; confirmar?: boolean }) =>
     api<{ ok: boolean }>(`/estadias/${id}/saida`, "POST", d),
   );

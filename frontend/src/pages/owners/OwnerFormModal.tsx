@@ -1,5 +1,5 @@
-import { Col, Form, Input, Modal, Row } from "antd";
-import { Form as MForm, Input as MInput, TextArea } from "antd-mobile";
+import { Checkbox, Col, Form, Input, Modal, Row } from "antd";
+import { Checkbox as MCheckbox, Form as MForm, Input as MInput, TextArea } from "antd-mobile";
 
 import type { Owner, OwnerInput } from "../../api/types";
 import { useT } from "../../i18n/I18n";
@@ -36,7 +36,10 @@ function useGuardarOwner({ owner, onClose, onSaved }: Props) {
   return { guardar, aGuardar: criar.isPending || editar.isPending };
 }
 
-const valoresIniciais = (owner: Owner | null) => Object.fromEntries(CAMPOS.map((k) => [k, owner?.[k] ?? ""]));
+const valoresIniciais = (owner: Owner | null) => ({
+  ...Object.fromEntries(CAMPOS.map((k) => [k, owner?.[k] ?? ""])),
+  da_clinica: !!owner?.da_clinica,
+});
 
 /** Criar (owner = null) ou editar um proprietário. O formulário só existe
  *  enquanto o modal está aberto, por isso começa sempre com os dados certos. */
@@ -89,6 +92,9 @@ function OwnerFormMobile(props: Props) {
         </MForm.Item>
         <MForm.Item name="cidade" label={t("label.city")}>
           <MInput clearable />
+        </MForm.Item>
+        <MForm.Item name="da_clinica" valuePropName="checked" description={t("web.owners.da_clinica_help")}>
+          <MCheckbox>{t("web.owners.da_clinica")}</MCheckbox>
         </MForm.Item>
       </MForm>
     </FolhaEcraInteiro>
@@ -164,6 +170,11 @@ function OwnerFormDesktop(props: Props) {
           <Col xs={24} sm={12}>
             <Form.Item name="codigo_postal" label={t("label.postal_code")}>
               <Input />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item name="da_clinica" valuePropName="checked" extra={t("web.owners.da_clinica_help")}>
+              <Checkbox>{t("web.owners.da_clinica")}</Checkbox>
             </Form.Item>
           </Col>
         </Row>

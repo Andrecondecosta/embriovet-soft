@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 
 export type TipoOp = "transfer_internal" | "transfer_external" | "insemination";
-export type Motivo = "Venda" | "Doação" | "Exportação" | "Outro";
+export type Motivo = "Venda" | "Doação" | "Exportação" | "Devolução" | "Outro";
 export const MOTIVOS: { value: Motivo; label: string }[] = [
   { value: "Venda", label: "stock.type.sale" },
   { value: "Doação", label: "stock.type.donation" },
   { value: "Exportação", label: "stock.type.export" },
+  { value: "Devolução", label: "web.transfer.reason_return" },
   { value: "Outro", label: "stock.type.other" },
 ];
 
@@ -17,6 +18,8 @@ export interface OperacaoIn {
   nova_localizacao?: { contentor_id: number; canister: number; andar: number } | null;
   destinatario?: string;
   motivo?: Motivo;
+  /** Saída para fora: dia em que saíram de facto (vazio = hoje). */
+  data?: string;
   observacoes?: string;
 }
 

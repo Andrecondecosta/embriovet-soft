@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dayjs, { type Dayjs } from "dayjs";
-import { Alert, Button, Card, DatePicker, Flex, Input, Modal, Space, Spin, Table, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Flex,
+  Input,
+  Modal,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
 import { FilePdfOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
@@ -16,10 +29,21 @@ import { useT } from "../../i18n/I18n";
 import { useBrand } from "../../components/Brand";
 import { useUser } from "../../components/User";
 import { useIsMobile } from "../../components/responsive";
-import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
+import {
+  confirmar,
+  notifySuccess,
+  useNotifyError,
+} from "../../components/errors";
 import { DataCampo, FolhaEcraInteiro } from "../../components/mobile";
 import { dataCurta } from "../../components/csv";
-import { numerosUsados, useFaturar, useResumo, type DonoFat, type Movimento, type PorFaturar } from "./api";
+import {
+  numerosUsados,
+  useFaturar,
+  useResumo,
+  type DonoFat,
+  type Movimento,
+  type PorFaturar,
+} from "./api";
 
 const ISO = "YYYY-MM-DD";
 
@@ -28,10 +52,15 @@ type LinhaResumo = PorFaturar & { k: string; original: PorFaturar };
 const chaveLinha = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
 
 /** Linha que começa no dia de entrada na app de um lote nunca faturado. */
-const primeiraDoLote = (l: PorFaturar) => l.tipo === "armazenamento" && !!l.pode_mudar_inicio && l.inicio === l.entrada_app;
+const primeiraDoLote = (l: PorFaturar) =>
+  l.tipo === "armazenamento" &&
+  !!l.pode_mudar_inicio &&
+  l.inicio === l.entrada_app;
 /** Linha (já ajustada ao período) que começa antes da entrada na app. */
-const antesDaEntrada = (l: PorFaturar) => l.tipo === "armazenamento" && !!l.entrada_app && l.inicio < l.entrada_app;
-const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
+const antesDaEntrada = (l: PorFaturar) =>
+  l.tipo === "armazenamento" && !!l.entrada_app && l.inicio < l.entrada_app;
+const nDias = (l: { inicio: string; fim: string }) =>
+  dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
 
 interface Grupo {
   chave: string;
@@ -41,6 +70,7 @@ interface Grupo {
   movimentos: { lote: string; m: Movimento }[];
   dias: number;
   ds: number;
+  pal: number;
 }
 
 function useTextosResumo() {
@@ -48,10 +78,21 @@ function useTextosResumo() {
   return {
     mov: (m: Movimento) =>
       `${dataCurta(m.data)}: ${t("web.billing.mov.out", { count: m.quantidade })} — ${t(`web.billing.mov.${m.tipo}`, { detalhe: m.detalhe ?? "—" })}`,
-    dias: (l: { inicio: string; fim: string }) => t("web.billing.days", { count: nDias(l) }),
-    palhetas: (l: PorFaturar) => (l.tipo === "armazenamento" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
+    dias: (l: { inicio: string; fim: string; tipo?: string }) =>
+      l.tipo === "palhetas_recebidas" || l.tipo === "palhetas_gastas"
+        ? ""
+        : t("web.billing.days", { count: nDias(l) }),
+    palhetas: (l: PorFaturar) =>
+      l.tipo !== "estadia" && l.palhetas != null
+        ? t("web.billing.straws", { count: l.palhetas })
+        : "",
     tipo: (l: PorFaturar) => t(`web.billing.type.${l.tipo}`),
-    morada: (d?: DonoFat) => (d ? [d.morada, [d.codigo_postal, d.cidade].filter(Boolean).join(" ")].filter(Boolean).join(", ") : ""),
+    morada: (d?: DonoFat) =>
+      d
+        ? [d.morada, [d.codigo_postal, d.cidade].filter(Boolean).join(" ")]
+            .filter(Boolean)
+            .join(", ")
+        : "",
   };
 }
 
@@ -84,8 +125,14 @@ export function ResumoFaturar({
   // (ex.: faturar só até ao fim do mês passado). O resto fica por faturar.
   const limites = useMemo<[Dayjs, Dayjs] | null>(() => {
     if (!selecionadas.length) return null;
-    const ini = selecionadas.reduce((m, l) => (l.inicio < m ? l.inicio : m), selecionadas[0].inicio);
-    const fim = selecionadas.reduce((m, l) => (l.fim > m ? l.fim : m), selecionadas[0].fim);
+    const ini = selecionadas.reduce(
+      (m, l) => (l.inicio < m ? l.inicio : m),
+      selecionadas[0].inicio,
+    );
+    const fim = selecionadas.reduce(
+      (m, l) => (l.fim > m ? l.fim : m),
+      selecionadas[0].fim,
+    );
     return [dayjs(ini), dayjs(fim)];
   }, [selecionadas]);
   const [periodo, setPeriodo] = useState<[Dayjs, Dayjs] | null>(null);
@@ -96,7 +143,9 @@ export function ResumoFaturar({
   const temPrimeira = selecionadas.some(primeiraDoLote);
   // Datas mudadas numa linha só (clicando nas datas dessa linha). Mudar o
   // período geral volta a aplicá-lo a todas.
-  const [porLinha, setPorLinha] = useState<Record<string, [string, string]>>({});
+  const [porLinha, setPorLinha] = useState<Record<string, [string, string]>>(
+    {},
+  );
   const mudarPeriodo = (p: [Dayjs, Dayjs]) => {
     setPeriodo(p);
     setPorLinha({});
@@ -109,12 +158,27 @@ export function ResumoFaturar({
       if (porLinha[k]) [inicio, fim] = porLinha[k];
       else if (periodo) {
         const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
-        inicio = primeiraDoLote(l) && de < l.inicio ? de : l.inicio > de ? l.inicio : de;
+        inicio =
+          primeiraDoLote(l) && de < l.inicio
+            ? de
+            : l.inicio > de
+              ? l.inicio
+              : de;
         fim = l.fim < ate ? l.fim : ate;
       }
       if (inicio > fim) return [];
       const dias = nDias({ inicio, fim });
-      return [{ ...l, k, original: l, inicio, fim, dias, quantidade: l.tipo === "estadia" ? dias : dias * (l.palhetas ?? 0) }];
+      return [
+        {
+          ...l,
+          k,
+          original: l,
+          inicio,
+          fim,
+          dias,
+          quantidade: l.tipo === "estadia" ? dias : dias * (l.palhetas ?? 0),
+        },
+      ];
     });
   }, [selecionadas, periodo, porLinha]);
   const mudarLinha = (l: LinhaResumo, v: [Dayjs, Dayjs]) =>
@@ -122,7 +186,9 @@ export function ResumoFaturar({
   /** Limites de uma linha: só encurta; na primeira fatura de um lote o início
    *  pode ir para antes da entrada na app. */
   const foraDaLinha = (l: LinhaResumo) => (d: Dayjs) =>
-    d.isAfter(dayjs(l.original.fim), "day") || (!primeiraDoLote(l.original) && d.isBefore(dayjs(l.original.inicio), "day"));
+    d.isAfter(dayjs(l.original.fim), "day") ||
+    (!primeiraDoLote(l.original) &&
+      d.isBefore(dayjs(l.original.inicio), "day"));
 
   useEffect(() => {
     if (!aberto) return;
@@ -138,17 +204,48 @@ export function ResumoFaturar({
 
   const atalhosAte = limites
     ? [
-        { label: t("web.billing.until_last_month"), data: dayjs().subtract(1, "month").endOf("month") },
-        { label: t("web.billing.until_end_of", { ano: dayjs().year() - 1 }), data: dayjs(`${dayjs().year() - 1}-12-31`) },
+        {
+          label: t("web.billing.until_last_month"),
+          data: dayjs().subtract(1, "month").endOf("month"),
+        },
+        {
+          label: t("web.billing.until_end_of", { ano: dayjs().year() - 1 }),
+          data: dayjs(`${dayjs().year() - 1}-12-31`),
+        },
       ]
-        .filter((x) => !x.data.isBefore(limites[0], "day") && x.data.isBefore(limites[1], "day"))
-        .map((x) => ({ label: x.label, value: [limites[0], x.data] as [Dayjs, Dayjs] }))
+        .filter(
+          (x) =>
+            !x.data.isBefore(limites[0], "day") &&
+            x.data.isBefore(limites[1], "day"),
+        )
+        .map((x) => ({
+          label: x.label,
+          value: [limites[0], x.data] as [Dayjs, Dayjs],
+        }))
     : [];
   const foraDosLimites = (d: Dayjs) =>
-    !!limites && (d.isAfter(limites[1], "day") || (!temPrimeira && d.isBefore(limites[0], "day")));
+    !!limites &&
+    (d.isAfter(limites[1], "day") ||
+      (!temPrimeira && d.isBefore(limites[0], "day")));
 
-  const refs = useMemo(() => linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })), [linhas]);
-  const donoIds = useMemo(() => [...new Set(linhas.map((l) => l.dono_id).filter((x): x is number => x != null))], [linhas]);
+  const refs = useMemo(
+    () =>
+      linhas.map((l) => ({
+        tipo: l.tipo,
+        ref_id: l.ref_id,
+        inicio: l.inicio,
+        fim: l.fim,
+      })),
+    [linhas],
+  );
+  const donoIds = useMemo(
+    () => [
+      ...new Set(
+        linhas.map((l) => l.dono_id).filter((x): x is number => x != null),
+      ),
+    ],
+    [linhas],
+  );
   const q = useResumo(refs, donoIds, aberto);
   const donos = new Map((q.data?.donos ?? []).map((d) => [d.id, d]));
 
@@ -159,11 +256,21 @@ export function ResumoFaturar({
       const g =
         porDono.get(chave) ??
         porDono
-          .set(chave, { chave, dono_id: l.dono_id, nome: l.dono_nome ?? t("web.billing.no_owner"), linhas: [], movimentos: [], dias: 0, ds: 0 })
+          .set(chave, {
+            chave,
+            dono_id: l.dono_id,
+            nome: l.dono_nome ?? t("web.billing.no_owner"),
+            linhas: [],
+            movimentos: [],
+            dias: 0,
+            ds: 0,
+            pal: 0,
+          })
           .get(chave)!;
       g.linhas.push(l);
       if (l.tipo === "estadia") g.dias += nDias(l);
-      else g.ds += nDias(l);
+      else if (l.tipo === "armazenamento") g.ds += nDias(l);
+      else g.pal += l.quantidade;
     }
     // Cada saída uma vez (o mesmo lote pode ter vários troços pedidos).
     const vistos = new Set<string>();
@@ -171,12 +278,24 @@ export function ResumoFaturar({
       const k = `${m.ref_id}|${m.data}|${m.tipo}|${m.detalhe}|${m.quantidade}`;
       if (vistos.has(k)) continue;
       vistos.add(k);
-      const l = linhas.find((x) => x.tipo === "armazenamento" && x.ref_id === m.ref_id);
-      if (l) porDono.get(String(l.dono_id ?? "sem"))?.movimentos.push({ lote: l.descricao, m });
+      const l = linhas.find(
+        (x) => x.tipo === "armazenamento" && x.ref_id === m.ref_id,
+      );
+      if (l)
+        porDono
+          .get(String(l.dono_id ?? "sem"))
+          ?.movimentos.push({ lote: l.descricao, m });
     }
     for (const g of porDono.values()) {
-      g.linhas.sort((a, b) => a.descricao.localeCompare(b.descricao) || a.inicio.localeCompare(b.inicio));
-      g.movimentos.sort((a, b) => a.lote.localeCompare(b.lote) || a.m.data.localeCompare(b.m.data));
+      g.linhas.sort(
+        (a, b) =>
+          a.descricao.localeCompare(b.descricao) ||
+          a.inicio.localeCompare(b.inicio),
+      );
+      g.movimentos.sort(
+        (a, b) =>
+          a.lote.localeCompare(b.lote) || a.m.data.localeCompare(b.m.data),
+      );
     }
     return [...porDono.values()].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [linhas, q.data, t]);
@@ -184,18 +303,32 @@ export function ResumoFaturar({
   /** Número repetido (já usado noutro proprietário, ou escrito para dois
    *  nesta janela): normalmente é engano de escrita. Avisa e pergunta. */
   const repetidos = async (): Promise<string[]> => {
-    const escritos = grupos.map((g) => ({ g, n: (numeros[g.chave] ?? "").trim() })).filter((x) => x.n);
+    const escritos = grupos
+      .map((g) => ({ g, n: (numeros[g.chave] ?? "").trim() }))
+      .filter((x) => x.n);
     if (!escritos.length) return [];
     const norm = (n: string) => n.toLowerCase();
     const avisos: string[] = [];
     const vezes = new Map<string, number>();
-    for (const { n } of escritos) vezes.set(norm(n), (vezes.get(norm(n)) ?? 0) + 1);
-    for (const [n, k] of vezes) if (k > 1) avisos.push(t("web.billing.dup_same", { numero: escritos.find((x) => norm(x.n) === n)!.n }));
+    for (const { n } of escritos)
+      vezes.set(norm(n), (vezes.get(norm(n)) ?? 0) + 1);
+    for (const [n, k] of vezes)
+      if (k > 1)
+        avisos.push(
+          t("web.billing.dup_same", {
+            numero: escritos.find((x) => norm(x.n) === n)!.n,
+          }),
+        );
     try {
       for (const u of await numerosUsados(escritos.map((x) => x.n))) {
         const meu = escritos.find((x) => norm(x.n) === norm(u.fatura_numero));
         if (meu && meu.g.dono_id !== u.dono_id)
-          avisos.push(t("web.billing.dup_used", { numero: u.fatura_numero, dono: u.dono_nome ?? t("web.billing.no_owner") }));
+          avisos.push(
+            t("web.billing.dup_used", {
+              numero: u.fatura_numero,
+              dono: u.dono_nome ?? t("web.billing.no_owner"),
+            }),
+          );
       }
     } catch {
       // Sem a verificação não se impede a gravação: é só um aviso.
@@ -235,7 +368,8 @@ export function ResumoFaturar({
   const guardar = async () => {
     setErro(null);
     if (!linhas.length) return setErro(t("web.billing.nothing_in_period"));
-    if (grupos.some((g) => !numeros[g.chave]?.trim())) return setErro(t("web.billing.invoice_each"));
+    if (grupos.some((g) => !numeros[g.chave]?.trim()))
+      return setErro(t("web.billing.invoice_each"));
     const avisos = await repetidos();
     if (avisos.length && !(await perguntar(avisos))) return;
     try {
@@ -245,7 +379,12 @@ export function ResumoFaturar({
           fatura_numero: numeros[g.chave].trim(),
           fatura_data: data.format(ISO),
           observacoes: obs.trim() || undefined,
-          linhas: g.linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })),
+          linhas: g.linhas.map((l) => ({
+            tipo: l.tipo,
+            ref_id: l.ref_id,
+            inicio: l.inicio,
+            fim: l.fim,
+          })),
         })),
       });
       notifySuccess(t("web.billing.marked", { n: r.linhas }));
@@ -253,15 +392,24 @@ export function ResumoFaturar({
     } catch (err) {
       notifyError(err);
       // Já faturado entretanto: a lista atualiza e escolhe-se de novo.
-      if (err instanceof ApiError && err.code === "web.billing.error.changed") onClose(true);
+      if (err instanceof ApiError && err.code === "web.billing.error.changed")
+        onClose(true);
     }
   };
 
   const pdf = () => setImprimir(true);
-  const impressao = imprimir && <FolhaImpressao grupos={grupos} donos={donos} onFim={() => setImprimir(false)} />;
-  const totalTexto = (g: Grupo) => t("web.billing.total_owner", { dias: g.dias, ds: g.ds });
+  const impressao = imprimir && (
+    <FolhaImpressao
+      grupos={grupos}
+      donos={donos}
+      onFim={() => setImprimir(false)}
+    />
+  );
+  const totalTexto = (g: Grupo) =>
+    t("web.billing.total_owner", { dias: g.dias, ds: g.ds, pal: g.pal });
   const numero = (g: Grupo) => numeros[g.chave] ?? "";
-  const mudarNumero = (g: Grupo, v: string) => setNumeros((n) => ({ ...n, [g.chave]: v }));
+  const mudarNumero = (g: Grupo, v: string) =>
+    setNumeros((n) => ({ ...n, [g.chave]: v }));
 
   if (isMobile)
     return (
@@ -274,7 +422,9 @@ export function ResumoFaturar({
           okText={podeEditar ? t("web.billing.mark") : t("web.billing.pdf")}
           loading={faturar.isPending}
         >
-          <div style={{ padding: "8px 12px", color: "#999", fontSize: 13 }}>{t("web.billing.review_help")}</div>
+          <div style={{ padding: "8px 12px", color: "#999", fontSize: 13 }}>
+            {t("web.billing.review_help")}
+          </div>
           {periodo && limites && (
             <List header={t("web.billing.period_to_bill")}>
               <DataMobile
@@ -299,7 +449,15 @@ export function ResumoFaturar({
               header={
                 <div>
                   <b>{g.nome}</b>
-                  {donos.get(g.dono_id ?? -1)?.nif && <span> · {t("web.billing.nif", { nif: donos.get(g.dono_id!)!.nif! })}</span>}
+                  {donos.get(g.dono_id ?? -1)?.nif && (
+                    <span>
+                      {" "}
+                      ·{" "}
+                      {t("web.billing.nif", {
+                        nif: donos.get(g.dono_id!)!.nif!,
+                      })}
+                    </span>
+                  )}
                   <div style={{ fontSize: 12 }}>{totalTexto(g)}</div>
                 </div>
               }
@@ -308,9 +466,15 @@ export function ResumoFaturar({
                 <div key={l.k}>
                   <List.Item
                     description={`${dataCurta(l.inicio)} – ${dataCurta(l.fim)}`}
-                    extra={[tx.palhetas(l), tx.dias(l)].filter(Boolean).join(" · ")}
+                    extra={[tx.palhetas(l), tx.dias(l)]
+                      .filter(Boolean)
+                      .join(" · ")}
                     arrow
-                    onClick={() => setEditar(editar === l.k ? null : l.k)}
+                    onClick={
+                      l.tipo === "estadia" || l.tipo === "armazenamento"
+                        ? () => setEditar(editar === l.k ? null : l.k)
+                        : undefined
+                    }
                   >
                     {l.descricao}
                   </List.Item>
@@ -319,7 +483,11 @@ export function ResumoFaturar({
                       <DataMobile
                         titulo={t("web.billing.from")}
                         data={dayjs(l.inicio)}
-                        min={primeiraDoLote(l.original) ? undefined : dayjs(l.original.inicio)}
+                        min={
+                          primeiraDoLote(l.original)
+                            ? undefined
+                            : dayjs(l.original.inicio)
+                        }
                         max={dayjs(l.fim)}
                         onChange={(d) => mudarLinha(l, [d, dayjs(l.fim)])}
                       />
@@ -335,26 +503,43 @@ export function ResumoFaturar({
                 </div>
               ))}
               {g.movimentos.map(({ lote, m }, i) => (
-                <List.Item key={`m${i}`} style={{ fontSize: 12, color: "#888" }}>
+                <List.Item
+                  key={`m${i}`}
+                  style={{ fontSize: 12, color: "#888" }}
+                >
                   {lote} — {tx.mov(m)}
                 </List.Item>
               ))}
               {podeEditar && (
                 <List.Item title={t("web.billing.invoice_number")}>
-                  <MInput clearable value={numero(g)} onChange={(v) => mudarNumero(g, v)} />
+                  <MInput
+                    clearable
+                    value={numero(g)}
+                    onChange={(v) => mudarNumero(g, v)}
+                  />
                 </List.Item>
               )}
             </List>
           ))}
           {podeEditar && (
             <List>
-              <DataMobile titulo={t("web.billing.invoice_date")} data={data} onChange={setData} />
+              <DataMobile
+                titulo={t("web.billing.invoice_date")}
+                data={data}
+                onChange={setData}
+              />
               <List.Item title={t("web.billing.notes")}>
-                <TextArea value={obs} onChange={setObs} autoSize={{ minRows: 1 }} />
+                <TextArea
+                  value={obs}
+                  onChange={setObs}
+                  autoSize={{ minRows: 1 }}
+                />
               </List.Item>
             </List>
           )}
-          {erro && <div style={{ color: "#ff3141", padding: "8px 12px" }}>{erro}</div>}
+          {erro && (
+            <div style={{ color: "#ff3141", padding: "8px 12px" }}>{erro}</div>
+          )}
           <div style={{ padding: 12 }}>
             <MButton block onClick={pdf} disabled={q.isPending}>
               {t("web.billing.pdf")}
@@ -378,20 +563,39 @@ export function ResumoFaturar({
             <Space wrap>
               {podeEditar ? (
                 <>
-                  <Typography.Text type="secondary">{t("web.billing.invoice_date")}</Typography.Text>
-                  <DatePicker format="DD/MM/YYYY" allowClear={false} value={data} onChange={(v) => v && setData(v)} />
+                  <Typography.Text type="secondary">
+                    {t("web.billing.invoice_date")}
+                  </Typography.Text>
+                  <DatePicker
+                    format="DD/MM/YYYY"
+                    allowClear={false}
+                    value={data}
+                    onChange={(v) => v && setData(v)}
+                  />
                 </>
               ) : (
-                <Typography.Text type="secondary">{t("web.billing.view_only")}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {t("web.billing.view_only")}
+                </Typography.Text>
               )}
             </Space>
             <Space>
-              <Button onClick={() => onClose(false)}>{t("web.common.cancel")}</Button>
-              <Button icon={<FilePdfOutlined />} onClick={pdf} disabled={q.isPending}>
+              <Button onClick={() => onClose(false)}>
+                {t("web.common.cancel")}
+              </Button>
+              <Button
+                icon={<FilePdfOutlined />}
+                onClick={pdf}
+                disabled={q.isPending}
+              >
                 {t("web.billing.pdf")}
               </Button>
               {podeEditar && (
-                <Button type="primary" loading={faturar.isPending} onClick={guardar}>
+                <Button
+                  type="primary"
+                  loading={faturar.isPending}
+                  onClick={guardar}
+                >
                   {t("web.billing.mark")}
                 </Button>
               )}
@@ -399,10 +603,14 @@ export function ResumoFaturar({
           </Flex>
         }
       >
-        <Typography.Paragraph type="secondary">{t("web.billing.review_help")}</Typography.Paragraph>
+        <Typography.Paragraph type="secondary">
+          {t("web.billing.review_help")}
+        </Typography.Paragraph>
         {periodo && (
           <Space wrap style={{ marginBottom: 12 }}>
-            <Typography.Text strong>{t("web.billing.period_to_bill")}</Typography.Text>
+            <Typography.Text strong>
+              {t("web.billing.period_to_bill")}
+            </Typography.Text>
             <DatePicker.RangePicker
               format="DD/MM/YYYY"
               allowClear={false}
@@ -412,7 +620,11 @@ export function ResumoFaturar({
               onChange={(v) => v?.[0] && v[1] && mudarPeriodo([v[0], v[1]])}
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t(temPrimeira ? "web.billing.period_help_first" : "web.billing.period_help")}
+              {t(
+                temPrimeira
+                  ? "web.billing.period_help_first"
+                  : "web.billing.period_help",
+              )}
             </Typography.Text>
           </Space>
         )}
@@ -427,7 +639,12 @@ export function ResumoFaturar({
                 title={
                   <>
                     {g.nome}
-                    {d?.nif && <Typography.Text type="secondary"> · {t("web.billing.nif", { nif: d.nif })}</Typography.Text>}
+                    {d?.nif && (
+                      <Typography.Text type="secondary">
+                        {" "}
+                        · {t("web.billing.nif", { nif: d.nif })}
+                      </Typography.Text>
+                    )}
                   </>
                 }
                 extra={
@@ -453,11 +670,23 @@ export function ResumoFaturar({
                       title: t("web.billing.col.what"),
                       render: (_, l) => (
                         <>
-                          <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l)}</Tag>
+                          <Tag
+                            color={
+                              l.tipo === "estadia"
+                                ? "blue"
+                                : l.tipo === "armazenamento"
+                                  ? "purple"
+                                  : "cyan"
+                            }
+                          >
+                            {tx.tipo(l)}
+                          </Tag>
                           {l.descricao}
                           {antesDaEntrada(l) && (
                             <Tag color="blue" style={{ marginLeft: 6 }}>
-                              {t("web.billing.before_entry", { data: dataCurta(l.entrada_app!) })}
+                              {t("web.billing.before_entry", {
+                                data: dataCurta(l.entrada_app!),
+                              })}
                             </Tag>
                           )}
                         </>
@@ -466,23 +695,44 @@ export function ResumoFaturar({
                     {
                       title: t("web.billing.col.period"),
                       width: 250,
-                      render: (_, l) => (
-                        // Clicar nas datas muda só esta linha.
-                        <DatePicker.RangePicker
-                          size="small"
-                          variant="borderless"
-                          format="DD/MM/YYYY"
-                          allowClear={false}
-                          suffixIcon={null}
-                          value={[dayjs(l.inicio), dayjs(l.fim)]}
-                          disabledDate={foraDaLinha(l)}
-                          onChange={(v) => v?.[0] && v[1] && mudarLinha(l, [v[0], v[1]])}
-                          style={{ padding: 0, width: 200, ...(porLinha[l.k] ? { background: "#e6f4ff" } : {}) }}
-                        />
-                      ),
+                      render: (_, l) =>
+                        l.tipo === "palhetas_recebidas" ||
+                        l.tipo === "palhetas_gastas" ? (
+                          // Palhetas usadas: o dia da inseminação (não se muda).
+                          dataCurta(l.inicio)
+                        ) : (
+                          // Clicar nas datas muda só esta linha.
+                          <DatePicker.RangePicker
+                            size="small"
+                            variant="borderless"
+                            format="DD/MM/YYYY"
+                            allowClear={false}
+                            suffixIcon={null}
+                            value={[dayjs(l.inicio), dayjs(l.fim)]}
+                            disabledDate={foraDaLinha(l)}
+                            onChange={(v) =>
+                              v?.[0] && v[1] && mudarLinha(l, [v[0], v[1]])
+                            }
+                            style={{
+                              padding: 0,
+                              width: 200,
+                              ...(porLinha[l.k]
+                                ? { background: "#e6f4ff" }
+                                : {}),
+                            }}
+                          />
+                        ),
                     },
-                    { title: t("web.billing.col.straws"), align: "right", render: (_, l) => tx.palhetas(l) },
-                    { title: t("web.billing.col.days"), align: "right", render: (_, l) => tx.dias(l) },
+                    {
+                      title: t("web.billing.col.straws"),
+                      align: "right",
+                      render: (_, l) => tx.palhetas(l),
+                    },
+                    {
+                      title: t("web.billing.col.days"),
+                      align: "right",
+                      render: (_, l) => tx.dias(l),
+                    },
                   ]}
                 />
                 {g.movimentos.length > 0 && (
@@ -515,7 +765,9 @@ export function ResumoFaturar({
             style={{ marginTop: 12 }}
           />
         )}
-        {erro && <Alert type="error" showIcon title={erro} style={{ marginTop: 12 }} />}
+        {erro && (
+          <Alert type="error" showIcon title={erro} style={{ marginTop: 12 }} />
+        )}
       </Modal>
       {impressao}
     </>
@@ -551,11 +803,23 @@ function DataMobile({
 
 /** Folha para imprimir / guardar em PDF (o "Guardar como PDF" do browser):
  *  só ela aparece na impressão. Um proprietário por página. */
-function FolhaImpressao({ grupos, donos, onFim }: { grupos: Grupo[]; donos: Map<number, DonoFat>; onFim: () => void }) {
+function FolhaImpressao({
+  grupos,
+  donos,
+  onFim,
+}: {
+  grupos: Grupo[];
+  donos: Map<number, DonoFat>;
+  onFim: () => void;
+}) {
   const t = useT();
   const tx = useTextosResumo();
   const { company_name, logo_base64 } = useBrand();
-  const logo = logo_base64 && (logo_base64.startsWith("data:") ? logo_base64 : `data:image/png;base64,${logo_base64}`);
+  const logo =
+    logo_base64 &&
+    (logo_base64.startsWith("data:")
+      ? logo_base64
+      : `data:image/png;base64,${logo_base64}`);
 
   const fimRef = useRef(onFim);
   fimRef.current = onFim;
@@ -575,31 +839,77 @@ function FolhaImpressao({ grupos, donos, onFim }: { grupos: Grupo[]; donos: Map<
     };
   }, []);
 
-  const celula = { border: "1px solid #ccc", padding: "4px 6px", fontSize: 12 } as const;
+  const celula = {
+    border: "1px solid #ccc",
+    padding: "4px 6px",
+    fontSize: 12,
+  } as const;
   return createPortal(
     <div className="folha-impressao">
       {grupos.map((g, i) => {
         const d = donos.get(g.dono_id ?? -1);
         return (
-          <section key={g.chave} style={{ pageBreakBefore: i ? "always" : undefined, fontFamily: "sans-serif", color: "#000" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              {logo && <img src={logo} alt="" style={{ height: 48, objectFit: "contain" }} />}
+          <section
+            key={g.chave}
+            style={{
+              pageBreakBefore: i ? "always" : undefined,
+              fontFamily: "sans-serif",
+              color: "#000",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              {logo && (
+                <img
+                  src={logo}
+                  alt=""
+                  style={{ height: 48, objectFit: "contain" }}
+                />
+              )}
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{company_name}</div>
-                <div style={{ fontSize: 12 }}>{t("web.billing.print_title")}</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>
+                  {company_name}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {t("web.billing.print_title")}
+                </div>
               </div>
-              <div style={{ marginLeft: "auto", fontSize: 12 }}>{t("web.billing.print_date", { data: dayjs().format("DD/MM/YYYY") })}</div>
+              <div style={{ marginLeft: "auto", fontSize: 12 }}>
+                {t("web.billing.print_date", {
+                  data: dayjs().format("DD/MM/YYYY"),
+                })}
+              </div>
             </div>
             <div style={{ marginBottom: 12, fontSize: 13 }}>
-              <div style={{ fontWeight: 700 }}>{d?.nome_completo || g.nome}</div>
+              <div style={{ fontWeight: 700 }}>
+                {d?.nome_completo || g.nome}
+              </div>
               {d?.nif && <div>{t("web.billing.nif", { nif: d.nif })}</div>}
               {tx.morada(d) && <div>{tx.morada(d)}</div>}
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {[t("web.billing.col.what"), t("web.billing.col.period"), t("web.billing.col.straws"), t("web.billing.col.days")].map((h) => (
-                    <th key={h} style={{ ...celula, textAlign: "left", background: "#f2f2f2" }}>
+                  {[
+                    t("web.billing.col.what"),
+                    t("web.billing.col.period"),
+                    t("web.billing.col.straws"),
+                    t("web.billing.col.days"),
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        ...celula,
+                        textAlign: "left",
+                        background: "#f2f2f2",
+                      }}
+                    >
                       {h}
                     </th>
                   ))}
@@ -614,15 +924,21 @@ function FolhaImpressao({ grupos, donos, onFim }: { grupos: Grupo[]; donos: Map<
                     <td style={celula}>
                       {dataCurta(l.inicio)} – {dataCurta(l.fim)}
                     </td>
-                    <td style={{ ...celula, textAlign: "right" }}>{tx.palhetas(l)}</td>
-                    <td style={{ ...celula, textAlign: "right" }}>{tx.dias(l)}</td>
+                    <td style={{ ...celula, textAlign: "right" }}>
+                      {tx.palhetas(l)}
+                    </td>
+                    <td style={{ ...celula, textAlign: "right" }}>
+                      {tx.dias(l)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {g.movimentos.length > 0 && (
               <div style={{ marginTop: 12, fontSize: 12 }}>
-                <div style={{ fontWeight: 700 }}>{t("web.billing.changes")}</div>
+                <div style={{ fontWeight: 700 }}>
+                  {t("web.billing.changes")}
+                </div>
                 {g.movimentos.map(({ lote, m }, j) => (
                   <div key={j}>
                     {lote} — {tx.mov(m)}
@@ -630,8 +946,19 @@ function FolhaImpressao({ grupos, donos, onFim }: { grupos: Grupo[]; donos: Map<
                 ))}
               </div>
             )}
-            <div style={{ marginTop: 12, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
-              {t("web.billing.total_owner", { dias: g.dias, ds: g.ds })}
+            <div
+              style={{
+                marginTop: 12,
+                textAlign: "right",
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              {t("web.billing.total_owner", {
+                dias: g.dias,
+                ds: g.ds,
+                pal: g.pal,
+              })}
             </div>
           </section>
         );

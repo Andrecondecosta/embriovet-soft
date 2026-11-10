@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import {
@@ -23,7 +23,7 @@ import { AddOutline, LeftOutline, RightOutline } from "antd-mobile-icons";
 import type { Owner } from "../../../api/types";
 import { useT } from "../../../i18n/I18n";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../../components/errors";
-import { Cabecalho, PickerCampo, SeletorPesquisa } from "../../../components/mobile";
+import { Cabecalho, DataCampo, PickerCampo, SeletorPesquisa } from "../../../components/mobile";
 import { OwnerFormModal } from "../../owners/OwnerFormModal";
 import { localizacao, referencia, type Lote } from "../api";
 import { MOTIVOS, useAnular, type Motivo, type OpHistorico } from "./api";
@@ -200,6 +200,7 @@ export function TransferenciasMobile() {
                       opcoes={MOTIVOS.map((m) => ({ value: m.value, label: t(m.label) }))}
                     />
                   </List.Item>
+                  <DataSaida valor={x.dataSaida} mudar={x.setDataSaida} />
                   <List.Item prefix={t("label.notes")}>
                     <TextArea autoSize={{ minRows: 1, maxRows: 5 }} value={x.observacoes} onChange={x.setObservacoes} />
                   </List.Item>
@@ -486,5 +487,21 @@ export function HistoricoMobile({
       )}
       <div style={{ padding: "8px 12px 16px", fontSize: 11, color: "#999" }}>{t("web.mobile.swipe_hint")}</div>
     </>
+  );
+}
+
+/** Saída para fora: dia em que saíram de facto (vazio = hoje). */
+function DataSaida({ valor, mudar }: { valor: string | null; mudar: (v: string | null) => void }) {
+  const t = useT();
+  const ref = useRef<{ open: () => void }>(null);
+  return (
+    <List.Item prefix={t("web.transfer.exit_date")} arrow onClick={() => ref.current?.open()}>
+      <DataCampo
+        ref={ref}
+        value={valor ?? dayjs().format("YYYY-MM-DD")}
+        max={new Date()}
+        onChange={(v) => mudar(v && v !== dayjs().format("YYYY-MM-DD") ? v : null)}
+      />
+    </List.Item>
   );
 }

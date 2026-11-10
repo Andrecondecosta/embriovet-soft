@@ -133,12 +133,17 @@ class Log:
     """Registos em JSONL: ações de cada pessoa, erros da API, verdade do mundo."""
 
     def __init__(self):
+        import threading
+
         self.f = {n: open(SAIDA / f"{n}.jsonl", "a") for n in ("acoes", "erros", "verdade", "notas")}
+        self._lock = threading.Lock()  # várias pessoas a escrever ao mesmo tempo
 
     def __call__(self, _ficheiro, **dados):
         dados = {"dia": RELOGIO.d, "data": RELOGIO.hoje.isoformat(), **dados}
-        self.f[_ficheiro].write(json.dumps(dados, default=str, ensure_ascii=False) + "\n")
-        self.f[_ficheiro].flush()
+        linha = json.dumps(dados, default=str, ensure_ascii=False) + "\n"
+        with self._lock:
+            self.f[_ficheiro].write(linha)
+            self.f[_ficheiro].flush()
 
 
 LOG = Log()

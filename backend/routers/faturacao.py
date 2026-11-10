@@ -18,7 +18,7 @@ from modules.repositories import faturacao_repo
 
 router = APIRouter(prefix="/api/faturacao", tags=["faturacao"], dependencies=[Depends(acesso_faturacao)])
 
-Tipo = Literal["estadia", "armazenamento"]
+Tipo = Literal["estadia", "armazenamento", "palhetas_recebidas", "palhetas_gastas"]
 
 
 def _erro(http_status: int, code: str, **params):
@@ -31,7 +31,7 @@ def _periodo(inicio: date, fim: date):
 
 
 @router.get("/por-faturar")
-def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: Tipo | None = None):
+def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: Literal["estadia", "armazenamento", "palhetas"] | None = None):
     _periodo(inicio, fim)
     return faturacao_repo.por_faturar(inicio, fim, dono_id, tipo)
 

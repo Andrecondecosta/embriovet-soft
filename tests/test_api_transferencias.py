@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -199,3 +199,21 @@ def test_anular_interna_com_destino_ja_usado_e_recusado(ctx):
     assert _exist(ctx["l1"]) == 10
     rasto = _exec("SELECT dados_novos FROM historico_edicoes WHERE tabela_nome = 'transferencias' AND utilizador_nome = %s", (ctx["user"],))
     assert rasto and rasto[0][0] == {"acao": "anulado"}
+
+
+def test_externa_com_data_verdadeira_e_devolucao(ctx):
+    c = ctx["c"]
+    # O dono levou as palhetas no sábado; regista-se hoje com a data certa.
+    ontem = date.today() - timedelta(days=1)
+    _exec("UPDATE estoque_dono SET data_criacao = NOW() - INTERVAL '10 days' WHERE id = %s", (ctx["l1"],))
+    r = c.post("/api/transferencias", json={
+        "tipo": "externa", "destinatario": "Dono", "motivo": "Devolução", "data": ontem.isoformat(),
+        "linhas": [{"stock_id": ctx["l1"], "quantidade": 2}]})
+    assert r.status_code == 201, r.text
+    assert _um("SELECT data_transferencia::date, tipo FROM transferencias_externas WHERE estoque_id = %s", (ctx["l1"],)) == (ontem, "Devolução")
+    amanha = (date.today() + timedelta(days=1)).isoformat()
+    r = c.post("/api/transferencias", json={"tipo": "externa", "destinatario": "D", "data": amanha, "linhas": [{"stock_id": ctx["l1"], "quantidade": 1}]})
+    assert r.json()["detail"]["code"] == "web.transfer.error.date_future"
+    antes = (date.today() - timedelta(days=30)).isoformat()
+    r = c.post("/api/transferencias", json={"tipo": "externa", "destinatario": "D", "data": antes, "linhas": [{"stock_id": ctx["l1"], "quantidade": 1}]})
+    assert r.json()["detail"]["code"] == "web.transfer.error.date_before_lot"

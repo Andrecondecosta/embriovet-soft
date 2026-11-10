@@ -339,6 +339,9 @@ class SaidaIn(BaseModel):
     data_saida: date
     estado: EstadoSaida
     observacoes: str | None = None
+    # Saída antes de registos já feitos, ou com dias já faturados depois:
+    # só depois de confirmar no ecrã (a data verdadeira pode ser essa).
+    confirmar: bool = False
 
     @field_validator("observacoes", mode="before")
     @classmethod
@@ -410,8 +413,22 @@ def registar_saida(estadia_id: int, d: SaidaIn, user: dict = Depends(get_current
         raise _erro(409, "web.stays.error.already_closed")
     if d.data_saida < row[0]:
         raise _erro(422, "web.stays.error.exit_before_entry")
-    if ultimo and d.data_saida < ultimo:
-        raise _erro(422, "web.stays.error.exit_before_records", data=ultimo.strftime("%d/%m/%Y"))
+    if not d.confirmar:
+        # O dono levou a égua sem avisar e a saída é registada depois: a data
+        # verdadeira pode ser anterior a exames feitos entretanto, ou a dias
+        # já faturados. Não se recusa (ficava internada para sempre e a ser
+        # faturada): avisa e pede confirmação.
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT COALESCE(SUM(fim - GREATEST(inicio, %s) + 1), 0) FROM faturacao_linhas
+                       WHERE tipo = 'estadia' AND ref_id = %s AND NOT anulada AND fim > %s""",
+                    (d.data_saida + timedelta(days=1), estadia_id, d.data_saida),
+                )
+                faturados = int(cur.fetchone()[0])
+        depois = ultimo is not None and d.data_saida < ultimo
+        if depois or faturados:
+            raise _erro(409, "web.stays.confirm_exit", registos=ultimo.strftime("%d/%m/%Y") if depois else "", faturados=faturados)
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(

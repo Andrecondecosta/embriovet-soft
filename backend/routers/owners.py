@@ -28,7 +28,7 @@ from modules.repositories.owner_repo import (
 router = APIRouter(prefix="/api/owners", tags=["owners"])
 
 COLUNAS = ["id", "nome", "ativo", "email", "telemovel", "nome_completo",
-           "nif", "morada", "codigo_postal", "cidade"]
+           "nif", "morada", "codigo_postal", "cidade", "da_clinica"]
 
 _ORDENACAO = {
     "nome": "LOWER(nome), id",
@@ -46,6 +46,8 @@ class OwnerIn(BaseModel):
     morada: str | None = None
     codigo_postal: str | None = None
     cidade: str | None = None
+    # A própria clínica: não se fatura e o seu sémen usa-se sem perguntar.
+    da_clinica: bool = False
 
     @field_validator("*", mode="before")
     @classmethod
@@ -149,13 +151,21 @@ def obter(owner_id: int, _user: dict = Depends(get_current_user)):
     return owner
 
 
+def _marcar_da_clinica(owner_id: int, valor: bool) -> None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE dono SET da_clinica = %s WHERE id = %s", (valor, owner_id))
+        conn.commit()
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def criar(body: OwnerIn, _user: dict = Depends(get_current_user)):
     if existente := _nome_em_uso(body.nome):
         raise _erro(409, "web.owners.error.duplicate", name=existente)
-    novo_id = adicionar_proprietario(body.model_dump())
+    novo_id = adicionar_proprietario(body.model_dump(exclude={"da_clinica"}))
     if not novo_id:
         raise _erro(500, "web.error.generic")
+    _marcar_da_clinica(novo_id, body.da_clinica)
     return _obter(novo_id)
 
 
@@ -165,8 +175,9 @@ def editar(owner_id: int, body: OwnerIn, _user: dict = Depends(get_current_user)
         raise _erro(404, "web.owners.error.not_found")
     if existente := _nome_em_uso(body.nome, excluir_id=owner_id):
         raise _erro(409, "web.owners.error.duplicate", name=existente)
-    if not editar_proprietario(owner_id, body.model_dump()):
+    if not editar_proprietario(owner_id, body.model_dump(exclude={"da_clinica"})):
         raise _erro(500, "web.error.generic")
+    _marcar_da_clinica(owner_id, body.da_clinica)
     return _obter(owner_id)
 
 

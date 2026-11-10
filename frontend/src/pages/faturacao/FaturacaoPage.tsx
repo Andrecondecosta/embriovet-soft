@@ -48,6 +48,7 @@ import { useOpcoes } from "../stock/api";
 import { ResumoFaturar } from "./ResumoFaturar";
 import {
   escalao,
+  ePalhetas,
   useAtraso,
   useAnos,
   useAnularFaturada,
@@ -59,6 +60,7 @@ import {
   type Faturada,
   type LinhaAno,
   type PorFaturar,
+  type FiltroTipo,
   type TipoFat,
 } from "./api";
 
@@ -98,11 +100,13 @@ function useTextos() {
   return {
     dono: (l: { dono_nome: string | null }) => l.dono_nome ?? t("web.billing.no_owner"),
     tipo: (x: TipoFat) => t(`web.billing.type.${x}`),
-    dias: (l: Linha) => t("web.billing.days", { count: nDias(l) }),
-    palhetas: (l: Linha) => (l.tipo === "armazenamento" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
+    dias: (l: Linha) => (ePalhetas(l.tipo) ? dataCurta(l.inicio) : t("web.billing.days", { count: nDias(l) })),
+    palhetas: (l: Linha) => (l.tipo !== "estadia" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
     /** "4 dias" na estadia; "10 palhetas · 4 dias" no sémen. */
     qtd: (l: Linha) =>
-      l.tipo === "armazenamento" && l.palhetas == null
+      ePalhetas(l.tipo)
+        ? t("web.billing.straws", { count: l.quantidade })
+        : l.tipo === "armazenamento" && l.palhetas == null
         ? t("web.billing.straw_days", { count: l.quantidade })
         : [l.tipo === "armazenamento" && t("web.billing.straws", { count: l.palhetas! }), t("web.billing.days", { count: nDias(l) })]
             .filter(Boolean)
@@ -120,8 +124,15 @@ const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.
 
 function totais(linhas: Linha[]) {
   const soma = (tipo: TipoFat) => linhas.filter((l) => l.tipo === tipo).reduce((s, l) => s + nDias(l), 0);
-  return { dias: soma("estadia"), ds: soma("armazenamento") };
+  const pal = linhas.filter((l) => ePalhetas(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
+  return { dias: soma("estadia"), ds: soma("armazenamento"), pal };
 }
+const COR_TIPO: Record<TipoFat, string> = {
+  estadia: "blue",
+  armazenamento: "purple",
+  palhetas_recebidas: "cyan",
+  palhetas_gastas: "geekblue",
+};
 
 export function FaturacaoPage() {
   const t = useT();
@@ -264,7 +275,7 @@ function PorFaturarTab() {
   const errorMessage = useErrorMessage();
   const tx = useTextos();
   const p = usePeriodo();
-  const [tipo, setTipo] = useState<TipoFat | null>(null);
+  const [tipo, setTipo] = useState<FiltroTipo | null>(null);
   const [pesquisa, setPesquisa] = useState("");
   const q = usePorFaturar({ ...p.filtro, tipo });
   const [sel, setSel] = useState<string[]>([]);
@@ -278,8 +289,8 @@ function PorFaturarTab() {
   const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
   const tot = totais(escolhidas.length ? escolhidas : linhas);
   const resumo = escolhidas.length
-    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, ds: tot.ds })
-    : t("web.billing.total", { dias: tot.dias, ds: tot.ds });
+    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, ds: tot.ds, pal: tot.pal })
+    : t("web.billing.total", { dias: tot.dias, ds: tot.ds, pal: tot.pal });
 
   const exportar = () =>
     baixarCsv(
@@ -291,8 +302,8 @@ function PorFaturarTab() {
         tx.tipo(l.tipo),
         l.inicio,
         l.fim,
-        l.tipo === "armazenamento" ? l.palhetas : "",
-        nDias(l),
+        l.tipo !== "estadia" ? l.palhetas : "",
+        ePalhetas(l.tipo) ? "" : nDias(l),
         l.tipo === "armazenamento" ? t("web.billing.straw_days", { count: l.quantidade }) : "",
       ]),
     );
@@ -348,13 +359,14 @@ function PorFaturarTab() {
   return (
     <>
       <FiltrosDesktop p={p}>
-        <Segmented<TipoFat | "todos">
+        <Segmented<FiltroTipo | "todos">
           value={tipo ?? "todos"}
           onChange={(v) => setTipo(v === "todos" ? null : v)}
           options={[
             { value: "todos", label: t("web.billing.type.all") },
             { value: "estadia", label: t("web.billing.type.estadia") },
             { value: "armazenamento", label: t("web.billing.type.armazenamento") },
+            { value: "palhetas", label: t("web.billing.type.palhetas") },
           ]}
         />
       </FiltrosDesktop>
@@ -388,7 +400,7 @@ function PorFaturarTab() {
             title: t("web.billing.col.what"),
             render: (_, l) => (
               <>
-                <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l.tipo)}</Tag>
+                <Tag color={COR_TIPO[l.tipo]}>{tx.tipo(l.tipo)}</Tag>
                 {l.descricao}
                 {l.local && <Typography.Text type="secondary"> · {l.local}</Typography.Text>}
               </>
@@ -432,8 +444,8 @@ function FaturadoTab() {
         seguro(l.descricao),
         l.inicio,
         l.fim,
-        l.tipo === "armazenamento" ? (l.palhetas ?? t("web.billing.straw_days", { count: l.quantidade })) : "",
-        nDias(l),
+        l.tipo !== "estadia" ? (l.palhetas ?? t("web.billing.straw_days", { count: l.quantidade })) : "",
+        ePalhetas(l.tipo) ? "" : nDias(l),
         l.criado_por,
         l.anulada ? l.motivo_anulacao : "",
       ]),
@@ -523,7 +535,7 @@ function FaturadoTab() {
             title: t("web.billing.col.what"),
             render: (_, l) => (
               <>
-                <Tag color={l.tipo === "estadia" ? "blue" : "purple"}>{tx.tipo(l.tipo)}</Tag>
+                <Tag color={COR_TIPO[l.tipo]}>{tx.tipo(l.tipo)}</Tag>
                 {l.descricao}
               </>
             ),
@@ -624,7 +636,7 @@ function AnosTab() {
   const [pesquisa, setPesquisa] = useState("");
   const q = useAnos(ANO_INICIAL);
   const anos = q.data?.anos ?? [];
-  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0);
+  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0 || c.palhetas > 0);
   const linhas = useMemo(() => {
     const s = pesquisa.trim().toLowerCase();
     return (q.data?.linhas ?? []).filter(
@@ -651,6 +663,7 @@ function AnosTab() {
     [
       c.dias > 0 && t("web.billing.stay_days", { count: c.dias }),
       c.dias_semen > 0 && `${t("web.billing.semen_days", { count: c.dias_semen })} (${t("web.stock.n_lots", { count: c.lotes })})`,
+      c.palhetas > 0 && t("web.billing.straws_used", { count: c.palhetas }),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -777,7 +790,8 @@ function AnosTab() {
 
 const ESCALOES = [3, 6, 12] as const;
 const COR_ESCALAO: Record<number, string> = { 3: "gold", 6: "orange", 12: "red" };
-const TIPOS_ATRASO = ["estadia", "armazenamento"] as const;
+const TIPOS_ATRASO = ["estadia", "armazenamento", "palhetas"] as const;
+type CatAtraso = (typeof TIPOS_ATRASO)[number];
 
 /** Quem tem dias por faturar há mais de 3 / 6 / 12 meses (a contar do dia
  *  mais antigo por faturar), estadias e sémen à parte. */
@@ -789,17 +803,20 @@ function AtrasoTab() {
   const tx = useTextos();
   const q = useAtraso();
   const [minimo, setMinimo] = useState<number>(3);
-  const [tipo, setTipo] = useState<TipoFat | null>(null);
+  const [tipo, setTipo] = useState<CatAtraso | null>(null);
 
-  const conta = (k: TipoFat, m: number) => (q.data ?? []).filter((l) => escalao(l[k]?.desde) >= m).length;
+  const conta = (k: CatAtraso, m: number) => (q.data ?? []).filter((l) => escalao(l[k]?.desde) >= m).length;
   const linhas = (q.data ?? []).filter((l) => (tipo ? [tipo] : TIPOS_ATRASO).some((k) => escalao(l[k]?.desde) >= minimo));
   const ver = (l: Atraso) =>
     navigate(`/faturacao/por-faturar?inicio=1990-01-01&fim=${dayjs().format(ISO)}${l.dono_id != null ? `&dono=${l.dono_id}` : ""}`);
   const rotuloEscalao = (m: number) => t(m === 12 ? "web.billing.over_12" : m === 6 ? "web.billing.over_6" : "web.billing.over_3");
   const meses = (desde: string) => dayjs().diff(dayjs(desde), "month");
-  const detalhe = (k: TipoFat, c: AtrasoTipo) =>
-    `${t("web.billing.days", { count: c.dias })} · ${k === "estadia" ? t("web.billing.stays_n", { count: c.itens }) : t("web.stock.n_lots", { count: c.itens })}`;
-  const celula = (k: TipoFat, c: AtrasoTipo | null) => {
+  const detalhe = (k: CatAtraso, c: AtrasoTipo) =>
+    k === "palhetas"
+      ? t("web.billing.straws", { count: c.dias })
+      : `${t("web.billing.days", { count: c.dias })} · ${k === "estadia" ? t("web.billing.stays_n", { count: c.itens }) : t("web.stock.n_lots", { count: c.itens })}`;
+  const rotuloCat = (k: CatAtraso) => t(`web.billing.type.${k}`);
+  const celula = (k: CatAtraso, c: AtrasoTipo | null) => {
     const e = escalao(c?.desde);
     if (!c) return <Typography.Text type="secondary">—</Typography.Text>;
     return (
@@ -816,8 +833,8 @@ function AtrasoTab() {
   const cartoes = (
     <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
       {TIPOS_ATRASO.map((k) => (
-        <Col xs={24} md={12} key={k}>
-          <Card size="small" title={tx.tipo(k)}>
+        <Col xs={24} md={8} key={k}>
+          <Card size="small" title={rotuloCat(k)}>
             <Row gutter={8}>
               {ESCALOES.map((m) => (
                 <Col span={8} key={m}>
@@ -850,13 +867,12 @@ function AtrasoTab() {
         onChange={setMinimo}
         options={ESCALOES.map((m) => ({ value: m, label: rotuloEscalao(m) }))}
       />
-      <Segmented<TipoFat | "todos">
+      <Segmented<CatAtraso | "todos">
         value={tipo ?? "todos"}
         onChange={(v) => setTipo(v === "todos" ? null : v)}
         options={[
           { value: "todos", label: t("web.billing.type.all") },
-          { value: "estadia", label: t("web.billing.type.estadia") },
-          { value: "armazenamento", label: t("web.billing.type.armazenamento") },
+          ...TIPOS_ATRASO.map((k) => ({ value: k, label: rotuloCat(k) })),
         ]}
       />
     </Flex>
@@ -890,7 +906,7 @@ function AtrasoTab() {
                 onClick={() => ver(l)}
                 description={TIPOS_ATRASO.filter((k) => l[k]).map((k) => (
                   <div key={k}>
-                    {tx.tipo(k)}: {t("web.billing.ago_months", { count: meses(l[k]!.desde) })} · {detalhe(k, l[k]!)}
+                    {rotuloCat(k)}: {t("web.billing.ago_months", { count: meses(l[k]!.desde) })} · {detalhe(k, l[k]!)}
                   </div>
                 ))}
               >
@@ -921,6 +937,7 @@ function AtrasoTab() {
           { title: t("label.owner"), render: (_, l) => <Typography.Text strong>{tx.dono(l)}</Typography.Text> },
           { title: t("web.billing.type.estadia"), render: (_, l) => celula("estadia", l.estadia) },
           { title: t("web.billing.type.armazenamento"), render: (_, l) => celula("armazenamento", l.armazenamento) },
+          { title: t("web.billing.type.palhetas"), render: (_, l) => celula("palhetas", l.palhetas) },
           {
             title: "",
             width: 140,

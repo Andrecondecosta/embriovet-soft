@@ -49,6 +49,18 @@ class Lote:
 
 
 @dataclass
+class LoteCliente:
+    """Sémen de um cliente guardado na clínica (aluguer de espaço)."""
+    codigo: str  # "CL-007"
+    garanhao: str
+    dono: str
+    palhetas: int
+    chega: date  # dia em que entra na clínica/app
+    guardado_desde: date  # quando começou mesmo a estar guardado (antes da app, nos que já cá estavam)
+    levantamentos: list = field(default_factory=list)  # [(dia, palhetas, motivo)]
+
+
+@dataclass
 class Egua:
     wid: int
     nome: str
@@ -108,9 +120,53 @@ class Mundo:
         for nome, interno, mot, conc in GARANHOES:
             for k in range(3):
                 self._lote(nome, interno, mot, conc, INICIO + timedelta(days=0 if k == 0 else self.r.randint(20, dias - 80)))
+        self._clientes(semente, dias)
         for e in self.eguas.values():
             LOG("verdade", evento="egua", wid=e.wid, nome=e.nome, idade=e.idade, chegada=e.chegada, garanhao=e.garanhao,
                 tipo=e.tipo, max_ciclos=e.max_ciclos, leva_para_casa=e.leva_para_casa, saida_imprevista=e.saida_imprevista)
+
+    # ── sémen de clientes (armazenamento a faturar) ─────────────────────
+    def _clientes(self, semente, dias):
+        """Clientes que guardam sémen na clínica. Gerador próprio: não mexe
+        no resto do mundo. Os 10 primeiros já cá estavam antes da app (o
+        contrato diz desde quando); os outros chegam ao longo do ano. Alguns
+        levantam palhetas a meio (venda, uso noutra clínica) e uns desistem
+        e levam tudo."""
+        r = random.Random(semente + 7)
+        self.lotes_cliente: dict[str, LoteCliente] = {}
+        self.cliente_chega: dict[date, list[LoteCliente]] = {}
+        self.cliente_levanta: dict[date, list[tuple]] = {}
+        clientes = DONOS[:9]
+        # Como cada cliente quer ser faturado (decisão da direção, em papel).
+        self.politica_cliente = {c: r.choice(["mensal", "trimestral", "trimestral", "trimestral", "anual"]) for c in clientes}
+        for i in range(1, 31):
+            dono = r.choice(clientes)
+            chega = INICIO if i <= 10 else INICIO + timedelta(days=r.randint(5, dias - 30))
+            desde = chega - timedelta(days=r.randint(60, 700)) if i <= 10 else chega
+            l = LoteCliente(f"CL-{i:03d}", r.choice(GARANHOES)[0], dono, r.choice([10, 12, 16, 20, 24, 30]), chega, desde)
+            resta = l.palhetas
+            dia = chega
+            if r.random() < 0.5:  # levantamento parcial
+                dia = chega + timedelta(days=r.randint(15, 200))
+                q = r.randint(2, max(2, resta // 2))
+                l.levantamentos.append((dia, q, r.choice(["venda", "outra clínica", "uso próprio"])))
+                resta -= q
+            if r.random() < 0.15:  # desiste e leva o resto
+                dia = dia + timedelta(days=r.randint(20, 150))
+                l.levantamentos.append((dia, resta, "desistência"))
+            self.lotes_cliente[l.codigo] = l
+            self.cliente_chega.setdefault(chega, []).append(l)
+            for d_, q, motivo in l.levantamentos:
+                self.cliente_levanta.setdefault(d_, []).append((l.codigo, q, motivo))
+            LOG("verdade", evento="lote_cliente", **{k: v for k, v in l.__dict__.items()})
+        LOG("verdade", evento="politica_faturacao", politica=self.politica_cliente)
+
+    def semen_cliente_chega(self, hoje: date) -> list[LoteCliente]:
+        return self.cliente_chega.get(hoje, [])
+
+    def semen_cliente_levanta(self, hoje: date) -> list[tuple]:
+        """(codigo, palhetas, motivo) que um cliente vem buscar hoje."""
+        return self.cliente_levanta.get(hoje, [])
 
     # ── sémen ────────────────────────────────────────────────────────────
     def _lote(self, garanhao, interno, mot, conc, chega):

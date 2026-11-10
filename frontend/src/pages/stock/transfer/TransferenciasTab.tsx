@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import dayjs from "dayjs";
 import {
+  DatePicker,
   Alert,
   Button,
   Card,
@@ -111,6 +113,8 @@ export function useTransferencia() {
   const [destinatario, setDestinatario] = useState("");
   const [motivo, setMotivo] = useState<Motivo>("Venda");
   const [observacoes, setObservacoes] = useState("");
+  // Dia em que saíram de facto (ex.: o dono veio no sábado, regista-se na segunda).
+  const [dataSaida, setDataSaida] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const limpar = () => {
@@ -118,6 +122,7 @@ export function useTransferencia() {
     setDono(TODOS);
     setTipo("interna");
     setDestino(null);
+    setDataSaida(null);
     setMudaLocal(false);
     setContentor(null);
     setCanister(1);
@@ -200,7 +205,7 @@ export function useTransferencia() {
       linhas: finais.map((l) => ({ stock_id: l.stock_id, quantidade: l.qty })),
       ...(tipo === "interna"
         ? { destino_id: destino, nova_localizacao: mudaLocal && contentor ? { contentor_id: contentor, canister, andar } : null }
-        : { destinatario, motivo, observacoes }),
+        : { destinatario, motivo, observacoes, ...(dataSaida ? { data: dataSaida } : {}) }),
     };
     try {
       if (edicao) await editar.mutateAsync({ ...body, tipoOp: edicao.tipo, id: edicao.id });
@@ -276,6 +281,8 @@ export function useTransferencia() {
     setMotivo,
     observacoes,
     setObservacoes,
+    dataSaida,
+    setDataSaida,
     erro,
     total,
     executar,
@@ -331,6 +338,8 @@ function TransferenciasDesktop() {
     setMotivo,
     observacoes,
     setObservacoes,
+    dataSaida,
+    setDataSaida,
     erro,
     total,
     executar,
@@ -513,6 +522,17 @@ function TransferenciasDesktop() {
                         value={motivo}
                         onChange={(v) => setMotivo(v)}
                         options={MOTIVOS.map((m) => ({ value: m.value, label: t(m.label) }))}
+                      />
+                    </Col>
+                    <Col xs={24} sm={12}>
+                      <Typography.Text type="secondary">{t("web.transfer.exit_date")}</Typography.Text>
+                      <DatePicker
+                        style={{ width: "100%" }}
+                        format="DD/MM/YYYY"
+                        allowClear={false}
+                        value={dayjs(dataSaida ?? undefined)}
+                        maxDate={dayjs()}
+                        onChange={(v) => setDataSaida(v && !v.isSame(dayjs(), "day") ? v.format("YYYY-MM-DD") : null)}
                       />
                     </Col>
                     <Col span={24}>
