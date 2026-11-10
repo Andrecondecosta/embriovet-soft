@@ -16,7 +16,7 @@ import {
 } from "@ant-design/icons";
 
 import { api } from "../api/client";
-import type { User } from "../api/types";
+import { veFaturacao, type User } from "../api/types";
 import { useT } from "../i18n/I18n";
 import { BrandMark, ProductSignature, useBrand } from "./Brand";
 import { useIsMobile } from "./responsive";
@@ -36,7 +36,7 @@ const FATURACAO = { path: "/faturacao", label: "web.nav.faturacao", icon: <EuroO
 
 /** Menu deste utilizador: "Faturação" só para quem tem acesso (os outros
  *  nem a veem), antes das Definições. */
-export const navDe = (user: User) => (user.acesso_faturacao ? [...NAV.slice(0, -1), FATURACAO, NAV[NAV.length - 1]] : NAV);
+export const navDe = (user: User) => (veFaturacao(user) ? [...NAV.slice(0, -1), FATURACAO, NAV[NAV.length - 1]] : NAV);
 
 export function Shell({ user }: { user: User }) {
   // No telemóvel, moldura de app (Ant Design Mobile); no resto, a de computador.

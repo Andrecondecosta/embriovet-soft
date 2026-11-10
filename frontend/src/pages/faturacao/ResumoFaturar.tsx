@@ -14,6 +14,7 @@ import {
 import { ApiError } from "../../api/client";
 import { useT } from "../../i18n/I18n";
 import { useBrand } from "../../components/Brand";
+import { useUser } from "../../components/User";
 import { useIsMobile } from "../../components/responsive";
 import { confirmar, notifySuccess, useNotifyError } from "../../components/errors";
 import { DataCampo, FolhaEcraInteiro } from "../../components/mobile";
@@ -76,6 +77,8 @@ export function ResumoFaturar({
   const [obs, setObs] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [imprimir, setImprimir] = useState(false);
+  // "Só ver": vê o resumo e tira o PDF, mas não marca como faturado.
+  const podeEditar = useUser().acesso_faturacao === "editar";
 
   // Período a faturar: começa pelo das linhas escolhidas e pode encurtar-se
   // (ex.: faturar só até ao fim do mês passado). O resto fica por faturar.
@@ -267,8 +270,8 @@ export function ResumoFaturar({
           visible={aberto}
           titulo={t("web.billing.review_title")}
           onCancel={() => onClose(false)}
-          onOk={guardar}
-          okText={t("web.billing.mark")}
+          onOk={podeEditar ? guardar : pdf}
+          okText={podeEditar ? t("web.billing.mark") : t("web.billing.pdf")}
           loading={faturar.isPending}
         >
           <div style={{ padding: "8px 12px", color: "#999", fontSize: 13 }}>{t("web.billing.review_help")}</div>
@@ -336,17 +339,21 @@ export function ResumoFaturar({
                   {lote} — {tx.mov(m)}
                 </List.Item>
               ))}
-              <List.Item title={t("web.billing.invoice_number")}>
-                <MInput clearable value={numero(g)} onChange={(v) => mudarNumero(g, v)} />
-              </List.Item>
+              {podeEditar && (
+                <List.Item title={t("web.billing.invoice_number")}>
+                  <MInput clearable value={numero(g)} onChange={(v) => mudarNumero(g, v)} />
+                </List.Item>
+              )}
             </List>
           ))}
-          <List>
-            <DataMobile titulo={t("web.billing.invoice_date")} data={data} onChange={setData} />
-            <List.Item title={t("web.billing.notes")}>
-              <TextArea value={obs} onChange={setObs} autoSize={{ minRows: 1 }} />
-            </List.Item>
-          </List>
+          {podeEditar && (
+            <List>
+              <DataMobile titulo={t("web.billing.invoice_date")} data={data} onChange={setData} />
+              <List.Item title={t("web.billing.notes")}>
+                <TextArea value={obs} onChange={setObs} autoSize={{ minRows: 1 }} />
+              </List.Item>
+            </List>
+          )}
           {erro && <div style={{ color: "#ff3141", padding: "8px 12px" }}>{erro}</div>}
           <div style={{ padding: 12 }}>
             <MButton block onClick={pdf} disabled={q.isPending}>
@@ -369,17 +376,25 @@ export function ResumoFaturar({
         footer={
           <Flex justify="space-between" align="center" wrap gap={8}>
             <Space wrap>
-              <Typography.Text type="secondary">{t("web.billing.invoice_date")}</Typography.Text>
-              <DatePicker format="DD/MM/YYYY" allowClear={false} value={data} onChange={(v) => v && setData(v)} />
+              {podeEditar ? (
+                <>
+                  <Typography.Text type="secondary">{t("web.billing.invoice_date")}</Typography.Text>
+                  <DatePicker format="DD/MM/YYYY" allowClear={false} value={data} onChange={(v) => v && setData(v)} />
+                </>
+              ) : (
+                <Typography.Text type="secondary">{t("web.billing.view_only")}</Typography.Text>
+              )}
             </Space>
             <Space>
               <Button onClick={() => onClose(false)}>{t("web.common.cancel")}</Button>
               <Button icon={<FilePdfOutlined />} onClick={pdf} disabled={q.isPending}>
                 {t("web.billing.pdf")}
               </Button>
-              <Button type="primary" loading={faturar.isPending} onClick={guardar}>
-                {t("web.billing.mark")}
-              </Button>
+              {podeEditar && (
+                <Button type="primary" loading={faturar.isPending} onClick={guardar}>
+                  {t("web.billing.mark")}
+                </Button>
+              )}
             </Space>
           </Flex>
         }
@@ -416,14 +431,16 @@ export function ResumoFaturar({
                   </>
                 }
                 extra={
-                  <Input
-                    placeholder={t("web.billing.invoice_number")}
-                    value={numero(g)}
-                    onChange={(e) => mudarNumero(g, e.target.value)}
-                    maxLength={60}
-                    status={erro && !numero(g).trim() ? "error" : undefined}
-                    style={{ width: 200 }}
-                  />
+                  podeEditar && (
+                    <Input
+                      placeholder={t("web.billing.invoice_number")}
+                      value={numero(g)}
+                      onChange={(e) => mudarNumero(g, e.target.value)}
+                      maxLength={60}
+                      status={erro && !numero(g).trim() ? "error" : undefined}
+                      style={{ width: 200 }}
+                    />
+                  )
                 }
               >
                 <Table<LinhaResumo>
@@ -489,13 +506,15 @@ export function ResumoFaturar({
             );
           })}
         </Flex>
-        <Input.TextArea
-          placeholder={t("web.billing.notes")}
-          value={obs}
-          onChange={(e) => setObs(e.target.value)}
-          autoSize={{ minRows: 1 }}
-          style={{ marginTop: 12 }}
-        />
+        {podeEditar && (
+          <Input.TextArea
+            placeholder={t("web.billing.notes")}
+            value={obs}
+            onChange={(e) => setObs(e.target.value)}
+            autoSize={{ minRows: 1 }}
+            style={{ marginTop: 12 }}
+          />
+        )}
         {erro && <Alert type="error" showIcon title={erro} style={{ marginTop: 12 }} />}
       </Modal>
       {impressao}

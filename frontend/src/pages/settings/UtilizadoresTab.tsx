@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Button, Collapse, Flex, Form, Input, Modal, Segmented, Select, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Collapse, Flex, Form, Input, Modal, Segmented, Select, Table, Tag, Tooltip, Typography } from "antd";
 import { KeyOutlined, PlusOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
@@ -12,7 +12,6 @@ import {
   List,
   Popup,
   Selector,
-  Switch as MSwitch,
   Tabs,
   Tag as MTag,
 } from "antd-mobile";
@@ -20,6 +19,7 @@ import { AddOutline } from "antd-mobile-icons";
 
 import { useT } from "../../i18n/I18n";
 import { useUser } from "../../components/User";
+import type { AcessoFaturacao } from "../../api/types";
 import { useIsMobile } from "../../components/responsive";
 import { dataHora } from "../../components/csv";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
@@ -36,6 +36,8 @@ import {
 } from "./api";
 
 type Estado = "todos" | "ativos" | "inativos";
+// Faturação, pessoa a pessoa: sem acesso / só ver / editar.
+const ACESSOS: AcessoFaturacao[] = ["nenhum", "ver", "editar"];
 type NovoForm = UtilizadorIn & { confirmar: string };
 
 const COR_NIVEL: Record<string, string> = { Administrador: "red", Gestor: "gold", Visualizador: "green" };
@@ -80,9 +82,9 @@ function useUtilizadoresTab() {
       return null;
     }
   };
-  const alternarFaturacao = async (u: Utilizador, ativo: boolean) => {
+  const mudarFaturacao = async (u: Utilizador, acesso: AcessoFaturacao) => {
     try {
-      return await faturacao.mutateAsync({ id: u.id, ativo });
+      return await faturacao.mutateAsync({ id: u.id, acesso });
     } catch (err) {
       notifyError(err);
       return null;
@@ -111,7 +113,7 @@ function useUtilizadoresTab() {
     criarUtilizador,
     aCriar: criar.isPending,
     alternar,
-    alternarFaturacao,
+    mudarFaturacao,
     aMudarFaturacao: faturacao.isPending,
     mudarPassword,
     aMudarPw: mudarPw.isPending,
@@ -235,10 +237,16 @@ function UtilizadoresDesktop() {
               </Tooltip>
             ),
             dataIndex: "acesso_faturacao",
-            width: 100,
-            align: "center",
-            render: (v, u) => (
-              <Switch size="small" checked={v} loading={x.aMudarFaturacao} onChange={(ativo) => void x.alternarFaturacao(u, ativo)} />
+            width: 140,
+            render: (v: AcessoFaturacao, u) => (
+              <Select<AcessoFaturacao>
+                size="small"
+                value={v}
+                disabled={x.aMudarFaturacao}
+                onChange={(acesso) => void x.mudarFaturacao(u, acesso)}
+                options={ACESSOS.map((a) => ({ value: a, label: t(`web.settings.users.billing_${a}`) }))}
+                style={{ width: 120 }}
+              />
             ),
           },
           { title: t("label.last_login"), dataIndex: "last_login", width: 150, render: (v) => (v ? dataHora(v) : t("web.users.never")) },
@@ -410,17 +418,17 @@ function UtilizadoresMobile() {
             <List>
               <List.Item extra={x.nomeNivel(aberto.nivel)}>{t("web.users.level")}</List.Item>
               <List.Item extra={aberto.ativo ? t("web.common.active") : t("web.common.inactive")}>{t("web.common.status")}</List.Item>
-              <List.Item
-                description={t("web.settings.users.billing_help")}
-                extra={
-                  <MSwitch
-                    checked={aberto.acesso_faturacao}
-                    loading={x.aMudarFaturacao}
-                    onChange={(ativo) => void x.alternarFaturacao(aberto, ativo).then((r) => r && setAberto(r))}
-                  />
-                }
-              >
+              <List.Item description={t("web.settings.users.billing_help")}>
                 {t("web.settings.users.billing")}
+                <Selector<AcessoFaturacao>
+                  style={{ marginTop: 8 }}
+                  columns={3}
+                  showCheckMark={false}
+                  value={[aberto.acesso_faturacao]}
+                  disabled={x.aMudarFaturacao}
+                  onChange={(v) => v[0] && void x.mudarFaturacao(aberto, v[0]).then((r) => r && setAberto(r))}
+                  options={ACESSOS.map((a) => ({ value: a, label: t(`web.settings.users.billing_${a}`) }))}
+                />
               </List.Item>
               <List.Item extra={aberto.last_login ? dataHora(aberto.last_login) : t("web.users.never")}>{t("label.last_login")}</List.Item>
               <List.Item extra={aberto.created_at ? dataHora(aberto.created_at) : "—"}>{t("label.created_at")}</List.Item>

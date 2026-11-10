@@ -2,8 +2,8 @@
 o que está por faturar e o que já foi faturado. Contas em
 `modules/repositories/faturacao_repo.py`.
 
-Só para quem tem `acesso_faturacao` (independente do nível: pode ser um
-Visualizador da contabilidade a marcar faturas)."""
+Só para quem tem `acesso_faturacao` (dado pessoa a pessoa, independente do
+nível): "ver" consulta tudo (e o resumo/PDF); "editar" também marca e anula."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
-from backend.deps import acesso_faturacao
+from backend.deps import acesso_faturacao, editar_faturacao
 from modules.repositories import faturacao_repo
 
 router = APIRouter(prefix="/api/faturacao", tags=["faturacao"], dependencies=[Depends(acesso_faturacao)])
@@ -62,7 +62,7 @@ class FaturarIn(BaseModel):
 
 
 @router.post("/faturar")
-def faturar(d: FaturarIn, user: dict = Depends(acesso_faturacao)):
+def faturar(d: FaturarIn, user: dict = Depends(editar_faturacao)):
     if any(not f.fatura_numero for f in d.faturas):
         raise _erro(422, "web.billing.error.invoice_required")
     try:
@@ -98,7 +98,7 @@ class AnularIn(BaseModel):
 
 
 @router.post("/linhas/{linha_id}/anular")
-def anular(linha_id: int, d: AnularIn, user: dict = Depends(acesso_faturacao)):
+def anular(linha_id: int, d: AnularIn, user: dict = Depends(editar_faturacao)):
     if not d.motivo.strip():
         raise _erro(422, "web.billing.error.reason_required")
     if not faturacao_repo.anular(linha_id, d.motivo.strip(), user["username"]):

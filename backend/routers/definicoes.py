@@ -303,16 +303,17 @@ def desativar(uid: int, user: dict = Depends(require_nivel("Administrador"))):
 
 
 class FaturacaoIn(BaseModel):
-    ativo: bool
+    acesso: Literal["nenhum", "ver", "editar"]
 
 
 @router.put("/utilizadores/{uid}/faturacao")
 def acesso_faturacao(uid: int, d: FaturacaoIn, _user: dict = Depends(require_nivel("Administrador"))):
-    """Dá ou tira o acesso ao separador Faturação (independente do nível)."""
+    """Acesso de uma pessoa à Faturação (sem acesso / só ver / editar),
+    independente do nível."""
     _obter_utilizador(uid)
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE usuarios SET acesso_faturacao = %s, updated_at = NOW() WHERE id = %s", (d.ativo, uid))
+            cur.execute("UPDATE usuarios SET acesso_faturacao = %s, updated_at = NOW() WHERE id = %s", (d.acesso, uid))
         conn.commit()
     return _obter_utilizador(uid)
 

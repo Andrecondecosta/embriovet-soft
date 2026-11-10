@@ -34,7 +34,8 @@ def _utilizador_atual(user_id: int):
         "nome": row[2],
         "nivel": row[3],
         "must_change_password": bool(row[4]),
-        "acesso_faturacao": bool(row[5]),
+        # Faturação por pessoa: 'nenhum' | 'ver' | 'editar'.
+        "acesso_faturacao": row[5] or "nenhum",
     }
 
 
@@ -95,8 +96,16 @@ def pode_escrever(request: Request, user: dict = Depends(get_current_user)) -> d
 
 
 def acesso_faturacao(user: dict = Depends(get_current_user)) -> dict:
-    """Faturação: só quem tem a autorização própria (dada em Definições →
-    Utilizadores), seja qual for o nível. Os outros nem veem o separador."""
-    if not user.get("acesso_faturacao"):
+    """Faturação: só quem tem a autorização própria (dada pessoa a pessoa em
+    Definições → Utilizadores), seja qual for o nível. Os outros nem veem o
+    separador."""
+    if user.get("acesso_faturacao") not in ("ver", "editar"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
+    return user
+
+
+def editar_faturacao(user: dict = Depends(acesso_faturacao)) -> dict:
+    """Marcar ou anular faturas: só quem tem a Faturação em "editar"."""
+    if user.get("acesso_faturacao") != "editar":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
     return user

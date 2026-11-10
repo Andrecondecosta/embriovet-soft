@@ -12,6 +12,7 @@ import { useErrorMessage } from "../components/errors";
 import { dataCurta, dataHora } from "../components/csv";
 import { Cabecalho } from "../components/mobile";
 import { useUser } from "../components/User";
+import { veFaturacao } from "../api/types";
 import { escalao, useAtraso } from "./faturacao/api";
 
 interface Dashboard {
@@ -137,7 +138,7 @@ function Barras({ itens }: { itens: { nome: string; palhetas: number }[] }) {
 function useAvisoFaturacao() {
   const t = useT();
   const navigate = useNavigate();
-  const acesso = !!useUser().acesso_faturacao;
+  const acesso = veFaturacao(useUser());
   const q = useAtraso(acesso);
   const conta = (m: number) =>
     (q.data ?? []).filter((l) => Math.max(escalao(l.estadia?.desde), escalao(l.armazenamento?.desde)) >= m).length;

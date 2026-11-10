@@ -26,7 +26,7 @@ def _exec(sql, params=()):
     return row
 
 
-def _login(nivel: str, faturacao: bool) -> TestClient:
+def _login(nivel: str, faturacao: str) -> TestClient:
     username = f"{P}{uuid.uuid4().hex[:8]}"
     _exec(
         """INSERT INTO usuarios (username, nome_completo, password_hash, nivel, ativo, must_change_password, acesso_faturacao)
@@ -71,7 +71,7 @@ def ctx():
     _exec("INSERT INTO inseminacoes (garanhao, egua, data_inseminacao, palhetas_gastas, estoque_id) VALUES ('z', 'e', %s, 2, %s)", (d(5), lote))
     _exec("INSERT INTO transferencias_externas (estoque_id, quantidade, data_transferencia, destinatario_externo) VALUES (%s, 1, %s, 'Fora')", (lote, d(2)))
     yield {
-        "fat": _login("Visualizador", True), "sem": _login("Administrador", False),
+        "fat": _login("Visualizador", "editar"), "sem": _login("Administrador", "nenhum"),
         "dono": dono, "outro": outro, "fechada": fechada, "aberta": aberta, "externa": externa, "lote": lote,
     }
     _exec("DELETE FROM faturacao_linhas WHERE dono_id IN (%s, %s)", (dono, outro))
@@ -100,7 +100,7 @@ def test_so_quem_tem_acesso(ctx):
     assert _por_faturar(ctx["sem"], ctx).status_code == 403
     assert _por_faturar(ctx["fat"], ctx).status_code == 200
     me = ctx["fat"].get("/api/auth/me").json()["user"]
-    assert me["acesso_faturacao"] is True
+    assert me["acesso_faturacao"] == "editar"
 
 
 def test_dias_de_estadia_e_palhetas_x_dias(ctx):
@@ -149,14 +149,23 @@ def test_faturar_parte_nao_repete_e_anular_devolve(ctx):
     assert any(f["id"] == feitas[0]["id"] and f["anulada"] for f in com)
 
 
-def test_admin_da_e_tira_acesso(ctx):
-    admin = _login("Administrador", False)
-    uid = _exec("SELECT id FROM usuarios WHERE username LIKE %s AND acesso_faturacao ORDER BY id DESC LIMIT 1", (f"{P}%",))[0]
-    r = admin.put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"ativo": False})
-    assert r.status_code == 200 and r.json()["acesso_faturacao"] is False
+def test_acesso_por_pessoa_sem_ver_editar(ctx):
+    admin = _login("Administrador", "nenhum")
+    uid = _exec("SELECT id FROM usuarios WHERE username LIKE %s AND acesso_faturacao = 'editar' ORDER BY id DESC LIMIT 1", (f"{P}%",))[0]
+    linha = {"tipo": "estadia", "ref_id": ctx["fechada"], "inicio": d(10).isoformat(), "fim": d(3).isoformat()}
+    # Só ver: consulta tudo (e o resumo), mas não marca nem anula.
+    r = admin.put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"acesso": "ver"})
+    assert r.status_code == 200 and r.json()["acesso_faturacao"] == "ver"
+    assert _por_faturar(ctx["fat"], ctx).status_code == 200
+    assert ctx["fat"].post("/api/faturacao/resumo", json={"linhas": [linha]}).status_code == 200
+    assert ctx["fat"].post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 1", HOJE.isoformat(), [linha])).status_code == 403
+    assert ctx["fat"].post("/api/faturacao/linhas/1/anular", json={"motivo": "x"}).status_code == 403
+    # Sem acesso: nada.
+    assert admin.put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"acesso": "nenhum"}).status_code == 200
     assert _por_faturar(ctx["fat"], ctx).status_code == 403
+    assert admin.put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"acesso": "outro"}).status_code == 422
     # Quem não é Administrador não muda acessos.
-    assert ctx["fat"].put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"ativo": True}).status_code == 403
+    assert ctx["fat"].put(f"/api/definicoes/utilizadores/{uid}/faturacao", json={"acesso": "editar"}).status_code == 403
 
 
 def test_quadro_por_ano(ctx):

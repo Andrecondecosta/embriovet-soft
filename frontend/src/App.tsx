@@ -14,7 +14,7 @@ import deDE from "antd/locale/de_DE";
 
 import { api, setUnauthorizedHandler } from "./api/client";
 import { criarTema } from "./theme";
-import type { PublicSettings, User } from "./api/types";
+import { veFaturacao, type PublicSettings, type User } from "./api/types";
 import { I18nProvider } from "./i18n/I18n";
 import { BrandContext, PRODUCT_NAME } from "./components/Brand";
 import { Shell } from "./components/Shell";
@@ -159,7 +159,7 @@ export function App() {
                         <Route path="/dashboard" element={pagina(<DashboardPage />)} />
                         <Route path="/atividade" element={pagina(<AtividadePage />)} />
                         <Route path="/relatorios" element={pagina(<RelatoriosPage />)} />
-                        {user.acesso_faturacao && <Route path="/faturacao/:tab?" element={pagina(<FaturacaoPage />)} />}
+                        {veFaturacao(user) && <Route path="/faturacao/:tab?" element={pagina(<FaturacaoPage />)} />}
                         <Route path="/estadias/:tab?" element={pagina(<EstadiasPage />)} />
                         <Route path="/trabalho-diario" element={pagina(<TrabalhoPage />)} />
                         <Route path="/animais/:id" element={pagina(<AnimalPage />)} />

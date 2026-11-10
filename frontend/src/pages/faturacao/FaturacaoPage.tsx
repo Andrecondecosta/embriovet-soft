@@ -40,6 +40,7 @@ import {
 import { useT } from "../../i18n/I18n";
 import { PageHeader } from "../../components/ds";
 import { useIsMobile } from "../../components/responsive";
+import { useUser } from "../../components/User";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../components/errors";
 import { FolhaEcraInteiro } from "../../components/mobile";
 import { baixarCsv, dataCurta } from "../../components/csv";
@@ -415,6 +416,8 @@ function FaturadoTab() {
   const [anuladas, setAnuladas] = useState(false);
   const q = useFaturado({ ...p.filtro, fatura, anuladas });
   const [anular, setAnular] = useState<Faturada | null>(null);
+  // "Só ver" não anula.
+  const podeEditar = useUser().acesso_faturacao === "editar";
   const linhas = q.data ?? [];
   const tot = totais(linhas.filter((l) => !l.anulada));
 
@@ -458,8 +461,8 @@ function FaturadoTab() {
                 key={l.id}
                 description={`${l.fatura_numero} · ${dataCurta(l.fatura_data)} · ${tx.dono(l)} · ${tx.periodo(l)}`}
                 extra={tx.qtd(l)}
-                onClick={l.anulada ? undefined : () => setAnular(l)}
-                arrow={!l.anulada}
+                onClick={l.anulada || !podeEditar ? undefined : () => setAnular(l)}
+                arrow={!l.anulada && podeEditar}
               >
                 {l.descricao}
                 {l.anulada && (
@@ -533,7 +536,8 @@ function FaturadoTab() {
             title: "",
             width: 90,
             render: (_, l) =>
-              !l.anulada && (
+              !l.anulada &&
+              podeEditar && (
                 <Button size="small" danger type="link" onClick={() => setAnular(l)}>
                   {t("web.billing.cancel")}
                 </Button>

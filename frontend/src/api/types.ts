@@ -6,8 +6,8 @@ export interface User {
   nome: string;
   nivel: Nivel;
   must_change_password: boolean;
-  /** Vê o separador Faturação (autorização própria, não o nível). */
-  acesso_faturacao?: boolean;
+  /** Faturação, dada pessoa a pessoa (não pelo nível): sem acesso, só ver ou editar. */
+  acesso_faturacao?: AcessoFaturacao;
 }
 
 export interface PublicSettings {
@@ -38,3 +38,7 @@ export interface Page<T> {
   pagina: number;
   por_pagina: number;
 }
+
+export type AcessoFaturacao = "nenhum" | "ver" | "editar";
+/** Vê o separador Faturação (só ver ou editar). */
+export const veFaturacao = (u: { acesso_faturacao?: AcessoFaturacao }) => u.acesso_faturacao === "ver" || u.acesso_faturacao === "editar";

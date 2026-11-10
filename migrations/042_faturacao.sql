@@ -2,7 +2,9 @@
 -- faturas: conta os dias / palhetas × dias e regista o que já foi faturado
 -- (número e data da fatura do programa de faturação), para nada ser
 -- faturado duas vezes nem ficar esquecido. Só acrescenta.
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS acesso_faturacao BOOLEAN NOT NULL DEFAULT FALSE;
+-- Acesso à Faturação por pessoa (não pelo nível): sem acesso / só ver / editar.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS acesso_faturacao VARCHAR(10) NOT NULL DEFAULT 'nenhum'
+    CHECK (acesso_faturacao IN ('nenhum', 'ver', 'editar'));
 
 CREATE TABLE IF NOT EXISTS faturacao_linhas (
     id SERIAL PRIMARY KEY,

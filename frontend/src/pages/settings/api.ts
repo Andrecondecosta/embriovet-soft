@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { descarregar } from "../../components/download";
-import type { PublicSettings } from "../../api/types";
+import type { AcessoFaturacao, PublicSettings } from "../../api/types";
 
 // ── Marca e idioma ──────────────────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ export interface Utilizador {
   ativo: boolean;
   created_at: string | null;
   last_login: string | null;
-  acesso_faturacao: boolean;
+  acesso_faturacao: AcessoFaturacao;
 }
 export interface UtilizadorIn {
   username: string;
@@ -172,7 +172,8 @@ export const useAtivarUtilizador = () =>
 export function useAcessoFaturacao() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ativo }: { id: number; ativo: boolean }) => api<Utilizador>(`/definicoes/utilizadores/${id}/faturacao`, "PUT", { ativo }),
+    mutationFn: ({ id, acesso }: { id: number; acesso: AcessoFaturacao }) =>
+      api<Utilizador>(`/definicoes/utilizadores/${id}/faturacao`, "PUT", { acesso }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["definicoes", "utilizadores"] });
       queryClient.invalidateQueries({ queryKey: ["me"] });

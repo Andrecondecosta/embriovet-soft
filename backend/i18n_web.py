@@ -2015,10 +2015,17 @@ for _k, *_txt in [
     ("web.billing.only_pending", "Só com algo por faturar", "Only with something to bill", "Seulement avec quelque chose à facturer", "Nur mit Offenem"),
     ("web.billing.empty_years", "Sem estadias nem sémen registados.", "No stays or semen recorded.", "Aucun séjour ni semence enregistrés.", "Keine Aufenthalte oder Samen erfasst."),
     ("web.settings.users.billing", "Faturação", "Billing", "Facturation", "Abrechnung"),
-    ("web.settings.users.billing_help", "Só quem tem esta opção vê o separador Faturação (seja qual for o nível).",
-     "Only users with this option see the Billing section (whatever their level).",
-     "Seuls les utilisateurs avec cette option voient la section Facturation (quel que soit le niveau).",
-     "Nur Benutzer mit dieser Option sehen den Bereich Abrechnung (unabhängig von der Stufe)."),
+    ("web.settings.users.billing_help", "Acesso à Faturação desta pessoa, seja qual for o nível: sem acesso (nem vê o separador), só ver (consulta e tira o PDF) ou editar (marca e anula faturas).",
+     "This person's Billing access, whatever their level: none (doesn't see the section), view only (consults and prints the PDF) or edit (marks and cancels invoices).",
+     "Accès de cette personne à la Facturation, quel que soit le niveau : aucun (ne voit pas la section), lecture (consulte et imprime le PDF) ou modification (marque et annule les factures).",
+     "Abrechnungszugang dieser Person, unabhängig von der Stufe: keiner (sieht den Bereich nicht), nur ansehen (einsehen und PDF) oder bearbeiten (Rechnungen markieren und stornieren)."),
+    ("web.settings.users.billing_nenhum", "Sem acesso", "No access", "Aucun accès", "Kein Zugang"),
+    ("web.settings.users.billing_ver", "Só ver", "View only", "Lecture seule", "Nur ansehen"),
+    ("web.settings.users.billing_editar", "Editar", "Edit", "Modifier", "Bearbeiten"),
+    ("web.billing.view_only", "Só consulta: pode ver e tirar o PDF; marcar faturas é para quem tem «Editar».",
+     "View only: you can see it and print the PDF; marking invoices requires “Edit”.",
+     "Lecture seule : vous pouvez consulter et imprimer le PDF ; marquer les factures nécessite « Modifier ».",
+     "Nur ansehen: einsehen und PDF möglich; Rechnungen markieren erfordert „Bearbeiten“."),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
