@@ -49,7 +49,15 @@ function useTextosResumo() {
 /** Antes de marcar como faturado: o que vai ser faturado, por proprietário
  *  (uma fatura cada), com o porquê de cada mudança de palhetas, em PDF se
  *  se quiser. Só depois se escreve o número de cada fatura. */
-export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; linhas: PorFaturar[]; onClose: (feito: boolean) => void }) {
+export function ResumoFaturar({
+  aberto,
+  linhas: selecionadas,
+  onClose,
+}: {
+  aberto: boolean;
+  linhas: PorFaturar[];
+  onClose: (feito: boolean) => void;
+}) {
   const t = useT();
   const isMobile = useIsMobile();
   const tx = useTextosResumo();
@@ -62,14 +70,47 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
   const [erro, setErro] = useState<string | null>(null);
   const [imprimir, setImprimir] = useState(false);
 
+  // Período a faturar: começa pelo das linhas escolhidas e pode encurtar-se
+  // (ex.: faturar só até ao fim do mês passado). O resto fica por faturar.
+  const limites = useMemo<[Dayjs, Dayjs] | null>(() => {
+    if (!selecionadas.length) return null;
+    const ini = selecionadas.reduce((m, l) => (l.inicio < m ? l.inicio : m), selecionadas[0].inicio);
+    const fim = selecionadas.reduce((m, l) => (l.fim > m ? l.fim : m), selecionadas[0].fim);
+    return [dayjs(ini), dayjs(fim)];
+  }, [selecionadas]);
+  const [periodo, setPeriodo] = useState<[Dayjs, Dayjs] | null>(null);
+  const linhas = useMemo(() => {
+    if (!periodo) return selecionadas;
+    const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
+    return selecionadas.flatMap((l) => {
+      const inicio = l.inicio > de ? l.inicio : de;
+      const fim = l.fim < ate ? l.fim : ate;
+      if (inicio > fim) return [];
+      const dias = nDias({ inicio, fim });
+      return [{ ...l, inicio, fim, dias, quantidade: l.tipo === "estadia" ? dias : dias * (l.palhetas ?? 0) }];
+    });
+  }, [selecionadas, periodo]);
+
   useEffect(() => {
     if (!aberto) return;
+    setPeriodo(limites);
     setNumeros({});
     setData(dayjs());
     setAcerto(false);
     setObs("");
     setErro(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
+
+  const atalhosAte = limites
+    ? [
+        { label: t("web.billing.until_last_month"), data: dayjs().subtract(1, "month").endOf("month") },
+        { label: t("web.billing.until_end_of", { ano: dayjs().year() - 1 }), data: dayjs(`${dayjs().year() - 1}-12-31`) },
+      ]
+        .filter((x) => !x.data.isBefore(limites[0], "day") && x.data.isBefore(limites[1], "day"))
+        .map((x) => ({ label: x.label, value: [limites[0], x.data] as [Dayjs, Dayjs] }))
+    : [];
+  const foraDosLimites = (d: Dayjs) => !!limites && (d.isBefore(limites[0], "day") || d.isAfter(limites[1], "day"));
 
   const refs = useMemo(() => linhas.map((l) => ({ tipo: l.tipo, ref_id: l.ref_id, inicio: l.inicio, fim: l.fim })), [linhas]);
   const donoIds = useMemo(() => [...new Set(linhas.map((l) => l.dono_id).filter((x): x is number => x != null))], [linhas]);
@@ -158,6 +199,7 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
 
   const guardar = async () => {
     setErro(null);
+    if (!linhas.length) return setErro(t("web.billing.nothing_in_period"));
     if (!acerto && grupos.some((g) => !numeros[g.chave]?.trim())) return setErro(t("web.billing.invoice_each"));
     const avisos = await repetidos();
     if (avisos.length && !(await perguntar(avisos))) return;
@@ -199,6 +241,24 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
           loading={faturar.isPending}
         >
           <div style={{ padding: "8px 12px", color: "#999", fontSize: 13 }}>{t("web.billing.review_help")}</div>
+          {periodo && limites && (
+            <List header={t("web.billing.period_to_bill")}>
+              <DataMobile
+                titulo={t("web.billing.from")}
+                data={periodo[0]}
+                min={limites[0]}
+                max={periodo[1]}
+                onChange={(d) => setPeriodo([d, periodo[1]])}
+              />
+              <DataMobile
+                titulo={t("web.billing.until")}
+                data={periodo[1]}
+                min={periodo[0]}
+                max={limites[1]}
+                onChange={(d) => setPeriodo([periodo[0], d])}
+              />
+            </List>
+          )}
           {grupos.map((g) => (
             <List
               key={g.chave}
@@ -237,7 +297,7 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
                 {t("web.billing.initial")}
               </MCheckbox>
             </List.Item>
-            <DataMobile data={data} onChange={setData} />
+            <DataMobile titulo={t("web.billing.invoice_date")} data={data} onChange={setData} />
             <List.Item title={t("web.billing.notes")}>
               <TextArea value={obs} onChange={setObs} autoSize={{ minRows: 1 }} />
             </List.Item>
@@ -283,6 +343,22 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
         }
       >
         <Typography.Paragraph type="secondary">{t("web.billing.review_help")}</Typography.Paragraph>
+        {periodo && (
+          <Space wrap style={{ marginBottom: 12 }}>
+            <Typography.Text strong>{t("web.billing.period_to_bill")}</Typography.Text>
+            <DatePicker.RangePicker
+              format="DD/MM/YYYY"
+              allowClear={false}
+              value={periodo}
+              disabledDate={foraDosLimites}
+              presets={atalhosAte}
+              onChange={(v) => v?.[0] && v[1] && setPeriodo([v[0], v[1]])}
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t("web.billing.period_help")}
+            </Typography.Text>
+          </Space>
+        )}
         {q.isPending && <Spin style={{ display: "block", margin: 12 }} />}
         <Flex vertical gap={12}>
           {grupos.map((g) => {
@@ -367,12 +443,29 @@ export function ResumoFaturar({ aberto, linhas, onClose }: { aberto: boolean; li
   );
 }
 
-function DataMobile({ data, onChange }: { data: Dayjs; onChange: (d: Dayjs) => void }) {
-  const t = useT();
+function DataMobile({
+  titulo,
+  data,
+  onChange,
+  min,
+  max,
+}: {
+  titulo: string;
+  data: Dayjs;
+  onChange: (d: Dayjs) => void;
+  min?: Dayjs;
+  max?: Dayjs;
+}) {
   const ref = useRef<{ open: () => void }>(null);
   return (
-    <List.Item title={t("web.billing.invoice_date")} arrow onClick={() => ref.current?.open()}>
-      <DataCampo ref={ref} value={data.format(ISO)} onChange={(v) => v && onChange(dayjs(v))} />
+    <List.Item title={titulo} arrow onClick={() => ref.current?.open()}>
+      <DataCampo
+        ref={ref}
+        value={data.format(ISO)}
+        min={min?.toDate()}
+        max={max?.toDate()}
+        onChange={(v) => v && onChange(dayjs(v))}
+      />
     </List.Item>
   );
 }
