@@ -22,7 +22,7 @@ from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.deps import get_current_user
 from backend.serial import valor
@@ -58,9 +58,19 @@ def _texto(v):
 
 # ── Modelos (a mesma forma que o ecrã usa) ────────────────────────────────
 
+# Com NS (nada significativo) ou MF (multifolicular) não se mede o folículo.
+SEM_TAMANHO = {"NS", "MF"}
+
+
 class Foliculo(BaseModel):
-    tamanho: int = Field(ge=9, le=61)  # 9 = "<10", 61 = ">60"
+    tamanho: int | None = Field(default=None, ge=9, le=61)  # 9 = "<10", 61 = ">60"
     achados: list[Literal["NS", "OV", "FH", "MF", "CL"]] = []
+
+    @model_validator(mode="after")
+    def _tamanho_obrigatorio(self):
+        if self.tamanho is None and not SEM_TAMANHO & set(self.achados):
+            raise ValueError("tamanho obrigatório (exceto com NS ou MF)")
+        return self
 
 
 class Ovario(BaseModel):

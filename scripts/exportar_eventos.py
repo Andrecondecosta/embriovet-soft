@@ -57,8 +57,10 @@ def _ovario(ov: dict | None) -> list:
     if ov is None:
         return [None, None, None]
     fol = ov.get("foliculos") or []
-    lista = "; ".join(" ".join([str(f.get("tamanho"))] + list(f.get("achados") or [])) for f in fol)
-    return [len(fol), max((f.get("tamanho") or 0) for f in fol) if fol else None, lista or None]
+    # Com NS/MF o folículo pode não ter tamanho.
+    lista = "; ".join(" ".join(([str(f["tamanho"])] if f.get("tamanho") is not None else []) + list(f.get("achados") or [])) for f in fol)
+    tamanhos = [f["tamanho"] for f in fol if f.get("tamanho") is not None]
+    return [len(fol), max(tamanhos) if tamanhos else None, lista or None]
 
 
 def _hora_inducao(d: dict):

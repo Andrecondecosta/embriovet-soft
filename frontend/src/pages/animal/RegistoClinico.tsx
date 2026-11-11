@@ -55,7 +55,7 @@ import type { Animal } from "./api";
 type Parte = "OE" | "OD" | "UT" | "CER";
 type Ficha = Parte | "TX" | "OVU" | "DG";
 interface Foliculo {
-  // null só enquanto se preenche: não se guarda sem tamanho.
+  // Sem tamanho só com NS (nada significativo) ou MF (multifolicular).
   tamanho: number | null; // 9 = "<10", 61 = ">60"
   achados: string[];
 }
@@ -131,6 +131,9 @@ const LIQUIDO = ["0", "<2 cm", "+", "++", "+++"];
 const HORAS = ["8h", "10h", "12h", "14h", "16h"];
 const SIM_NAO: SimNao[] = ["sim", "nao", "nao_avaliado"];
 const DGS = ["Positivo", "Negativo", "Inconclusivo", "Sem exame"];
+/** NS (nada significativo) e MF (multifolicular) dispensam o tamanho. */
+const SEM_TAMANHO = ["NS", "MF"];
+const precisaTamanho = (f: Foliculo) => f.tamanho == null && !f.achados.some((a) => SEM_TAMANHO.includes(a));
 const mm = (n: number | null) => (n == null ? "—" : n <= 9 ? "<10" : n >= 61 ? ">60" : String(n));
 
 /** Resumo curto de cada parte (tabela, desenho). */
@@ -155,7 +158,7 @@ function useResumo() {
       .join(" · ");
   };
   return (d: Dados, f: Ficha): string => {
-    if (f === "OE" || f === "OD") return d[f]?.foliculos.map((x) => [`${mm(x.tamanho)} mm`, ...x.achados].join(" ")).join(" · ") ?? "";
+    if (f === "OE" || f === "OD") return d[f]?.foliculos.map((x) => [x.tamanho != null && `${mm(x.tamanho)} mm`, ...x.achados].filter(Boolean).join(" ")).join(" · ") ?? "";
     if (f === "UT") return d.UT ? `Ed ${EDEMA[d.UT.edema]} · ${t("web.registo.liquid_short")} ${LIQUIDO[d.UT.liquido]}` : "";
     if (f === "CER") return d.CER ? cervix(d.CER.grau) : "";
     if (f === "DG") return d.DG ? t(`web.registo.dg.${d.DG}`) : "";
@@ -422,7 +425,7 @@ function FichaOvario({ atual, onGuardar }: { atual?: Ovario; onGuardar: (v: Ovar
       </div>
       <Comentario value={ov.comentario} onChange={(v) => setOv({ ...ov, comentario: v })} />
       {falta && <Falta>{t("web.registo.size_missing")}</Falta>}
-      <Guardar onClick={() => (ov.foliculos.some((f) => f.tamanho == null) ? setFalta(true) : onGuardar(ov))} />
+      <Guardar onClick={() => (ov.foliculos.some(precisaTamanho) ? setFalta(true) : onGuardar(ov))} />
     </>
   );
 }
@@ -750,8 +753,15 @@ function useLinhasDetalhe() {
           com(
             d[p]!.foliculos.map((f, i) => (
               <div key={i}>
-                {t("web.registo.follicle", { n: i + 1 })}: <b>{mm(f.tamanho)}</b>
-                {f.achados.length > 0 && ` · ${f.achados.join(", ")}`}
+                {t("web.registo.follicle", { n: i + 1 })}:{" "}
+                {f.tamanho != null ? (
+                  <>
+                    <b>{mm(f.tamanho)}</b>
+                    {f.achados.length > 0 && ` · ${f.achados.join(", ")}`}
+                  </>
+                ) : (
+                  <b>{f.achados.join(", ")}</b>
+                )}
               </div>
             )),
             d[p]!.comentario,

@@ -65,7 +65,7 @@ class Marta(Pessoa):
 
     @staticmethod
     def _maior(dados: dict) -> int:
-        fs = [f.get("tamanho", 0) for k in ("OE", "OD") for f in (dados.get(k) or {}).get("foliculos", [])]
+        fs = [f.get("tamanho") or 0 for k in ("OE", "OD") for f in (dados.get(k) or {}).get("foliculos", [])]
         return max(fs + [0])
 
     # ── o dia ────────────────────────────────────────────────────────────
