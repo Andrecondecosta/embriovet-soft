@@ -10,7 +10,7 @@ import { useErrorMessage } from "../../components/errors";
 import { useAnimal, useReprodutivo, type Animal } from "./api";
 import { TagReprodutivo } from "../../components/EstadoReprodutivo";
 import { RegistarSaida } from "../estadias/EstadiasPage";
-import { MudarTipo, type EntradaAberta } from "../estadias/MudarTipo";
+import { MudarTipo, destinos, rotuloDestino, type EntradaAberta } from "../estadias/MudarTipo";
 import type { Estadia } from "../estadias/api";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
@@ -87,25 +87,32 @@ export function AnimalPage() {
   const abrirSaida = () => {
     if (animal.estadia_ativa !== null) setSaida({ id: animal.estadia_ativa, animal: animal.nome } as Estadia);
   };
-  // Externo ⇄ estadia ⇄ visita (ex.: acompanhada em casa e depois internada).
-  const abrirMudarTipo = () => {
+  // Mudar para interno / externo (ex.: acompanhada em casa e depois internada).
+  const paraOnde = animal.estadia_ativa !== null ? destinos(animal.estadia_tipo) : [];
+  const abrirMudarTipo = (para: EntradaAberta["para"]) => {
     if (animal.estadia_ativa !== null && animal.estadia_tipo)
-      setMudarTipo({ id: animal.estadia_ativa, animal: animal.nome, tipo: animal.estadia_tipo });
+      setMudarTipo({ id: animal.estadia_ativa, animal: animal.nome, tipo: animal.estadia_tipo, para });
   };
   const botaoSaida =
     animal.estadia_ativa !== null &&
     (isMobile ? (
       <div style={{ display: "flex", gap: 8, margin: "4px 0 8px" }}>
-        <MButton size="small" fill="outline" onClick={abrirMudarTipo}>
-          {t("web.stays.change.button")}
-        </MButton>
+        {paraOnde.map((p) => (
+          <MButton key={p} size="small" fill="outline" onClick={() => abrirMudarTipo(p)}>
+            {rotuloDestino(t, p)}
+          </MButton>
+        ))}
         <MButton size="small" fill="outline" onClick={abrirSaida}>
           {t("web.stays.register_exit")}
         </MButton>
       </div>
     ) : (
       <>
-        <Button onClick={abrirMudarTipo}>{t("web.stays.change.button")}</Button>
+        {paraOnde.map((p) => (
+          <Button key={p} onClick={() => abrirMudarTipo(p)}>
+            {rotuloDestino(t, p)}
+          </Button>
+        ))}
         <Button onClick={abrirSaida}>{t("web.stays.register_exit")}</Button>
       </>
     ));

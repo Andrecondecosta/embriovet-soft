@@ -2069,10 +2069,9 @@ for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Éguas", "Mares", "Juments",
 
 # ── Mudar o tipo de uma entrada em aberto (externo ⇄ estadia ⇄ visita) ──
 for _k, *_txt in [
-    ("button", "Mudar tipo", "Change type", "Changer le type", "Art ändern"),
-    ("title", "Mudar tipo de registo", "Change record type", "Changer le type d'enregistrement", "Eintragsart ändern"),
+    ("to_estadia", "Mudar para interno", "Move to inpatient", "Passer en interne", "Stationär aufnehmen"),
+    ("to_externo", "Mudar para externo", "Move to external", "Passer en externe", "Auf extern umstellen"),
     ("now", "{name} — agora: {tipo}", "{name} — now: {tipo}", "{name} — actuellement : {tipo}", "{name} — derzeit: {tipo}"),
-    ("to", "Passa a", "Becomes", "Devient", "Wird zu"),
     ("date", "Desde", "From", "Depuis", "Ab"),
     ("help", "O trabalho clínico (inseminações, diagnósticos, tarefas) continua igual. Na Faturação só contam os dias na clínica.",
      "Clinical work (inseminations, pregnancy checks, tasks) stays the same. Billing only counts days at the clinic.",

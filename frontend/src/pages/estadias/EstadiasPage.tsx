@@ -28,7 +28,7 @@ import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../..
 import { ApiError } from "../../api/client";
 import { Cabecalho } from "../../components/mobile";
 import { NovaEstadia } from "./NovaEstadia";
-import { MudarTipo, type EntradaAberta } from "./MudarTipo";
+import { MudarTipo, destinos, rotuloDestino, type EntradaAberta } from "./MudarTipo";
 import { TagReprodutivo, useEstadoReprodutivo } from "../../components/EstadoReprodutivo";
 import {
   ESTADOS_SAIDA,
@@ -276,16 +276,18 @@ function InternadasDesktop({ e }: { e: E }) {
           },
           {
             key: "acoes",
-            width: 330,
+            width: 400,
             align: "right",
             render: (_, x) => (
               <Flex gap={4} justify="flex-end">
                 <Button size="small" type="link" onClick={() => e.verFicha(x)}>
                   {t("web.stays.view_record")}
                 </Button>
-                <Button size="small" onClick={() => e.setEntradaTipo(x)}>
-                  {t("web.stays.change.button")}
-                </Button>
+                {destinos(x.tipo).map((p) => (
+                  <Button key={p} size="small" onClick={() => e.setEntradaTipo({ ...x, para: p })}>
+                    {rotuloDestino(t, p)}
+                  </Button>
+                ))}
                 <Button size="small" onClick={() => e.setSaida(x)}>
                   {t("web.stays.register_exit")}
                 </Button>
@@ -704,7 +706,7 @@ function InternadasMobile({ e }: { e: E }) {
             <SwipeAction
               key={x.id}
               rightActions={[
-                { key: "tipo", text: t("web.stays.change.button"), color: "light", onClick: () => e.setEntradaTipo(x) },
+                ...destinos(x.tipo).map((p) => ({ key: p, text: rotuloDestino(t, p), color: "light", onClick: () => e.setEntradaTipo({ ...x, para: p }) })),
                 { key: "saida", text: t("web.stays.register_exit"), color: "primary", onClick: () => e.setSaida(x) },
               ]}
             >
