@@ -89,7 +89,7 @@ def pesquisar_animais(
 
 @router.get("/animais/eguas")
 def todas_as_eguas(_user: dict = Depends(get_current_user)):
-    """Todas as éguas e receptoras ativas (Trabalho diário): dono, se está
+    """Todas as éguas e receptoras ativas (separador Éguas): dono, se está
     na clínica, estado reprodutivo e data do último registo clínico."""
     with get_connection() as conn:
         with conn.cursor() as cur:

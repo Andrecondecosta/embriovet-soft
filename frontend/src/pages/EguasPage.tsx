@@ -1,0 +1,167 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Alert, Card, Input, Segmented, Space, Table, Tag, Typography } from "antd";
+import { DotLoading, ErrorBlock, List, SearchBar, Selector } from "antd-mobile";
+
+import { api } from "../api/client";
+import { useT } from "../i18n/I18n";
+import { useIsMobile } from "../components/responsive";
+import { useErrorMessage } from "../components/errors";
+import { dataCurta } from "../components/csv";
+import { TagReprodutivo, useEstadoReprodutivo, type Repro } from "../components/EstadoReprodutivo";
+import type { TipoRegisto } from "./estadias/api";
+
+// Todas as éguas e receptoras; tocar numa abre a ficha no Diário clínico.
+
+interface Egua {
+  id: number;
+  nome: string;
+  tipo: "egua" | "receptora";
+  proprietario: string | null;
+  em_aberto: TipoRegisto | null;
+  ultimo_registo: string | null;
+  repro: Repro | null;
+}
+
+function useEguas() {
+  const t = useT();
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ["animais", "eguas"], queryFn: () => api<Egua[]>("/animais/eguas") });
+  const [texto, setTexto] = useState("");
+  const [soNaClinica, setSoNaClinica] = useState(false);
+  const procura = texto.trim().toLowerCase();
+  const lista = (q.data ?? []).filter(
+    (e) =>
+      (!soNaClinica || e.em_aberto) &&
+      (!procura || e.nome.toLowerCase().includes(procura) || (e.proprietario ?? "").toLowerCase().includes(procura)),
+  );
+  return {
+    t,
+    q,
+    lista,
+    texto,
+    setTexto,
+    soNaClinica,
+    setSoNaClinica,
+    abrir: (e: Egua) => navigate(`/animais/${e.id}?tab=diario`),
+    filtro: [
+      { value: "todas", label: t("web.daily.mares.all") },
+      { value: "aqui", label: t("web.daily.mares.here") },
+    ],
+    naClinica: (e: Egua) => (e.em_aberto ? t(`web.stays.kind.${e.em_aberto}`) : null),
+  };
+}
+
+export function EguasPage() {
+  return useIsMobile() ? <EguasMobile /> : <EguasDesktop />;
+}
+
+function EguasDesktop() {
+  const x = useEguas();
+  const { t } = x;
+  const errorMessage = useErrorMessage();
+  if (x.q.isError) return <Alert type="error" showIcon title={errorMessage(x.q.error)} />;
+  return (
+    <Card
+      size="small"
+      title={`${t("web.daily.mares.title")} (${x.lista.length})`}
+      extra={
+        <Space>
+          <Input.Search
+            allowClear
+            placeholder={t("web.daily.mares.filter")}
+            style={{ width: 260 }}
+            value={x.texto}
+            onChange={(e) => x.setTexto(e.target.value)}
+          />
+          <Segmented options={x.filtro} value={x.soNaClinica ? "aqui" : "todas"} onChange={(v) => x.setSoNaClinica(v === "aqui")} />
+        </Space>
+      }
+    >
+      <Table<Egua>
+        size="small"
+        rowKey="id"
+        loading={x.q.isFetching}
+        dataSource={x.lista}
+        pagination={{ defaultPageSize: 50, showSizeChanger: true, hideOnSinglePage: true }}
+        onRow={(e) => ({ onClick: () => x.abrir(e), style: { cursor: "pointer" } })}
+        locale={{ emptyText: t("web.daily.mares.none") }}
+        columns={[
+          {
+            title: t("web.dashboard.mare"),
+            dataIndex: "nome",
+            sorter: (a, b) => a.nome.localeCompare(b.nome),
+            render: (v: string) => <Typography.Text strong>{v}</Typography.Text>,
+          },
+          {
+            title: t("web.dashboard.owner"),
+            dataIndex: "proprietario",
+            sorter: (a, b) => (a.proprietario ?? "").localeCompare(b.proprietario ?? ""),
+            render: (v: string | null) => v ?? "—",
+          },
+          { title: t("web.daily.mares.col.type"), dataIndex: "tipo", width: 110, render: (v: string) => t(`web.stays.animal.${v}`) },
+          {
+            title: t("web.daily.mares.here"),
+            key: "aqui",
+            width: 120,
+            render: (_, e) => (x.naClinica(e) ? <Tag color="green">{x.naClinica(e)}</Tag> : null),
+          },
+          { title: t("web.daily.mares.col.state"), key: "repro", render: (_, e) => <TagReprodutivo r={e.repro} /> },
+          {
+            title: t("web.daily.mares.col.last"),
+            dataIndex: "ultimo_registo",
+            width: 130,
+            sorter: (a, b) => (a.ultimo_registo ?? "").localeCompare(b.ultimo_registo ?? ""),
+            render: (v: string | null) => (v ? dataCurta(v) : "—"),
+          },
+        ]}
+      />
+    </Card>
+  );
+}
+
+function EguasMobile() {
+  const x = useEguas();
+  const { t } = x;
+  const estadoRepro = useEstadoReprodutivo();
+  const errorMessage = useErrorMessage();
+  if (x.q.isError) return <ErrorBlock status="default" title={errorMessage(x.q.error)} description="" />;
+  return (
+    <>
+      <div style={{ padding: "8px 12px", background: "#fff" }}>
+        <SearchBar value={x.texto} onChange={x.setTexto} placeholder={t("web.daily.mares.filter")} />
+        <Selector
+          style={{ marginTop: 8 }}
+          columns={2}
+          options={x.filtro}
+          value={[x.soNaClinica ? "aqui" : "todas"]}
+          onChange={(v) => v.length && x.setSoNaClinica(v[0] === "aqui")}
+        />
+      </div>
+      {!x.q.data ? (
+        <div style={{ textAlign: "center", padding: 48 }}>
+          <DotLoading color="primary" />
+        </div>
+      ) : (
+        <List header={`${t("web.daily.mares.title")} (${x.lista.length})`}>
+          {x.lista.map((e) => (
+            <List.Item
+              key={e.id}
+              arrow
+              description={[e.proprietario ?? "—", x.naClinica(e), estadoRepro(e.repro)?.texto].filter(Boolean).join(" · ")}
+              onClick={() => x.abrir(e)}
+            >
+              {e.nome}
+            </List.Item>
+          ))}
+          {!x.lista.length && (
+            <List.Item>
+              <span style={{ color: "#999" }}>{t("web.daily.mares.none")}</span>
+            </List.Item>
+          )}
+        </List>
+      )}
+    </>
+  );
+}

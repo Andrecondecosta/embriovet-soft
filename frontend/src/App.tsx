@@ -33,6 +33,7 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ 
 const RelatoriosPage = lazy(() => import("./pages/RelatoriosPage").then((m) => ({ default: m.RelatoriosPage })));
 const FaturacaoPage = lazy(() => import("./pages/faturacao/FaturacaoPage").then((m) => ({ default: m.FaturacaoPage })));
 const EstadiasPage = lazy(() => import("./pages/estadias/EstadiasPage").then((m) => ({ default: m.EstadiasPage })));
+const EguasPage = lazy(() => import("./pages/EguasPage").then((m) => ({ default: m.EguasPage })));
 const TrabalhoPage = lazy(() => import("./pages/TrabalhoPage").then((m) => ({ default: m.TrabalhoPage })));
 const AnimalPage = lazy(() => import("./pages/animal/AnimalPage").then((m) => ({ default: m.AnimalPage })));
 const InseminacaoPage = lazy(() => import("./pages/InseminacaoPage").then((m) => ({ default: m.InseminacaoPage })));
@@ -161,6 +162,7 @@ export function App() {
                         <Route path="/relatorios" element={pagina(<RelatoriosPage />)} />
                         {veFaturacao(user) && <Route path="/faturacao/:area?/:tab?" element={pagina(<FaturacaoPage />)} />}
                         <Route path="/estadias/:tab?" element={pagina(<EstadiasPage />)} />
+                        <Route path="/eguas" element={pagina(<EguasPage />)} />
                         <Route path="/trabalho-diario" element={pagina(<TrabalhoPage />)} />
                         <Route path="/animais/:id" element={pagina(<AnimalPage />)} />
                         <Route path="/trabalho-diario/inseminacao" element={pagina(<InseminacaoPage />)} />

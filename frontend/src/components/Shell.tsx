@@ -13,6 +13,7 @@ import {
   LogoutOutlined,
   MenuOutlined,
   SettingOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 
 import { api } from "../api/client";
@@ -22,10 +23,11 @@ import { BrandMark, ProductSignature, useBrand } from "./Brand";
 import { useIsMobile } from "./responsive";
 import { MobileShell } from "./MobileShell";
 
-// Os mesmos 7 sítios do menu da app atual (Pedido 7), pela mesma ordem.
+// Os 7 sítios do menu da app atual (Pedido 7), pela mesma ordem, e "Éguas".
 export const NAV = [
   { path: "/dashboard", label: "web.nav.dashboard", icon: <AppstoreOutlined /> },
   { path: "/estadias", label: "web.nav.estadias", icon: <HomeOutlined /> },
+  { path: "/eguas", label: "web.nav.eguas", icon: <UnorderedListOutlined /> },
   { path: "/trabalho-diario", label: "web.nav.trabalho_diario", icon: <CalendarOutlined /> },
   { path: "/stock-semen", label: "web.nav.stock_semen", icon: <ExperimentOutlined /> },
   { path: "/atividade", label: "web.nav.atividade", icon: <LineChartOutlined /> },
