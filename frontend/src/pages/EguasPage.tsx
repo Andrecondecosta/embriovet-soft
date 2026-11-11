@@ -32,11 +32,15 @@ function useEguas() {
   const navigate = useNavigate();
   const q = useQuery({ queryKey: ["animais", "eguas"], queryFn: () => api<Egua[]>("/animais/eguas") });
   const [texto, setTexto] = useState("");
-  const [soNaClinica, setSoNaClinica] = useState(false);
+  // Tipo (éguas / receptoras) e situação (na clínica / externas).
+  const [tipo, setTipo] = useState<"todos" | "egua" | "receptora">("todos");
+  const [situacao, setSituacao] = useState<"todas" | "aqui" | "externas">("todas");
   const procura = texto.trim().toLowerCase();
   const lista = (q.data ?? []).filter(
     (e) =>
-      (!soNaClinica || (e.em_aberto && e.em_aberto !== "externo")) &&
+      (tipo === "todos" || e.tipo === tipo) &&
+      (situacao === "todas" ||
+        (situacao === "externas" ? e.em_aberto === "externo" : !!e.em_aberto && e.em_aberto !== "externo")) &&
       (!procura || e.nome.toLowerCase().includes(procura) || (e.proprietario ?? "").toLowerCase().includes(procura)),
   );
   return {
@@ -45,12 +49,20 @@ function useEguas() {
     lista,
     texto,
     setTexto,
-    soNaClinica,
-    setSoNaClinica,
+    tipo,
+    setTipo,
+    situacao,
+    setSituacao,
     abrir: (e: Egua) => navigate(`/animais/${e.id}?tab=diario`),
-    filtro: [
-      { value: "todas", label: t("web.daily.mares.all") },
-      { value: "aqui", label: t("web.daily.mares.here") },
+    tipos: [
+      { value: "todos" as const, label: t("web.daily.mares.all") },
+      { value: "egua" as const, label: t("web.stays.animals.egua") },
+      { value: "receptora" as const, label: t("web.stays.animals.receptora") },
+    ],
+    situacoes: [
+      { value: "todas" as const, label: t("web.daily.mares.all") },
+      { value: "aqui" as const, label: t("web.daily.mares.here") },
+      { value: "externas" as const, label: t("web.daily.mares.external") },
     ],
     naClinica: (e: Egua) => (e.em_aberto ? t(`web.stays.kind.${e.em_aberto}`) : null),
   };
@@ -85,7 +97,8 @@ function EguasDesktop({ novaEgua }: { novaEgua: () => void }) {
             value={x.texto}
             onChange={(e) => x.setTexto(e.target.value)}
           />
-          <Segmented options={x.filtro} value={x.soNaClinica ? "aqui" : "todas"} onChange={(v) => x.setSoNaClinica(v === "aqui")} />
+          <Segmented options={x.tipos} value={x.tipo} onChange={x.setTipo} />
+          <Segmented options={x.situacoes} value={x.situacao} onChange={x.setSituacao} />
           <Button type="primary" icon={<PlusOutlined />} onClick={novaEgua}>
             {t("web.daily.mares.new")}
           </Button>
@@ -146,10 +159,19 @@ function EguasMobile({ novaEgua }: { novaEgua: () => void }) {
         <SearchBar value={x.texto} onChange={x.setTexto} placeholder={t("web.daily.mares.filter")} />
         <Selector
           style={{ marginTop: 8 }}
-          columns={2}
-          options={x.filtro}
-          value={[x.soNaClinica ? "aqui" : "todas"]}
-          onChange={(v) => v.length && x.setSoNaClinica(v[0] === "aqui")}
+          columns={3}
+          showCheckMark={false}
+          options={x.tipos}
+          value={[x.tipo]}
+          onChange={(v) => v.length && x.setTipo(v[0])}
+        />
+        <Selector
+          style={{ marginTop: 8 }}
+          columns={3}
+          showCheckMark={false}
+          options={x.situacoes}
+          value={[x.situacao]}
+          onChange={(v) => v.length && x.setSituacao(v[0])}
         />
       </div>
       {!x.q.data ? (

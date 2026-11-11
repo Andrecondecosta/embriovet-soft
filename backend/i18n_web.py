@@ -2054,6 +2054,7 @@ for _k, *_txt in [
     ("mares.title", "Éguas", "Mares", "Juments", "Stuten"),
     ("mares.all", "Todas", "All", "Toutes", "Alle"),
     ("mares.here", "Na clínica", "At the clinic", "À la clinique", "In der Klinik"),
+    ("mares.external", "Externas", "External", "Externes", "Extern"),
     ("mares.filter", "Filtrar por nome ou proprietário", "Filter by name or owner", "Filtrer par nom ou propriétaire",
      "Nach Name oder Besitzer filtern"),
     ("mares.none", "Sem éguas.", "No mares.", "Aucune jument.", "Keine Stuten."),
