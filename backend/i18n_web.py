@@ -2059,9 +2059,18 @@ for _k, *_txt in [
     ("mares.none", "Sem éguas.", "No mares.", "Aucune jument.", "Keine Stuten."),
     ("mares.col.state", "Estado reprodutivo", "Breeding status", "Statut reproductif", "Zuchtstatus"),
     ("mares.col.type", "Tipo", "Type", "Type", "Typ"),
+    ("mares.new", "Nova égua", "New mare", "Nouvelle jument", "Neue Stute"),
+    ("mares.created", "Égua criada.", "Mare created.", "Jument créée.", "Stute angelegt."),
+    ("mares.not_here", "Não está na clínica", "Not at the clinic", "Pas à la clinique", "Nicht in der Klinik"),
+    ("mares.not_here_help", "Fica só registada (pode dar entrada mais tarde nas Estadias).",
+     "Only registered (you can check her in later in Stays).", "Seulement enregistrée (entrée possible plus tard dans Séjours).",
+     "Nur erfasst (Aufnahme später unter Aufenthalte möglich)."),
     ("mares.col.last", "Último registo", "Last record", "Dernier enregistrement", "Letzter Eintrag"),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.daily.{_k}"] = _v
 for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Éguas", "Mares", "Juments", "Stuten")):
     WEB_TRANSLATIONS[_lang]["web.nav.eguas"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Aqui só se criam éguas e receptoras.", "Only mares and recipients can be created here.",
+                                                    "Ici, seulement juments et receveuses.", "Hier nur Stuten und Empfängerstuten.")):
+    WEB_TRANSLATIONS[_lang]["web.mares.error.only_mares"] = _v

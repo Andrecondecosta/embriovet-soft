@@ -280,6 +280,64 @@ def _lugar_livre(cur, d) -> None:
         raise _erro(409, "web.stays.error.housing_full", name=row[0])
 
 
+def _inserir_animal(cur, a: AnimalNovo, dono_id: int, observacoes: str | None) -> int:
+    """Cria o animal (formulário "Novo animal"). Só bloqueia o mesmo nome com
+    o MESMO dono (como a app atual)."""
+    cur.execute("SELECT 1 FROM animais WHERE LOWER(nome) = LOWER(%s) AND dono_id = %s LIMIT 1", (a.nome, dono_id))
+    if cur.fetchone():
+        raise _erro(409, "web.stays.error.animal_exists", name=a.nome)
+    cur.execute(
+        """
+        INSERT INTO animais (
+            nome, tipo, raca, pelagem, data_nascimento, numero_registo, chip,
+            altura, peso, dono_id, pai, mae, avo_paterno, avo_materno,
+            observacoes, is_receptora, ativo
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+        RETURNING id
+        """,
+        (
+            a.nome, a.tipo, a.raca, a.pelagem, a.data_nascimento, a.numero_registo, a.chip,
+            a.altura if a.altura and a.altura > 0 else None,
+            a.peso if a.peso and a.peso > 0 else None,
+            dono_id, a.pai, a.mae, a.avo_paterno, a.avo_materno,
+            observacoes, a.tipo == "receptora",
+        ),
+    )
+    return cur.fetchone()[0]
+
+
+class EguaIn(BaseModel):
+    animal: AnimalNovo
+    dono_id: int | None = None
+    observacoes: str | None = None
+
+    @field_validator("observacoes", mode="before")
+    @classmethod
+    def _limpar(cls, v):
+        return _texto(v)
+
+
+@router.post("/animais/eguas", status_code=201)
+def nova_egua(d: EguaIn, _user: dict = Depends(get_current_user)):
+    """Nova égua ou receptora sem entrada na clínica (separador Éguas)."""
+    a = d.animal
+    if a.tipo not in ("egua", "receptora"):
+        raise _erro(422, "web.mares.error.only_mares")
+    if not a.nome:
+        raise _erro(422, "web.stays.error.animal_name_required")
+    if not d.dono_id:
+        raise _erro(422, "web.stays.error.owner_required")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                animal_id = _inserir_animal(cur, a, d.dono_id, d.observacoes)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+    return {"id": animal_id}
+
+
 @router.post("/estadias", status_code=201)
 def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
     if (d.animal_id is None) == (d.animal is None):
@@ -302,31 +360,7 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
                     if not a.nome:
                         raise _erro(422, "web.stays.error.animal_name_required")
                     _validar_motivo(a.tipo, d.motivo)
-                    # Só bloqueia o mesmo nome com o MESMO dono (como a app atual).
-                    cur.execute(
-                        "SELECT 1 FROM animais WHERE LOWER(nome) = LOWER(%s) AND dono_id = %s LIMIT 1",
-                        (a.nome, d.dono_id),
-                    )
-                    if cur.fetchone():
-                        raise _erro(409, "web.stays.error.animal_exists", name=a.nome)
-                    cur.execute(
-                        """
-                        INSERT INTO animais (
-                            nome, tipo, raca, pelagem, data_nascimento, numero_registo, chip,
-                            altura, peso, dono_id, pai, mae, avo_paterno, avo_materno,
-                            observacoes, is_receptora, ativo
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-                        RETURNING id
-                        """,
-                        (
-                            a.nome, a.tipo, a.raca, a.pelagem, a.data_nascimento, a.numero_registo, a.chip,
-                            a.altura if a.altura and a.altura > 0 else None,
-                            a.peso if a.peso and a.peso > 0 else None,
-                            d.dono_id, a.pai, a.mae, a.avo_paterno, a.avo_materno,
-                            d.observacoes, a.tipo == "receptora",
-                        ),
-                    )
-                    animal_id = cur.fetchone()[0]
+                    animal_id = _inserir_animal(cur, a, d.dono_id, d.observacoes)
                 else:
                     animal_id = d.animal_id
                     cur.execute("SELECT tipo FROM animais WHERE id = %s", (animal_id,))

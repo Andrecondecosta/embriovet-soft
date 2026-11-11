@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Card, Input, Segmented, Space, Table, Tag, Typography } from "antd";
-import { DotLoading, ErrorBlock, List, SearchBar, Selector } from "antd-mobile";
+import { Alert, Button, Card, Input, Segmented, Space, Table, Tag, Typography } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { DotLoading, ErrorBlock, FloatingBubble, List, SearchBar, Selector } from "antd-mobile";
+import { AddOutline } from "antd-mobile-icons";
 
 import { api } from "../api/client";
 import { useT } from "../i18n/I18n";
@@ -11,6 +13,7 @@ import { useErrorMessage } from "../components/errors";
 import { dataCurta } from "../components/csv";
 import { TagReprodutivo, useEstadoReprodutivo, type Repro } from "../components/EstadoReprodutivo";
 import type { TipoRegisto } from "./estadias/api";
+import { NovaEstadia } from "./estadias/NovaEstadia";
 
 // Todas as éguas e receptoras; tocar numa abre a ficha no Diário clínico.
 
@@ -54,10 +57,17 @@ function useEguas() {
 }
 
 export function EguasPage() {
-  return useIsMobile() ? <EguasMobile /> : <EguasDesktop />;
+  // "Nova égua": o formulário das Estadias, mas por defeito sem entrada na clínica.
+  const [nova, setNova] = useState(false);
+  return (
+    <>
+      {useIsMobile() ? <EguasMobile novaEgua={() => setNova(true)} /> : <EguasDesktop novaEgua={() => setNova(true)} />}
+      <NovaEstadia egua aberto={nova} onClose={() => setNova(false)} />
+    </>
+  );
 }
 
-function EguasDesktop() {
+function EguasDesktop({ novaEgua }: { novaEgua: () => void }) {
   const x = useEguas();
   const { t } = x;
   const errorMessage = useErrorMessage();
@@ -76,6 +86,9 @@ function EguasDesktop() {
             onChange={(e) => x.setTexto(e.target.value)}
           />
           <Segmented options={x.filtro} value={x.soNaClinica ? "aqui" : "todas"} onChange={(v) => x.setSoNaClinica(v === "aqui")} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={novaEgua}>
+            {t("web.daily.mares.new")}
+          </Button>
         </Space>
       }
     >
@@ -121,7 +134,7 @@ function EguasDesktop() {
   );
 }
 
-function EguasMobile() {
+function EguasMobile({ novaEgua }: { novaEgua: () => void }) {
   const x = useEguas();
   const { t } = x;
   const estadoRepro = useEstadoReprodutivo();
@@ -162,6 +175,20 @@ function EguasMobile() {
           )}
         </List>
       )}
+      <div style={{ height: 72 }} />
+      <FloatingBubble
+        style={
+          {
+            "--initial-position-bottom": "calc(72px + env(safe-area-inset-bottom))",
+            "--initial-position-right": "16px",
+            "--edge-distance": "16px",
+            "--size": "52px",
+          } as React.CSSProperties
+        }
+        onClick={novaEgua}
+      >
+        <AddOutline fontSize={26} />
+      </FloatingBubble>
     </>
   );
 }

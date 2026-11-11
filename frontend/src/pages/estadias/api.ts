@@ -125,6 +125,11 @@ function useEstadiaMutation<V, R>(fn: (v: V) => Promise<R>) {
   });
 }
 
+/** Nova égua/receptora sem entrada na clínica (separador Éguas). */
+export const useCriarEgua = () =>
+  useEstadiaMutation((d: { animal: AnimalNovo; dono_id: number | null; observacoes?: string }) =>
+    api<{ id: number }>("/animais/eguas", "POST", d),
+  );
 export const useCriarEstadia = () => useEstadiaMutation((d: EstadiaIn) => api<{ id: number; animal_id: number }>("/estadias", "POST", d));
 /** O que fica em curso se a égua sair (aviso no formulário de saída). */
 export const usePendentesSaida = (id: number | null) =>

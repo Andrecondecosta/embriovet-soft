@@ -26,6 +26,7 @@ import {
   MOTIVOS_POR_TIPO,
   TIPOS_ANIMAL,
   TIPOS_REGISTO,
+  useCriarEgua,
   useCriarEstadia,
   useOpcoesEstadia,
   usePesquisaAnimais,
@@ -38,13 +39,16 @@ import {
 } from "./api";
 
 const FMT = "YYYY-MM-DD";
+/** "Não está na clínica": só no "Nova égua" (cria a égua sem entrada). */
+type TipoForm = TipoRegisto | "fora";
+const ANIMAIS_EGUA: TipoAnimal[] = ["egua", "receptora"];
 
 /** Valores do formulário (comuns às duas versões). */
 interface Valores {
   modo: "existente" | "novo";
   animal?: AnimalPesquisa | null;
   novo?: Partial<AnimalNovo> & { data_nascimento?: Dayjs | Date | null };
-  tipo_registo?: TipoRegisto;
+  tipo_registo?: TipoForm;
   motivo: Motivo;
   dono_id: number | null;
   data_entrada: Dayjs | Date;
@@ -81,9 +85,24 @@ function useGuardar(onClose: () => void) {
   const t = useT();
   const notifyError = useNotifyError();
   const criar = useCriarEstadia();
+  const criarEgua = useCriarEgua();
   const guardar = async (v: Valores) => {
+    if (v.tipo_registo === "fora") {
+      try {
+        await criarEgua.mutateAsync({
+          animal: { ...(v.novo as AnimalNovo), data_nascimento: data(v.novo?.data_nascimento) },
+          dono_id: v.dono_id,
+          observacoes: v.observacoes,
+        });
+        notifySuccess(t("web.daily.mares.created"));
+        onClose();
+      } catch (err) {
+        notifyError(err);
+      }
+      return;
+    }
     const corpo: EstadiaIn = {
-      tipo_registo: v.tipo_registo!, // obrigatório no formulário
+      tipo_registo: v.tipo_registo as TipoRegisto, // obrigatório no formulário
       motivo: v.motivo,
       dono_id: v.dono_id,
       data_entrada: data(v.data_entrada)!,
@@ -102,7 +121,7 @@ function useGuardar(onClose: () => void) {
       notifyError(err);
     }
   };
-  return { guardar, aGuardar: criar.isPending };
+  return { guardar, aGuardar: criar.isPending || criarEgua.isPending };
 }
 
 /** Motivos permitidos para o animal escolhido; se o motivo atual deixar de
@@ -119,7 +138,7 @@ function useMotivos(tipo: TipoAnimal | undefined, atual: Motivo | undefined, def
 /** Tipo de entrada: nas éguas/receptoras vem "Estadia" por defeito; nos
  *  garanhões fica por escolher, para não ficarem internados sem querer
  *  (internados, ganhavam tarefas no Trabalho diário). */
-function useTipoRegisto(tipo: TipoAnimal | undefined, atual: TipoRegisto | undefined, definir: (v: TipoRegisto | undefined) => void) {
+function useTipoRegisto(tipo: TipoAnimal | undefined, atual: TipoForm | undefined, definir: (v: TipoForm | undefined) => void) {
   useEffect(() => {
     if (tipo === "garanhao") definir(undefined);
     else if (tipo && !atual) definir("estadia");
@@ -131,8 +150,11 @@ function useTipoRegisto(tipo: TipoAnimal | undefined, atual: TipoRegisto | undef
  *  para guardar sémen não é preciso entrada (basta o lote no Stock). */
 function useAjudaTipo() {
   const t = useT();
-  return (tipo: TipoRegisto | undefined, animal: TipoAnimal | undefined) =>
-    [animal === "garanhao" && tipo !== "externo" && t("web.stays.stallion_stock_hint"), tipo && t(`web.stays.kind_help.${tipo}`)]
+  return (tipo: TipoForm | undefined, animal: TipoAnimal | undefined) =>
+    [
+      animal === "garanhao" && tipo !== "externo" && t("web.stays.stallion_stock_hint"),
+      tipo && t(tipo === "fora" ? "web.daily.mares.not_here_help" : `web.stays.kind_help.${tipo}`),
+    ]
       .filter(Boolean)
       .join(" ") || undefined;
 }
@@ -144,15 +166,48 @@ function useAvisoNome(nome: string | undefined, donoId: number | null) {
   return n.length > 1 && (pesquisa.data ?? []).some((a) => a.nome.toLowerCase() === n.toLowerCase() && a.dono_id !== donoId);
 }
 
-export function NovaEstadia({ aberto, onClose, inicial }: { aberto: boolean; onClose: () => void; inicial?: AnimalPesquisa | null }) {
+/** Opções do formulário: com `egua` ("Nova égua", no separador Éguas) é
+ *  sempre animal novo, só égua/receptora, e por defeito não está na clínica. */
+interface Modo {
+  egua: boolean;
+  tiposAnimal: TipoAnimal[];
+  tiposRegisto: TipoForm[];
+  titulo: string;
+}
+
+export function NovaEstadia({
+  aberto,
+  onClose,
+  inicial,
+  egua = false,
+}: {
+  aberto: boolean;
+  onClose: () => void;
+  inicial?: AnimalPesquisa | null;
+  egua?: boolean;
+}) {
+  const t = useT();
   // Animal já escolhido (ex.: vindo da ficha de uma égua sem estadia).
-  const valores: Valores = inicial ? { ...INICIAIS, modo: "existente", animal: inicial, dono_id: inicial.dono_id } : INICIAIS;
+  const valores: Valores = egua
+    ? { ...INICIAIS, modo: "novo", tipo_registo: "fora" }
+    : inicial
+      ? { ...INICIAIS, modo: "existente", animal: inicial, dono_id: inicial.dono_id }
+      : INICIAIS;
+  const m: Modo = {
+    egua,
+    tiposAnimal: egua ? ANIMAIS_EGUA : [...TIPOS_ANIMAL],
+    tiposRegisto: egua ? ["fora", ...TIPOS_REGISTO] : [...TIPOS_REGISTO],
+    titulo: t(egua ? "web.daily.mares.new" : "web.stays.new"),
+  };
   return useIsMobile() ? (
-    <NovaEstadiaMobile aberto={aberto} onClose={onClose} valores={valores} />
+    <NovaEstadiaMobile aberto={aberto} onClose={onClose} valores={valores} m={m} />
   ) : (
-    <NovaEstadiaDesktop aberto={aberto} onClose={onClose} valores={valores} />
+    <NovaEstadiaDesktop aberto={aberto} onClose={onClose} valores={valores} m={m} />
   );
 }
+
+/** Rótulo de cada "Tipo" (inclui "Não está na clínica"). */
+const rotuloTipo = (t: (k: string) => string, x: TipoForm) => t(x === "fora" ? "web.daily.mares.not_here" : `web.stays.kind.${x}`);
 
 // ── Computador ──────────────────────────────────────────────────────────────
 
@@ -193,13 +248,14 @@ function PesquisaAnimal({ value, onChange }: { value?: AnimalPesquisa | null; on
   );
 }
 
-function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onClose: () => void; valores: Valores }) {
+function NovaEstadiaDesktop({ aberto, onClose, valores, m }: { aberto: boolean; onClose: () => void; valores: Valores; m: Modo }) {
   const t = useT();
   const [form] = Form.useForm<Valores>();
   const opcoes = useOpcoesEstadia();
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = Form.useWatch("modo", form) ?? "existente";
-  const tipoRegisto = Form.useWatch("tipo_registo", form) as TipoRegisto | undefined;
+  const tipoRegisto = Form.useWatch("tipo_registo", form) as TipoForm | undefined;
+  const fora = tipoRegisto === "fora";
   const tipoNovo = Form.useWatch(["novo", "tipo"], form);
   const animalSel = Form.useWatch("animal", form) as AnimalPesquisa | null | undefined;
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, Form.useWatch("motivo", form), (m) =>
@@ -220,7 +276,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
     <Modal
       open={aberto}
       onCancel={onClose}
-      title={t("web.stays.new")}
+      title={m.titulo}
       okText={t("btn.save")}
       cancelText={t("web.common.cancel")}
       onOk={() => form.submit()}
@@ -229,7 +285,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
       destroyOnHidden
     >
       <Form form={form} layout="vertical" preserve={false} initialValues={valores} onFinish={guardar}>
-        <Form.Item name="modo" style={{ marginBottom: 12 }}>
+        <Form.Item name="modo" style={{ marginBottom: 12 }} hidden={m.egua}>
           <Segmented
             options={[
               { value: "existente", label: t("web.stays.form.existing") },
@@ -261,7 +317,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
               </Col>
               <Col xs={24} sm={10}>
                 <Form.Item name={["novo", "tipo"]} label={t("web.stays.col.type")}>
-                  <Segmented block options={TIPOS_ANIMAL.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))} />
+                  <Segmented block options={m.tiposAnimal.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))} />
                 </Form.Item>
               </Col>
             </Row>
@@ -340,10 +396,10 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
           extra={ajudaTipo(tipoRegisto, modo === "novo" ? tipoNovo : animalSel?.tipo)}
           rules={r("web.stays.error.kind_required")}
         >
-          <Segmented block options={TIPOS_REGISTO.map((x) => ({ value: x, label: t(`web.stays.kind.${x}`) }))} />
+          <Segmented block options={m.tiposRegisto.map((x) => ({ value: x, label: rotuloTipo(t, x) }))} />
         </Form.Item>
         <Row gutter={12}>
-          <Col xs={24} sm={12}>
+          <Col xs={24} sm={12} style={fora ? { display: "none" } : undefined}>
             <Form.Item name="motivo" label={tipoRegisto === "externo" ? t("web.stays.form.reason_optional") : t("web.stays.col.reason")}>
               <Select options={motivos.map((m) => ({ value: m, label: t(`web.stays.reason.${m}`) }))} />
             </Form.Item>
@@ -353,14 +409,14 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
               <DonoSelect apenasAtivos={false} />
             </Form.Item>
           </Col>
-          {Form.useWatch("motivo", form) === "inseminacao" && (
+          {Form.useWatch("motivo", form) === "inseminacao" && !fora && (
             <Col xs={24} sm={12}>
               <Form.Item name="garanhao" label={t("web.stays.form.requested_stallion")}>
                 <GaranhaoInput />
               </Form.Item>
             </Col>
           )}
-          <Col xs={24} sm={12}>
+          <Col xs={24} sm={12} style={fora ? { display: "none" } : undefined}>
             <Form.Item
               name="data_entrada"
               label={tipoRegisto === "externo" ? t("web.stays.form.service_date") : t("web.stays.form.entry_date")}
@@ -369,7 +425,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores }: { aberto: boolean; onC
               <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          {tipoRegisto && tipoRegisto !== "externo" && usarAloj && (
+          {tipoRegisto && tipoRegisto !== "externo" && !fora && usarAloj && (
             <Col xs={24} sm={12}>
               {opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
                 <Alert type="warning" showIcon title={t("web.stays.form.no_housing")} style={{ marginTop: 22 }} />
@@ -444,14 +500,15 @@ function PesquisaAnimalMobile({ value, onChange }: { value?: AnimalPesquisa | nu
   );
 }
 
-function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onClose: () => void; valores: Valores }) {
+function NovaEstadiaMobile({ aberto, onClose, valores, m }: { aberto: boolean; onClose: () => void; valores: Valores; m: Modo }) {
   const t = useT();
   const [form] = MForm.useForm<Valores>();
   const garanhoes = useOpcoes("garanhoes");
   const opcoes = useOpcoesEstadia();
   const { guardar, aGuardar } = useGuardar(onClose);
   const modo = MForm.useWatch("modo", form) ?? "existente";
-  const tipoRegisto = MForm.useWatch("tipo_registo", form) as TipoRegisto | undefined;
+  const tipoRegisto = MForm.useWatch("tipo_registo", form) as TipoForm | undefined;
+  const fora = tipoRegisto === "fora";
   const tipoNovo = MForm.useWatch(["novo", "tipo"], form);
   const animalSel = MForm.useWatch("animal", form) as AnimalPesquisa | null | undefined;
   const motivos = useMotivos(modo === "novo" ? (tipoNovo ?? "egua") : animalSel?.tipo, MForm.useWatch("motivo", form), (m) =>
@@ -473,7 +530,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
   return (
     <FolhaEcraInteiro
       visible={aberto}
-      titulo={t("web.stays.new")}
+      titulo={m.titulo}
       onCancel={onClose}
       onOk={() => form.submit()}
       okText={t("btn.save")}
@@ -487,7 +544,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
         onFinish={(v: Valores) => guardar({ ...form.getFieldsValue(true), ...v })}
         onFinishFailed={irParaErro}
       >
-        <MForm.Item name="modo" {...umSo}>
+        <MForm.Item name="modo" {...umSo} hidden={m.egua}>
           <Selector
             columns={2}
             showCheckMark={false}
@@ -522,7 +579,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
               <Selector
                 showCheckMark={false}
                 columns={3}
-                options={TIPOS_ANIMAL.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))}
+                options={m.tiposAnimal.map((x) => ({ value: x, label: t(`web.stays.animal.${x}`) }))}
               />
             </MForm.Item>
             <Cabecalho>{t("web.stays.form.identification")}</Cabecalho>
@@ -571,10 +628,11 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
           rules={[{ required: true, message: t("web.stays.error.kind_required") }]}
           {...umSo}
         >
-          <Selector showCheckMark={false} columns={3} options={TIPOS_REGISTO.map((x) => ({ value: x, label: t(`web.stays.kind.${x}`) }))} />
+          <Selector showCheckMark={false} columns={m.tiposRegisto.length > 3 ? 2 : 3} options={m.tiposRegisto.map((x) => ({ value: x, label: rotuloTipo(t, x) }))} />
         </MForm.Item>
         <MForm.Item
           name="motivo"
+          hidden={fora}
           label={tipoRegisto === "externo" ? t("web.stays.form.reason_optional") : t("web.stays.col.reason")}
           arrow
           onClick={abrirAoTocar}
@@ -594,7 +652,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
             acao={{ texto: t("web.owners.new"), onClick: () => setNovoDono(true) }}
           />
         </MForm.Item>
-        {MForm.useWatch("motivo", form) === "inseminacao" && (
+        {MForm.useWatch("motivo", form) === "inseminacao" && !fora && (
           <MForm.Item name="garanhao" label={t("web.stays.form.requested_stallion")} arrow onClick={abrirAoTocar}>
             <SeletorPesquisa<string>
               titulo={t("web.stays.form.requested_stallion")}
@@ -605,6 +663,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
         )}
         <MForm.Item
           name="data_entrada"
+          hidden={fora}
           label={tipoRegisto === "externo" ? t("web.stays.form.service_date") : t("web.stays.form.entry_date")}
           rules={[{ required: true }]}
           arrow
@@ -614,6 +673,7 @@ function NovaEstadiaMobile({ aberto, onClose, valores }: { aberto: boolean; onCl
         </MForm.Item>
         {tipoRegisto &&
           tipoRegisto !== "externo" &&
+          !fora &&
           usarAloj &&
           (opcoes.data && !alojamentos.length && tipoRegisto === "estadia" ? (
             <MForm.Item key="sem-alojamento">

@@ -173,6 +173,18 @@ def test_lista_de_todas_as_eguas(client, base):
     assert r[egua]["em_aberto"] == "estadia" and r[egua]["tipo"] == "egua" and r[egua]["ultimo_registo"] is None
 
 
+def test_nova_egua_sem_entrada_na_clinica(client, base):
+    nome = f"{PREFIXO}Nova{uuid.uuid4().hex[:6]}"
+    r = client.post("/api/animais/eguas", json={"animal": {"nome": nome, "tipo": "receptora", "raca": "PSL"}, "dono_id": base["dono"]})
+    assert r.status_code == 201
+    x = {e["nome"]: e for e in client.get("/api/animais/eguas").json()}[nome]
+    assert x["tipo"] == "receptora" and x["em_aberto"] is None
+    # O mesmo nome no mesmo dono não; garanhão não; sem dono não.
+    assert client.post("/api/animais/eguas", json={"animal": {"nome": nome}, "dono_id": base["dono"]}).status_code == 409
+    assert client.post("/api/animais/eguas", json={"animal": {"nome": nome + "G", "tipo": "garanhao"}, "dono_id": base["dono"]}).status_code == 422
+    assert client.post("/api/animais/eguas", json={"animal": {"nome": nome + "S"}}).status_code == 422
+
+
 @pytest.mark.parametrize(
     "tipo, motivo, ok",
     [
