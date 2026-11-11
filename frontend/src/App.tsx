@@ -159,7 +159,7 @@ export function App() {
                         <Route path="/dashboard" element={pagina(<DashboardPage />)} />
                         <Route path="/atividade" element={pagina(<AtividadePage />)} />
                         <Route path="/relatorios" element={pagina(<RelatoriosPage />)} />
-                        {veFaturacao(user) && <Route path="/faturacao/:tab?" element={pagina(<FaturacaoPage />)} />}
+                        {veFaturacao(user) && <Route path="/faturacao/:area?/:tab?" element={pagina(<FaturacaoPage />)} />}
                         <Route path="/estadias/:tab?" element={pagina(<EstadiasPage />)} />
                         <Route path="/trabalho-diario" element={pagina(<TrabalhoPage />)} />
                         <Route path="/animais/:id" element={pagina(<AnimalPage />)} />

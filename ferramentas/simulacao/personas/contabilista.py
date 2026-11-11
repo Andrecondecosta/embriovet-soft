@@ -116,7 +116,6 @@ class Teresa(Pessoa):
         self.api("GET", "/faturacao/atraso")
         self._estadias(rel)
         self._semen(rel)
-        self._palhetas(rel)
         if hoje.month in (1, 4, 7, 10):
             self.api("GET", "/faturacao/anos", params={"desde": 2025})
 
@@ -172,19 +171,6 @@ class Teresa(Pessoa):
                     lc = self.mundo.lotes_cliente.get(cod) if cod else None
                     if lc and lc.guardado_desde < lc.chega:
                         l["inicio"] = rel.real(lc.guardado_desde).isoformat()
-            self._faturar(rel, dono_id, nome, ls, ate)
-
-    def _palhetas(self, rel):
-        """Palhetas de sémen de clientes usadas no mês passado: ao dono da égua
-        (recebidas) e ao dono do sémen (gastas, para acerto)."""
-        ate = rel.real(fim_mes_anterior(rel.hoje)).isoformat()
-        s, linhas = self.api("GET", "/faturacao/por-faturar", params={"inicio": "1990-01-01", "fim": ate, "tipo": "palhetas"})
-        if s != 200:
-            return
-        por_dono: dict = {}
-        for l in linhas:
-            por_dono.setdefault((l["dono_id"], l["dono_nome"]), []).append(l)
-        for (dono_id, nome), ls in por_dono.items():
             self._faturar(rel, dono_id, nome, ls, ate)
 
     def _atrasado(self, linhas, rel, dias) -> bool:

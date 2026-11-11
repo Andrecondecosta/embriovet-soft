@@ -18,7 +18,7 @@ from modules.repositories import faturacao_repo
 
 router = APIRouter(prefix="/api/faturacao", tags=["faturacao"], dependencies=[Depends(acesso_faturacao)])
 
-Tipo = Literal["estadia", "armazenamento", "palhetas_recebidas", "palhetas_gastas"]
+Tipo = Literal["estadia", "armazenamento"]
 
 
 def _erro(http_status: int, code: str, **params):
@@ -31,7 +31,7 @@ def _periodo(inicio: date, fim: date):
 
 
 @router.get("/por-faturar")
-def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: Literal["estadia", "armazenamento", "palhetas"] | None = None):
+def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: Tipo | None = None):
     _periodo(inicio, fim)
     return faturacao_repo.por_faturar(inicio, fim, dono_id, tipo)
 
@@ -88,9 +88,10 @@ def resumo(d: ResumoIn):
 
 
 @router.get("/faturado")
-def faturado(inicio: date, fim: date, dono_id: int | None = None, fatura: str | None = None, anuladas: bool = False):
+def faturado(inicio: date, fim: date, dono_id: int | None = None, fatura: str | None = None, anuladas: bool = False,
+             tipo: Tipo | None = None):
     _periodo(inicio, fim)
-    return faturacao_repo.faturado(inicio, fim, dono_id, (fatura or "").strip() or None, anuladas)
+    return faturacao_repo.faturado(inicio, fim, dono_id, (fatura or "").strip() or None, anuladas, tipo)
 
 
 class AnularIn(BaseModel):
@@ -109,8 +110,9 @@ def anular(linha_id: int, d: AnularIn, user: dict = Depends(editar_faturacao)):
 # ── Por ano (proprietário × ano) ──────────────────────────────────────────
 
 @router.get("/anos")
-def anos(desde: int = Query(2025, ge=1990, le=2100)):
-    return faturacao_repo.resumo_anual(min(desde, date.today().year))
+def anos(desde: int = Query(2025, ge=1990, le=2100), tipo: Tipo | None = None):
+    """Estadias e Sémen são áreas separadas: `tipo` escolhe uma."""
+    return faturacao_repo.resumo_anual(min(desde, date.today().year), tipo)
 
 
 

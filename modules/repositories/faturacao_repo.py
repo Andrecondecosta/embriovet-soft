@@ -24,9 +24,6 @@ from datetime import date, timedelta
 from modules.db import get_connection
 
 TIPOS = ("estadia", "armazenamento")
-# Palhetas de sémen de clientes usadas em inseminações: ao dono da égua
-# ("recebidas", para cobrar) e ao dono do sémen ("gastas", para acerto).
-PALHETAS = ("palhetas_recebidas", "palhetas_gastas")
 
 
 def _menos(intervalo: tuple[date, date], cobertos: list[tuple[date, date]]) -> list[tuple[date, date]]:
@@ -171,59 +168,7 @@ def _qtd_lote(item: dict, a: date, b: date) -> int:
     return item["atual"] * dias + sum(q * max(0, (min(d, b) - a).days + 1) for d, q in item["saidas"])
 
 
-def _qtd_palhetas(item: dict, _a: date, _b: date) -> int:
-    return item["palhetas"]
-
-
-_QTD = {"estadia": _qtd_estadia, "armazenamento": _qtd_lote,
-        "palhetas_recebidas": _qtd_palhetas, "palhetas_gastas": _qtd_palhetas}
-
-
-def _palhetas(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | None = None, tipo: str = "palhetas_recebidas") -> list[dict]:
-    """Inseminações feitas com sémen de um cliente (o da própria clínica não
-    conta). "recebidas": para o dono da égua (menos se for o próprio dono do
-    sémen ou a clínica). "gastas": para o dono do sémen, a dizer onde foram."""
-    cur.execute(
-        """
-        SELECT i.id, i.data_inseminacao, i.palhetas_gastas, l.id, COALESCE(g.nome, l.garanhao),
-               ds.id, ds.nome, dm.id, dm.nome, COALESCE(dm.da_clinica, FALSE), COALESCE(ae.nome, i.egua)
-        FROM inseminacoes i
-        JOIN estoque_dono l ON l.id = i.estoque_id
-        JOIN dono ds ON ds.id = l.dono_id
-        LEFT JOIN animais g ON g.id = l.animal_id
-        LEFT JOIN estadias e ON e.id = i.estadia_id
-        LEFT JOIN animais ae ON ae.id = i.animal_id_egua
-        LEFT JOIN dono dm ON dm.id = COALESCE(e.dono_id, ae.dono_id)
-        WHERE NOT ds.da_clinica AND i.palhetas_gastas > 0
-          AND i.data_inseminacao BETWEEN %(a)s AND %(b)s
-          AND (%(ids)s::int[] IS NULL OR i.id = ANY(%(ids)s))
-        ORDER BY ds.nome, i.data_inseminacao, i.id
-        """,
-        {"a": inicio, "b": min(fim, date.today()), "ids": ids},
-    )
-    itens = []
-    for iid, dia, q, lote, garanhao, ds_id, ds_nome, dm_id, dm_nome, dm_clinica, egua in cur.fetchall():
-        if tipo == "palhetas_recebidas":
-            if dm_id is None or dm_id == ds_id or dm_clinica:
-                continue
-            dono, nome = dm_id, dm_nome
-            descricao = f"{garanhao} · lote {lote} (sémen de {ds_nome}) → {egua}"
-        else:
-            dono, nome = ds_id, ds_nome
-            descricao = f"{garanhao} · lote {lote} → {egua}" + (f" ({dm_nome})" if dm_nome and dm_id != ds_id else "")
-        if dono_id is not None and dono != dono_id:
-            continue
-        itens.append({"tipo": tipo, "ref_id": iid, "dono_id": dono, "dono_nome": nome, "descricao": descricao,
-                      "garanhao": garanhao, "lote_id": lote, "egua": egua, "palhetas": q, "limite": (dia, dia)})
-    return itens
-
-
-def _busca(tipo: str):
-    if tipo == "estadia":
-        return _estadias
-    if tipo == "armazenamento":
-        return _lotes
-    return lambda cur, a, b, dono, ids=None: _palhetas(cur, a, b, dono, ids, tipo)
+_QTD = {"estadia": _qtd_estadia, "armazenamento": _qtd_lote}
 
 
 def _tracos(item: dict, a: date, b: date):
@@ -246,9 +191,6 @@ def _linhas(itens: list[dict], faturados: dict[int, list], tipo: str) -> list[di
             # O início do armazenamento só se acerta antes da primeira fatura.
             base["pode_mudar_inicio"] = it["ref_id"] not in faturados
         for a, b in _menos(it["limite"], faturados.get(it["ref_id"], [])):
-            if tipo in PALHETAS:
-                out.append({**base, "inicio": a, "fim": b, "dias": 1, "quantidade": it["palhetas"]})
-                continue
             tracos = _tracos(it, a, b) if tipo == "armazenamento" else [(a, b, None)]
             for ta, tb, palhetas in tracos:
                 dias = (tb - ta).days + 1
@@ -271,10 +213,6 @@ def por_faturar(inicio: date, fim: date, dono_id: int | None = None, tipo: str |
             if tipo in (None, "armazenamento"):
                 itens = _lotes(cur, inicio, fim, dono_id)
                 out += _linhas(itens, _faturados(cur, "armazenamento", [i["ref_id"] for i in itens]), "armazenamento")
-            if tipo in (None, "palhetas"):
-                for t in PALHETAS:
-                    itens = _palhetas(cur, inicio, fim, dono_id, None, t)
-                    out += _linhas(itens, _faturados(cur, t, [i["ref_id"] for i in itens]), t)
     return out
 
 
@@ -308,7 +246,8 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
             for f in faturas:
                 for l in f["linhas"]:
                     a, b = l["inicio"], l["fim"]
-                    itens = _busca(l["tipo"])(cur, a, b, None, [l["ref_id"]])
+                    busca = _estadias if l["tipo"] == "estadia" else _lotes
+                    itens = busca(cur, a, b, None, [l["ref_id"]])
                     if not itens:
                         raise JaFaturado()
                     it = itens[0]
@@ -333,8 +272,7 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (l["tipo"], l["ref_id"], it["dono_id"], it["dono_nome"], it["descricao"], a, b,
-                         _QTD[l["tipo"]](it, a, b),
-                         _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else it.get("palhetas"),
+                         _QTD[l["tipo"]](it, a, b), _palhetas_fixas(it, a, b) if l["tipo"] == "armazenamento" else None,
                          f["fatura_numero"], f["fatura_data"], f.get("observacoes"), (utilizador or "—")[:50]),
                     )
                     n += 1
@@ -394,7 +332,7 @@ _COLS = ["id", "tipo", "ref_id", "dono_id", "dono_nome", "descricao", "inicio", 
 
 
 def faturado(inicio: date, fim: date, dono_id: int | None = None, fatura: str | None = None,
-             incluir_anuladas: bool = False) -> list[dict]:
+             incluir_anuladas: bool = False, tipo: str | None = None) -> list[dict]:
     """Linhas faturadas cujo período toca em [inicio, fim]."""
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -405,9 +343,10 @@ def faturado(inicio: date, fim: date, dono_id: int | None = None, fatura: str | 
                   AND (%(dono)s::int IS NULL OR dono_id = %(dono)s)
                   AND (%(fatura)s::text IS NULL OR fatura_numero ILIKE '%%' || %(fatura)s || '%%')
                   AND (%(anuladas)s OR NOT anulada)
+                  AND (%(tipo)s::text IS NULL OR tipo = %(tipo)s)
                 ORDER BY fatura_data DESC, fatura_numero, dono_nome, inicio
                 """,
-                {"inicio": inicio, "fim": fim, "dono": dono_id, "fatura": fatura or None, "anuladas": incluir_anuladas},
+                {"inicio": inicio, "fim": fim, "dono": dono_id, "fatura": fatura or None, "anuladas": incluir_anuladas, "tipo": tipo},
             )
             return [dict(zip(_COLS, r)) for r in cur.fetchall()]
 
@@ -440,7 +379,7 @@ def _por_ano(a: date, b: date):
         a = fim_ano + timedelta(days=1)
 
 
-def resumo_anual(desde: int) -> dict:
+def resumo_anual(desde: int, tipo: str | None = None) -> dict:
     """Para cada proprietário e ano (de `desde` até ao ano atual — cada ano
     novo acrescenta uma coluna): se houve estadias/sémen, o que falta
     faturar (dias e palhetas × dia) e até que dia desse ano já se faturou.
@@ -452,7 +391,7 @@ def resumo_anual(desde: int) -> dict:
     def celula(dono_id, dono_nome, k):
         d = donos.setdefault(dono_id, {"dono_id": dono_id, "dono_nome": dono_nome, "celulas": {}})
         return d["celulas"].setdefault(
-            k, {"atividade": False, "dias": 0, "dias_semen": 0, "lotes": 0, "pd": 0, "palhetas": 0, "faturado_ate": None}
+            k, {"atividade": False, "dias": 0, "dias_semen": 0, "lotes": 0, "pd": 0, "faturado_ate": None}
         )
 
     # Sémen: dias do calendário com algum lote por faturar (vários lotes no
@@ -463,20 +402,22 @@ def resumo_anual(desde: int) -> dict:
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            for tipo, busca in (("estadia", _estadias), ("armazenamento", _lotes)):
+            for t, busca in (("estadia", _estadias), ("armazenamento", _lotes)):
+                if tipo and t != tipo:
+                    continue  # Estadias e Sémen são áreas separadas
                 itens = busca(cur, inicio, hoje, None)
-                faturados = _faturados(cur, tipo, [i["ref_id"] for i in itens])
+                faturados = _faturados(cur, t, [i["ref_id"] for i in itens])
                 for it in itens:
                     for ano, a, b in _por_ano(*it["limite"]):
-                        if _QTD[tipo](it, a, b):
+                        if _QTD[t](it, a, b):
                             celula(it["dono_id"], it["dono_nome"], str(ano))["atividade"] = True
                     for livre in _menos(it["limite"], faturados.get(it["ref_id"], [])):
                         for ano, a, b in _por_ano(*livre):
-                            qtd = _QTD[tipo](it, a, b)
+                            qtd = _QTD[t](it, a, b)
                             if not qtd:
                                 continue
                             c = celula(it["dono_id"], it["dono_nome"], str(ano))
-                            if tipo == "estadia":
+                            if t == "estadia":
                                 c["dias"] += qtd
                                 continue
                             c["pd"] += qtd
@@ -487,17 +428,12 @@ def resumo_anual(desde: int) -> dict:
                                 for ta, tb, n in _tracos(it, a, b) if n
                                 for i in range((tb - ta).days + 1)
                             )
-            # Palhetas de sémen de clientes usadas (recebidas e gastas) por faturar.
-            for t in PALHETAS:
-                itens = _palhetas(cur, inicio, hoje, None, None, t)
-                feitos = _faturados(cur, t, [i["ref_id"] for i in itens])
-                for it in itens:
-                    c = celula(it["dono_id"], it["dono_nome"], str(it["limite"][0].year))
-                    c["atividade"] = True
-                    if not feitos.get(it["ref_id"]):
-                        c["palhetas"] += it["palhetas"]
             # Até que dia de cada ano já se faturou (a última data faturada nesse ano).
-            cur.execute("SELECT dono_id, inicio, fim FROM faturacao_linhas WHERE NOT anulada AND fim >= %s", (inicio,))
+            cur.execute(
+                """SELECT dono_id, inicio, fim FROM faturacao_linhas
+                   WHERE NOT anulada AND fim >= %s AND (%s::text IS NULL OR tipo = %s)""",
+                (inicio, tipo, tipo),
+            )
             faturadas = cur.fetchall()
     for (dono_id, k), dias in dias_semen.items():
         donos[dono_id]["celulas"][k].update(dias_semen=len(dias), lotes=len(lotes[(dono_id, k)]))
@@ -515,33 +451,29 @@ def resumo_anual(desde: int) -> dict:
 # ── Em atraso (há quanto tempo cada proprietário tem dias por faturar) ──────
 
 def em_atraso() -> list[dict]:
-    """Por proprietário, estadias, sémen e palhetas usadas à parte: o dia
-    mais antigo ainda por faturar ("desde") e quanto falta (no sémen, dias do
-    calendário com algum lote por faturar, e quantos lotes; nas palhetas
-    usadas, quantas palhetas, em "dias")."""
+    """Por proprietário, estadias e sémen à parte: o dia mais antigo ainda
+    por faturar ("desde") e quantos dias faltam (no sémen, dias do
+    calendário com algum lote por faturar, e quantos lotes)."""
     hoje = date.today()
     donos: dict = {}
     dias_semen: dict = defaultdict(set)
     for l in por_faturar(INICIO_HISTORICO, hoje):
         d = donos.setdefault(l["dono_id"], {"dono_id": l["dono_id"], "dono_nome": l["dono_nome"],
-                                            "estadia": None, "armazenamento": None, "palhetas": None})
-        k = "palhetas" if l["tipo"] in PALHETAS else l["tipo"]
-        c = d[k] = d[k] or {"desde": l["inicio"], "dias": 0, "itens": set()}
+                                            "estadia": None, "armazenamento": None})
+        c = d[l["tipo"]] = d[l["tipo"]] or {"desde": l["inicio"], "dias": 0, "itens": set()}
         c["desde"] = min(c["desde"], l["inicio"])
-        c["itens"].add((l["tipo"], l["ref_id"]))
+        c["itens"].add(l["ref_id"])
         if l["tipo"] == "estadia":
             c["dias"] += l["dias"]
-        elif k == "palhetas":
-            c["dias"] += l["palhetas"]
         else:
             dias_semen[l["dono_id"]].update(range(l["inicio"].toordinal(), l["fim"].toordinal() + 1))
     for dono_id, dias in dias_semen.items():
         donos[dono_id]["armazenamento"]["dias"] = len(dias)
     for d in donos.values():
-        for k in (*TIPOS, "palhetas"):
+        for k in TIPOS:
             if d[k]:
                 d[k]["itens"] = len(d[k]["itens"])
-    return sorted(donos.values(), key=lambda d: min(d[k]["desde"] for k in (*TIPOS, "palhetas") if d[k]))
+    return sorted(donos.values(), key=lambda d: min(d[k]["desde"] for k in TIPOS if d[k]))
 
 
 def numeros_usados(numeros: list[str]) -> list[dict]:

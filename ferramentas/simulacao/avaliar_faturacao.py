@@ -197,18 +197,6 @@ if inicio_errado:
     achado("BAIXO", f"{len(inicio_errado)} lotes de clientes cuja primeira fatura não começa no dia em que o sémen começou a "
            f"estar guardado (lote, faturado desde, real): {inicio_errado[:4]}")
 
-# 5b. Palhetas de clientes usadas: cada uso faturado ao dono da égua e ao dono do sémen?
-usos = q("""SELECT i.id, i.data_inseminacao, ds.id, COALESCE(e.dono_id, a.dono_id)
-            FROM inseminacoes i JOIN estoque_dono l ON l.id = i.estoque_id JOIN dono ds ON ds.id = l.dono_id
-            LEFT JOIN estadias e ON e.id = i.estadia_id LEFT JOIN animais a ON a.id = i.animal_id_egua
-            WHERE NOT ds.da_clinica AND i.palhetas_gastas > 0""")
-corte_p = max((l[6] for l in ativas if l[1].startswith("palhetas")), default=None)
-if usos:
-    faltam = [u for u in usos if corte_p and u[1] <= corte_p and not por_ref.get(("palhetas_gastas", u[0]))]
-    print(f"INFO {len(usos)} inseminações com sémen de clientes; sem 'palhetas gastas' faturadas até ao corte: {len(faltam)}")
-    if faltam:
-        achado("MÉDIO", f"{len(faltam)} usos de sémen de clientes ainda por faturar ao dono do sémen até ao último corte.")
-
 # 5c. Estadias que ficaram abertas com a égua já fora (saída recusada).
 abertas_presas = [e for e in erros_saida] if (erros_saida := [x for x in ler("erros") if str(x.get("caminho", "")).endswith("/saida") and x.get("status") in (409, 422)]) else []
 if abertas_presas:

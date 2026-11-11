@@ -1,10 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 
-export type TipoFat = "estadia" | "armazenamento" | "palhetas_recebidas" | "palhetas_gastas";
-/** Filtro da lista: as duas espécies de palhetas usadas vão juntas. */
-export type FiltroTipo = "estadia" | "armazenamento" | "palhetas";
-export const ePalhetas = (t: TipoFat) => t === "palhetas_recebidas" || t === "palhetas_gastas";
+export type TipoFat = "estadia" | "armazenamento";
 
 /** Uma linha por faturar: uma estadia (dias) ou um lote (palhetas × dias). */
 export interface PorFaturar {
@@ -59,14 +56,14 @@ export interface FiltroFat {
 const params = (o: object) =>
   new URLSearchParams(Object.entries(o as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
 
-export const usePorFaturar = (f: FiltroFat & { tipo: FiltroTipo | null }) =>
+export const usePorFaturar = (f: FiltroFat & { tipo: TipoFat | null }) =>
   useQuery({
     queryKey: ["faturacao", "por-faturar", f],
     placeholderData: keepPreviousData,
     queryFn: () => api<PorFaturar[]>(`/faturacao/por-faturar?${params(f)}`),
   });
 
-export const useFaturado = (f: FiltroFat & { fatura: string; anuladas: boolean }) =>
+export const useFaturado = (f: FiltroFat & { fatura: string; anuladas: boolean; tipo: TipoFat }) =>
   useQuery({
     queryKey: ["faturacao", "faturado", f],
     placeholderData: keepPreviousData,
@@ -131,8 +128,6 @@ export interface CelulaAno {
   dias_semen: number;
   lotes: number;
   pd: number;
-  /** Palhetas de sémen de clientes usadas, por faturar. */
-  palhetas: number;
   /** Último dia faturado neste ano (ou null). */
   faturado_ate: string | null;
 }
@@ -142,12 +137,12 @@ export interface LinhaAno {
   celulas: Record<string, CelulaAno>;
 }
 
-/** Proprietário × ano, de `desde` até ao ano atual. */
-export const useAnos = (desde: number) =>
+/** Proprietário × ano, de `desde` até ao ano atual, numa área (estadias ou sémen). */
+export const useAnos = (desde: number, tipo: TipoFat) =>
   useQuery({
-    queryKey: ["faturacao", "anos", desde],
+    queryKey: ["faturacao", "anos", desde, tipo],
     placeholderData: keepPreviousData,
-    queryFn: () => api<{ anos: string[]; linhas: LinhaAno[] }>(`/faturacao/anos?desde=${desde}`),
+    queryFn: () => api<{ anos: string[]; linhas: LinhaAno[] }>(`/faturacao/anos?desde=${desde}&tipo=${tipo}`),
   });
 
 export interface AtrasoTipo {
@@ -161,8 +156,6 @@ export interface Atraso {
   dono_nome: string | null;
   estadia: AtrasoTipo | null;
   armazenamento: AtrasoTipo | null;
-  /** Palhetas de sémen de clientes usadas (em "dias" vem o n.º de palhetas). */
-  palhetas: AtrasoTipo | null;
 }
 
 export const useAtraso = (ativo = true) =>

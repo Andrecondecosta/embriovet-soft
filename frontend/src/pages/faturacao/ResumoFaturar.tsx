@@ -70,7 +70,6 @@ interface Grupo {
   movimentos: { lote: string; m: Movimento }[];
   dias: number;
   ds: number;
-  pal: number;
 }
 
 function useTextosResumo() {
@@ -78,12 +77,9 @@ function useTextosResumo() {
   return {
     mov: (m: Movimento) =>
       `${dataCurta(m.data)}: ${t("web.billing.mov.out", { count: m.quantidade })} — ${t(`web.billing.mov.${m.tipo}`, { detalhe: m.detalhe ?? "—" })}`,
-    dias: (l: { inicio: string; fim: string; tipo?: string }) =>
-      l.tipo === "palhetas_recebidas" || l.tipo === "palhetas_gastas"
-        ? ""
-        : t("web.billing.days", { count: nDias(l) }),
+    dias: (l: { inicio: string; fim: string }) => t("web.billing.days", { count: nDias(l) }),
     palhetas: (l: PorFaturar) =>
-      l.tipo !== "estadia" && l.palhetas != null
+      l.tipo === "armazenamento" && l.palhetas != null
         ? t("web.billing.straws", { count: l.palhetas })
         : "",
     tipo: (l: PorFaturar) => t(`web.billing.type.${l.tipo}`),
@@ -264,13 +260,11 @@ export function ResumoFaturar({
             movimentos: [],
             dias: 0,
             ds: 0,
-            pal: 0,
           })
           .get(chave)!;
       g.linhas.push(l);
       if (l.tipo === "estadia") g.dias += nDias(l);
-      else if (l.tipo === "armazenamento") g.ds += nDias(l);
-      else g.pal += l.quantidade;
+      else g.ds += nDias(l);
     }
     // Cada saída uma vez (o mesmo lote pode ter vários troços pedidos).
     const vistos = new Set<string>();
@@ -406,7 +400,7 @@ export function ResumoFaturar({
     />
   );
   const totalTexto = (g: Grupo) =>
-    t("web.billing.total_owner", { dias: g.dias, ds: g.ds, pal: g.pal });
+    t("web.billing.total_owner", { dias: g.dias + g.ds });
   const numero = (g: Grupo) => numeros[g.chave] ?? "";
   const mudarNumero = (g: Grupo, v: string) =>
     setNumeros((n) => ({ ...n, [g.chave]: v }));
@@ -695,12 +689,7 @@ export function ResumoFaturar({
                     {
                       title: t("web.billing.col.period"),
                       width: 250,
-                      render: (_, l) =>
-                        l.tipo === "palhetas_recebidas" ||
-                        l.tipo === "palhetas_gastas" ? (
-                          // Palhetas usadas: o dia da inseminação (não se muda).
-                          dataCurta(l.inicio)
-                        ) : (
+                      render: (_, l) => (
                           // Clicar nas datas muda só esta linha.
                           <DatePicker.RangePicker
                             size="small"
@@ -954,11 +943,7 @@ function FolhaImpressao({
                 fontSize: 13,
               }}
             >
-              {t("web.billing.total_owner", {
-                dias: g.dias,
-                ds: g.ds,
-                pal: g.pal,
-              })}
+              {t("web.billing.total_owner", { dias: g.dias + g.ds })}
             </div>
           </section>
         );

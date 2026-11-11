@@ -293,37 +293,16 @@ def test_saida_com_dias_ja_faturados_avisa(ctx):
     assert rececao.post(f"/api/estadias/{ctx['aberta']}/saida", json={**corpo, "confirmar": True}).status_code == 200
 
 
-def test_palhetas_de_cliente_usadas_aparecem_aos_dois(ctx):
+def test_estadias_e_semen_em_areas_separadas(ctx):
     c = ctx["fat"]
-    # Sémen do "outro" (cliente) usado numa égua do "dono"; o da clínica não conta.
-    clinica = _exec("INSERT INTO dono (nome, ativo, da_clinica) VALUES (%s, TRUE, TRUE) RETURNING id", (f"{P}clinica{uuid.uuid4().hex[:4]}",))[0]
-    l_cli = _exec("INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual, quantidade_inicial, data_criacao) VALUES (%s, %s, 8, 10, %s) RETURNING id",
-                  (f"{P}Zeus", ctx["outro"], d(20)))[0]
-    l_cas = _exec("INSERT INTO estoque_dono (garanhao, dono_id, existencia_atual, quantidade_inicial, data_criacao) VALUES (%s, %s, 8, 10, %s) RETURNING id",
-                  (f"{P}Zeus", clinica, d(20)))[0]
-    egua = _exec("SELECT animal_id FROM estadias WHERE id = %s", (ctx["fechada"],))[0]
-    i_cli = _exec("""INSERT INTO inseminacoes (garanhao, egua, data_inseminacao, palhetas_gastas, estoque_id, animal_id_egua, estadia_id)
-                     VALUES ('z', 'e', %s, 2, %s, %s, %s) RETURNING id""", (d(5), l_cli, egua, ctx["fechada"]))[0]
-    i_cas = _exec("""INSERT INTO inseminacoes (garanhao, egua, data_inseminacao, palhetas_gastas, estoque_id, animal_id_egua, estadia_id)
-                     VALUES ('z', 'e', %s, 2, %s, %s, %s) RETURNING id""", (d(5), l_cas, egua, ctx["fechada"]))[0]
-    try:
-        p = {"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "tipo": "palhetas"}
-        linhas = c.get("/api/faturacao/por-faturar", params=p).json()
-        minhas = sorted((l["tipo"], l["dono_id"], l["palhetas"]) for l in linhas if l["ref_id"] == i_cli)
-        assert minhas == sorted([("palhetas_recebidas", ctx["dono"], 2), ("palhetas_gastas", ctx["outro"], 2)])
-        # O sémen da própria clínica não entra.
-        assert all(l["ref_id"] != i_cas for l in linhas)
-        # Faturar as recebidas ao dono da égua; as gastas continuam para o dono do sémen.
-        rec = {"tipo": "palhetas_recebidas", "ref_id": i_cli, "inicio": d(5).isoformat(), "fim": d(5).isoformat()}
-        assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT P1", HOJE.isoformat(), [rec])).status_code == 200
-        resto = [(l["tipo"], l["dono_id"]) for l in c.get("/api/faturacao/por-faturar", params=p).json() if l["ref_id"] == i_cli]
-        assert resto == [("palhetas_gastas", ctx["outro"])]
-        f = c.get("/api/faturacao/faturado", params={"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "fatura": "FT P1"}).json()
-        assert [(x["tipo"], x["quantidade"], x["palhetas"]) for x in f] == [("palhetas_recebidas", 2, 2)]
-        atr = next(x for x in c.get("/api/faturacao/atraso").json() if x["dono_id"] == ctx["outro"])
-        assert atr["palhetas"]["dias"] == 2
-    finally:
-        _exec("DELETE FROM faturacao_linhas WHERE fatura_numero = 'FT P1'")
-        _exec("DELETE FROM inseminacoes WHERE estoque_id IN (%s, %s)", (l_cli, l_cas))
-        _exec("DELETE FROM estoque_dono WHERE id IN (%s, %s)", (l_cli, l_cas))
-        _exec("DELETE FROM dono WHERE id = %s", (clinica,))
+    est = {"tipo": "estadia", "ref_id": ctx["fechada"], "inicio": d(10).isoformat(), "fim": d(3).isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT E1", HOJE.isoformat(), [est])).status_code == 200
+    p = {"inicio": d(30).isoformat(), "fim": HOJE.isoformat(), "dono_id": ctx["dono"]}
+    assert [f["tipo"] for f in c.get("/api/faturacao/faturado", params={**p, "tipo": "armazenamento"}).json()] == []
+    assert [f["tipo"] for f in c.get("/api/faturacao/faturado", params={**p, "tipo": "estadia"}).json()] == ["estadia"]
+    ano = str(HOJE.year)
+    semen = next(l for l in c.get("/api/faturacao/anos", params={"tipo": "armazenamento"}).json()["linhas"] if l["dono_id"] == ctx["dono"])
+    estadias = next(l for l in c.get("/api/faturacao/anos", params={"tipo": "estadia"}).json()["linhas"] if l["dono_id"] == ctx["dono"])
+    if d(10).year == HOJE.year:
+        assert semen["celulas"][ano]["dias"] == 0 and semen["celulas"][ano]["faturado_ate"] is None
+        assert estadias["celulas"][ano]["dias_semen"] == 0 and estadias["celulas"][ano]["faturado_ate"] == d(3).isoformat()

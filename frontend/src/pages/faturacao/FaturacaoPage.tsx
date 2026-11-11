@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import dayjs, { type Dayjs } from "dayjs";
 import {
@@ -48,7 +48,6 @@ import { useOpcoes } from "../stock/api";
 import { ResumoFaturar } from "./ResumoFaturar";
 import {
   escalao,
-  ePalhetas,
   useAtraso,
   useAnos,
   useAnularFaturada,
@@ -60,7 +59,6 @@ import {
   type Faturada,
   type LinhaAno,
   type PorFaturar,
-  type FiltroTipo,
   type TipoFat,
 } from "./api";
 
@@ -100,13 +98,11 @@ function useTextos() {
   return {
     dono: (l: { dono_nome: string | null }) => l.dono_nome ?? t("web.billing.no_owner"),
     tipo: (x: TipoFat) => t(`web.billing.type.${x}`),
-    dias: (l: Linha) => (ePalhetas(l.tipo) ? dataCurta(l.inicio) : t("web.billing.days", { count: nDias(l) })),
-    palhetas: (l: Linha) => (l.tipo !== "estadia" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
+    dias: (l: Linha) => t("web.billing.days", { count: nDias(l) }),
+    palhetas: (l: Linha) => (l.tipo === "armazenamento" && l.palhetas != null ? t("web.billing.straws", { count: l.palhetas }) : ""),
     /** "4 dias" na estadia; "10 palhetas · 4 dias" no sémen. */
     qtd: (l: Linha) =>
-      ePalhetas(l.tipo)
-        ? t("web.billing.straws", { count: l.quantidade })
-        : l.tipo === "armazenamento" && l.palhetas == null
+      l.tipo === "armazenamento" && l.palhetas == null
         ? t("web.billing.straw_days", { count: l.quantidade })
         : [l.tipo === "armazenamento" && t("web.billing.straws", { count: l.palhetas! }), t("web.billing.days", { count: nDias(l) })]
             .filter(Boolean)
@@ -122,55 +118,80 @@ const chave = (l: PorFaturar) => `${l.tipo}-${l.ref_id}-${l.inicio}`;
 type Linha = { tipo: TipoFat; inicio: string; fim: string; quantidade: number; palhetas?: number | null };
 const nDias = (l: { inicio: string; fim: string }) => dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
 
-function totais(linhas: Linha[]) {
-  const soma = (tipo: TipoFat) => linhas.filter((l) => l.tipo === tipo).reduce((s, l) => s + nDias(l), 0);
-  const pal = linhas.filter((l) => ePalhetas(l.tipo)).reduce((s, l) => s + l.quantidade, 0);
-  return { dias: soma("estadia"), ds: soma("armazenamento"), pal };
-}
-const COR_TIPO: Record<TipoFat, string> = {
-  estadia: "blue",
-  armazenamento: "purple",
-  palhetas_recebidas: "cyan",
-  palhetas_gastas: "geekblue",
+/** Dias das linhas (cada área só tem um tipo). */
+const totalDias = (linhas: Linha[]) => linhas.reduce((s, l) => s + nDias(l), 0);
+
+// Estadias e Sémen são áreas separadas da Faturação (cada uma com as suas
+// faturas): o endereço é /faturacao/<area>/<separador>.
+const AREAS = { estadias: "estadia", semen: "armazenamento" } as const;
+type Area = keyof typeof AREAS;
+const AreaCtx = createContext<{ area: Area; tipo: TipoFat }>({ area: "estadias", tipo: "estadia" });
+const useArea = () => {
+  const { area, tipo } = useContext(AreaCtx);
+  /** Endereço de um separador desta área (com filtros opcionais). */
+  const rota = (tab: string, q = "") => `/faturacao/${area}/${tab}${q ? `?${q}` : ""}`;
+  return { area, tipo, rota };
 };
 
 export function FaturacaoPage() {
   const t = useT();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { tab } = useParams();
-  if (!tab || !TABS.includes(tab as (typeof TABS)[number])) return <Navigate to="/faturacao/atraso" replace />;
+  const { area, tab } = useParams();
+  if (!area || !(area in AREAS) || !tab || !TABS.includes(tab as (typeof TABS)[number]))
+    return <Navigate to={`/faturacao/${area && area in AREAS ? area : "estadias"}/atraso`} replace />;
+  const a = area as Area;
   const conteudo = tab === "atraso" ? <AtrasoTab /> : tab === "anos" ? <AnosTab /> : tab === "por-faturar" ? <PorFaturarTab /> : <FaturadoTab />;
+  const areas = [
+    { value: "estadias", label: t("web.billing.type.estadia") },
+    { value: "semen", label: t("web.billing.type.armazenamento") },
+  ];
 
   if (isMobile)
     return (
-      <>
-        <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/faturacao/${v}`)} style={{ background: "#fff" }}>
+      <AreaCtx.Provider value={{ area: a, tipo: AREAS[a] }}>
+        <div style={{ padding: "8px 8px 0", background: "#fff" }}>
+          <Selector
+            columns={2}
+            showCheckMark={false}
+            value={[a]}
+            onChange={(v) => v[0] && navigate(`/faturacao/${v[0]}/${tab}`)}
+            options={areas}
+          />
+        </div>
+        <CapsuleTabs activeKey={tab} onChange={(v) => navigate(`/faturacao/${a}/${v}`)} style={{ background: "#fff" }}>
           <CapsuleTabs.Tab key="atraso" title={t("web.billing.tab.overdue")} />
           <CapsuleTabs.Tab key="anos" title={t("web.billing.tab.years")} />
           <CapsuleTabs.Tab key="por-faturar" title={t("web.billing.tab.pending")} />
           <CapsuleTabs.Tab key="faturado" title={t("web.billing.tab.done")} />
         </CapsuleTabs>
         {conteudo}
-      </>
+      </AreaCtx.Provider>
     );
 
   return (
-    <Card size="small">
-      <PageHeader titulo={t("web.nav.faturacao")} />
-      <Typography.Paragraph type="secondary">{t("web.billing.help")}</Typography.Paragraph>
-      <Tabs
-        activeKey={tab}
-        onChange={(v) => navigate(`/faturacao/${v}`)}
-        destroyOnHidden
-        items={[
-          { key: "atraso", label: t("web.billing.tab.overdue"), children: tab === "atraso" && conteudo },
-          { key: "anos", label: t("web.billing.tab.years"), children: tab === "anos" && conteudo },
-          { key: "por-faturar", label: t("web.billing.tab.pending"), children: tab === "por-faturar" && conteudo },
-          { key: "faturado", label: t("web.billing.tab.done"), children: tab === "faturado" && conteudo },
-        ]}
-      />
-    </Card>
+    <AreaCtx.Provider value={{ area: a, tipo: AREAS[a] }}>
+      <Card size="small">
+        <PageHeader
+          titulo={t("web.nav.faturacao")}
+          acoes={
+            <Segmented size="large" value={a} onChange={(v) => navigate(`/faturacao/${v}/${tab}`)} options={areas} />
+          }
+        />
+        <Typography.Paragraph type="secondary">{t(a === "estadias" ? "web.billing.help_stays" : "web.billing.help_semen")}</Typography.Paragraph>
+        <Tabs
+          activeKey={tab}
+          onChange={(v) => navigate(`/faturacao/${a}/${v}`)}
+          destroyOnHidden
+          items={[
+            { key: "atraso", label: t("web.billing.tab.overdue"), children: tab === "atraso" && conteudo },
+            { key: "anos", label: t("web.billing.tab.years"), children: tab === "anos" && conteudo },
+            { key: "por-faturar", label: t("web.billing.tab.pending"), children: tab === "por-faturar" && conteudo },
+            { key: "faturado", label: t("web.billing.tab.done"), children: tab === "faturado" && conteudo },
+          ]}
+        />
+      </Card>
+    </AreaCtx.Provider>
   );
 }
 
@@ -275,7 +296,7 @@ function PorFaturarTab() {
   const errorMessage = useErrorMessage();
   const tx = useTextos();
   const p = usePeriodo();
-  const [tipo, setTipo] = useState<FiltroTipo | null>(null);
+  const { tipo } = useArea();
   const [pesquisa, setPesquisa] = useState("");
   const q = usePorFaturar({ ...p.filtro, tipo });
   const [sel, setSel] = useState<string[]>([]);
@@ -287,10 +308,10 @@ function PorFaturarTab() {
   }, [q.data, pesquisa]);
   // Só contam as escolhidas que ainda estão na lista (o período/filtro pode ter mudado).
   const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
-  const tot = totais(escolhidas.length ? escolhidas : linhas);
+  const dias = totalDias(escolhidas.length ? escolhidas : linhas);
   const resumo = escolhidas.length
-    ? t("web.billing.summary", { linhas: escolhidas.length, dias: tot.dias, ds: tot.ds, pal: tot.pal })
-    : t("web.billing.total", { dias: tot.dias, ds: tot.ds, pal: tot.pal });
+    ? t("web.billing.summary", { linhas: escolhidas.length, dias })
+    : t("web.billing.total", { dias });
 
   const exportar = () =>
     baixarCsv(
@@ -302,8 +323,8 @@ function PorFaturarTab() {
         tx.tipo(l.tipo),
         l.inicio,
         l.fim,
-        l.tipo !== "estadia" ? l.palhetas : "",
-        ePalhetas(l.tipo) ? "" : nDias(l),
+        l.tipo === "armazenamento" ? l.palhetas : "",
+        nDias(l),
         l.tipo === "armazenamento" ? t("web.billing.straw_days", { count: l.quantidade }) : "",
       ]),
     );
@@ -359,17 +380,7 @@ function PorFaturarTab() {
   return (
     <>
       <FiltrosDesktop p={p}>
-        <Segmented<FiltroTipo | "todos">
-          value={tipo ?? "todos"}
-          onChange={(v) => setTipo(v === "todos" ? null : v)}
-          options={[
-            { value: "todos", label: t("web.billing.type.all") },
-            { value: "estadia", label: t("web.billing.type.estadia") },
-            { value: "armazenamento", label: t("web.billing.type.armazenamento") },
-            { value: "palhetas", label: t("web.billing.type.palhetas") },
-          ]}
-        />
-      </FiltrosDesktop>
+</FiltrosDesktop>
       {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
       <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 8 }}>
         <Typography.Text type="secondary">{resumo}</Typography.Text>
@@ -400,14 +411,16 @@ function PorFaturarTab() {
             title: t("web.billing.col.what"),
             render: (_, l) => (
               <>
-                <Tag color={COR_TIPO[l.tipo]}>{tx.tipo(l.tipo)}</Tag>
                 {l.descricao}
                 {l.local && <Typography.Text type="secondary"> · {l.local}</Typography.Text>}
               </>
             ),
           },
           { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
-          { title: t("web.billing.col.straws"), align: "right", render: (_, l) => tx.palhetas(l) },
+          // Palhetas só na área do sémen.
+          ...(tipo === "armazenamento"
+            ? [{ title: t("web.billing.col.straws"), align: "right" as const, render: (_: unknown, l: PorFaturar) => tx.palhetas(l) }]
+            : []),
           { title: t("web.billing.col.days"), align: "right", render: (_, l) => <Typography.Text strong>{tx.dias(l)}</Typography.Text> },
         ]}
       />
@@ -426,12 +439,13 @@ function FaturadoTab() {
   const p = usePeriodo();
   const [fatura, setFatura] = useState("");
   const [anuladas, setAnuladas] = useState(false);
-  const q = useFaturado({ ...p.filtro, fatura, anuladas });
+  const { tipo } = useArea();
+  const q = useFaturado({ ...p.filtro, fatura, anuladas, tipo });
   const [anular, setAnular] = useState<Faturada | null>(null);
   // "Só ver" não anula.
   const podeEditar = useUser().acesso_faturacao === "editar";
   const linhas = q.data ?? [];
-  const tot = totais(linhas.filter((l) => !l.anulada));
+  const dias = totalDias(linhas.filter((l) => !l.anulada));
 
   const exportar = () =>
     baixarCsv(
@@ -444,8 +458,8 @@ function FaturadoTab() {
         seguro(l.descricao),
         l.inicio,
         l.fim,
-        l.tipo !== "estadia" ? (l.palhetas ?? t("web.billing.straw_days", { count: l.quantidade })) : "",
-        ePalhetas(l.tipo) ? "" : nDias(l),
+        l.tipo === "armazenamento" ? (l.palhetas ?? t("web.billing.straw_days", { count: l.quantidade })) : "",
+        nDias(l),
         l.criado_por,
         l.anulada ? l.motivo_anulacao : "",
       ]),
@@ -458,7 +472,7 @@ function FaturadoTab() {
         <div style={{ padding: 8, background: "#fff" }}>
           <PeriodoMobile p={p} />
           <SearchBar style={{ marginTop: 8 }} placeholder={t("web.billing.search_invoice")} value={fatura} onChange={setFatura} />
-          <div style={{ color: "#999", fontSize: 13, marginTop: 8 }}>{t("web.billing.total", tot)}</div>
+          <div style={{ color: "#999", fontSize: 13, marginTop: 8 }}>{t("web.billing.total", { dias })}</div>
         </div>
         {q.isPending ? (
           <div style={{ textAlign: "center", padding: 24 }}>
@@ -500,7 +514,7 @@ function FaturadoTab() {
       </FiltrosDesktop>
       {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
       <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary">{t("web.billing.total", tot)}</Typography.Text>
+        <Typography.Text type="secondary">{t("web.billing.total", { dias })}</Typography.Text>
         <Button icon={<DownloadOutlined />} disabled={!linhas.length} onClick={exportar}>
           {t("web.billing.export")}
         </Button>
@@ -535,13 +549,20 @@ function FaturadoTab() {
             title: t("web.billing.col.what"),
             render: (_, l) => (
               <>
-                <Tag color={COR_TIPO[l.tipo]}>{tx.tipo(l.tipo)}</Tag>
                 {l.descricao}
               </>
             ),
           },
           { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
-          { title: t("web.billing.col.straws"), align: "right", render: (_, l) => (l.palhetas == null && l.tipo === "armazenamento" ? t("web.billing.straw_days", { count: l.quantidade }) : tx.palhetas(l)) },
+          ...(tipo === "armazenamento"
+            ? [
+                {
+                  title: t("web.billing.col.straws"),
+                  align: "right" as const,
+                  render: (_: unknown, l: Faturada) => (l.palhetas == null ? t("web.billing.straw_days", { count: l.quantidade }) : tx.palhetas(l)),
+                },
+              ]
+            : []),
           { title: t("web.billing.col.days"), align: "right", render: (_, l) => tx.dias(l) },
           { title: t("web.billing.col.by"), dataIndex: "criado_por" },
           {
@@ -634,9 +655,10 @@ function AnosTab() {
   const errorMessage = useErrorMessage();
   const [soPendentes, setSoPendentes] = useState(true);
   const [pesquisa, setPesquisa] = useState("");
-  const q = useAnos(ANO_INICIAL);
+  const { tipo, rota } = useArea();
+  const q = useAnos(ANO_INICIAL, tipo);
   const anos = q.data?.anos ?? [];
-  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0 || c.palhetas > 0);
+  const pendente = (c?: CelulaAno) => !!c && (c.dias > 0 || c.dias_semen > 0);
   const linhas = useMemo(() => {
     const s = pesquisa.trim().toLowerCase();
     return (q.data?.linhas ?? []).filter(
@@ -657,13 +679,12 @@ function AnosTab() {
   const abrir = (l: LinhaAno, k: string) => {
     const fim = k === String(dayjs().year()) ? dayjs().format(ISO) : `${k}-12-31`;
     const dono = l.dono_id != null ? `&dono=${l.dono_id}` : "";
-    navigate(`/faturacao/por-faturar?inicio=${k}-01-01&fim=${fim}${dono}`);
+    navigate(rota("por-faturar", `inicio=${k}-01-01&fim=${fim}${dono}`));
   };
   const falta = (c: CelulaAno) =>
     [
       c.dias > 0 && t("web.billing.stay_days", { count: c.dias }),
       c.dias_semen > 0 && `${t("web.billing.semen_days", { count: c.dias_semen })} (${t("web.stock.n_lots", { count: c.lotes })})`,
-      c.palhetas > 0 && t("web.billing.straws_used", { count: c.palhetas }),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -790,92 +811,45 @@ function AnosTab() {
 
 const ESCALOES = [3, 6, 12] as const;
 const COR_ESCALAO: Record<number, string> = { 3: "gold", 6: "orange", 12: "red" };
-const TIPOS_ATRASO = ["estadia", "armazenamento", "palhetas"] as const;
-type CatAtraso = (typeof TIPOS_ATRASO)[number];
 
-/** Quem tem dias por faturar há mais de 3 / 6 / 12 meses (a contar do dia
- *  mais antigo por faturar), estadias e sémen à parte. */
+/** Quem tem dias por faturar nesta área (estadias ou sémen) há mais de
+ *  3 / 6 / 12 meses, a contar do dia mais antigo por faturar. */
 function AtrasoTab() {
   const t = useT();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
   const tx = useTextos();
+  const { tipo, rota } = useArea();
   const q = useAtraso();
   const [minimo, setMinimo] = useState<number>(3);
-  const [tipo, setTipo] = useState<CatAtraso | null>(null);
 
-  const conta = (k: CatAtraso, m: number) => (q.data ?? []).filter((l) => escalao(l[k]?.desde) >= m).length;
-  const linhas = (q.data ?? []).filter((l) => (tipo ? [tipo] : TIPOS_ATRASO).some((k) => escalao(l[k]?.desde) >= minimo));
+  const de = (l: Atraso) => (tipo === "estadia" ? l.estadia : l.armazenamento);
+  const conta = (m: number) => (q.data ?? []).filter((l) => escalao(de(l)?.desde) >= m).length;
+  const linhas = (q.data ?? []).filter((l) => escalao(de(l)?.desde) >= minimo);
   const ver = (l: Atraso) =>
-    navigate(`/faturacao/por-faturar?inicio=1990-01-01&fim=${dayjs().format(ISO)}${l.dono_id != null ? `&dono=${l.dono_id}` : ""}`);
+    navigate(rota("por-faturar", `inicio=1990-01-01&fim=${dayjs().format(ISO)}${l.dono_id != null ? `&dono=${l.dono_id}` : ""}`));
   const rotuloEscalao = (m: number) => t(m === 12 ? "web.billing.over_12" : m === 6 ? "web.billing.over_6" : "web.billing.over_3");
   const meses = (desde: string) => dayjs().diff(dayjs(desde), "month");
-  const detalhe = (k: CatAtraso, c: AtrasoTipo) =>
-    k === "palhetas"
-      ? t("web.billing.straws", { count: c.dias })
-      : `${t("web.billing.days", { count: c.dias })} · ${k === "estadia" ? t("web.billing.stays_n", { count: c.itens }) : t("web.stock.n_lots", { count: c.itens })}`;
-  const rotuloCat = (k: CatAtraso) => t(`web.billing.type.${k}`);
-  const celula = (k: CatAtraso, c: AtrasoTipo | null) => {
-    const e = escalao(c?.desde);
-    if (!c) return <Typography.Text type="secondary">—</Typography.Text>;
-    return (
-      <>
-        <Tag color={e ? COR_ESCALAO[e] : undefined}>{t("web.billing.ago_months", { count: meses(c.desde) })}</Tag>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t("web.billing.since_date", { data: dataCurta(c.desde) })}
-        </Typography.Text>
-        <div style={{ fontSize: 12 }}>{detalhe(k, c)}</div>
-      </>
-    );
-  };
+  const detalhe = (c: AtrasoTipo) =>
+    `${t("web.billing.days", { count: c.dias })} · ${tipo === "estadia" ? t("web.billing.stays_n", { count: c.itens }) : t("web.stock.n_lots", { count: c.itens })}`;
 
-  const cartoes = (
-    <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-      {TIPOS_ATRASO.map((k) => (
-        <Col xs={24} md={8} key={k}>
-          <Card size="small" title={rotuloCat(k)}>
-            <Row gutter={8}>
-              {ESCALOES.map((m) => (
-                <Col span={8} key={m}>
-                  <div
-                    role="button"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => {
-                      setTipo(k);
-                      setMinimo(m);
-                    }}
-                  >
-                    <Statistic
-                      title={rotuloEscalao(m)}
-                      value={conta(k, m)}
-                      valueStyle={{ color: conta(k, m) ? (m === 12 ? "#cf1322" : m === 6 ? "#d46b08" : "#d48806") : undefined }}
-                    />
-                  </div>
-                </Col>
-              ))}
-            </Row>
-          </Card>
-        </Col>
-      ))}
-    </Row>
-  );
-  const filtros = (
-    <Flex gap={8} wrap align="center" style={{ marginBottom: 12 }}>
-      <Segmented<number>
-        value={minimo}
-        onChange={setMinimo}
-        options={ESCALOES.map((m) => ({ value: m, label: rotuloEscalao(m) }))}
-      />
-      <Segmented<CatAtraso | "todos">
-        value={tipo ?? "todos"}
-        onChange={(v) => setTipo(v === "todos" ? null : v)}
-        options={[
-          { value: "todos", label: t("web.billing.type.all") },
-          ...TIPOS_ATRASO.map((k) => ({ value: k, label: rotuloCat(k) })),
-        ]}
-      />
-    </Flex>
+  const cartao = (
+    <Card size="small" style={{ marginBottom: 12, maxWidth: 560 }}>
+      <Row gutter={8}>
+        {ESCALOES.map((m) => (
+          <Col span={8} key={m}>
+            <div role="button" style={{ cursor: "pointer" }} onClick={() => setMinimo(m)}>
+              <Statistic
+                title={rotuloEscalao(m)}
+                value={conta(m)}
+                valueStyle={{ color: conta(m) ? (m === 12 ? "#cf1322" : m === 6 ? "#d46b08" : "#d48806") : undefined }}
+              />
+            </div>
+          </Col>
+        ))}
+      </Row>
+    </Card>
   );
 
   if (isMobile)
@@ -888,7 +862,7 @@ function AtrasoTab() {
             showCheckMark={false}
             value={[String(minimo)]}
             onChange={(v) => v[0] && setMinimo(Number(v[0]))}
-            options={ESCALOES.map((m) => ({ value: String(m), label: `${rotuloEscalao(m)}` }))}
+            options={ESCALOES.map((m) => ({ value: String(m), label: `${rotuloEscalao(m)} (${conta(m)})` }))}
           />
         </div>
         {q.isPending ? (
@@ -904,11 +878,7 @@ function AtrasoTab() {
                 key={l.dono_id ?? "sem"}
                 arrow
                 onClick={() => ver(l)}
-                description={TIPOS_ATRASO.filter((k) => l[k]).map((k) => (
-                  <div key={k}>
-                    {rotuloCat(k)}: {t("web.billing.ago_months", { count: meses(l[k]!.desde) })} · {detalhe(k, l[k]!)}
-                  </div>
-                ))}
+                description={`${t("web.billing.ago_months", { count: meses(de(l)!.desde) })} · ${detalhe(de(l)!)}`}
               >
                 {tx.dono(l)}
               </List.Item>
@@ -922,8 +892,13 @@ function AtrasoTab() {
     <>
       <Typography.Paragraph type="secondary">{t("web.billing.overdue_help")}</Typography.Paragraph>
       {q.isError && <Alert type="error" showIcon title={errorMessage(q.error)} style={{ marginBottom: 12 }} />}
-      {cartoes}
-      {filtros}
+      {cartao}
+      <Segmented<number>
+        style={{ marginBottom: 12 }}
+        value={minimo}
+        onChange={setMinimo}
+        options={ESCALOES.map((m) => ({ value: m, label: rotuloEscalao(m) }))}
+      />
       <Table<Atraso>
         size="small"
         bordered
@@ -935,9 +910,22 @@ function AtrasoTab() {
         title={() => <Typography.Text type="secondary">{t("web.billing.owners_n", { count: linhas.length })}</Typography.Text>}
         columns={[
           { title: t("label.owner"), render: (_, l) => <Typography.Text strong>{tx.dono(l)}</Typography.Text> },
-          { title: t("web.billing.type.estadia"), render: (_, l) => celula("estadia", l.estadia) },
-          { title: t("web.billing.type.armazenamento"), render: (_, l) => celula("armazenamento", l.armazenamento) },
-          { title: t("web.billing.type.palhetas"), render: (_, l) => celula("palhetas", l.palhetas) },
+          {
+            title: t("web.billing.col.since"),
+            render: (_, l) => {
+              const c = de(l)!;
+              const e = escalao(c.desde);
+              return (
+                <>
+                  <Tag color={e ? COR_ESCALAO[e] : undefined}>{t("web.billing.ago_months", { count: meses(c.desde) })}</Tag>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {t("web.billing.since_date", { data: dataCurta(c.desde) })}
+                  </Typography.Text>
+                </>
+              );
+            },
+          },
+          { title: t("web.billing.col.missing"), render: (_, l) => detalhe(de(l)!) },
           {
             title: "",
             width: 140,

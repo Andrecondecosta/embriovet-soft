@@ -147,7 +147,7 @@ function useAvisoFaturacao() {
     mostrar: acesso && n3 > 0,
     titulo: t("web.billing.dash_title"),
     texto: t("web.billing.dash_text", { n3, n12: conta(12) }),
-    abrir: () => navigate("/faturacao/atraso"),
+    abrir: () => navigate("/faturacao"),
   };
 }
 
