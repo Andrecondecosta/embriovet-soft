@@ -113,6 +113,27 @@ def test_registar_desconta_stock_e_cria_tarefas(ctx):
     assert r.json()["detail"]["code"] == "web.insem.error.not_enough"
 
 
+def test_semen_fresco_nao_gasta_stock_e_segue_os_mesmos_passos(ctx):
+    c = ctx["c"]
+    corpo = _corpo(ctx, 1, linhas=[], fresco=True, garanhao=f"{P}Fresco{uuid.uuid4().hex[:4]}")
+    r = c.post("/api/inseminacoes", json=corpo)
+    assert r.status_code == 201, r.text
+    assert r.json()["total_palhetas"] == 0 and r.json()["data_1o_diagnostico"] == (date.today() + timedelta(days=14)).isoformat()
+    assert _stock(ctx["lote"]) == 10
+    assert {"verificar_ovulacao", "diagnostico_gestacao"} <= {t for (t,) in _tarefas(ctx["egua"])}
+    linha = _um("SELECT fresco, estoque_id, palhetas_gastas, animal_id_garanhao IS NOT NULL, operation_id::text FROM inseminacoes WHERE animal_id_egua = %s", (ctx["egua"],))
+    assert linha[:4] == (True, None, 0, True)
+    # Corrigir: muda o garanhão e a hora; não se passa a congelado.
+    op = linha[4]
+    assert c.get(f"/api/inseminacoes/operacao/{op}").json()["fresco"] is True
+    novo = f"{P}Outro{uuid.uuid4().hex[:4]}"
+    assert c.put(f"/api/inseminacoes/operacao/{op}", json={**corpo, "garanhao": novo, "hora_inseminacao": "12:00"}).status_code == 200
+    assert _um("SELECT garanhao, hora_inseminacao::text FROM inseminacoes WHERE operation_id = %s::uuid", (op,)) == (novo, "12:00:00")
+    assert c.put(f"/api/inseminacoes/operacao/{op}", json=_corpo(ctx, 1)).json()["detail"]["code"] == "web.insem.error.edit_kind"
+    # Congelado continua a pedir lotes.
+    assert c.post("/api/inseminacoes", json=_corpo(ctx, 1, linhas=[])).json()["detail"]["code"] == "web.insem.error.no_lots"
+
+
 def _tarefas(egua):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -126,7 +147,7 @@ def test_validacoes(ctx):
     corpo = _corpo(ctx, 1)
     corpo["linhas"] *= 2
     assert c.post("/api/inseminacoes", json=corpo).json()["detail"]["code"] == "web.insem.error.duplicate_lot"
-    assert c.post("/api/inseminacoes", json=_corpo(ctx, 1, linhas=[])).status_code == 422
+    assert c.post("/api/inseminacoes", json=_corpo(ctx, 1, linhas=[])).json()["detail"]["code"] == "web.insem.error.no_lots"
     # Égua sem estadia aberta não pode ser inseminada.
     _um("UPDATE estadias SET data_saida = CURRENT_DATE, estado = 'alta' WHERE animal_id = %s", (ctx["egua"],))
     assert c.post("/api/inseminacoes", json=_corpo(ctx, 1)).json()["detail"]["code"] == "web.insem.error.mare_no_stay"

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { EscolherSemen } from "./InseminacaoFresca";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { PlusOutlined } from "@ant-design/icons";
@@ -856,6 +857,8 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   // null = lista do diário; Novo = ecrã do registo (novo ou a corrigir).
   const [novo, setNovo] = useState<Novo | null>(null);
   const [aberto, setAberto] = useState<Ficha | null>(null);
+  // INS: pergunta "fresco ou congelado?".
+  const [semen, setSemen] = useState(false);
   const [detalhe, setDetalhe] = useState<Historico | null>(null);
   const [ultimoAberto, setUltimoAberto] = useState(false);
 
@@ -1186,19 +1189,25 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
   const titulo = novo.id ? t("web.registo.editing") : t("web.registo.new_button");
   // [rótulo, ação, já preenchido, obrigatório hoje (tarefa D+1 / DG por fazer)]
   const pedeHoje = !novo.id;
+  // A ovulação marca-se com OV no ovário (o antigo OVU só aparece ao corrigir
+  // um registo que o tinha). INS pergunta se o sémen é fresco ou congelado.
   const acoes: [string, () => void, boolean, boolean][] = [
-    ["OVU", () => setAberto("OVU"), !!dados.OVU, pedeHoje && r.pede.ovulacao],
+    ...(animal.tipo === "egua" ? [["INS", () => setSemen(true), false, false] as [string, () => void, boolean, boolean]] : []),
+    ...(dados.OVU ? [["OVU", () => setAberto("OVU"), true, false] as [string, () => void, boolean, boolean]] : []),
     ["DG", () => setAberto("DG"), !!dados.DG, pedeHoje && r.pede.dg],
     ["TX", () => setAberto("TX"), !!dados.TX, false],
     ["!", () => setNovo({ ...novo, prioritario: !novo.prioritario }), novo.prioritario, false],
-    ...(animal.tipo === "egua"
-      ? [["INS", () => navigate(`/trabalho-diario/inseminacao?egua=${animal.id}`), false, false] as [string, () => void, boolean, boolean]]
-      : []),
   ];
-  const faltaHoje = acoes.filter(([, , ativo, obrigatorio]) => obrigatorio && !ativo).map(([rotulo]) => rotulo);
+  // Tarefa D+1 (verificar ovulação): responde-se com os ovários.
+  const faltaOvarios = pedeHoje && r.pede.ovulacao && !dados.OE && !dados.OD && !dados.OVU;
+  const faltaHoje = [
+    ...(faltaOvarios ? ["OE/OD"] : []),
+    ...acoes.filter(([, , ativo, obrigatorio]) => obrigatorio && !ativo).map(([rotulo]) => rotulo),
+  ];
   const ajudaBotoes = t(animal.tipo === "egua" ? "web.registo.buttons_help" : "web.registo.buttons_help_recipient");
   const extras = (
     <>
+      {animal.tipo === "egua" && <EscolherSemen eguaId={animal.id} aberto={semen} onClose={() => setSemen(false)} />}
       {faltaHoje.length > 0 && (
         <Typography.Text type="danger">{t("web.registo.required_today", { o: faltaHoje.join(", ") })}</Typography.Text>
       )}

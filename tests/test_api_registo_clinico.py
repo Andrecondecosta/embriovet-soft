@@ -197,10 +197,20 @@ def test_ovulacao_obrigatoria_com_tarefa_d1(ctx):
     assert c.get(f"/api/animais/{aid}/registos").json()["pede"] == {"ovulacao": True, "dg": False}
     r = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 1}))
     assert r.json()["detail"]["code"] == "web.registo.error.ovulation_required"
-    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "nao_avaliado", "fh": "nao"}))
+    # Responde-se com os ovários: OV marcado = ovulou.
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OD={"foliculos": [{"achados": ["OV"]}]}))
     assert r.status_code == 201 and r.json()["tarefas_concluidas"] == 1
-    assert c.get(f"/api/animais/{aid}/registos").json()["historico"][0]["dados"]["OVU"] == {"ovulacao": "nao_avaliado", "fh": "nao"}
+    # Registos antigos com OVU continuam a valer.
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "talvez", "fh": "nao"})).status_code == 422
+
+
+def test_exportacao_tira_a_ovulacao_dos_ovarios():
+    from scripts.exportar_eventos import _ovulacao
+
+    assert _ovulacao({"OE": {"foliculos": [{"tamanho": 30}]}, "OD": {"foliculos": [{"achados": ["OV", "FH"]}]}}) == ["sim", "sim"]
+    assert _ovulacao({"OE": {"foliculos": [{"tamanho": 30, "achados": ["CL"]}]}}) == ["nao", "nao"]
+    assert _ovulacao({"UT": {"edema": 1, "liquido": 0}}) == [None, None]
+    assert _ovulacao({"OVU": {"ovulacao": "nao_avaliado", "fh": "nao"}}) == ["nao_avaliado", "nao"]
 
 
 def test_dg_obrigatorio_com_tarefa_e_guardado_por_etapa(ctx):
@@ -268,7 +278,7 @@ def test_registo_fecha_observacoes_em_atraso_mas_nao_tratamentos(ctx):
         )
     # D+1 em atraso: a ovulação também é pedida.
     assert c.get(f"/api/animais/{aid}/registos").json()["pede"]["ovulacao"] is True
-    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OVU={"ovulacao": "sim", "fh": "nao"}))
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"tamanho": 35, "achados": ["OV"]}]}))
     assert r.status_code == 201, r.text
     abertas = _todas("SELECT tipo FROM trabalho_diario WHERE animal_id = %s AND concluida = FALSE", (aid,))
     assert abertas == [("tratamento",)]

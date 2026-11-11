@@ -47,6 +47,7 @@ import { Cabecalho, DataCampo, PickerCampo, SeletorPesquisa } from "../component
 import { localizacao, referencia, type Lote } from "./stock/api";
 import { QtdPalhetas, SelecionarLotesModal } from "./stock/transfer/TransferenciasTab";
 import { SelecionarLotesMobile } from "./stock/transfer/TransferenciasMobile";
+import { InseminacaoFresca } from "./animal/InseminacaoFresca";
 
 interface LoteInsem {
   id: number;
@@ -102,6 +103,8 @@ interface Operacao {
   data_inseminacao: string;
   hora_inseminacao: string | null;
   observacoes: string | null;
+  /** Sémen fresco: sem lotes; corrige-se na janela do fresco. */
+  fresco: boolean;
   linhas: { stock_id: number; palhetas: number; max: number }[];
 }
 
@@ -324,7 +327,25 @@ type X = ReturnType<typeof useInseminacao>;
 
 export function InseminacaoPage() {
   const x = useInseminacao();
-  return useIsMobile() ? <InseminacaoMobile x={x} /> : <InseminacaoDesktop x={x} />;
+  const isMobile = useIsMobile();
+  const op = x.operacao.data;
+  // Corrigir uma inseminação com sémen fresco: a janela do fresco (sem lotes).
+  if (x.editarRef && op?.fresco && op.animal_id_egua)
+    return (
+      <InseminacaoFresca
+        eguaId={op.animal_id_egua}
+        aberto
+        onClose={() => x.navigate("/atividade")}
+        editar={{
+          ref: op.ref,
+          garanhao: op.garanhao ?? "",
+          data_inseminacao: op.data_inseminacao,
+          hora_inseminacao: op.hora_inseminacao,
+          observacoes: op.observacoes,
+        }}
+      />
+    );
+  return isMobile ? <InseminacaoMobile x={x} /> : <InseminacaoDesktop x={x} />;
 }
 
 // ── Computador ──────────────────────────────────────────────────────────────

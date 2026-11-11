@@ -168,6 +168,7 @@ def registar_inseminacao_completa(
     criar_tarefa_d1: bool = True,
     hora_inseminacao: Optional[time] = None,
     pedido_id: Optional[str] = None,
+    fresco: bool = False,
 ) -> dict:
     """Regista uma inseminação completa numa única transacção.
 
@@ -205,6 +206,9 @@ def registar_inseminacao_completa(
     pedido_id : str | None
         Id do envio do formulário. Se já foi gravado, levanta
         `InseminacaoDuplicada` e não grava nada (anti-duplicados).
+    fresco : bool
+        Sémen fresco: sem lotes (`registros` vazio), não gasta palhetas;
+        uma linha com `estoque_id` NULL. Tudo o resto igual (D+1, DG).
 
     Devolve
     -------
@@ -220,7 +224,9 @@ def registar_inseminacao_completa(
         Se validações falharem (sem lotes, stock insuficiente, etc.).
     """
     # ── Validações ────────────────────────────────────────────────────
-    if not registros:
+    if fresco and registros:
+        raise InseminacaoError("Sémen fresco não leva lotes.")
+    if not fresco and not registros:
         raise InseminacaoError("Sem lotes seleccionados.")
     if not garanhao_nome or not garanhao_nome.strip():
         raise InseminacaoError("Nome do garanhão obrigatório.")
@@ -300,6 +306,24 @@ def registar_inseminacao_completa(
                 raise InseminacaoError(
                     f"Garanhão id={animal_id_garanhao} não existe."
                 )
+
+            # 1a. Sémen fresco: uma linha sem lote (não mexe no stock).
+            if fresco:
+                cur.execute(
+                    """
+                    INSERT INTO inseminacoes (
+                        garanhao, dono_id, data_inseminacao, hora_inseminacao, egua,
+                        palhetas_gastas, observacoes, utilizador, operation_id,
+                        animal_id_egua, animal_id_garanhao, estadia_id, fresco
+                    ) VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s::uuid, %s, %s, %s, TRUE) RETURNING id
+                    """,
+                    (
+                        gar_nome, dono_id, data_inseminacao, hora_inseminacao, egua_nome,
+                        observacoes, utilizador, operation_id,
+                        int(animal_id_egua), int(animal_id_garanhao), int(estadia_id),
+                    ),
+                )
+                inseminacao_ids.append(int(cur.fetchone()[0]))
 
             # 1. Validar stock e INSERT `inseminacoes` (uma linha por lote).
             for reg in registros:

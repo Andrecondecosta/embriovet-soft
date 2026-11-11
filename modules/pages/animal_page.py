@@ -313,6 +313,7 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
                 i.hora_inseminacao,
                 i.utilizador,
                 i.estoque_id,
+                COALESCE(i.fresco, FALSE) AS fresco,
                 COALESCE(i.operation_id::text, 'solo_' || i.id::text) AS op_key
             FROM inseminacoes i
             WHERE i.animal_id_egua = %s
@@ -329,6 +330,7 @@ def _carregar_inseminacoes_animal(animal_id: int, animal_nome: str) -> pd.DataFr
             MIN(ins.hora_inseminacao) AS hora_inseminacao,
             MAX(ins.utilizador)       AS utilizador,
             STRING_AGG(DISTINCT COALESCE(NULLIF(TRIM(lt.origem_externa), ''), lt.data_embriovet, '#' || lt.id::text), ', ') AS lotes,
+            BOOL_OR(ins.fresco)       AS fresco,
             ins.op_key
         FROM ins
         LEFT JOIN dono d ON d.id = ins.dono_id

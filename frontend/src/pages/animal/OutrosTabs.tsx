@@ -82,7 +82,11 @@ function Kpis({ itens }: { itens: [string, string | number][] }) {
 
 function usePalhetas() {
   const t = useT();
-  return (i: Inseminacao) => `${i.palhetas_gastas ?? 0}${i.num_lotes > 1 ? ` (${t("web.animal.lots_n", { n: i.num_lotes })})` : ""}`;
+  // Sémen fresco: sem palhetas nem lote.
+  return (i: Inseminacao) =>
+    i.fresco
+      ? t("web.insem.fresh.label")
+      : `${i.palhetas_gastas ?? 0}${i.num_lotes > 1 ? ` (${t("web.animal.lots_n", { n: i.num_lotes })})` : ""}`;
 }
 
 // ── Historial reprodutivo (égua) ────────────────────────────────────────────

@@ -453,7 +453,9 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
     if not any([dados.OE, dados.OD, dados.UT, dados.CER, dados.TX, dados.OVU, dados.DG]):
         raise _erro(422, "web.registo.error.empty")
     pede = _pede(animal_id)
-    if pede["ovulacao"] and not dados.OVU:
+    # Tarefa D+1 (verificar ovulação): responde-se com os ovários (OV/FH
+    # no folículo). Registos antigos traziam o OVU, que ainda se aceita.
+    if pede["ovulacao"] and not (dados.OE or dados.OD or dados.OVU):
         raise _erro(422, "web.registo.error.ovulation_required")
     if pede["dg"] and not dados.DG:
         raise _erro(422, "web.registo.error.dg_required")

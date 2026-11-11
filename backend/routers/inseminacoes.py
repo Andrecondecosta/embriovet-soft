@@ -25,6 +25,7 @@ from modules.repositories.insemination_repo import (
     registar_inseminacao_completa,
     registrar_inseminacao_multiplas,
 )
+from modules.repositories.animal_repo import get_or_create_garanhao
 from modules.repositories.owner_repo import atualizar_status_proprietarios
 from modules.repositories.stock_repo import carregar_stock
 
@@ -71,7 +72,9 @@ class InseminacaoIn(BaseModel):
     data_inseminacao: date
     # Obrigatória numa inseminação nova; as antigas podem não ter.
     hora_inseminacao: time | None = None
-    linhas: list[Linha] = Field(min_length=1)
+    # Congelado: os lotes usados. Fresco: nenhum (só o nome do garanhão).
+    linhas: list[Linha] = []
+    fresco: bool = False
     observacoes: str | None = None
     criar_tarefa_d1: bool = True
     # Id do envio do formulário (anti-duplicados).
@@ -134,7 +137,12 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
         raise _erro(422, "warning.select_garanhao_first")
     if d.hora_inseminacao is None:
         raise _erro(422, "web.insem.error.time_required")
-    _validar_linhas(d.linhas)
+    if d.fresco:
+        d.linhas = []
+    elif not d.linhas:
+        raise _erro(422, "web.insem.error.no_lots")
+    else:
+        _validar_linhas(d.linhas)
     if not d.confirmar_gestante and (gestante := _gestacao_confirmada(d.animal_id_egua, d.data_inseminacao)):
         # Ao confirmar, essa gestação fica "falhou" (a égua voltou a ser inseminada).
         raise _erro(409, "web.insem.error.mare_pregnant", data=gestante.strftime("%d/%m/%Y"))
@@ -151,6 +159,7 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
             criar_tarefa_d1=d.criar_tarefa_d1,
             hora_inseminacao=d.hora_inseminacao,
             pedido_id=str(d.pedido_id) if d.pedido_id else None,
+            fresco=d.fresco,
         )
     except InseminacaoDuplicada as e:
         raise _erro(409, "web.insem.error.duplicate_submit") from e
@@ -175,6 +184,25 @@ def registar(d: InseminacaoIn, user: dict = Depends(get_current_user)):
 
 # ── Editar (a partir da Atividade) ────────────────────────────────────────
 
+def _editar_fresco(ref: str, d: InseminacaoIn) -> dict:
+    """Sémen fresco: muda o garanhão, a data, a hora e as observações (não há
+    lotes nem palhetas). Como no congelado, as tarefas não se recalculam."""
+    if not d.garanhao:
+        raise _erro(422, "warning.select_garanhao_first")
+    gid = get_or_create_garanhao(d.garanhao)
+    onde = "id = %s" if ref.startswith("id-") else "operation_id = %s::uuid"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""UPDATE inseminacoes SET garanhao = %s, animal_id_garanhao = %s, data_inseminacao = %s,
+                        hora_inseminacao = COALESCE(%s, hora_inseminacao), observacoes = %s
+                    WHERE {onde}""",
+                (d.garanhao, gid, d.data_inseminacao, d.hora_inseminacao, d.observacoes, int(ref[3:]) if ref.startswith("id-") else ref),
+            )
+        conn.commit()
+    return {"ok": True}
+
+
 def _linhas_da_operacao(ref: str) -> list[tuple]:
     """`ref` = operation_id (UUID) ou "id-<n>" para linhas antigas sem operação."""
     with get_connection() as conn:
@@ -184,7 +212,7 @@ def _linhas_da_operacao(ref: str) -> list[tuple]:
             cur.execute(
                 f"""
                 SELECT i.id, i.estoque_id, i.palhetas_gastas, i.data_inseminacao, i.observacoes,
-                       i.animal_id_egua, i.egua, i.garanhao, ed.existencia_atual, i.hora_inseminacao
+                       i.animal_id_egua, i.egua, i.garanhao, ed.existencia_atual, i.hora_inseminacao, i.fresco
                 FROM inseminacoes i
                 LEFT JOIN estoque_dono ed ON ed.id = i.estoque_id
                 WHERE {onde}
@@ -212,6 +240,7 @@ def operacao(ref: str, _user: dict = Depends(get_current_user)):
         "data_inseminacao": valor(r0[3]),
         "hora_inseminacao": r0[9].strftime("%H:%M") if r0[9] else None,
         "observacoes": r0[4],
+        "fresco": any(r[10] for r in rows),
         # Disponível = o que o lote tem + o que esta operação já gastou dele.
         "linhas": [{"stock_id": r[1], "palhetas": r[2], "max": int(r[8] or 0) + int(r[2] or 0)} for r in rows if r[1]],
     }
@@ -220,6 +249,10 @@ def operacao(ref: str, _user: dict = Depends(get_current_user)):
 @router.put("/operacao/{ref}")
 def editar(ref: str, d: InseminacaoIn, user: dict = Depends(get_current_user)):
     atual = operacao(ref)
+    if atual["fresco"] != d.fresco:
+        raise _erro(409, "web.insem.error.edit_kind")
+    if d.fresco:
+        return _editar_fresco(ref, d)
     _validar_linhas(d.linhas, extra={l["stock_id"]: int(l["palhetas"] or 0) for l in atual["linhas"]})
     # Cada linha leva o dono do lote (como a app atual).
     with get_connection() as conn:

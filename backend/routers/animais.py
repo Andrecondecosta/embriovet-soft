@@ -303,7 +303,7 @@ def reprodutivo(animal_id: int, _user: dict = Depends(get_current_user)):
     a = _animal(animal_id)
     df = _carregar_inseminacoes_animal(animal_id, a.get("nome") or "")
     ins = registos(df, ["data_inseminacao", "hora_inseminacao", "utilizador", "lotes", "garanhao", "proprietario", "palhetas_gastas",
-                        "num_lotes", "resultado", "observacoes", "op_key"])
+                        "num_lotes", "resultado", "observacoes", "op_key", "fresco"])
     feitas = _etapas_feitas(animal_id)
     ultimos = _ultimos_dg(animal_id)
     for r in ins:

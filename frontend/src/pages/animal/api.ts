@@ -54,6 +54,8 @@ export interface Inseminacao {
   proprietario: string | null;
   palhetas_gastas: number | null;
   num_lotes: number;
+  /** Sémen fresco (sem lote nem palhetas). */
+  fresco?: boolean;
   resultado: "pendente" | "gestacao_confirmada" | "falhou" | string;
   observacoes?: string | null;
   op_key?: string;

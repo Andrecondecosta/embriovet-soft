@@ -63,6 +63,19 @@ def _ovario(ov: dict | None) -> list:
     return [len(fol), max(tamanhos) if tamanhos else None, lista or None]
 
 
+def _ovulacao(d: dict) -> list:
+    """Ovulação e folículo hemorrágico do exame. Registos antigos tinham o
+    OVU (sim / nao / nao_avaliado); agora marca-se OV / FH no folículo:
+    ovários examinados sem OV = "nao"; sem ovários = vazio."""
+    if d.get("OVU"):
+        return [d["OVU"].get("ovulacao"), d["OVU"].get("fh")]
+    ovarios = [d[k] for k in ("OE", "OD") if d.get(k)]
+    if not ovarios:
+        return [None, None]
+    achados = {a for ov in ovarios for f in ov.get("foliculos") or [] for a in f.get("achados") or []}
+    return ["sim" if "OV" in achados else "nao", "sim" if "FH" in achados else "nao"]
+
+
 def _hora_inducao(d: dict):
     """Data e hora da indução da ovulação escrita no registo (hCG/deslorelina)."""
     v = ((d.get("TX") or {}).get("inducao") or {}).get("data")
@@ -85,7 +98,7 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
                 f"""
                 SELECT i.id, i.operation_id::text, i.animal_id_egua, i.data_inseminacao, i.hora_inseminacao,
                        i.animal_id_garanhao, i.estoque_id, i.palhetas_gastas, i.resultado, i.utilizador,
-                       e.concentracao, e.motilidade, e.origem_externa, e.data_embriovet, e.dose
+                       e.concentracao, e.motilidade, e.origem_externa, e.data_embriovet, e.dose, i.fresco
                 FROM inseminacoes i
                 LEFT JOIN estoque_dono e ON e.id = i.estoque_id
                 WHERE i.animal_id_egua IS NOT NULL AND i.data_inseminacao {entre}
@@ -147,7 +160,7 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
                 _cod("E", aid), _cod("R", rid), _txt(quando),
                 *_ovario(d.get("OE")), *_ovario(d.get("OD")),
                 (d.get("UT") or {}).get("edema"), (d.get("UT") or {}).get("liquido"), (d.get("CER") or {}).get("grau"),
-                (d.get("OVU") or {}).get("ovulacao"), (d.get("OVU") or {}).get("fh"), DG.get(d.get("DG")),
+                *_ovulacao(d), DG.get(d.get("DG")),
                 _hora_inducao(d), ((d.get("TX") or {}).get("inducao") or {}).get("produto"), vet(u),
             ]
             for rid, aid, quando, d, u in exames
@@ -156,14 +169,15 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
     )
     t_insem = (
         "Inseminações",
-        ["egua", "inseminacao", "data", "hora", "garanhao", "lote", "palhetas", "lote_concentracao", "lote_motilidade",
+        ["egua", "inseminacao", "data", "hora", "garanhao", "semen", "lote", "palhetas", "lote_concentracao", "lote_motilidade",
          "lote_origem", "lote_data_producao", "lote_dose", "resultado_atual", "veterinario"],
         [
             [
-                _cod("E", egua), op_cod.get(op) or f"I{iid}", _txt(dia), _txt(hora), _cod("G", gar), _cod("L", lote), palh,
+                _cod("E", egua), op_cod.get(op) or f"I{iid}", _txt(dia), _txt(hora), _cod("G", gar),
+                "fresco" if fresco else "congelado", _cod("L", lote), palh,
                 conc, mot, _origem(origem) if lote else None, prod, dose, res, vet(u),
             ]
-            for iid, op, egua, dia, hora, gar, lote, palh, res, u, conc, mot, origem, prod, dose in insem
+            for iid, op, egua, dia, hora, gar, lote, palh, res, u, conc, mot, origem, prod, dose, fresco in insem
         ],
     )
     t_diag = (
@@ -186,7 +200,8 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
             ["edema", "0 = 0, 1 = +, 2 = ++, 3 = +++. Vazio = útero não examinado."],
             ["liquido", "0 = 0, 1 = <2 cm, 2 = +, 3 = ++, 4 = +++. Vazio = útero não examinado."],
             ["cervix", "1 = fechado, 2 = intermédio, 3 = aberto."],
-            ["ovulacao / folic_hemorragico", "sim / nao / nao_avaliado. Vazio = não registado nesse exame."],
+            ["ovulacao / folic_hemorragico", "sim / nao (OV / FH marcados num folículo do ovário examinado); exames antigos podem ter nao_avaliado. Vazio = ovários não examinados."],
+            ["semen", "fresco (só o garanhão; sem lote nem palhetas) ou congelado (lote do stock)."],
             ["dg (Exames)", "positivo / negativo / inconclusivo / sem_exame, como escrito no registo."],
             ["Diagnósticos", "Um por exame, na etapa D+14 / D+28 / D+45 contada desde a inseminação; não se substituem."],
             ["lote_concentracao / lote_motilidade", "Do lote usado (10⁶/mL e %). Motilidade sempre pós-descongelação. 0 pode querer dizer «não registado»."],
