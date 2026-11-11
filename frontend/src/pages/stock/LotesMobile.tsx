@@ -31,6 +31,7 @@ import {
   PERIODOS,
   periodosDoEndereco,
   referencia,
+  simNao,
   useGaranhoesStock,
   useLotes,
   useTransferencias,
@@ -226,6 +227,7 @@ export function LotesMobile({ onNovoLote }: { onNovoLote: () => void }) {
                   l.proprietario_nome ?? t("common.no_owner"),
                   localizacao(l) ?? "—",
                   `M ${pct(l.motilidade)}`,
+                  `${t("stock.certificate_label")}: ${simNao(t, l.certificado)}`,
                   l.origem_externa && `${t("stock.external_origin")}: ${l.origem_externa}`,
                 ]
                   .filter(Boolean)

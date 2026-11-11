@@ -37,6 +37,7 @@ import {
   PERIODOS,
   periodosDoEndereco,
   referencia,
+  simNao,
   useGaranhoesStock,
   useLotes,
   useTransferencias,
@@ -317,7 +318,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                     </Tag>
                   </Flex>
                 ),
-                descricao: `${l.proprietario_nome ?? t("common.no_owner")} · ${localizacao(l) ?? "—"} · M ${pct(l.motilidade)}`,
+                descricao: `${l.proprietario_nome ?? t("common.no_owner")} · ${localizacao(l) ?? "—"} · M ${pct(l.motilidade)} · ${t("stock.certificate_label")}: ${simNao(t, l.certificado)}`,
                 extra: <RightOutlined style={{ color: "#bfbfbf" }} />,
               })}
             />
@@ -378,6 +379,18 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
                   responsive: ["lg"],
                 },
                 { title: t("stock.quality_label"), dataIndex: "qualidade", render: (v: string | null) => v || "—", responsive: ["xl"] },
+                {
+                  title: t("stock.certificate_label"),
+                  dataIndex: "certificado",
+                  align: "center",
+                  width: 100,
+                  filters: [
+                    { text: t("common.yes"), value: "Sim" },
+                    { text: t("common.no"), value: "Não" },
+                  ],
+                  onFilter: (v, l) => (l.certificado === "Sim" ? "Sim" : "Não") === v,
+                  render: (v: string | null) => <Certificado valor={v} />,
+                },
                 {
                   title: t("stock.created_at_label"),
                   dataIndex: "data_criacao",
@@ -492,5 +505,15 @@ export function HistoricoTransferencias({
         />
       )}
     </Space>
+  );
+}
+
+function Certificado({ valor }: { valor: string | null }) {
+  const t = useT();
+  if (valor !== "Sim" && valor !== "Não") return <>{valor ?? "—"}</>;
+  return (
+    <Tag color={valor === "Sim" ? "green" : "default"} style={{ marginInlineEnd: 0 }}>
+      {simNao(t, valor)}
+    </Tag>
   );
 }

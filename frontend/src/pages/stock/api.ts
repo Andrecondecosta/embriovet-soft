@@ -232,3 +232,7 @@ export function mostrarProducao(texto: string | null | undefined): string | null
 
 export const useCriarGaranhao = () =>
   useStockMutation((nome: string) => api<{ animal_id: number; garanhao: string }>("/stock/garanhoes", "POST", { nome }));
+
+/** Certificado do lote: "Sim" / "Não" (antigos podem vir vazios). */
+export const simNao = (t: (k: string) => string, v: string | null | undefined) =>
+  v === "Sim" ? t("common.yes") : v === "Não" ? t("common.no") : (v ?? "—");
