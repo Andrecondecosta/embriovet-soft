@@ -55,7 +55,7 @@ import type { Animal } from "./api";
 type Parte = "OE" | "OD" | "UT" | "CER";
 type Ficha = Parte | "TX" | "OVU" | "DG";
 interface Foliculo {
-  // Sem tamanho só com NS (nada significativo) ou MF (multifolicular).
+  // Sem tamanho só com alguma opção marcada (NS, OV, FH, MF, CL).
   tamanho: number | null; // 9 = "<10", 61 = ">60"
   achados: string[];
 }
@@ -131,9 +131,8 @@ const LIQUIDO = ["0", "<2 cm", "+", "++", "+++"];
 const HORAS = ["8h", "10h", "12h", "14h", "16h"];
 const SIM_NAO: SimNao[] = ["sim", "nao", "nao_avaliado"];
 const DGS = ["Positivo", "Negativo", "Inconclusivo", "Sem exame"];
-/** NS (nada significativo) e MF (multifolicular) dispensam o tamanho. */
-const SEM_TAMANHO = ["NS", "MF"];
-const precisaTamanho = (f: Foliculo) => f.tamanho == null && !f.achados.some((a) => SEM_TAMANHO.includes(a));
+/** Qualquer opção marcada (NS, OV, FH, MF, CL) dispensa o tamanho. */
+const precisaTamanho = (f: Foliculo) => f.tamanho == null && !f.achados.length;
 const mm = (n: number | null) => (n == null ? "—" : n <= 9 ? "<10" : n >= 61 ? ">60" : String(n));
 
 /** Resumo curto de cada parte (tabela, desenho). */

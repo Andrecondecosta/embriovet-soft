@@ -58,18 +58,15 @@ def _texto(v):
 
 # ── Modelos (a mesma forma que o ecrã usa) ────────────────────────────────
 
-# Com NS (nada significativo) ou MF (multifolicular) não se mede o folículo.
-SEM_TAMANHO = {"NS", "MF"}
-
-
 class Foliculo(BaseModel):
     tamanho: int | None = Field(default=None, ge=9, le=61)  # 9 = "<10", 61 = ">60"
     achados: list[Literal["NS", "OV", "FH", "MF", "CL"]] = []
 
     @model_validator(mode="after")
     def _tamanho_obrigatorio(self):
-        if self.tamanho is None and not SEM_TAMANHO & set(self.achados):
-            raise ValueError("tamanho obrigatório (exceto com NS ou MF)")
+        # Com alguma opção marcada (NS, OV, FH, MF, CL) o tamanho é opcional.
+        if self.tamanho is None and not self.achados:
+            raise ValueError("tamanho ou uma opção (NS, OV, FH, MF, CL) obrigatório")
         return self
 
 

@@ -164,9 +164,9 @@ def test_validacoes(ctx):
     r = c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"pg": 1, "marcar": {"dias": "agenda"}}))
     assert r.json()["detail"]["code"] == "web.registo.error.agenda_date"
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"tamanho": 80}]})).status_code == 422
-    # Sem tamanho só com NS (nada significativo) ou MF (multifolicular).
-    assert c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"achados": ["OV"]}]})).status_code == 422
-    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"achados": ["NS"]}]}, OD={"foliculos": [{"achados": ["MF"]}]}))
+    # Sem tamanho só com alguma opção marcada (NS, OV, FH, MF, CL).
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"achados": []}]})).status_code == 422
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(OE={"foliculos": [{"achados": ["OV"]}, {"achados": ["NS"]}]}, OD={"foliculos": [{"achados": ["MF"]}]}))
     assert r.status_code == 201, r.text
     assert c.get(f"/api/animais/{aid}/registos").json()["historico"][0]["dados"]["OD"]["foliculos"] == [{"achados": ["MF"]}]
     sem = ctx["animal"](estadia=False)
