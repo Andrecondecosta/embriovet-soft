@@ -12,6 +12,7 @@ from __future__ import annotations
 from backend import config  # noqa: F401 — tem de vir antes de `modules.*`
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,6 +28,11 @@ app = FastAPI(
     redoc_url=None,
     openapi_url="/api/openapi.json" if _DOCS else None,
 )
+
+
+# Comprime as respostas (o JavaScript da app passa de ~1 MB para ~300 KB):
+# abre mais depressa em ligações lentas (rede móvel, campo).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.middleware("http")
