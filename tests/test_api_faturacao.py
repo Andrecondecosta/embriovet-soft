@@ -306,3 +306,30 @@ def test_estadias_e_semen_em_areas_separadas(ctx):
     if d(10).year == HOJE.year:
         assert semen["celulas"][ano]["dias"] == 0 and semen["celulas"][ano]["faturado_ate"] is None
         assert estadias["celulas"][ano]["dias_semen"] == 0 and estadias["celulas"][ano]["faturado_ate"] == d(3).isoformat()
+
+
+def test_externo_que_passa_a_clinica_so_fatura_os_dias_na_clinica(ctx):
+    """Acompanhada em casa (externo) → visita na clínica → externo outra vez:
+    a mesma entrada (trabalho clínico igual); só se faturam os dias na clínica."""
+    c, eid = _login("Gestor", "editar"), ctx["externa"]
+    linhas = lambda: [  # noqa: E731
+        (l["inicio"], l["fim"], l["dias"])
+        for l in c.get("/api/faturacao/por-faturar", params={"inicio": "2000-01-01", "fim": HOJE.isoformat(), "dono_id": ctx["outro"]}).json()
+    ]
+    assert linhas() == []
+    mudar = lambda tipo, dia: c.post(f"/api/estadias/{eid}/mudar-tipo", json={"tipo_registo": tipo, "data": dia.isoformat()})  # noqa: E731
+    assert mudar("visita", d(6)).status_code == 422  # antes da entrada
+    assert mudar("externo", d(3)).status_code == 422  # já é externo
+    assert mudar("visita", d(-1)).status_code == 422  # no futuro
+    assert mudar("visita", d(3)).status_code == 200
+    assert linhas() == [(d(3).isoformat(), HOJE.isoformat(), 4)]
+    assert mudar("externo", d(4)).status_code == 422  # antes da última mudança
+    # Fatura até ontem; voltar a externo antes disso já não dá (anular primeiro).
+    r = c.post("/api/faturacao/faturar", json={"faturas": [{"dono_id": ctx["outro"], "fatura_numero": "FT X/1", "fatura_data": HOJE.isoformat(),
+                                                             "linhas": [{"tipo": "estadia", "ref_id": eid, "inicio": d(3).isoformat(), "fim": d(1).isoformat()}]}]})
+    assert r.status_code == 200, r.json()
+    assert mudar("externo", d(2)).status_code == 409
+    assert mudar("externo", d(1)).status_code == 200
+    assert linhas() == []  # o dia 1 já está faturado; depois é externo
+    e = _exec("SELECT tipo_registo, estado, data_entrada FROM estadias WHERE id = %s", (eid,))
+    assert e == ("externo", "externo", d(5))

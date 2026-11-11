@@ -58,6 +58,24 @@ def _faturados(cur, tipo: str, refs: list[int]) -> dict[int, list[tuple[date, da
 
 # ── Estadias ──────────────────────────────────────────────────────────────
 
+def _periodos(entrada: date, saida: date | None, tipo: str, mudancas: list[tuple]) -> list[tuple]:
+    """Períodos na clínica (estadia/visita) de uma entrada; os dias como
+    externo (acompanhada fora) não se faturam. No dia da mudança conta o
+    lado da clínica (como os dias de entrada e de saída)."""
+    if not mudancas:
+        return [] if tipo == "externo" else [(entrada, saida)]
+    out, inicio, tipo = [], entrada, mudancas[0][1]
+    for data, de, para in mudancas:
+        if de != "externo" and para == "externo":
+            out.append((inicio, data))
+        elif de == "externo" and para != "externo":
+            inicio = data
+        tipo = para
+    if tipo != "externo":
+        out.append((inicio, saida))
+    return out
+
+
 def _estadias(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | None = None) -> list[dict]:
     hoje = date.today()
     cur.execute(
@@ -68,7 +86,7 @@ def _estadias(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] 
         JOIN animais a ON a.id = e.animal_id
         LEFT JOIN dono d ON d.id = e.dono_id
         LEFT JOIN alojamentos al ON al.id = e.alojamento_id
-        WHERE e.tipo_registo <> 'externo'
+        WHERE (e.tipo_registo <> 'externo' OR EXISTS (SELECT 1 FROM estadias_mudancas m WHERE m.estadia_id = e.id))
           AND e.data_entrada <= %(fim)s
           AND (e.data_saida IS NULL OR e.data_saida >= %(inicio)s)
           AND (%(dono)s::int IS NULL OR e.dono_id = %(dono)s)
@@ -78,17 +96,28 @@ def _estadias(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] 
         """,
         {"inicio": inicio, "fim": fim, "dono": dono_id, "ids": ids},
     )
+    linhas = cur.fetchall()
+    mudancas: dict = defaultdict(list)
+    if linhas:
+        cur.execute(
+            "SELECT estadia_id, data, de, para FROM estadias_mudancas WHERE estadia_id = ANY(%s) ORDER BY data, id",
+            ([r[0] for r in linhas],),
+        )
+        for eid, data, de, para in cur.fetchall():
+            mudancas[eid].append((data, de, para))
     itens = []
-    for eid, dono, dono_nome, animal, tipo_animal, tipo_registo, aloj, entrada, saida in cur.fetchall():
-        a, b = max(entrada, inicio), min(saida or hoje, fim)
-        if a > b:
-            continue
-        itens.append({
-            "tipo": "estadia", "ref_id": eid, "dono_id": dono, "dono_nome": dono_nome,
-            "descricao": " · ".join(x for x in (animal, aloj) if x),
-            "animal": animal, "tipo_animal": tipo_animal, "tipo_registo": tipo_registo, "alojamento": aloj,
-            "entrada": entrada, "saida": saida, "limite": (a, b),
-        })
+    for eid, dono, dono_nome, animal, tipo_animal, tipo_registo, aloj, entrada, saida in linhas:
+        # Uma linha por período na clínica (passou de externo a estadia e/ou ao contrário).
+        for p_ini, p_fim in _periodos(entrada, saida, tipo_registo, mudancas.get(eid, [])):
+            a, b = max(p_ini, inicio), min(p_fim or hoje, fim)
+            if a > b:
+                continue
+            itens.append({
+                "tipo": "estadia", "ref_id": eid, "dono_id": dono, "dono_nome": dono_nome,
+                "descricao": " · ".join(x for x in (animal, aloj) if x),
+                "animal": animal, "tipo_animal": tipo_animal, "tipo_registo": tipo_registo, "alojamento": aloj,
+                "entrada": entrada, "saida": saida, "limite": (a, b),
+            })
     return itens
 
 
@@ -250,7 +279,8 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
                     itens = busca(cur, a, b, None, [l["ref_id"]])
                     if not itens:
                         raise JaFaturado()
-                    it = itens[0]
+                    # Uma entrada pode ter vários períodos na clínica: o que contém (a, b).
+                    it = next((x for x in itens if x["limite"] == (a, b)), itens[0])
                     if it["limite"] != (a, b) and not (
                         # Primeira fatura de um lote: pode começar antes da
                         # entrada na app (o sémen já estava guardado). O lote

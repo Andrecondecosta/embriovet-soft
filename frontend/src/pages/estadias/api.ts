@@ -121,14 +121,15 @@ function useEstadiaMutation<V, R>(fn: (v: V) => Promise<R>) {
       queryClient.invalidateQueries({ queryKey: ["animal"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["trabalho"] });
+      queryClient.invalidateQueries({ queryKey: ["faturacao"] });
     },
   });
 }
 
-/** Nova égua/receptora sem entrada na clínica (separador Éguas). */
-export const useCriarEgua = () =>
-  useEstadiaMutation((d: { animal: AnimalNovo; dono_id: number | null; observacoes?: string }) =>
-    api<{ id: number }>("/animais/eguas", "POST", d),
+/** Externo ⇄ estadia ⇄ visita na mesma entrada (o trabalho clínico continua igual). */
+export const useMudarTipo = () =>
+  useEstadiaMutation(({ id, ...d }: { id: number; tipo_registo: TipoRegisto; data: string; alojamento_id: number | null }) =>
+    api<{ ok: boolean }>(`/estadias/${id}/mudar-tipo`, "POST", d),
   );
 export const useCriarEstadia = () => useEstadiaMutation((d: EstadiaIn) => api<{ id: number; animal_id: number }>("/estadias", "POST", d));
 /** O que fica em curso se a égua sair (aviso no formulário de saída). */

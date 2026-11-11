@@ -95,8 +95,21 @@ def ficha(animal_id: int, _user: dict = Depends(get_current_user)):
         **a,
         "proprietario": proprietario,
         "estadia_ativa": _obter_estadia_activa(animal_id),
+        "estadia_tipo": _tipo_da_entrada(animal_id),
         "estadia_inseminacao": {k: valor(v) for k, v in with_ins.items()} if with_ins else None,
     }
+
+
+def _tipo_da_entrada(animal_id: int) -> str | None:
+    """Tipo da entrada em aberto (estadia / visita / externo), se houver."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT tipo_registo FROM estadias WHERE animal_id = %s AND data_saida IS NULL ORDER BY data_entrada DESC, id DESC LIMIT 1",
+                (animal_id,),
+            )
+            row = cur.fetchone()
+    return row[0] if row else None
 
 
 class AnimalIn(BaseModel):

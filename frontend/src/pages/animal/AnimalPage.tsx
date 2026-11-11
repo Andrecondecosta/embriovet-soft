@@ -10,6 +10,7 @@ import { useErrorMessage } from "../../components/errors";
 import { useAnimal, useReprodutivo, type Animal } from "./api";
 import { TagReprodutivo } from "../../components/EstadoReprodutivo";
 import { RegistarSaida } from "../estadias/EstadiasPage";
+import { MudarTipo, type EntradaAberta } from "../estadias/MudarTipo";
 import type { Estadia } from "../estadias/api";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
@@ -46,6 +47,7 @@ export function AnimalPage() {
   const ultima = useReprodutivo(id).data?.inseminacoes[0];
   // Registar saída também a partir da ficha (no telemóvel só havia o deslizar na lista).
   const [saida, setSaida] = useState<Estadia | null>(null);
+  const [mudarTipo, setMudarTipo] = useState<EntradaAberta | null>(null);
 
   if (q.isError)
     return isMobile ? (
@@ -68,7 +70,12 @@ export function AnimalPage() {
   const etiquetas = (
     <>
       <Tag>{t(`web.stays.animal.${animal.tipo}`)}</Tag>
-      {animal.estadia_ativa !== null && <Tag color="blue">{t("web.stays.in_clinic")}</Tag>}
+      {animal.estadia_ativa !== null &&
+        (animal.estadia_tipo === "externo" ? (
+          <Tag>{t("web.stays.kind.externo")}</Tag>
+        ) : (
+          <Tag color="blue">{t("web.stays.in_clinic")}</Tag>
+        ))}
       {animal.tipo !== "garanhao" && ultima && (
         <TagReprodutivo
           r={{ data_inseminacao: ultima.data_inseminacao, resultado: ultima.resultado, ultimo_dg: ultima.ultimo_dg }}
@@ -80,16 +87,34 @@ export function AnimalPage() {
   const abrirSaida = () => {
     if (animal.estadia_ativa !== null) setSaida({ id: animal.estadia_ativa, animal: animal.nome } as Estadia);
   };
+  // Externo ⇄ estadia ⇄ visita (ex.: acompanhada em casa e depois internada).
+  const abrirMudarTipo = () => {
+    if (animal.estadia_ativa !== null && animal.estadia_tipo)
+      setMudarTipo({ id: animal.estadia_ativa, animal: animal.nome, tipo: animal.estadia_tipo });
+  };
   const botaoSaida =
     animal.estadia_ativa !== null &&
     (isMobile ? (
-      <MButton size="small" fill="outline" style={{ margin: "4px 0 8px" }} onClick={abrirSaida}>
-        {t("web.stays.register_exit")}
-      </MButton>
+      <div style={{ display: "flex", gap: 8, margin: "4px 0 8px" }}>
+        <MButton size="small" fill="outline" onClick={abrirMudarTipo}>
+          {t("web.stays.change.button")}
+        </MButton>
+        <MButton size="small" fill="outline" onClick={abrirSaida}>
+          {t("web.stays.register_exit")}
+        </MButton>
+      </div>
     ) : (
-      <Button onClick={abrirSaida}>{t("web.stays.register_exit")}</Button>
+      <>
+        <Button onClick={abrirMudarTipo}>{t("web.stays.change.button")}</Button>
+        <Button onClick={abrirSaida}>{t("web.stays.register_exit")}</Button>
+      </>
     ));
-  const janelaSaida = <RegistarSaida estadia={saida} onClose={() => setSaida(null)} />;
+  const janelaSaida = (
+    <>
+      <RegistarSaida estadia={saida} onClose={() => setSaida(null)} />
+      <MudarTipo entrada={mudarTipo} onClose={() => setMudarTipo(null)} />
+    </>
+  );
 
   if (isMobile)
     return (

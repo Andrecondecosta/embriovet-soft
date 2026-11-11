@@ -28,6 +28,7 @@ import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../..
 import { ApiError } from "../../api/client";
 import { Cabecalho } from "../../components/mobile";
 import { NovaEstadia } from "./NovaEstadia";
+import { MudarTipo, type EntradaAberta } from "./MudarTipo";
 import { TagReprodutivo, useEstadoReprodutivo } from "../../components/EstadoReprodutivo";
 import {
   ESTADOS_SAIDA,
@@ -87,6 +88,7 @@ function useEstadias() {
       }
     : null;
   const [saida, setSaida] = useState<Estadia | null>(null);
+  const [entradaTipo, setEntradaTipo] = useState<EntradaAberta | null>(null);
   // Pesquisa por nome do animal ou do proprietário — vale para os três separadores.
   const [pesquisa, setPesquisa] = useState("");
   const termo = normalizar(pesquisa.trim());
@@ -108,6 +110,8 @@ function useEstadias() {
     animalInicial,
     saida,
     setSaida,
+    entradaTipo,
+    setEntradaTipo,
     mudarTab: (id: string) => navigate(`/estadias/${id}?${params}`),
     mudarTipo: (v: TipoAnimal | null) => atualizar("tipo", v),
     mudarOrdem: (v: Ordem) => atualizar("ordem", v === "dias" ? null : v),
@@ -143,6 +147,7 @@ export function EstadiasPage() {
       {isMobile ? <EstadiasMobile e={e} /> : <EstadiasDesktop e={e} />}
       <NovaEstadia aberto={e.nova} onClose={() => e.setNova(false)} inicial={e.animalInicial} />
       <RegistarSaida estadia={e.saida} onClose={() => e.setSaida(null)} />
+      <MudarTipo entrada={e.entradaTipo} onClose={() => e.setEntradaTipo(null)} />
     </>
   );
 }
@@ -271,12 +276,15 @@ function InternadasDesktop({ e }: { e: E }) {
           },
           {
             key: "acoes",
-            width: 230,
+            width: 330,
             align: "right",
             render: (_, x) => (
               <Flex gap={4} justify="flex-end">
                 <Button size="small" type="link" onClick={() => e.verFicha(x)}>
                   {t("web.stays.view_record")}
+                </Button>
+                <Button size="small" onClick={() => e.setEntradaTipo(x)}>
+                  {t("web.stays.change.button")}
                 </Button>
                 <Button size="small" onClick={() => e.setSaida(x)}>
                   {t("web.stays.register_exit")}
@@ -695,7 +703,10 @@ function InternadasMobile({ e }: { e: E }) {
             // Deslizar para a esquerda: Registar saída.
             <SwipeAction
               key={x.id}
-              rightActions={[{ key: "saida", text: t("web.stays.register_exit"), color: "primary", onClick: () => e.setSaida(x) }]}
+              rightActions={[
+                { key: "tipo", text: t("web.stays.change.button"), color: "light", onClick: () => e.setEntradaTipo(x) },
+                { key: "saida", text: t("web.stays.register_exit"), color: "primary", onClick: () => e.setSaida(x) },
+              ]}
             >
               <LinhaMobile
                 e={e}

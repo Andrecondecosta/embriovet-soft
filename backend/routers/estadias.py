@@ -306,38 +306,6 @@ def _inserir_animal(cur, a: AnimalNovo, dono_id: int, observacoes: str | None) -
     return cur.fetchone()[0]
 
 
-class EguaIn(BaseModel):
-    animal: AnimalNovo
-    dono_id: int | None = None
-    observacoes: str | None = None
-
-    @field_validator("observacoes", mode="before")
-    @classmethod
-    def _limpar(cls, v):
-        return _texto(v)
-
-
-@router.post("/animais/eguas", status_code=201)
-def nova_egua(d: EguaIn, _user: dict = Depends(get_current_user)):
-    """Nova égua ou receptora sem entrada na clínica (separador Éguas)."""
-    a = d.animal
-    if a.tipo not in ("egua", "receptora"):
-        raise _erro(422, "web.mares.error.only_mares")
-    if not a.nome:
-        raise _erro(422, "web.stays.error.animal_name_required")
-    if not d.dono_id:
-        raise _erro(422, "web.stays.error.owner_required")
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            try:
-                animal_id = _inserir_animal(cur, a, d.dono_id, d.observacoes)
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-    return {"id": animal_id}
-
-
 @router.post("/estadias", status_code=201)
 def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
     if (d.animal_id is None) == (d.animal is None):
@@ -396,6 +364,62 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
 
 
 # ── Registar saída ────────────────────────────────────────────────────────
+
+class MudarTipoIn(BaseModel):
+    tipo_registo: TipoRegisto
+    data: date
+    alojamento_id: int | None = None
+
+
+@router.post("/estadias/{estadia_id}/mudar-tipo")
+def mudar_tipo(estadia_id: int, d: MudarTipoIn, user: dict = Depends(get_current_user)):
+    """Externo ⇄ estadia ⇄ visita na MESMA entrada: o trabalho clínico
+    (inseminações, diagnósticos, tarefas) continua igual. A mudança fica em
+    `estadias_mudancas` (a Faturação só conta os dias na clínica)."""
+    if d.data > date.today():
+        raise _erro(422, "web.stays.change.error.future")
+    if d.tipo_registo == "externo" or not usar_alojamentos():
+        d.alojamento_id = None
+    elif d.tipo_registo == "estadia" and not d.alojamento_id:
+        raise _erro(422, "web.stays.error.housing_required")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT tipo_registo, data_entrada, data_saida FROM estadias WHERE id = %s FOR UPDATE", (estadia_id,))
+            row = cur.fetchone()
+            if not row:
+                raise _erro(404, "web.stays.error.not_found")
+            atual, entrada, saida = row
+            if saida is not None:
+                raise _erro(409, "web.stays.error.already_closed")
+            if atual == d.tipo_registo:
+                raise _erro(422, "web.stays.change.error.same")
+            cur.execute("SELECT MAX(data) FROM estadias_mudancas WHERE estadia_id = %s", (estadia_id,))
+            ultima = cur.fetchone()[0]
+            if d.data < entrada or (ultima and d.data < ultima):
+                raise _erro(422, "web.stays.change.error.before", data=max(entrada, ultima or entrada).strftime("%d/%m/%Y"))
+            if d.tipo_registo == "externo":
+                # Dias depois da mudança já faturados como estadia: anular primeiro.
+                cur.execute(
+                    "SELECT 1 FROM faturacao_linhas WHERE tipo = 'estadia' AND ref_id = %s AND NOT anulada AND fim > %s LIMIT 1",
+                    (estadia_id, d.data),
+                )
+                if cur.fetchone():
+                    raise _erro(409, "web.stays.change.error.billed")
+            cur.execute("SELECT 1 FROM estadias WHERE id = %s AND alojamento_id = %s", (estadia_id, d.alojamento_id))
+            if not cur.fetchone():
+                _lugar_livre(cur, d)
+            cur.execute(
+                "UPDATE estadias SET tipo_registo = %s, estado = %s, alojamento_id = %s WHERE id = %s",
+                (d.tipo_registo, ESTADO_INICIAL[d.tipo_registo], d.alojamento_id, estadia_id),
+            )
+            cur.execute(
+                """INSERT INTO estadias_mudancas (estadia_id, data, de, para, alojamento_id, utilizador)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (estadia_id, d.data, atual, d.tipo_registo, d.alojamento_id, user["username"][:50]),
+            )
+        conn.commit()
+    return {"ok": True}
+
 
 class SaidaIn(BaseModel):
     data_saida: date

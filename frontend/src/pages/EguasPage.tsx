@@ -36,7 +36,7 @@ function useEguas() {
   const procura = texto.trim().toLowerCase();
   const lista = (q.data ?? []).filter(
     (e) =>
-      (!soNaClinica || e.em_aberto) &&
+      (!soNaClinica || (e.em_aberto && e.em_aberto !== "externo")) &&
       (!procura || e.nome.toLowerCase().includes(procura) || (e.proprietario ?? "").toLowerCase().includes(procura)),
   );
   return {
@@ -115,10 +115,10 @@ function EguasDesktop({ novaEgua }: { novaEgua: () => void }) {
           },
           { title: t("web.daily.mares.col.type"), dataIndex: "tipo", width: 110, render: (v: string) => t(`web.stays.animal.${v}`) },
           {
-            title: t("web.daily.mares.here"),
+            title: t("web.daily.mares.col.where"),
             key: "aqui",
             width: 120,
-            render: (_, e) => (x.naClinica(e) ? <Tag color="green">{x.naClinica(e)}</Tag> : null),
+            render: (_, e) => (x.naClinica(e) ? <Tag color={e.em_aberto === "externo" ? "default" : "green"}>{x.naClinica(e)}</Tag> : null),
           },
           { title: t("web.daily.mares.col.state"), key: "repro", render: (_, e) => <TagReprodutivo r={e.repro} /> },
           {

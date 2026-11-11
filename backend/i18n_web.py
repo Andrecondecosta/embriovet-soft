@@ -2060,17 +2060,36 @@ for _k, *_txt in [
     ("mares.col.state", "Estado reprodutivo", "Breeding status", "Statut reproductif", "Zuchtstatus"),
     ("mares.col.type", "Tipo", "Type", "Type", "Typ"),
     ("mares.new", "Nova égua", "New mare", "Nouvelle jument", "Neue Stute"),
-    ("mares.created", "Égua criada.", "Mare created.", "Jument créée.", "Stute angelegt."),
-    ("mares.not_here", "Não está na clínica", "Not at the clinic", "Pas à la clinique", "Nicht in der Klinik"),
-    ("mares.not_here_help", "Fica só registada (pode dar entrada mais tarde nas Estadias).",
-     "Only registered (you can check her in later in Stays).", "Seulement enregistrée (entrée possible plus tard dans Séjours).",
-     "Nur erfasst (Aufnahme später unter Aufenthalte möglich)."),
     ("mares.col.last", "Último registo", "Last record", "Dernier enregistrement", "Letzter Eintrag"),
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.daily.{_k}"] = _v
 for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Éguas", "Mares", "Juments", "Stuten")):
     WEB_TRANSLATIONS[_lang]["web.nav.eguas"] = _v
-for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Aqui só se criam éguas e receptoras.", "Only mares and recipients can be created here.",
-                                                    "Ici, seulement juments et receveuses.", "Hier nur Stuten und Empfängerstuten.")):
-    WEB_TRANSLATIONS[_lang]["web.mares.error.only_mares"] = _v
+
+# ── Mudar o tipo de uma entrada em aberto (externo ⇄ estadia ⇄ visita) ──
+for _k, *_txt in [
+    ("button", "Mudar tipo", "Change type", "Changer le type", "Art ändern"),
+    ("title", "Mudar tipo de registo", "Change record type", "Changer le type d'enregistrement", "Eintragsart ändern"),
+    ("now", "{name} — agora: {tipo}", "{name} — now: {tipo}", "{name} — actuellement : {tipo}", "{name} — derzeit: {tipo}"),
+    ("to", "Passa a", "Becomes", "Devient", "Wird zu"),
+    ("date", "Desde", "From", "Depuis", "Ab"),
+    ("help", "O trabalho clínico (inseminações, diagnósticos, tarefas) continua igual. Na Faturação só contam os dias na clínica.",
+     "Clinical work (inseminations, pregnancy checks, tasks) stays the same. Billing only counts days at the clinic.",
+     "Le travail clinique (inséminations, diagnostics, tâches) reste le même. La facturation ne compte que les jours à la clinique.",
+     "Die klinische Arbeit (Besamungen, Untersuchungen, Aufgaben) bleibt gleich. Abgerechnet werden nur Tage in der Klinik."),
+    ("saved", "Tipo mudado.", "Type changed.", "Type modifié.", "Art geändert."),
+    ("error.future", "A data não pode ser no futuro.", "The date cannot be in the future.", "La date ne peut pas être future.",
+     "Das Datum darf nicht in der Zukunft liegen."),
+    ("error.same", "Já é desse tipo.", "It is already that type.", "C'est déjà ce type.", "Ist bereits diese Art."),
+    ("error.before", "A data tem de ser a partir de {data}.", "The date must be on or after {data}.",
+     "La date doit être à partir du {data}.", "Das Datum muss ab {data} sein."),
+    ("error.billed", "Há dias depois dessa data já faturados como estadia. Anule-os primeiro na Faturação.",
+     "Days after that date were already billed as a stay. Cancel them first in Billing.",
+     "Des jours après cette date ont déjà été facturés comme séjour. Annulez-les d'abord dans Facturation.",
+     "Tage nach diesem Datum wurden bereits als Aufenthalt abgerechnet. Zuerst in der Abrechnung stornieren."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.stays.change.{_k}"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Situação", "Status", "Situation", "Status")):
+    WEB_TRANSLATIONS[_lang]["web.daily.mares.col.where"] = _v
