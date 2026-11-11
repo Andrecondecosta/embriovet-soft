@@ -2048,3 +2048,19 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
+
+# ── Trabalho diário: lista de todas as éguas (abre a ficha no Diário clínico) ──
+for _k, *_txt in [
+    ("mares.title", "Éguas", "Mares", "Juments", "Stuten"),
+    ("mares.all", "Todas", "All", "Toutes", "Alle"),
+    ("mares.here", "Na clínica", "At the clinic", "À la clinique", "In der Klinik"),
+    ("mares.filter", "Filtrar por nome ou proprietário", "Filter by name or owner", "Filtrer par nom ou propriétaire",
+     "Nach Name oder Besitzer filtern"),
+    ("mares.open_list", "Ver todas as éguas", "See all mares", "Voir toutes les juments", "Alle Stuten anzeigen"),
+    ("mares.none", "Sem éguas.", "No mares.", "Aucune jument.", "Keine Stuten."),
+    ("mares.col.state", "Estado reprodutivo", "Breeding status", "Statut reproductif", "Zuchtstatus"),
+    ("mares.col.type", "Tipo", "Type", "Type", "Typ"),
+    ("mares.col.last", "Último registo", "Last record", "Dernier enregistrement", "Letzter Eintrag"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.daily.{_k}"] = _v

@@ -1,9 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
-import { Alert, Button, Card, Col, DatePicker, Flex, Popover, Row, Select, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
-import { CheckOutlined, CloseOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Flex,
+  Input,
+  Popover,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  CheckOutlined,
+  CloseOutlined,
+  FilterOutlined,
+  LeftOutlined,
+  RightOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import {
   Button as MButton,
   DatePicker as MDatePicker,
@@ -24,9 +55,24 @@ import { useT } from "../i18n/I18n";
 import { useUser } from "../components/User";
 import { useBrand } from "../components/Brand";
 import { useDebounced, useIsMobile } from "../components/responsive";
-import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../components/errors";
+import {
+  confirmar,
+  notifySuccess,
+  useErrorMessage,
+  useNotifyError,
+} from "../components/errors";
 import { Cabecalho } from "../components/mobile";
-import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
+import {
+  usePesquisaAnimais,
+  type AnimalPesquisa,
+  type TipoRegisto,
+} from "./estadias/api";
+import {
+  TagReprodutivo,
+  useEstadoReprodutivo,
+  type Repro,
+} from "../components/EstadoReprodutivo";
+import { dataCurta } from "../components/csv";
 
 interface Tarefa {
   tarefa_id: number;
@@ -42,16 +88,32 @@ interface Tarefa {
 }
 interface Trabalho {
   dia: string;
-  resumo: { total: number; feitas: number; por_fazer: number; atrasadas: number };
+  resumo: {
+    total: number;
+    feitas: number;
+    por_fazer: number;
+    atrasadas: number;
+  };
   por_fazer: Tarefa[];
   atrasadas: Tarefa[];
   feitas: Tarefa[];
 }
 
 // Fecham-se com a resposta (registo clínico, DG, inseminação): sem "Concluir".
-const PEDEM_RESPOSTA = new Set(["verificar_ovulacao", "diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao", "inseminar"]);
+const PEDEM_RESPOSTA = new Set([
+  "verificar_ovulacao",
+  "diagnostico_gestacao",
+  "confirmacao_gestacao",
+  "segunda_confirmacao",
+  "inseminar",
+]);
 
-const COR_URGENCIA: Record<string, string> = { urgente: "#dc2626", hoje: "#b45309", amanha: "#94a3b8", observacao: "#cbd5e1" };
+const COR_URGENCIA: Record<string, string> = {
+  urgente: "#dc2626",
+  hoje: "#b45309",
+  amanha: "#94a3b8",
+  observacao: "#cbd5e1",
+};
 const FMT = "YYYY-MM-DD";
 
 /** Estado no endereço (dia, filtros) e pedidos — comum às duas versões. */
@@ -62,7 +124,10 @@ function useTrabalho() {
   const user = useUser();
   const [params, setParams] = useSearchParams();
   const pedido = params.get("dia");
-  const dia: Dayjs = pedido && /^\d{4}-\d{2}-\d{2}$/.test(pedido) ? dayjs(pedido) : dayjs().startOf("day");
+  const dia: Dayjs =
+    pedido && /^\d{4}-\d{2}-\d{2}$/.test(pedido)
+      ? dayjs(pedido)
+      : dayjs().startOf("day");
   const ehHoje = dia.isSame(dayjs(), "day");
   const minhas = params.get("minhas") === "1";
   const notifyError = useNotifyError();
@@ -73,7 +138,9 @@ function useTrabalho() {
     mutationFn: () => api<{ criadas: number }>("/trabalho/gerar", "POST"),
     onSuccess: (r) => {
       if (r.criadas > 0) {
-        notifySuccess(t("web.daily.created_auto", { n: r.criadas, count: r.criadas }));
+        notifySuccess(
+          t("web.daily.created_auto", { n: r.criadas, count: r.criadas }),
+        );
         queryClient.invalidateQueries({ queryKey: ["trabalho"] });
       }
     },
@@ -91,31 +158,67 @@ function useTrabalho() {
 
   // Concluir / cancelar à mão (também as em atraso).
   const acao = useMutation({
-    mutationFn: ({ tarefa, como }: { tarefa: Tarefa; como: "concluir" | "cancelar" }) =>
-      api(`/trabalho/${tarefa.tarefa_id}/${como}`, "POST", como === "concluir" ? {} : undefined),
+    mutationFn: ({
+      tarefa,
+      como,
+    }: {
+      tarefa: Tarefa;
+      como: "concluir" | "cancelar";
+    }) =>
+      api(
+        `/trabalho/${tarefa.tarefa_id}/${como}`,
+        "POST",
+        como === "concluir" ? {} : undefined,
+      ),
     // Sai logo da lista (sem esperar pela resposta); volta se der erro.
     onMutate: ({ tarefa }) =>
-      queryClient.setQueriesData<Trabalho>({ queryKey: ["trabalho"] }, (d) =>
-        d && {
-          ...d,
-          // Os números do topo também mudam logo.
-          resumo: {
-            ...d.resumo,
-            por_fazer: Math.max(0, d.resumo.por_fazer - 1),
-            atrasadas: Math.max(0, d.resumo.atrasadas - (tarefa.dias_atraso ? 1 : 0)),
+      queryClient.setQueriesData<Trabalho>(
+        { queryKey: ["trabalho"] },
+        (d) =>
+          d && {
+            ...d,
+            // Os números do topo também mudam logo.
+            resumo: {
+              ...d.resumo,
+              por_fazer: Math.max(0, d.resumo.por_fazer - 1),
+              atrasadas: Math.max(
+                0,
+                d.resumo.atrasadas - (tarefa.dias_atraso ? 1 : 0),
+              ),
+            },
+            por_fazer: d.por_fazer.filter(
+              (x) => x.tarefa_id !== tarefa.tarefa_id,
+            ),
+            atrasadas: d.atrasadas.filter(
+              (x) => x.tarefa_id !== tarefa.tarefa_id,
+            ),
           },
-          por_fazer: d.por_fazer.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
-          atrasadas: d.atrasadas.filter((x) => x.tarefa_id !== tarefa.tarefa_id),
-        },
       ),
-    onSuccess: (_, v) => notifySuccess(t(v.como === "concluir" ? "web.daily.completed" : "web.daily.cancelled")),
+    onSuccess: (_, v) =>
+      notifySuccess(
+        t(
+          v.como === "concluir" ? "web.daily.completed" : "web.daily.cancelled",
+        ),
+      ),
     onError: notifyError,
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["trabalho"] }),
   });
 
-  const filtrar = (lista: Tarefa[]) => lista.filter((x) => (!minhas || x.utilizador === user.username) && (!dono || x.dono === dono));
+  const filtrar = (lista: Tarefa[]) =>
+    lista.filter(
+      (x) =>
+        (!minhas || x.utilizador === user.username) &&
+        (!dono || x.dono === dono),
+    );
   const donos = useMemo(
-    () => [...new Set([...(q.data?.por_fazer ?? []), ...(q.data?.atrasadas ?? [])].map((x) => x.dono).filter(Boolean) as string[])].sort(),
+    () =>
+      [
+        ...new Set(
+          [...(q.data?.por_fazer ?? []), ...(q.data?.atrasadas ?? [])]
+            .map((x) => x.dono)
+            .filter(Boolean) as string[],
+        ),
+      ].sort(),
     [q.data],
   );
   const atualizar = (k: string, v: string | null) =>
@@ -141,7 +244,8 @@ function useTrabalho() {
     atrasadas: filtrar(q.data?.atrasadas ?? []),
     feitas: q.data?.feitas ?? [],
     nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0),
-    irPara: (d: Dayjs) => atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
+    irPara: (d: Dayjs) =>
+      atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
     mudarMinhas: (v: boolean) => atualizar("minhas", v ? "1" : null),
     mudarDono: (v: string | null) => atualizar("dono", v),
     // Tocar numa tarefa abre a ficha do animal logo no Diário clínico (onde
@@ -153,19 +257,35 @@ function useTrabalho() {
           ? `/trabalho-diario/inseminacao?egua=${x.animal_id}`
           : `/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`,
       ),
-    nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
+    nome: (x: Tarefa) =>
+      x.tipo === "colheita"
+        ? t("web.daily.collection_of", { name: x.animal ?? "—" })
+        : (x.animal ?? "—"),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     // Tarefas com pormenor útil (hora da indução, o tratamento a fazer).
-    detalhe: (x: Tarefa) => (["inseminar", "tratamento"].includes(x.tipo) && x.motivo ? x.motivo : null),
+    detalhe: (x: Tarefa) =>
+      ["inseminar", "tratamento"].includes(x.tipo) && x.motivo
+        ? x.motivo
+        : null,
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
-    atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
-    titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
+    atraso: (n: number) =>
+      n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n }),
+    titulo: () =>
+      ehHoje
+        ? t("web.daily.today_title")
+        : t("web.daily.day_title", { dia: dia.format("DD/MM") }),
     // Noutro dia, "em atraso" é em relação a esse dia (o aviso do topo é sempre de hoje).
-    tituloAtraso: () => (ehHoje ? t("web.daily.overdue") : t("web.daily.overdue_on", { dia: dia.format("DD/MM") })),
+    tituloAtraso: () =>
+      ehHoje
+        ? t("web.daily.overdue")
+        : t("web.daily.overdue_on", { dia: dia.format("DD/MM") }),
     concluir: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "concluir" }),
     cancelar: (tarefa: Tarefa) => acao.mutate({ tarefa, como: "cancelar" }),
     textoCancelar: (tarefa: Tarefa) =>
-      t("web.daily.cancel_confirm", { tipo: t(`web.task.${tarefa.tipo}`), nome: tarefa.animal ?? "—" }),
+      t("web.daily.cancel_confirm", {
+        tipo: t(`web.task.${tarefa.tipo}`),
+        nome: tarefa.animal ?? "—",
+      }),
   };
 }
 type T = ReturnType<typeof useTrabalho>;
@@ -188,7 +308,8 @@ function TrabalhoDesktop({ x }: { x: T }) {
   const errorMessage = useErrorMessage();
   const r = x.q.data?.resumo;
 
-  if (x.q.isError) return <Alert type="error" showIcon title={errorMessage(x.q.error)} />;
+  if (x.q.isError)
+    return <Alert type="error" showIcon title={errorMessage(x.q.error)} />;
 
   const linha = (tarefa: Tarefa) => ({
     onClick: () => x.abrir(tarefa),
@@ -204,7 +325,13 @@ function TrabalhoDesktop({ x }: { x: T }) {
       <Space size={2} onClick={(e) => e.stopPropagation()}>
         {!PEDEM_RESPOSTA.has(a.tipo) && (
           <Tooltip title={t("web.daily.complete")}>
-            <Button size="small" type="text" icon={<CheckOutlined />} aria-label={t("web.daily.complete")} onClick={() => x.concluir(a)} />
+            <Button
+              size="small"
+              type="text"
+              icon={<CheckOutlined />}
+              aria-label={t("web.daily.complete")}
+              onClick={() => x.concluir(a)}
+            />
           </Tooltip>
         )}
         <Tooltip title={t("web.daily.cancel_task")}>
@@ -233,14 +360,22 @@ function TrabalhoDesktop({ x }: { x: T }) {
       title: "#",
       key: "n",
       width: 44,
-      render: (_: unknown, __: Tarefa, i: number) => <Typography.Text type="secondary">{i + 1}</Typography.Text>,
+      render: (_: unknown, __: Tarefa, i: number) => (
+        <Typography.Text type="secondary">{i + 1}</Typography.Text>
+      ),
     },
     {
       title: t("web.dashboard.mare"),
       key: "animal",
-      render: (_: unknown, a: Tarefa) => <Typography.Text strong>{x.nome(a)}</Typography.Text>,
+      render: (_: unknown, a: Tarefa) => (
+        <Typography.Text strong>{x.nome(a)}</Typography.Text>
+      ),
     },
-    { title: t("web.dashboard.owner"), dataIndex: "dono", render: (v: string | null) => v ?? "—" },
+    {
+      title: t("web.dashboard.owner"),
+      dataIndex: "dono",
+      render: (v: string | null) => v ?? "—",
+    },
     {
       title: t("web.dashboard.task_type"),
       key: "tipo",
@@ -263,11 +398,19 @@ function TrabalhoDesktop({ x }: { x: T }) {
     <Flex vertical gap={12}>
       <Card size="small">
         <Flex gap={48} align="center" wrap>
-          <Statistic title={t("web.daily.kpi.todo")} value={r?.por_fazer ?? "—"} styles={{ content: { color: primary_color } }} />
+          <Statistic
+            title={t("web.daily.kpi.todo")}
+            value={r?.por_fazer ?? "—"}
+            styles={{ content: { color: primary_color } }}
+          />
           <Statistic title={t("web.daily.kpi.tasks")} value={r?.total ?? "—"} />
           <Statistic title={t("web.daily.kpi.done")} value={r?.feitas ?? "—"} />
           {!!r?.atrasadas && (
-            <Tag color="red" icon={<WarningOutlined />} style={{ fontSize: 13, padding: "4px 10px" }}>
+            <Tag
+              color="red"
+              icon={<WarningOutlined />}
+              style={{ fontSize: 13, padding: "4px 10px" }}
+            >
               {t("web.daily.overdue_banner", { n: r.atrasadas })}
             </Tag>
           )}
@@ -310,9 +453,20 @@ function TrabalhoDesktop({ x }: { x: T }) {
             }
           >
             <Flex gap={6} align="center" style={{ marginBottom: 10 }}>
-              <Button icon={<LeftOutlined />} onClick={() => x.irPara(x.dia.subtract(1, "day"))} />
-              <DatePicker value={x.dia} onChange={(d) => d && x.irPara(d)} allowClear={false} format="DD/MM/YYYY" />
-              <Button icon={<RightOutlined />} onClick={() => x.irPara(x.dia.add(1, "day"))} />
+              <Button
+                icon={<LeftOutlined />}
+                onClick={() => x.irPara(x.dia.subtract(1, "day"))}
+              />
+              <DatePicker
+                value={x.dia}
+                onChange={(d) => d && x.irPara(d)}
+                allowClear={false}
+                format="DD/MM/YYYY"
+              />
+              <Button
+                icon={<RightOutlined />}
+                onClick={() => x.irPara(x.dia.add(1, "day"))}
+              />
               {!x.ehHoje && (
                 <Button type="link" onClick={() => x.irPara(dayjs())}>
                   {t("web.transfer.today")}
@@ -341,7 +495,11 @@ function TrabalhoDesktop({ x }: { x: T }) {
                   title: t("web.dashboard.urgency"),
                   key: "urg",
                   width: 110,
-                  render: (_, a) => <Typography.Text type="secondary">{x.urgencia(a)}</Typography.Text>,
+                  render: (_, a) => (
+                    <Typography.Text type="secondary">
+                      {x.urgencia(a)}
+                    </Typography.Text>
+                  ),
                 },
                 acoes,
               ]}
@@ -350,7 +508,14 @@ function TrabalhoDesktop({ x }: { x: T }) {
         </Col>
         <Col xs={24} lg={10}>
           <Flex vertical gap={12}>
-            <Card size="small" title={<span style={{ color: "#dc2626" }}>{`${x.tituloAtraso()} (${x.atrasadas.length})`}</span>}>
+            <Card
+              size="small"
+              title={
+                <span
+                  style={{ color: "#dc2626" }}
+                >{`${x.tituloAtraso()} (${x.atrasadas.length})`}</span>
+              }
+            >
               <Table<Tarefa>
                 size="small"
                 rowKey="tarefa_id"
@@ -367,7 +532,12 @@ function TrabalhoDesktop({ x }: { x: T }) {
                     key: "atraso",
                     width: 100,
                     render: (_, a) => (
-                      <span style={{ color: corAtraso(a.dias_atraso ?? 0), fontWeight: (a.dias_atraso ?? 0) >= 7 ? 700 : 400 }}>
+                      <span
+                        style={{
+                          color: corAtraso(a.dias_atraso ?? 0),
+                          fontWeight: (a.dias_atraso ?? 0) >= 7 ? 700 : 400,
+                        }}
+                      >
                         {x.atraso(a.dias_atraso ?? 0)}
                       </span>
                     ),
@@ -376,7 +546,10 @@ function TrabalhoDesktop({ x }: { x: T }) {
                 ]}
               />
             </Card>
-            <Card size="small" title={`${t("web.daily.done_today")} (${x.feitas.length})`}>
+            <Card
+              size="small"
+              title={`${t("web.daily.done_today")} (${x.feitas.length})`}
+            >
               <Table<Tarefa>
                 size="small"
                 rowKey="tarefa_id"
@@ -386,16 +559,45 @@ function TrabalhoDesktop({ x }: { x: T }) {
                 showHeader={false}
                 locale={{ emptyText: t("web.daily.none_done") }}
                 columns={[
-                  { key: "ok", width: 28, render: () => <span style={{ color: primary_color }}>✓</span> },
-                  { key: "nome", render: (_, a) => <Typography.Text type="secondary">{x.nome(a)}</Typography.Text> },
-                  { key: "tipo", render: (_, a) => <Typography.Text type="secondary">{x.tipo(a)}</Typography.Text> },
-                  { dataIndex: "concluida_por", width: 110, render: (v) => <Typography.Text type="secondary">{v ?? "—"}</Typography.Text> },
+                  {
+                    key: "ok",
+                    width: 28,
+                    render: () => (
+                      <span style={{ color: primary_color }}>✓</span>
+                    ),
+                  },
+                  {
+                    key: "nome",
+                    render: (_, a) => (
+                      <Typography.Text type="secondary">
+                        {x.nome(a)}
+                      </Typography.Text>
+                    ),
+                  },
+                  {
+                    key: "tipo",
+                    render: (_, a) => (
+                      <Typography.Text type="secondary">
+                        {x.tipo(a)}
+                      </Typography.Text>
+                    ),
+                  },
+                  {
+                    dataIndex: "concluida_por",
+                    width: 110,
+                    render: (v) => (
+                      <Typography.Text type="secondary">
+                        {v ?? "—"}
+                      </Typography.Text>
+                    ),
+                  },
                 ]}
               />
             </Card>
           </Flex>
         </Col>
       </Row>
+      <EguasDesktop />
     </Flex>
   );
 }
@@ -410,7 +612,14 @@ function TrabalhoMobile({ x }: { x: T }) {
   const [calendario, setCalendario] = useState(false);
   const r = x.q.data?.resumo;
 
-  if (x.q.isError) return <ErrorBlock status="default" title={errorMessage(x.q.error)} description="" />;
+  if (x.q.isError)
+    return (
+      <ErrorBlock
+        status="default"
+        title={errorMessage(x.q.error)}
+        description=""
+      />
+    );
   if (!x.q.data)
     return (
       <div style={{ textAlign: "center", padding: 48 }}>
@@ -423,7 +632,16 @@ function TrabalhoMobile({ x }: { x: T }) {
     <SwipeAction
       key={a.tarefa_id}
       rightActions={[
-        ...(PEDEM_RESPOSTA.has(a.tipo) ? [] : [{ key: "concluir", text: t("web.daily.complete"), color: "primary", onClick: () => x.concluir(a) }]),
+        ...(PEDEM_RESPOSTA.has(a.tipo)
+          ? []
+          : [
+              {
+                key: "concluir",
+                text: t("web.daily.complete"),
+                color: "primary",
+                onClick: () => x.concluir(a),
+              },
+            ]),
         {
           key: "cancelar",
           text: t("web.daily.cancel_task"),
@@ -431,7 +649,11 @@ function TrabalhoMobile({ x }: { x: T }) {
           onClick: () =>
             void Dialog.confirm({
               content: x.textoCancelar(a),
-              confirmText: <span style={{ color: "var(--adm-color-danger)" }}>{t("web.daily.cancel_task")}</span>,
+              confirmText: (
+                <span style={{ color: "var(--adm-color-danger)" }}>
+                  {t("web.daily.cancel_task")}
+                </span>
+              ),
               cancelText: t("web.daily.keep"),
               onConfirm: () => x.cancelar(a),
             }),
@@ -443,7 +665,9 @@ function TrabalhoMobile({ x }: { x: T }) {
         arrow
         description={`${a.dono ?? "—"} · ${x.detalhe(a) ?? x.tipo(a)}`}
         extra={direita}
-        style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
+        style={{
+          boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}`,
+        }}
       >
         {x.nome(a)}
       </List.Item>
@@ -461,13 +685,23 @@ function TrabalhoMobile({ x }: { x: T }) {
           ] as [string, number | undefined, string?][]
         ).map(([label, n, cor]) => (
           <Grid.Item key={label} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: cor }}>{n ?? "—"}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: cor }}>
+              {n ?? "—"}
+            </div>
             <div style={{ fontSize: 10, color: "#999" }}>{label}</div>
           </Grid.Item>
         ))}
       </Grid>
       {!!r?.atrasadas && (
-        <div style={{ background: "#fef2f2", color: "#dc2626", padding: "6px 12px", fontWeight: 600, fontSize: 12 }}>
+        <div
+          style={{
+            background: "#fef2f2",
+            color: "#dc2626",
+            padding: "6px 12px",
+            fontWeight: 600,
+            fontSize: 12,
+          }}
+        >
           ⚠︎ {t("web.daily.overdue_banner", { n: r.atrasadas })}
         </div>
       )}
@@ -475,17 +709,38 @@ function TrabalhoMobile({ x }: { x: T }) {
       <div style={{ padding: "8px 12px 0", background: "#fff", marginTop: 8 }}>
         <PesquisaAnimal />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#fff" }}>
-        <MButton size="small" onClick={() => x.irPara(x.dia.subtract(1, "day"))}>
+      <EguasMobile />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          background: "#fff",
+        }}
+      >
+        <MButton
+          size="small"
+          onClick={() => x.irPara(x.dia.subtract(1, "day"))}
+        >
           ‹
         </MButton>
-        <MButton size="small" style={{ flex: 1 }} onClick={() => setCalendario(true)}>
+        <MButton
+          size="small"
+          style={{ flex: 1 }}
+          onClick={() => setCalendario(true)}
+        >
           {x.dia.format("DD/MM/YYYY")}
         </MButton>
         <MButton size="small" onClick={() => x.irPara(x.dia.add(1, "day"))}>
           ›
         </MButton>
-        <MButton size="small" color={x.nFiltros ? "primary" : "default"} fill="outline" onClick={() => setFiltros(true)}>
+        <MButton
+          size="small"
+          color={x.nFiltros ? "primary" : "default"}
+          fill="outline"
+          onClick={() => setFiltros(true)}
+        >
           {t("common.filters")}
           {x.nFiltros > 0 && ` (${x.nFiltros})`}
         </MButton>
@@ -511,7 +766,14 @@ function TrabalhoMobile({ x }: { x: T }) {
             </span>
           </List.Item>
         ) : (
-          x.porFazer.map((a) => item(a, <span style={{ fontSize: 11, color: "#999" }}>{x.urgencia(a)}</span>))
+          x.porFazer.map((a) =>
+            item(
+              a,
+              <span style={{ fontSize: 11, color: "#999" }}>
+                {x.urgencia(a)}
+              </span>,
+            ),
+          )
         )}
       </List>
 
@@ -529,7 +791,13 @@ function TrabalhoMobile({ x }: { x: T }) {
           x.atrasadas.map((a) =>
             item(
               a,
-              <span style={{ fontSize: 11, color: corAtraso(a.dias_atraso ?? 0), fontWeight: (a.dias_atraso ?? 0) >= 7 ? 700 : 400 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: corAtraso(a.dias_atraso ?? 0),
+                  fontWeight: (a.dias_atraso ?? 0) >= 7 ? 700 : 400,
+                }}
+              >
                 {x.atraso(a.dias_atraso ?? 0)}
               </span>,
             ),
@@ -559,20 +827,37 @@ function TrabalhoMobile({ x }: { x: T }) {
       <Popup
         visible={filtros}
         onMaskClick={() => setFiltros(false)}
-        bodyStyle={{ borderTopLeftRadius: 12, borderTopRightRadius: 12, padding: 16 }}
+        bodyStyle={{
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
+          padding: 16,
+        }}
       >
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{t("common.filters")}</div>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>
+          {t("common.filters")}
+        </div>
         <List style={{ "--border-top": "none" } as React.CSSProperties}>
-          <List.Item extra={<MSwitch checked={x.minhas} onChange={x.mudarMinhas} />}>{t("web.daily.mine")}</List.Item>
+          <List.Item
+            extra={<MSwitch checked={x.minhas} onChange={x.mudarMinhas} />}
+          >
+            {t("web.daily.mine")}
+          </List.Item>
         </List>
-        <div style={{ color: "#999", margin: "10px 0 6px" }}>{t("web.dashboard.owner")}</div>
+        <div style={{ color: "#999", margin: "10px 0 6px" }}>
+          {t("web.dashboard.owner")}
+        </div>
         <Selector
           columns={2}
           value={x.dono ? [x.dono] : []}
           onChange={(v) => x.mudarDono((v[0] as string) ?? null)}
           options={x.donos.map((d) => ({ value: d, label: d }))}
         />
-        <MButton block color="primary" style={{ marginTop: 14 }} onClick={() => setFiltros(false)}>
+        <MButton
+          block
+          color="primary"
+          style={{ marginTop: 14 }}
+          onClick={() => setFiltros(false)}
+        >
           OK
         </MButton>
       </Popup>
@@ -585,7 +870,8 @@ function TrabalhoMobile({ x }: { x: T }) {
 /** Abre a ficha; éguas e receptoras logo no Diário clínico. */
 function useAbrirAnimal() {
   const navigate = useNavigate();
-  return (a: AnimalPesquisa) => navigate(`/animais/${a.id}${a.tipo === "garanhao" ? "" : "?tab=diario"}`);
+  return (a: AnimalPesquisa) =>
+    navigate(`/animais/${a.id}${a.tipo === "garanhao" ? "" : "?tab=diario"}`);
 }
 
 function PesquisaAnimal() {
@@ -596,7 +882,8 @@ function PesquisaAnimal() {
   const [aberto, setAberto] = useState(false);
   const pesquisa = usePesquisaAnimais(useDebounced(q, 250));
   const lista = pesquisa.data ?? [];
-  const detalhe = (a: AnimalPesquisa) => `${t(`web.stays.animal.${a.tipo}`)} · ${a.proprietario ?? "—"}`;
+  const detalhe = (a: AnimalPesquisa) =>
+    `${t(`web.stays.animal.${a.tipo}`)} · ${a.proprietario ?? "—"}`;
 
   if (!isMobile)
     return (
@@ -617,7 +904,8 @@ function PesquisaAnimal() {
           value: a.id,
           label: (
             <span>
-              {a.nome} <Typography.Text type="secondary">· {detalhe(a)}</Typography.Text>
+              {a.nome}{" "}
+              <Typography.Text type="secondary">· {detalhe(a)}</Typography.Text>
             </span>
           ),
         }))}
@@ -627,16 +915,30 @@ function PesquisaAnimal() {
   return (
     <>
       <div onClick={() => setAberto(true)}>
-        <SearchBar placeholder={t("web.daily.search_animal")} style={{ pointerEvents: "none" }} />
+        <SearchBar
+          placeholder={t("web.daily.search_animal")}
+          style={{ pointerEvents: "none" }}
+        />
       </div>
       <Popup
         visible={aberto}
         onMaskClick={() => setAberto(false)}
         onClose={() => setAberto(false)}
-        bodyStyle={{ borderTopLeftRadius: 8, borderTopRightRadius: 8, height: "80dvh", display: "flex", flexDirection: "column" }}
+        bodyStyle={{
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+          height: "80dvh",
+          display: "flex",
+          flexDirection: "column",
+        }}
       >
         <div style={{ padding: "12px 12px 8px" }}>
-          <SearchBar autoFocus value={q} onChange={setQ} placeholder={t("web.daily.search_animal")} />
+          <SearchBar
+            autoFocus
+            value={q}
+            onChange={setQ}
+            placeholder={t("web.daily.search_animal")}
+          />
         </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           <List>
@@ -654,7 +956,223 @@ function PesquisaAnimal() {
             ))}
           </List>
           {!lista.length && !pesquisa.isFetching && (
-            <div style={{ padding: 24, textAlign: "center", color: "#999" }}>{t("web.common.no_results")}</div>
+            <div style={{ padding: 24, textAlign: "center", color: "#999" }}>
+              {t("web.common.no_results")}
+            </div>
+          )}
+        </div>
+      </Popup>
+    </>
+  );
+}
+
+// ── Todas as éguas (tocar abre a ficha no Diário clínico) ───────────────────
+
+interface Egua {
+  id: number;
+  nome: string;
+  tipo: "egua" | "receptora";
+  proprietario: string | null;
+  em_aberto: TipoRegisto | null;
+  ultimo_registo: string | null;
+  repro: Repro | null;
+}
+
+function useEguas() {
+  const t = useT();
+  const navigate = useNavigate();
+  const q = useQuery({
+    queryKey: ["animais", "eguas"],
+    queryFn: () => api<Egua[]>("/animais/eguas"),
+  });
+  const [texto, setTexto] = useState("");
+  const [soNaClinica, setSoNaClinica] = useState(false);
+  const procura = texto.trim().toLowerCase();
+  const lista = (q.data ?? []).filter(
+    (e) =>
+      (!soNaClinica || e.em_aberto) &&
+      (!procura ||
+        e.nome.toLowerCase().includes(procura) ||
+        (e.proprietario ?? "").toLowerCase().includes(procura)),
+  );
+  return {
+    t,
+    q,
+    lista,
+    texto,
+    setTexto,
+    soNaClinica,
+    setSoNaClinica,
+    abrir: (e: Egua) => navigate(`/animais/${e.id}?tab=diario`),
+    filtro: [
+      { value: "todas", label: t("web.daily.mares.all") },
+      { value: "aqui", label: t("web.daily.mares.here") },
+    ],
+    naClinica: (e: Egua) =>
+      e.em_aberto ? t(`web.stays.kind.${e.em_aberto}`) : null,
+  };
+}
+
+function EguasDesktop() {
+  const x = useEguas();
+  const { t } = x;
+  return (
+    <Card
+      size="small"
+      title={`${t("web.daily.mares.title")} (${x.lista.length})`}
+      extra={
+        <Space>
+          <Input.Search
+            allowClear
+            placeholder={t("web.daily.mares.filter")}
+            style={{ width: 260 }}
+            value={x.texto}
+            onChange={(e) => x.setTexto(e.target.value)}
+          />
+          <Segmented
+            options={x.filtro}
+            value={x.soNaClinica ? "aqui" : "todas"}
+            onChange={(v) => x.setSoNaClinica(v === "aqui")}
+          />
+        </Space>
+      }
+    >
+      <Table<Egua>
+        size="small"
+        rowKey="id"
+        loading={x.q.isFetching}
+        dataSource={x.lista}
+        pagination={{
+          defaultPageSize: 20,
+          showSizeChanger: true,
+          hideOnSinglePage: true,
+        }}
+        onRow={(e) => ({
+          onClick: () => x.abrir(e),
+          style: { cursor: "pointer" },
+        })}
+        locale={{ emptyText: t("web.daily.mares.none") }}
+        columns={[
+          {
+            title: t("web.dashboard.mare"),
+            dataIndex: "nome",
+            sorter: (a, b) => a.nome.localeCompare(b.nome),
+            render: (v: string) => (
+              <Typography.Text strong>{v}</Typography.Text>
+            ),
+          },
+          {
+            title: t("web.dashboard.owner"),
+            dataIndex: "proprietario",
+            sorter: (a, b) =>
+              (a.proprietario ?? "").localeCompare(b.proprietario ?? ""),
+            render: (v: string | null) => v ?? "—",
+          },
+          {
+            title: t("web.daily.mares.col.type"),
+            dataIndex: "tipo",
+            width: 110,
+            render: (v: string) => t(`web.stays.animal.${v}`),
+          },
+          {
+            title: t("web.daily.mares.here"),
+            key: "aqui",
+            width: 120,
+            render: (_, e) =>
+              x.naClinica(e) ? <Tag color="green">{x.naClinica(e)}</Tag> : null,
+          },
+          {
+            title: t("web.daily.mares.col.state"),
+            key: "repro",
+            render: (_, e) => <TagReprodutivo r={e.repro} />,
+          },
+          {
+            title: t("web.daily.mares.col.last"),
+            dataIndex: "ultimo_registo",
+            width: 130,
+            sorter: (a, b) =>
+              (a.ultimo_registo ?? "").localeCompare(b.ultimo_registo ?? ""),
+            render: (v: string | null) => (v ? dataCurta(v) : "—"),
+          },
+        ]}
+      />
+    </Card>
+  );
+}
+
+function EguasMobile() {
+  const x = useEguas();
+  const { t } = x;
+  const estadoRepro = useEstadoReprodutivo();
+  const [aberto, setAberto] = useState(false);
+  return (
+    <>
+      <List>
+        <List.Item
+          arrow
+          onClick={() => setAberto(true)}
+          extra={x.q.data?.length ?? ""}
+        >
+          {t("web.daily.mares.open_list")}
+        </List.Item>
+      </List>
+      <Popup
+        visible={aberto}
+        onMaskClick={() => setAberto(false)}
+        onClose={() => setAberto(false)}
+        bodyStyle={{
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+          height: "85dvh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div style={{ padding: "12px 12px 8px" }}>
+          <SearchBar
+            value={x.texto}
+            onChange={x.setTexto}
+            placeholder={t("web.daily.mares.filter")}
+          />
+          <Selector
+            style={{ marginTop: 8 }}
+            columns={2}
+            options={x.filtro}
+            value={[x.soNaClinica ? "aqui" : "todas"]}
+            onChange={(v) => v.length && x.setSoNaClinica(v[0] === "aqui")}
+          />
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <List header={`${t("web.daily.mares.title")} (${x.lista.length})`}>
+            {x.lista.map((e) => (
+              <List.Item
+                key={e.id}
+                arrow
+                description={[
+                  e.proprietario ?? "—",
+                  x.naClinica(e),
+                  estadoRepro(e.repro)?.texto,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                onClick={() => {
+                  setAberto(false);
+                  x.abrir(e);
+                }}
+              >
+                {e.nome}
+              </List.Item>
+            ))}
+          </List>
+          {!x.lista.length && !x.q.isFetching && (
+            <div style={{ padding: 24, textAlign: "center", color: "#999" }}>
+              {t("web.daily.mares.none")}
+            </div>
+          )}
+          {x.q.isFetching && !x.q.data && (
+            <div style={{ textAlign: "center", padding: 24 }}>
+              <DotLoading color="primary" />
+            </div>
           )}
         </div>
       </Popup>

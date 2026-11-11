@@ -164,6 +164,15 @@ def test_pesquisa_animais(client, base):
     assert len(r) == 1 and r[0]["em_aberto"] == "estadia" and r[0]["dono_id"] == base["dono"]
 
 
+def test_lista_de_todas_as_eguas(client, base):
+    egua, garanhao = (f"{PREFIXO}Lista{uuid.uuid4().hex[:6]}" for _ in range(2))
+    _nova(client, base, animal={"nome": egua})
+    _nova(client, base, animal={"nome": garanhao, "tipo": "garanhao"}, motivo="colheita")
+    r = {x["nome"]: x for x in client.get("/api/animais/eguas").json()}
+    assert garanhao not in r
+    assert r[egua]["em_aberto"] == "estadia" and r[egua]["tipo"] == "egua" and r[egua]["ultimo_registo"] is None
+
+
 @pytest.mark.parametrize(
     "tipo, motivo, ok",
     [

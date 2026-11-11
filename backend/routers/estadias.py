@@ -87,6 +87,34 @@ def pesquisar_animais(
             return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+@router.get("/animais/eguas")
+def todas_as_eguas(_user: dict = Depends(get_current_user)):
+    """Todas as éguas e receptoras ativas (Trabalho diário): dono, se está
+    na clínica, estado reprodutivo e data do último registo clínico."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT a.id, a.nome, a.tipo, d.nome AS proprietario,
+                       (SELECT e.tipo_registo FROM estadias e
+                         WHERE e.animal_id = a.id AND e.data_saida IS NULL
+                         ORDER BY e.data_entrada DESC, e.id DESC LIMIT 1) AS em_aberto,
+                       (SELECT MAX(r.data_registo) FROM registo_clinico r WHERE r.animal_id = a.id) AS ultimo_registo
+                FROM animais a
+                LEFT JOIN dono d ON d.id = a.dono_id
+                WHERE a.ativo = TRUE AND a.tipo IN ('egua', 'receptora')
+                ORDER BY LOWER(a.nome)
+                """
+            )
+            cols = ["id", "nome", "tipo", "proprietario", "em_aberto", "ultimo_registo"]
+            itens = [dict(zip(cols, r)) for r in cur.fetchall()]
+    repro = estado_reprodutivo([r["id"] for r in itens])
+    for r in itens:
+        r["ultimo_registo"] = r["ultimo_registo"].date().isoformat() if r["ultimo_registo"] else None
+        r["repro"] = repro.get(r["id"])
+    return itens
+
+
 # ── Listas ────────────────────────────────────────────────────────────────
 
 @router.get("/estadias/internadas")
