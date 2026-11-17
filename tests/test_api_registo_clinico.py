@@ -127,10 +127,10 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
             }
         ),
     )
-    assert r.json()["tarefas_criadas"] == 3  # 2 dias de tratamento + inseminar (da indução)
+    assert r.json()["tarefas_criadas"] == 2  # próxima toma daqui a 2 dias + inseminar (da indução)
     tarefas = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'tratamento' ORDER BY id", (aid,))
     hoje = date.today()
-    assert [t[0] for t in tarefas] == [hoje + timedelta(days=1), hoje + timedelta(days=2)]
+    assert [t[0] for t in tarefas] == [hoje + timedelta(days=2)]  # intervalo, não dias seguidos
     assert "Ocitocina 2× 8h" in tarefas[0][1] and "Genta" in tarefas[0][1]
     # A indução deixa a tarefa "inseminar" para o dia seguinte (passagem de turno).
     ins = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (aid,))

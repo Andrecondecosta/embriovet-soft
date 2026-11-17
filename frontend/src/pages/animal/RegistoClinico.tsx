@@ -650,9 +650,9 @@ function FichaTX({ r, atual, onGuardar }: { r: Resposta; atual?: Tratamento; onG
           <Flex vertical gap={6} style={{ marginTop: 6, paddingLeft: 24 }}>
             <Escolha
               opcoes={[
-                { label: t("web.registo.days", { n: 1 }), value: "1" },
-                { label: t("web.registo.days", { n: 2 }), value: "2" },
-                { label: t("web.registo.days", { n: 3 }), value: "3" },
+                { label: t("web.registo.in_days", { n: 1 }), value: "1" },
+                { label: t("web.registo.in_days", { n: 2 }), value: "2" },
+                { label: t("web.registo.in_days", { n: 3 }), value: "3" },
                 { label: t("web.registo.agenda"), value: "agenda" },
               ]}
               valor={x.marcar.dias}
@@ -778,10 +778,8 @@ function useLinhasDetalhe() {
           {resumo(d, "TX") || "—"}
           {d.TX.marcar && (
             <Typography.Text type="secondary" style={{ display: "block" }}>
-              {t("web.registo.mark_tx")}:{" "}
-              {d.TX.marcar.dias === "agenda"
-                ? dayjs(d.TX.marcar.data).format("DD/MM/YYYY")
-                : t("web.registo.days", { n: d.TX.marcar.dias })}
+              {t("web.registo.next_dose")}:{" "}
+              {(d.TX.marcar.dias === "agenda" ? dayjs(d.TX.marcar.data) : dayjs(h.data_registo).add(Number(d.TX.marcar.dias), "day")).format("DD/MM/YYYY")}
             </Typography.Text>
           )}
         </>,

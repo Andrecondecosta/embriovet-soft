@@ -484,15 +484,11 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                 _guardar_opcoes(cur, dados.TX)
                 t = dados.TX
                 if t and t.marcar:
-                    # Repetir o tratamento: as mesmas vezes (na ocitocina, as mesmas horas).
+                    # Próxima toma (as mesmas vezes; na ocitocina, as mesmas horas):
+                    # uma só tarefa daqui a N dias (intervalo), ou no dia da agenda.
                     motivo = f"Tratamento: {resumo_tx(t.model_copy(update={'inducao': None}))}"
-                    dias = (
-                        [t.marcar.data]
-                        if t.marcar.dias == "agenda"
-                        else [d.data_registo.date() + timedelta(days=i) for i in range(1, int(t.marcar.dias) + 1)]
-                    )
-                    for dia in dias:
-                        criadas.append(_tarefa(cur, animal_id, estadia_id, dia, motivo, user["username"]))
+                    dia = t.marcar.data if t.marcar.dias == "agenda" else d.data_registo.date() + timedelta(days=int(t.marcar.dias))
+                    criadas.append(_tarefa(cur, animal_id, estadia_id, dia, motivo, user["username"]))
                 if t and t.inducao:
                     # Passagem de turno: quem vem a seguir vê no Trabalho
                     # diário que esta égua tem de ser inseminada (a tarefa
