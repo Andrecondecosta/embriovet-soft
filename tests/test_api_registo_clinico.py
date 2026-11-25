@@ -140,6 +140,27 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
     assert lista["tratamentos_anteriores"][0]["texto"].startswith("Ocitocina 2× 8h")
 
 
+def test_ver_a_egua_antes_do_dia_fecha_a_proxima_observacao(ctx):
+    # Passou à porta do cliente na quarta: a observação de quinta fica feita,
+    # a seguinte (e o tratamento marcado) não.
+    c, aid = ctx["c"], ctx["animal"](tarefa="tratamento")
+    _exec("UPDATE trabalho_diario SET data_tarefa = CURRENT_DATE + 1 WHERE animal_id = %s", (aid,))
+    eid = _todas("SELECT id FROM estadias WHERE animal_id = %s", (aid,))[0][0]
+    for dias in (1, 4):
+        _exec(
+            """INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia)
+               VALUES (%s, %s, CURRENT_DATE + %s, 'observacao_clinica', 'teste', 'observacao')""",
+            (aid, eid, dias),
+        )
+    r = c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 2}))
+    assert r.status_code == 201, r.text
+    assert r.json()["tarefas_concluidas"] == 1
+    estado = _todas(
+        "SELECT tipo, data_tarefa - CURRENT_DATE, concluida FROM trabalho_diario WHERE animal_id = %s ORDER BY data_tarefa, tipo", (aid,)
+    )
+    assert estado == [("observacao_clinica", 1, True), ("tratamento", 1, False), ("observacao_clinica", 4, False)]
+
+
 def test_registo_nao_fecha_tarefa_inseminar(ctx):
     # A égua tem hoje "Inseminar": um exame qualquer não a dá por inseminada.
     c, aid = ctx["c"], ctx["animal"](tarefa="inseminar")

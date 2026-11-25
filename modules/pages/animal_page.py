@@ -196,7 +196,8 @@ def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None)
     """Marca como concluídas as tarefas pendentes do animal para hoje (menos
     as que pedem resposta: DG e "Inseminar"), e as observações em atraso (o exame de hoje cumpre-as; tratamentos e
     diagnósticos em atraso não, ficam para fechar à mão ou com o resultado).
-    Devolve o número de tarefas concluídas.
+    Se hoje não havia observação, fecha a próxima observação marcada (a égua
+    foi vista antes do dia). Devolve o número de tarefas concluídas.
 
     `utilizador` é quem está a registar o diário clínico agora — grava-se
     em `concluida_por`, distinto de `trabalho_diario.utilizador` (quem
@@ -217,10 +218,32 @@ def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None)
           -- com a inseminação), não por haver um registo nesse dia.
           AND tipo NOT IN ('inseminar', 'diagnostico_gestacao', 'confirmacao_gestacao', 'segunda_confirmacao')
     """
+    # Ver a égua antes do dia marcado (ex.: passar à porta do cliente)
+    # conta como a próxima observação marcada — só a primeira, e só se hoje
+    # não havia nenhuma observação por fazer. Tratamentos e DG não.
+    adiantada = """
+        UPDATE trabalho_diario
+        SET concluida = TRUE,
+            data_conclusao = CURRENT_DATE,
+            concluida_por = %s,
+            observacoes_conclusao = 'Concluído via registo clínico (antes do dia marcado)'
+        WHERE id = (
+            SELECT id FROM trabalho_diario
+            WHERE animal_id = %s AND concluida = FALSE AND data_tarefa > CURRENT_DATE
+              AND tipo IN ('observacao_clinica', 'primeira_observacao')
+            ORDER BY data_tarefa, id
+            LIMIT 1
+        )
+    """
+    quem = (utilizador or "—")[:50]
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute(sql, ((utilizador or "—")[:50], animal_id))
-        n = cur.rowcount
+        cur.execute(sql + " RETURNING tipo", (quem, animal_id))
+        tipos = [r[0] for r in cur.fetchall()]
+        n = len(tipos)
+        if not {"observacao_clinica", "primeira_observacao"} & set(tipos):
+            cur.execute(adiantada, (quem, animal_id))
+            n += cur.rowcount
         conn.commit()
         cur.close()
         return n or 0
