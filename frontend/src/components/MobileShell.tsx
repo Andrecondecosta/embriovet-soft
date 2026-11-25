@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { List, NavBar, Popup, TabBar } from "antd-mobile";
-import { AppstoreOutlined, CalendarOutlined, EllipsisOutlined, ExperimentOutlined, HomeOutlined, LogoutOutlined } from "@ant-design/icons";
+import { EllipsisOutlined, LogoutOutlined } from "@ant-design/icons";
 
 import { api } from "../api/client";
 import type { User } from "../api/types";
@@ -10,8 +10,9 @@ import { useT } from "../i18n/I18n";
 import { BrandMark, ProductSignature, useBrand } from "./Brand";
 import { NAV, navDe } from "./Shell";
 
-// Barra de baixo: só cabem 5. As restantes secções ficam em "Mais".
-const BARRA = ["/dashboard", "/estadias", "/trabalho-diario", "/stock-semen"];
+// Barra de baixo: só cabem 5 — as 4 primeiras secções do menu do computador,
+// pela mesma ordem; as restantes ficam em "Mais" (também pela mesma ordem).
+const BARRA = NAV.slice(0, 4).map((n) => n.path);
 const CURTOS: Record<string, string> = { "/stock-semen": "Stock" };
 
 /** Título da barra de cima e se tem botão "voltar" (páginas dentro de páginas). */
@@ -73,7 +74,7 @@ export function MobileShell({ user }: { user: User }) {
         style={{ background: "#fff", borderTop: "1px solid #eee", flexShrink: 0 }}
       >
         {NAV.filter((n) => BARRA.includes(n.path)).map((n) => (
-          <TabBar.Item key={n.path} icon={iconeBarra(n.path)} title={CURTOS[n.path] ?? t(n.label)} />
+          <TabBar.Item key={n.path} icon={n.icon} title={CURTOS[n.path] ?? t(n.label)} />
         ))}
         <TabBar.Item key="mais" icon={<EllipsisOutlined />} title={t("web.nav.more")} />
       </TabBar>
@@ -117,17 +118,4 @@ export function MobileShell({ user }: { user: User }) {
       </Popup>
     </div>
   );
-}
-
-function iconeBarra(path: string) {
-  switch (path) {
-    case "/dashboard":
-      return <AppstoreOutlined />;
-    case "/estadias":
-      return <HomeOutlined />;
-    case "/trabalho-diario":
-      return <CalendarOutlined />;
-    default:
-      return <ExperimentOutlined />;
-  }
 }
