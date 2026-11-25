@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from backend.deps import get_current_user
 from backend.serial import registos
 from modules.db import get_connection
+from backend.routers.consultas import sem_proxima
 from modules.pages.trabalho_diario_page import _gerar_tarefas_primeira_observacao
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
@@ -51,6 +52,8 @@ def trabalho(dia: date | None = None, _user: dict = Depends(get_current_user)):
         "por_fazer": normais,
         "atrasadas": atrasadas,
         "feitas": registos(carregar_tarefas_feitas_hoje(), COLS + ["concluida_por", "data_conclusao"]),
+        # Éguas com consulta gravada e sem a próxima marcada.
+        "sem_proxima": sem_proxima(),
     }
 
 

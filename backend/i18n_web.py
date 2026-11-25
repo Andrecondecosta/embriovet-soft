@@ -2125,3 +2125,42 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
+
+# ── Próxima consulta obrigatória ──
+for _k, *_txt in [
+    ("title", "Próxima consulta — {name}", "Next visit — {name}", "Prochaine consultation — {name}", "Nächste Untersuchung — {name}"),
+    ("already", "Já marcado", "Already scheduled", "Déjà prévu", "Bereits geplant"),
+    ("current", "Consulta marcada para {data}: muda a data se for preciso.", "Visit scheduled for {data}: change the date if needed.",
+     "Consultation prévue le {data} : changez la date si besoin.", "Untersuchung am {data} geplant: Datum bei Bedarf ändern."),
+    ("in", "Daqui a", "In", "Dans", "In"),
+    ("days", "{n} d", "{n} d", "{n} j", "{n} T"),
+    ("date", "Data", "Date", "Date", "Datum"),
+    ("notes", "Observações", "Notes", "Observations", "Bemerkungen"),
+    ("notes_placeholder", "ex.: ver folículo OE", "e.g. check left ovary follicle", "ex. : voir follicule OG", "z. B. Follikel li. Ovar prüfen"),
+    ("save", "Marcar", "Schedule", "Planifier", "Planen"),
+    ("saved", "Próxima consulta marcada para {data}.", "Next visit scheduled for {data}.", "Prochaine consultation prévue le {data}.", "Nächste Untersuchung am {data} geplant."),
+    ("date_required", "Escolha o dia da próxima consulta.", "Choose the day of the next visit.", "Choisissez le jour de la prochaine consultation.", "Tag der nächsten Untersuchung wählen."),
+    ("end_link", "Terminar consultas desta égua", "End visits for this mare", "Terminer les consultations de cette jument", "Untersuchungen dieser Stute beenden"),
+    ("end_title", "Terminar consultas", "End visits", "Terminer les consultations", "Untersuchungen beenden"),
+    ("end_text", "As consultas marcadas desta égua são fechadas e deixa de ser pedida a próxima. DG, confirmações e tratamentos continuam. Para confirmar, escreva TERMINAR.",
+     "This mare’s scheduled visits are closed and the next one is no longer asked for. PDs, confirmations and treatments continue. To confirm, type TERMINAR.",
+     "Les consultations prévues de cette jument sont fermées et la suivante n’est plus demandée. DG, confirmations et traitements continuent. Pour confirmer, écrivez TERMINAR.",
+     "Die geplanten Untersuchungen dieser Stute werden geschlossen und die nächste wird nicht mehr verlangt. TU, Bestätigungen und Behandlungen laufen weiter. Zur Bestätigung TERMINAR eingeben."),
+    ("end_ok", "Confirmar", "Confirm", "Confirmer", "Bestätigen"),
+    ("end_back", "Voltar", "Back", "Retour", "Zurück"),
+    ("ended", "Consultas terminadas.", "Visits ended.", "Consultations terminées.", "Untersuchungen beendet."),
+    ("tag_ended", "Sem consultas", "No visits", "Sans consultations", "Keine Untersuchungen"),
+    ("tag_missing", "Falta próxima consulta", "Next visit missing", "Prochaine consultation manquante", "Nächste Untersuchung fehlt"),
+    ("daily_title", "Falta marcar a próxima consulta", "Next visit not scheduled", "Prochaine consultation à planifier", "Nächste Untersuchung nicht geplant"),
+    ("error.future", "A próxima consulta tem de ser depois de hoje.", "The next visit must be after today.",
+     "La prochaine consultation doit être après aujourd’hui.", "Die nächste Untersuchung muss nach heute sein."),
+    ("error.word", "Escreva TERMINAR para confirmar.", "Type TERMINAR to confirm.", "Écrivez TERMINAR pour confirmer.", "Zur Bestätigung TERMINAR eingeben."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.next_visit.{_k}"] = _v
+for _k, *_txt in [
+    ("web.task.observacao_clinica", "Consulta", "Visit", "Consultation", "Untersuchung"),
+    ("web.task.tratamento", "Tratamento", "Treatment", "Traitement", "Behandlung"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang].setdefault(_k, _v)

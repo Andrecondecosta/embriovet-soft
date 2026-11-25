@@ -390,3 +390,49 @@ def test_dg_repetido_no_mesmo_dia_avisa(ctx):
     _inseminada_ha(aid, 14)
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Inconclusivo")).json()["dg_mesmo_dia"] is False
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(DG="Positivo")).json()["dg_mesmo_dia"] is True
+
+
+def test_proxima_consulta_marcar_mudar_e_terminar(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    assert c.get(f"/api/animais/{aid}/proxima-consulta").json()["falta"] is False
+    # Gravar uma consulta: falta marcar a próxima (aparece no Trabalho diário).
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 2})).status_code == 201
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["falta"] is True and e["marcada"] is None and e["pode_terminar"] is True
+    assert aid in [x["animal_id"] for x in c.get("/api/trabalho").json()["sem_proxima"]]
+
+    # Hoje não serve (é a consulta que se acabou de fazer).
+    hoje = date.today()
+    r = c.put(f"/api/animais/{aid}/proxima-consulta", json={"data": hoje.isoformat()})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.next_visit.error.future"
+    r = c.put(f"/api/animais/{aid}/proxima-consulta", json={"data": (hoje + timedelta(days=3)).isoformat(), "observacoes": " ver OE "})
+    assert r.status_code == 200, r.text
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["falta"] is False and e["marcada"]["data"] == (hoje + timedelta(days=3)).isoformat() and e["marcada"]["observacoes"] == "ver OE"
+    assert aid not in [x["animal_id"] for x in c.get("/api/trabalho").json()["sem_proxima"]]
+
+    # Só uma marcada: marcar de novo muda a data.
+    c.put(f"/api/animais/{aid}/proxima-consulta", json={"data": (hoje + timedelta(days=5)).isoformat()})
+    marcadas = _todas(
+        "SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'observacao_clinica' AND concluida = FALSE", (aid,)
+    )
+    assert marcadas == [(hoje + timedelta(days=5), "Próxima consulta")]
+
+    # Terminar: tem de se escrever TERMINAR; fecha só as consultas.
+    _exec(
+        """INSERT INTO trabalho_diario (animal_id, data_tarefa, tipo, motivo, urgencia)
+           VALUES (%s, CURRENT_DATE + 9, 'diagnostico_gestacao', 'teste', 'observacao')""",
+        (aid,),
+    )
+    r = c.post(f"/api/animais/{aid}/terminar-consultas", json={"confirmacao": "sim"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "web.next_visit.error.word"
+    r = c.post(f"/api/animais/{aid}/terminar-consultas", json={"confirmacao": " terminar "})
+    assert r.status_code == 200 and r.json()["fechadas"] == 1  # a marcada (a de hoje fechou-a o registo)
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["terminadas"] is True and e["falta"] is False and e["marcada"] is None
+    assert [o["tipo"] for o in e["outras"]] == ["diagnostico_gestacao"]
+
+    # Um exame novo recomeça o ciclo.
+    c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 1}))
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["terminadas"] is False and e["falta"] is True

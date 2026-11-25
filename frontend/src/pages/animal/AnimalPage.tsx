@@ -14,10 +14,11 @@ import { MudarTipo, destinos, rotuloDestino, type EntradaAberta } from "../estad
 import type { Estadia } from "../estadias/api";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
+import { ProximaConsulta, useEstadoConsulta } from "./ProximaConsulta";
 import { AlertasTab, EstadiasAnimalTab, FertilidadeTab, ProducaoTab, ReprodutivoTab } from "./OutrosTabs";
 
 /** Separadores da ficha — como a app atual, variam com o tipo do animal. */
-function separadores(animal: Animal) {
+function separadores(animal: Animal, onConsulta: () => void) {
   if (animal.tipo === "garanhao")
     return [
       { id: "resumo", label: "web.animal.tab.summary", el: <ResumoTab animal={animal} /> },
@@ -27,7 +28,7 @@ function separadores(animal: Animal) {
     ];
   return [
     { id: "resumo", label: "web.animal.tab.summary", el: <ResumoTab animal={animal} /> },
-    { id: "diario", label: "web.animal.tab.clinical", el: <RegistoClinico animal={animal} /> },
+    { id: "diario", label: "web.animal.tab.clinical", el: <RegistoClinico animal={animal} onConsulta={onConsulta} /> },
     { id: "reprodutivo", label: "web.animal.tab.reproductive", el: <ReprodutivoTab animal={animal} /> },
     { id: "estadias", label: "web.animal.tab.stays", el: <EstadiasAnimalTab animal={animal} /> },
   ];
@@ -48,6 +49,9 @@ export function AnimalPage() {
   // Registar saída também a partir da ficha (no telemóvel só havia o deslizar na lista).
   const [saida, setSaida] = useState<Estadia | null>(null);
   const [mudarTipo, setMudarTipo] = useState<EntradaAberta | null>(null);
+  // Próxima consulta: abre sozinha depois de gravar uma consulta.
+  const [proxima, setProxima] = useState(false);
+  const consulta = useEstadoConsulta(id, !!animal && animal.tipo !== "garanhao").data;
 
   if (q.isError)
     return isMobile ? (
@@ -64,7 +68,7 @@ export function AnimalPage() {
       <Spin style={{ display: "block", margin: 48 }} />
     );
 
-  const tabs = separadores(animal);
+  const tabs = separadores(animal, () => setProxima(true));
   const tab = tabs.find((x) => x.id === params.get("tab"))?.id ?? "resumo";
   const mudar = (v: string) => setParams((p) => (v === "resumo" ? p.delete("tab") : p.set("tab", v), p), { replace: true });
   const etiquetas = (
@@ -76,6 +80,12 @@ export function AnimalPage() {
         ) : (
           <Tag color="blue">{t("web.stays.in_clinic")}</Tag>
         ))}
+      {consulta?.terminadas && <Tag>{t("web.next_visit.tag_ended")}</Tag>}
+      {consulta?.falta && (
+        <Tag color="red" style={{ cursor: "pointer" }} onClick={() => setProxima(true)}>
+          {t("web.next_visit.tag_missing")}
+        </Tag>
+      )}
       {animal.tipo !== "garanhao" && ultima && (
         <TagReprodutivo
           r={{ data_inseminacao: ultima.data_inseminacao, resultado: ultima.resultado, ultimo_dg: ultima.ultimo_dg }}
@@ -120,6 +130,7 @@ export function AnimalPage() {
     <>
       <RegistarSaida estadia={saida} onClose={() => setSaida(null)} />
       <MudarTipo entrada={mudarTipo} onClose={() => setMudarTipo(null)} />
+      {animal.tipo !== "garanhao" && <ProximaConsulta animalId={animal.id} nome={animal.nome} aberto={proxima} onClose={() => setProxima(false)} />}
     </>
   );
 

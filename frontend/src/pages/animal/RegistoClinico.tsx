@@ -837,7 +837,7 @@ function useResumoLinha() {
 
 // ── Diário clínico ──────────────────────────────────────────────────────────
 
-export function RegistoClinico({ animal }: { animal: Animal }) {
+export function RegistoClinico({ animal, onConsulta }: { animal: Animal; onConsulta?: () => void }) {
   const t = useT();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -1158,6 +1158,8 @@ export function RegistoClinico({ animal }: { animal: Animal }) {
             .join(" "),
         );
         if (x.dg_mesmo_dia) notifyWarning(t("web.registo.dg_same_day"));
+        // Consulta gravada: marca-se já a próxima (obrigatório).
+        onConsulta?.();
       }
       setNovo(null);
     } catch (err) {

@@ -27,6 +27,7 @@ import { useDebounced, useIsMobile } from "../components/responsive";
 import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../components/errors";
 import { Cabecalho } from "../components/mobile";
 import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
+import { ProximaConsulta } from "./animal/ProximaConsulta";
 
 interface Tarefa {
   tarefa_id: number;
@@ -46,6 +47,12 @@ interface Trabalho {
   por_fazer: Tarefa[];
   atrasadas: Tarefa[];
   feitas: Tarefa[];
+  sem_proxima: SemProxima[];
+}
+interface SemProxima {
+  animal_id: number;
+  animal: string;
+  dono: string | null;
 }
 
 // Fecham-se com a resposta (registo clínico, DG, inseminação): sem "Concluir".
@@ -140,6 +147,7 @@ function useTrabalho() {
     porFazer: filtrar(q.data?.por_fazer ?? []),
     atrasadas: filtrar(q.data?.atrasadas ?? []),
     feitas: q.data?.feitas ?? [],
+    semProxima: q.data?.sem_proxima ?? [],
     nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0),
     irPara: (d: Dayjs) => atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
     mudarMinhas: (v: boolean) => atualizar("minhas", v ? "1" : null),
@@ -156,7 +164,7 @@ function useTrabalho() {
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     // Tarefas com pormenor útil (hora da indução, o tratamento a fazer).
-    detalhe: (x: Tarefa) => (["inseminar", "tratamento"].includes(x.tipo) && x.motivo ? x.motivo : null),
+    detalhe: (x: Tarefa) => (["inseminar", "tratamento", "observacao_clinica"].includes(x.tipo) && x.motivo ? x.motivo : null),
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
     atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
     titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
@@ -350,6 +358,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
         </Col>
         <Col xs={24} lg={10}>
           <Flex vertical gap={12}>
+            <FaltaProxima lista={x.semProxima} />
             <Card size="small" title={<span style={{ color: "#dc2626" }}>{`${x.tituloAtraso()} (${x.atrasadas.length})`}</span>}>
               <Table<Tarefa>
                 size="small"
@@ -515,6 +524,8 @@ function TrabalhoMobile({ x }: { x: T }) {
         )}
       </List>
 
+      <FaltaProxima lista={x.semProxima} />
+
       <Cabecalho>
         <span style={{ color: "#dc2626" }}>
           {x.tituloAtraso()} ({x.atrasadas.length})
@@ -581,6 +592,50 @@ function TrabalhoMobile({ x }: { x: T }) {
 }
 
 // ── Pesquisar animal (para ver um que não está na lista do dia) ─────────────
+
+/** Éguas com consulta gravada e sem a próxima marcada: tocar abre logo a janela para a marcar. */
+function FaltaProxima({ lista }: { lista: SemProxima[] }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const [egua, setEgua] = useState<SemProxima | null>(null);
+  if (!lista.length) return null;
+  const janela = egua && <ProximaConsulta animalId={egua.animal_id} nome={egua.animal} aberto onClose={() => setEgua(null)} />;
+  const titulo = `${t("web.next_visit.daily_title")} (${lista.length})`;
+  if (isMobile)
+    return (
+      <>
+        {janela}
+        <Cabecalho>
+          <span style={{ color: "#b45309" }}>{titulo}</span>
+        </Cabecalho>
+        <List>
+          {lista.map((e) => (
+            <List.Item key={e.animal_id} onClick={() => setEgua(e)} description={e.dono ?? "—"} arrow>
+              {e.animal}
+            </List.Item>
+          ))}
+        </List>
+      </>
+    );
+  return (
+    <Card size="small" title={<span style={{ color: "#b45309" }}>{titulo}</span>}>
+      {janela}
+      <Table<SemProxima>
+        size="small"
+        rowKey="animal_id"
+        dataSource={lista}
+        pagination={false}
+        showHeader={false}
+        scroll={{ y: 190 }}
+        onRow={(e) => ({ onClick: () => setEgua(e), style: { cursor: "pointer", boxShadow: "inset 3px 0 0 #b45309" } })}
+        columns={[
+          { key: "animal", render: (_, e) => <Typography.Text strong>{e.animal}</Typography.Text> },
+          { key: "dono", render: (_, e) => <Typography.Text type="secondary">{e.dono ?? "—"}</Typography.Text> },
+        ]}
+      />
+    </Card>
+  );
+}
 
 /** Abre a ficha; éguas e receptoras logo no Diário clínico. */
 function useAbrirAnimal() {

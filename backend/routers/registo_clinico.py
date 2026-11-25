@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from backend.deps import get_current_user
 from backend.serial import valor
 from modules.db import get_connection
+from backend.routers.consultas import gravou_consulta
 from modules.pages.animal_page import _carregar_animal, _concluir_tarefas_animal_hoje, _obter_estadia_activa
 from modules.repositories.audit_repo import auditar_apagadas
 from modules.repositories.insemination_repo import DIAS_MIN_DG, InseminacaoError, registar_diagnostico, registar_resultado
@@ -481,6 +482,8 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                     (animal_id, estadia_id, d.data_registo, json.dumps(dados.model_dump(mode="json", exclude_none=True)), d.prioritario, user["username"][:50]),
                 )
                 rid = cur.fetchone()[0]
+                # Falta marcar a próxima consulta (ou terminar as consultas).
+                gravou_consulta(cur, animal_id)
                 _guardar_opcoes(cur, dados.TX)
                 t = dados.TX
                 if t and t.marcar:
