@@ -12,7 +12,9 @@ import { NAV, navDe } from "./Shell";
 
 // Barra de baixo: só cabem 5 — as 4 primeiras secções do menu do computador,
 // pela mesma ordem; as restantes ficam em "Mais" (também pela mesma ordem).
-const BARRA = NAV.slice(0, 4).map((n) => n.path);
+// Calculada só ao desenhar: Shell importa este ficheiro e vice-versa, e ao
+// carregar o módulo o NAV ainda não existe (dava a página em branco).
+const barra = () => NAV.slice(0, 4).map((n) => n.path);
 const CURTOS: Record<string, string> = { "/stock-semen": "Stock" };
 
 /** Título da barra de cima e se tem botão "voltar" (páginas dentro de páginas). */
@@ -36,6 +38,7 @@ export function MobileShell({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const { company_name } = useBrand();
   const [mais, setMais] = useState(false);
+  const BARRA = barra();
 
   const { titulo, voltar } = tituloDaRota(pathname, t);
   // Fora das páginas da barra nenhum separador fica ativo: assim tocar em
