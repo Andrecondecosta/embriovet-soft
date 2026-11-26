@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
 import { Alert, Button, Card, Col, DatePicker, Flex, Popover, Row, Select, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
-import { CheckOutlined, CloseOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, DownloadOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
   DatePicker as MDatePicker,
@@ -29,6 +29,7 @@ import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../co
 import { Cabecalho } from "../components/mobile";
 import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 import { ProximaConsulta } from "./animal/ProximaConsulta";
+import { ExportarTrabalho, TIPOS_TRABALHO, type TipoTrabalho } from "./ExportarTrabalho";
 import { FORMATO_DATA } from "../components/datas";
 
 interface Tarefa {
@@ -137,6 +138,8 @@ function useTrabalho() {
   const minhas = params.get("minhas") === "1";
   const notifyError = useNotifyError();
   const dono = params.get("dono");
+  // Filtro por tipo: tratamentos (amarelo), consultas e diagnósticos (verde), urgentes (vermelho).
+  const tipoSel = (TIPOS_TRABALHO.find((x) => x === params.get("tipo")) ?? "todos") as TipoTrabalho;
 
   // Tarefas automáticas de 1.ª observação, ao abrir (como a app atual).
   const gerar = useMutation({
@@ -183,7 +186,14 @@ function useTrabalho() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["trabalho"] }),
   });
 
-  const filtrar = (lista: Tarefa[]) => lista.filter((x) => (!minhas || x.utilizador === user.username) && (!dono || x.dono === dono));
+  // Um tratamento urgente aparece também em "Tratamentos" (e em "Urgentes").
+  const doTipo = (x: Tarefa) =>
+    tipoSel === "todos" ||
+    (tipoSel === "tratamentos" && x.tipo === "tratamento") ||
+    (tipoSel === "consultas" && CONSULTAS.has(x.tipo)) ||
+    (tipoSel === "urgentes" && etiquetas(x, t).cor === "vermelho");
+  const filtrar = (lista: Tarefa[]) =>
+    lista.filter((x) => (!minhas || x.utilizador === user.username) && (!dono || x.dono === dono) && doTipo(x));
   const donos = useMemo(
     () => [...new Set([...(q.data?.por_fazer ?? []), ...(q.data?.atrasadas ?? [])].map((x) => x.dono).filter(Boolean) as string[])].sort(),
     [q.data],
@@ -211,7 +221,9 @@ function useTrabalho() {
     atrasadas: filtrar(q.data?.atrasadas ?? []),
     feitas: q.data?.feitas ?? [],
     semProxima: q.data?.sem_proxima ?? [],
-    nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0),
+    nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0) + (tipoSel !== "todos" ? 1 : 0),
+    filtroTipo: tipoSel,
+    mudarTipo: (v: TipoTrabalho) => atualizar("tipo", v === "todos" ? null : v),
     irPara: (d: Dayjs) => atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
     mudarMinhas: (v: boolean) => atualizar("minhas", v ? "1" : null),
     mudarDono: (v: string | null) => atualizar("dono", v),
@@ -257,6 +269,7 @@ function corAtraso(n: number) {
 
 function TrabalhoDesktop({ x }: { x: T }) {
   const { t } = x;
+  const [exportar, setExportar] = useState(false);
   const { primary_color } = useBrand();
   const errorMessage = useErrorMessage();
   const r = x.q.data?.resumo;
@@ -334,6 +347,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
 
   return (
     <Flex vertical gap={12}>
+      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} />
       <Card size="small">
         <Flex gap={48} align="center" wrap>
           <Statistic title={t("web.daily.kpi.todo")} value={r?.por_fazer ?? "—"} styles={{ content: { color: primary_color } }} />
@@ -355,6 +369,10 @@ function TrabalhoDesktop({ x }: { x: T }) {
             size="small"
             title={`${x.titulo()} (${x.porFazer.length})`}
             extra={
+              <Space size={6}>
+              <Button size="small" icon={<DownloadOutlined />} onClick={() => setExportar(true)}>
+                {t("web.daily.export.button")}
+              </Button>
               <Popover
                 trigger="click"
                 placement="bottomRight"
@@ -372,6 +390,12 @@ function TrabalhoDesktop({ x }: { x: T }) {
                       onChange={(v) => x.mudarDono(v ?? null)}
                       options={x.donos.map((d) => ({ value: d, label: d }))}
                     />
+                    <Select
+                      style={{ width: "100%" }}
+                      value={x.filtroTipo}
+                      onChange={(v) => x.mudarTipo(v)}
+                      options={TIPOS_TRABALHO.map((v) => ({ value: v, label: `${t("web.daily.type.label")}: ${t(`web.daily.type.${v}`)}` }))}
+                    />
                   </Space>
                 }
               >
@@ -380,6 +404,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
                   {x.nFiltros > 0 && ` (${x.nFiltros})`}
                 </Button>
               </Popover>
+              </Space>
             }
           >
             <Flex gap={6} align="center" style={{ marginBottom: 10 }}>
@@ -481,6 +506,7 @@ function TrabalhoMobile({ x }: { x: T }) {
   const { primary_color } = useBrand();
   const errorMessage = useErrorMessage();
   const [filtros, setFiltros] = useState(false);
+  const [exportar, setExportar] = useState(false);
   const [calendario, setCalendario] = useState(false);
   const r = x.q.data?.resumo;
 
@@ -569,7 +595,11 @@ function TrabalhoMobile({ x }: { x: T }) {
           {t("common.filters")}
           {x.nFiltros > 0 && ` (${x.nFiltros})`}
         </MButton>
+        <MButton size="small" fill="outline" onClick={() => setExportar(true)}>
+          {t("web.daily.export.button")}
+        </MButton>
       </div>
+      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} />
       <MDatePicker
         visible={calendario}
         onClose={() => setCalendario(false)}
@@ -653,6 +683,13 @@ function TrabalhoMobile({ x }: { x: T }) {
           value={x.dono ? [x.dono] : []}
           onChange={(v) => x.mudarDono((v[0] as string) ?? null)}
           options={x.donos.map((d) => ({ value: d, label: d }))}
+        />
+        <div style={{ color: "#999", margin: "10px 0 6px" }}>{t("web.daily.type.label")}</div>
+        <Selector
+          columns={2}
+          value={[x.filtroTipo]}
+          onChange={(v) => v[0] && x.mudarTipo(v[0])}
+          options={TIPOS_TRABALHO.map((v) => ({ value: v, label: t(`web.daily.type.${v}`) }))}
         />
         <MButton block color="primary" style={{ marginTop: 14 }} onClick={() => setFiltros(false)}>
           OK

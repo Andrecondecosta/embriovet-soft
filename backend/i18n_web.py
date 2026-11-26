@@ -2200,3 +2200,34 @@ for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Total: {q} palhetas × dias"
     WEB_TRANSLATIONS[_lang]["web.billing.total_straw_days"] = _v
 for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Induzir", "Induce", "Induire", "Induzieren")):
     WEB_TRANSLATIONS[_lang].setdefault("web.task.induzir", _v)
+for _k, *_txt in [
+    ("web.daily.export.button", "Exportar", "Export", "Exporter", "Exportieren"),
+    ("web.daily.export.title", "Trabalho diário", "Daily work", "Travail du jour", "Tagesarbeit"),
+    ("web.daily.export.period", "De {ini} a {fim}", "From {ini} to {fim}", "Du {ini} au {fim}", "Von {ini} bis {fim}"),
+    ("web.daily.export.done", "Feito", "Done", "Fait", "Erledigt"),
+    ("web.daily.export.where", "Local", "Where", "Lieu", "Ort"),
+    ("web.daily.export.detail", "Pormenor", "Details", "Détail", "Details"),
+    ("web.daily.export.since", "Desde", "Since", "Depuis", "Seit"),
+    ("web.daily.export.empty", "Nada por fazer neste período.", "Nothing to do in this period.", "Rien à faire sur cette période.", "Nichts zu tun in diesem Zeitraum."),
+    ("web.daily.export.days", "Dias", "Days", "Jours", "Tage"),
+    ("web.daily.export.today", "Hoje", "Today", "Aujourd’hui", "Heute"),
+    ("web.daily.export.tomorrow", "Amanhã", "Tomorrow", "Demain", "Morgen"),
+    ("web.daily.export.next_two", "Amanhã e depois", "Tomorrow and the day after", "Demain et après-demain", "Morgen und übermorgen"),
+    ("web.daily.export.format", "Formato", "Format", "Format", "Format"),
+    ("web.daily.export.help", "As tarefas em atraso deste proprietário também saem, no topo.", "Overdue tasks for this owner are included too, at the top.",
+     "Les tâches en retard de ce propriétaire sont aussi incluses, en haut.", "Überfällige Aufgaben dieses Besitzers kommen oben mit dazu."),
+    ("web.daily.type.label", "Tipo", "Type", "Type", "Art"),
+    ("web.daily.type.todos", "Todos", "All", "Tous", "Alle"),
+    ("web.daily.type.tratamentos", "Tratamentos", "Treatments", "Traitements", "Behandlungen"),
+    ("web.daily.type.consultas", "Consultas e diagnósticos", "Visits and diagnoses", "Consultations et diagnostics", "Untersuchungen und Diagnosen"),
+    ("web.daily.type.urgentes", "Urgentes", "Urgent", "Urgents", "Dringend"),
+    ("web.week.0", "Segunda", "Monday", "Lundi", "Montag"),
+    ("web.week.1", "Terça", "Tuesday", "Mardi", "Dienstag"),
+    ("web.week.2", "Quarta", "Wednesday", "Mercredi", "Mittwoch"),
+    ("web.week.3", "Quinta", "Thursday", "Jeudi", "Donnerstag"),
+    ("web.week.4", "Sexta", "Friday", "Vendredi", "Freitag"),
+    ("web.week.5", "Sábado", "Saturday", "Samedi", "Samstag"),
+    ("web.week.6", "Domingo", "Sunday", "Dimanche", "Sonntag"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][_k] = _v

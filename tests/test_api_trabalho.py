@@ -186,3 +186,45 @@ def test_saida_cancela_tarefas_menos_as_da_gestacao(client):
             estado = {t: (c, x) for t, c, x in cur.fetchall()}
     assert estado["tratamento"] == estado["verificar_ovulacao"] == (True, True)
     assert estado["diagnostico_gestacao"] == estado["parto_previsto"] == (False, False)
+
+
+def test_exportar_por_proprietario_e_dias(client):
+    # Para o tratador: as éguas de um proprietário a ver amanhã e depois, com as em atraso no topo.
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id", (f"{PREFIXO}Casa",))
+            dono = cur.fetchone()[0]
+            ids = []
+            for nome in ("Alfa", "Beta"):
+                cur.execute("INSERT INTO animais (nome, tipo, ativo, dono_id) VALUES (%s, 'egua', TRUE, %s) RETURNING id", (f"{PREFIXO}{nome}", dono))
+                ids.append(cur.fetchone()[0])
+            amanha = date.today() + timedelta(days=1)
+            for aid, dia, tipo, motivo, urg in (
+                (ids[0], amanha, "tratamento", "Tratamento: PG 1×", "observacao"),
+                (ids[1], amanha + timedelta(days=1), "observacao_clinica", "Próxima consulta: ver OE", "observacao"),
+                (ids[1], date.today() - timedelta(days=2), "induzir", "Induzir — hCG às 20:00", "urgente"),
+                (ids[0], amanha + timedelta(days=5), "tratamento", "Tratamento: Lavagem 1×", "observacao"),
+            ):
+                cur.execute(
+                    "INSERT INTO trabalho_diario (animal_id, data_tarefa, tipo, motivo, urgencia) VALUES (%s, %s, %s, %s, %s)",
+                    (aid, dia, tipo, motivo, urg),
+                )
+        conn.commit()
+    params = {"inicio": amanha.isoformat(), "fim": (amanha + timedelta(days=1)).isoformat(), "dono_id": dono}
+    r = client.get("/api/trabalho/exportar", params=params | {"formato": "xlsx"})
+    assert r.status_code == 200 and "spreadsheetml" in r.headers["content-type"]
+    from openpyxl import load_workbook
+    import io
+
+    texto = " | ".join(str(c.value) for ws in load_workbook(io.BytesIO(r.content)).worksheets for row in ws.iter_rows() for c in row if c.value)
+    assert "PG" in texto and "Consulta" in texto and "Induzir 20:00" in texto  # a em atraso entra
+    assert "Lavagem" not in texto  # fora dos dias pedidos
+    # Só tratamentos.
+    r = client.get("/api/trabalho/exportar", params=params | {"formato": "xlsx", "tipo": "tratamentos"})
+    texto = " | ".join(str(c.value) for ws in load_workbook(io.BytesIO(r.content)).worksheets for row in ws.iter_rows() for c in row if c.value)
+    assert "PG" in texto and "Consulta" not in texto and "Induzir" not in texto
+    assert client.get("/api/trabalho/exportar", params=params | {"formato": "pdf"}).headers["content-type"].startswith("application/pdf")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE animais SET dono_id = NULL WHERE dono_id = %s", (dono,))
+        conn.commit()

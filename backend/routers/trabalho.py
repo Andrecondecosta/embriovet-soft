@@ -9,15 +9,18 @@ ao abrir, para a leitura não ter efeitos secundários.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from backend.deps import get_current_user
 from backend.serial import registos
 from modules.db import get_connection
 from backend.routers.consultas import sem_proxima
+from backend.routers.relatorios import TIPOS as TIPOS_FICHEIRO, _ficheiro, _t
+from modules.relatorio_export import gerar_excel, gerar_pdf
 from modules.pages.trabalho_diario_page import _gerar_tarefas_primeira_observacao
 from modules.repositories.dashboard_repo import (
     carregar_resumo_tarefas_hoje,
@@ -111,3 +114,120 @@ def cancelar(tarefa_id: int, user: dict = Depends(get_current_user)):
     if not feito:
         raise HTTPException(404, {"code": "web.work.error.task_not_found", "params": {}})
     return {"ok": True}
+
+
+# ── Exportar (para dar ao tratador: as éguas de um proprietário a ver nos
+#    próximos dias, em PDF ou Excel) ────────────────────────────────────────
+
+# As mesmas cores do ecrã: tratamentos (amarelo), consultas e diagnósticos
+# (verde), urgentes (vermelho).
+CONSULTAS = ("observacao_clinica", "primeira_observacao", "verificar_ovulacao",
+             "diagnostico_gestacao", "confirmacao_gestacao", "segunda_confirmacao")
+SEMPRE_URGENTES = ("inseminar", "induzir")
+Categoria = Literal["todos", "tratamentos", "consultas", "urgentes"]
+
+
+def categoria(tipo: str, urgencia: str | None) -> str:
+    if urgencia == "urgente" or tipo in SEMPRE_URGENTES:
+        return "urgentes"
+    return "tratamentos" if tipo == "tratamento" else "consultas" if tipo in CONSULTAS else "outras"
+
+
+def _rotulo(tipo: str, motivo: str | None) -> str:
+    """O que está no retângulo do ecrã: "PG, Ocitocina", "Induzir 20:00", "Consulta"…"""
+    m = motivo or ""
+    if tipo == "tratamento" and m:
+        return ", ".join(p.split(" ")[0] for p in m.removeprefix("Tratamento:").strip().split(" · ") if p)
+    nome = _t(f"web.task.{tipo}")
+    if tipo == "induzir" and " às " in m:
+        return f"{nome} {m.rsplit(' às ', 1)[1]}"
+    return nome
+
+
+def _pormenor(tipo: str, motivo: str | None) -> str:
+    if tipo in ("tratamento", "induzir", "inseminar", "observacao_clinica") and motivo:
+        return motivo.removeprefix("Tratamento:").strip()
+    return ""
+
+
+@router.get("/exportar")
+def exportar(
+    inicio: date,
+    fim: date,
+    formato: Literal["pdf", "xlsx"] = "pdf",
+    dono_id: int | None = None,
+    tipo: Categoria = "todos",
+    _user: dict = Depends(get_current_user),
+):
+    if fim < inicio:
+        raise HTTPException(422, {"code": "web.billing.error.bad_period", "params": {}})
+    hoje = date.today()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Por fazer no período, e as em atraso (para não ficarem esquecidas).
+            cur.execute(
+                """
+                SELECT t.data_tarefa, t.tipo, t.motivo, t.urgencia, a.nome, d.nome, e.tipo_registo, al.nome
+                FROM trabalho_diario t
+                JOIN animais a ON a.id = t.animal_id
+                LEFT JOIN dono d ON d.id = a.dono_id
+                LEFT JOIN LATERAL (
+                    SELECT tipo_registo, alojamento_id FROM estadias
+                    WHERE animal_id = a.id AND data_saida IS NULL ORDER BY data_entrada DESC LIMIT 1
+                ) e ON TRUE
+                LEFT JOIN alojamentos al ON al.id = e.alojamento_id
+                WHERE NOT t.concluida AND t.data_tarefa <= %(fim)s
+                  AND (t.data_tarefa >= %(inicio)s OR t.data_tarefa < %(hoje)s)
+                  AND (%(dono)s::int IS NULL OR a.dono_id = %(dono)s)
+                ORDER BY t.data_tarefa, a.nome
+                """,
+                {"inicio": inicio, "fim": fim, "hoje": hoje, "dono": dono_id},
+            )
+            linhas = cur.fetchall()
+            nome_dono = None
+            if dono_id is not None:
+                cur.execute("SELECT nome FROM dono WHERE id = %s", (dono_id,))
+                r = cur.fetchone()
+                nome_dono = r[0] if r else None
+
+    def local(tipo_registo, alojamento):
+        return _t("web.stays.kind.externo") if tipo_registo == "externo" else (alojamento or "—")
+
+    com_dono = dono_id is None
+    cab = [_t("web.daily.export.done"), _t("web.dashboard.mare")] + ([_t("web.dashboard.owner")] if com_dono else []) + [
+        _t("web.daily.export.where"), _t("web.dashboard.task_type"), _t("web.daily.export.detail")]
+    atrasadas, por_dia = [], {}
+    for dia, tp, motivo, urg, egua, dono, tipo_registo, aloj in linhas:
+        # Um tratamento urgente sai também em "Tratamentos" (e em "Urgentes").
+        if tipo != "todos" and not (
+            (tipo == "tratamentos" and tp == "tratamento")
+            or (tipo == "consultas" and tp in CONSULTAS)
+            or (tipo == "urgentes" and categoria(tp, urg) == "urgentes")
+        ):
+            continue
+        linha = ["", egua] + ([dono or "—"] if com_dono else []) + [local(tipo_registo, aloj), _rotulo(tp, motivo), _pormenor(tp, motivo)]
+        urgente = categoria(tp, urg) == "urgentes"
+        if dia < hoje and dia < inicio:
+            atrasadas.append((dia, urgente, linha))
+        else:
+            por_dia.setdefault(dia, []).append((urgente, linha))
+
+    tabelas = []
+    if atrasadas:
+        tabelas.append((_t("web.daily.overdue"), cab + [_t("web.daily.export.since")],
+                        [l + [d.strftime("%d/%m/%Y")] for d, _, l in sorted(atrasadas, key=lambda x: (not x[1], x[0]))]))
+    for dia in sorted(por_dia):
+        # Urgentes primeiro; depois por égua.
+        filas = [l for _, l in sorted(por_dia[dia], key=lambda x: (not x[0], x[1][1].lower()))]
+        tabelas.append((f"{_t(f'web.week.{dia.weekday()}')}, {dia:%d/%m/%Y}", cab, filas))
+
+    titulo = _t("web.daily.export.title") + (f" — {nome_dono}" if nome_dono else "")
+    sub = _t("web.daily.export.period", ini=inicio.strftime("%d/%m/%Y"), fim=fim.strftime("%d/%m/%Y"))
+    if tipo != "todos":
+        sub += f" · {_t(f'web.daily.type.{tipo}')}"
+    nome = f"trabalho_{nome_dono or 'todos'}_{inicio:%Y%m%d}-{fim:%Y%m%d}.{formato}".replace(" ", "_").replace("/", "-")
+    if formato == "pdf":
+        dados = gerar_pdf(titulo, sub, [], tabelas, sem_dados=_t("web.daily.export.empty"), gerado_em=datetime.now())
+    else:
+        dados = gerar_excel(f"{titulo} · {sub}", [], tabelas)
+    return _ficheiro(dados, nome, TIPOS_FICHEIRO[formato])
