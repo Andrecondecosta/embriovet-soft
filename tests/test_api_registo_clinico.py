@@ -456,3 +456,9 @@ def test_inducao_marcada_feita_no_dia(ctx):
     assert _todas("SELECT tipo, concluida FROM trabalho_diario WHERE animal_id = %s AND tipo = 'induzir'", (aid,)) == [("induzir", True)]
     ins = _todas("SELECT data_tarefa FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar' AND NOT concluida", (aid,))
     assert ins == [((feita + timedelta(hours=24)).date(),)]
+
+
+def test_edema_vai_ate_4_cruzes(ctx):
+    c, aid = ctx["c"], ctx["animal"]()
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 4, "liquido": 0})).status_code == 201
+    assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 5, "liquido": 0})).status_code == 422

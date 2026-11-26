@@ -197,7 +197,7 @@ def tabelas_eventos(inicio: date | None = None, fim: date | None = None) -> list
             ["oe_* / od_*", "Ovário esquerdo / direito. Vazio = ovário não examinado nesse registo; 0 folículos = examinado sem folículos."],
             ["*_maior_mm", "Diâmetro do maior folículo (mm). 9 significa «<10 mm» e 61 significa «>60 mm»."],
             ["*_foliculos", "Cada folículo: tamanho e achados (OV, FH, NS, MF, CL)."],
-            ["edema", "0 = 0, 1 = +, 2 = ++, 3 = +++. Vazio = útero não examinado."],
+            ["edema", "0 = 0, 1 = +, 2 = ++, 3 = +++, 4 = ++++. Vazio = útero não examinado."],
             ["liquido", "0 = 0, 1 = <2 cm, 2 = +, 3 = ++, 4 = +++. Vazio = útero não examinado."],
             ["cervix", "1 = fechado, 2 = intermédio, 3 = aberto."],
             ["ovulacao / folic_hemorragico", "sim / nao (OV / FH marcados num folículo do ovário examinado); exames antigos podem ter nao_avaliado. Vazio = ovários não examinados."],

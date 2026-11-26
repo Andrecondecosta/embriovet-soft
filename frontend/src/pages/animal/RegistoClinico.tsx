@@ -128,7 +128,7 @@ interface Novo {
 }
 
 const ACHADOS = ["NS", "OV", "FH", "MF", "CL"];
-const EDEMA = ["0", "+", "++", "+++"];
+const EDEMA = ["0", "+", "++", "+++", "++++"];
 const LIQUIDO = ["0", "<2 cm", "+", "++", "+++"];
 const HORAS = ["8h", "10h", "12h", "14h", "16h"];
 const SIM_NAO: SimNao[] = ["sim", "nao", "nao_avaliado"];

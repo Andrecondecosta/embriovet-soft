@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/animais", tags=["registo_clinico"])
 
 HORAS = ("8h", "10h", "12h", "14h", "16h")
 ANTIBIOTICOS = ("Genta", "Genta + Peni", "Ceftiofur", "Marbofloxacina")
-EDEMA = ("0", "+", "++", "+++")
+EDEMA = ("0", "+", "++", "+++", "++++")
 LIQUIDO = ("0", "<2 cm", "+", "++", "+++")
 CERVIX = ("1 · fechado", "2 · intermédio", "3 · aberto")
 # Tarefas de hoje que obrigam a responder no registo (o registo fecha-as).
