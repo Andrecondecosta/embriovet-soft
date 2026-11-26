@@ -46,7 +46,7 @@ def lotes(_user: dict = Depends(get_current_user)):
 
 
 def _eguas() -> list[dict]:
-    """Éguas com estadia ou visita aberta. As receptoras ficam de fora: só
+    """Éguas com estadia, visita ou entrada externa aberta. As receptoras ficam de fora: só
     recebem embriões, não são inseminadas."""
     lista = listar_eguas_com_estadia_ativa()
     with get_connection() as conn:

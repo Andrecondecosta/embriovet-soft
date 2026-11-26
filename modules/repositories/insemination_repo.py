@@ -560,7 +560,8 @@ def listar_eguas_com_estadia_ativa() -> list[dict]:
         WHERE a.tipo IN ('egua', 'receptora')
           AND a.ativo = TRUE
           AND e.data_saida IS NULL
-          AND e.tipo_registo IN ('estadia', 'visita')
+          -- Externas também (acompanhadas em casa do cliente).
+          AND e.tipo_registo IN ('estadia', 'visita', 'externo')
         ORDER BY a.id, e.data_entrada ASC, e.id ASC
     """
     with get_connection() as conn:

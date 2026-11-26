@@ -339,3 +339,15 @@ def _todas_insem(sql, params=()):
         with conn.cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchall()
+
+
+def test_egua_externa_pode_ser_inseminada(ctx):
+    # Acompanhada em casa do cliente (entrada "externo"): fresco e congelado.
+    c = ctx["c"]
+    _um("UPDATE estadias SET tipo_registo = 'externo', estado = 'externo' WHERE animal_id = %s", (ctx["egua"],))
+    assert ctx["egua"] in [e["animal_id"] for e in c.get("/api/inseminacoes/eguas").json()]
+    r = c.post("/api/inseminacoes", json=_corpo(ctx, 1, linhas=[], fresco=True, garanhao=f"{P}Fresco{uuid.uuid4().hex[:4]}"))
+    assert r.status_code == 201, r.text
+    r = c.post("/api/inseminacoes", json=_corpo(ctx, 1, confirmar_gestante=True))
+    assert r.status_code == 201, r.text
+    assert _stock(ctx["lote"]) == 9
