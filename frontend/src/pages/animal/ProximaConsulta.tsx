@@ -16,6 +16,8 @@ export interface EstadoConsulta {
   terminadas: boolean;
   marcada: { id: number; data: string; observacoes: string } | null;
   outras: { tipo: string; data: string; motivo: string | null }[];
+  /** "Inseminar" marcado (da indução): pode ser a própria próxima consulta. */
+  inseminar: { id: number; data: string; motivo: string | null } | null;
   pode_terminar: boolean;
 }
 
@@ -45,6 +47,8 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
   const [obs, setObs] = useState("");
   const [terminar, setTerminar] = useState(false);
   const [palavra, setPalavra] = useState("");
+  // Dia da inseminação marcada (pode mudar-se, e passa a ser a próxima consulta).
+  const [diaIns, setDiaIns] = useState<string | null>(null);
 
   // Ao abrir: se já há uma consulta marcada, começa nela (muda-se em vez de criar outra).
   const marcada = q.data?.marcada;
@@ -54,7 +58,8 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
     setObs(marcada?.observacoes ?? "");
     setTerminar(false);
     setPalavra("");
-  }, [aberto, marcada?.data, marcada?.observacoes]);
+    setDiaIns(q.data?.inseminar?.data ?? null);
+  }, [aberto, marcada?.data, marcada?.observacoes, q.data?.inseminar?.data]);
 
   const atualizar = () => {
     for (const k of [["animal", animalId], ["trabalho"], ["dashboard"]]) queryClient.invalidateQueries({ queryKey: k });
@@ -64,6 +69,15 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
     onSuccess: () => {
       atualizar();
       notifySuccess(t("web.next_visit.saved", { data: dayjs(data).format("DD/MM/YYYY") }));
+      onClose();
+    },
+    onError: notifyError,
+  });
+  const usarInseminacao = useMutation({
+    mutationFn: () => api(`/animais/${animalId}/proxima-consulta/inseminacao`, "PUT", { data: diaIns }),
+    onSuccess: () => {
+      atualizar();
+      notifySuccess(t("web.next_visit.insemination_saved", { data: dayjs(diaIns).format("DD/MM/YYYY") }));
       onClose();
     },
     onError: notifyError,
@@ -84,14 +98,17 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
   const titulo = t("web.next_visit.title", { name: nome });
   const fmt = (d: string) => dayjs(d).format("DD/MM");
 
-  const jaMarcado = !!q.data?.outras.length && (
+  const ins = q.data?.inseminar;
+  const outras = (q.data?.outras ?? []).filter((o) => !(ins && o.tipo === "inseminar"));
+  const jaMarcado = !!outras.length && (
     <div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {t("web.next_visit.already")}:
       </Typography.Text>{" "}
-      {q.data.outras.map((o) => `${t(`web.task.${o.tipo}`)} ${fmt(o.data)}`).join(" · ")}
+      {outras.map((o) => `${t(`web.task.${o.tipo}`)} ${fmt(o.data)}`).join(" · ")}
     </div>
   );
+  const hoje = dayjs().startOf("day");
   const textoMarcada = marcada && t("web.next_visit.current", { data: dayjs(marcada.data).format("DD/MM/YYYY") });
 
   if (isMobile)
@@ -114,6 +131,17 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
         ) : (
           <>
             {jaMarcado && <div style={{ fontSize: 13, marginBottom: 8 }}>{jaMarcado}</div>}
+            {ins && diaIns && (
+              <div style={{ background: "#fff1f0", border: "1px solid #ffccc7", borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600 }}>{t("web.next_visit.insemination", { data: dayjs(diaIns).format("DD/MM/YYYY") })}</div>
+                <div style={{ fontSize: 12, color: "#666", margin: "4px 0 6px" }}>{t("web.next_visit.insemination_help")}</div>
+                <DataCampo value={diaIns} onChange={(v) => v && setDiaIns(v)} min={hoje.toDate()} />
+                <MButton block color="danger" fill="outline" loading={usarInseminacao.isPending} style={{ marginTop: 8 }} onClick={() => usarInseminacao.mutate()}>
+                  {t("web.next_visit.insemination_ok")}
+                </MButton>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 10 }}>{t("web.next_visit.or_other")}</div>
+              </div>
+            )}
             {textoMarcada && <div style={{ fontSize: 13, color: "var(--adm-color-primary)", marginBottom: 8 }}>{textoMarcada}</div>}
             <div style={{ fontSize: 13, color: "#999", marginBottom: 6 }}>{t("web.next_visit.in")}</div>
             <Selector
@@ -186,6 +214,33 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
       ) : (
         <Flex vertical gap={12}>
           {jaMarcado}
+          {ins && diaIns && (
+            <Alert
+              type="error"
+              showIcon
+              title={t("web.next_visit.insemination", { data: dayjs(diaIns).format("DD/MM/YYYY") })}
+              description={
+                <Flex vertical gap={8}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {t("web.next_visit.insemination_help")}
+                  </Typography.Text>
+                  <Flex gap={8} wrap>
+                    <DatePicker
+                      format={FORMATO_DATA}
+                      allowClear={false}
+                      value={dayjs(diaIns)}
+                      disabledDate={(d: Dayjs) => d.isBefore(hoje, "day")}
+                      onChange={(d) => d && setDiaIns(d.format(FMT))}
+                    />
+                    <Button danger loading={usarInseminacao.isPending} onClick={() => usarInseminacao.mutate()}>
+                      {t("web.next_visit.insemination_ok")}
+                    </Button>
+                  </Flex>
+                </Flex>
+              }
+            />
+          )}
+          {ins && <Typography.Text type="secondary">{t("web.next_visit.or_other")}</Typography.Text>}
           {textoMarcada && <Alert type="info" showIcon title={textoMarcada} />}
           <div>
             <Typography.Text type="secondary">{t("web.next_visit.in")}</Typography.Text>

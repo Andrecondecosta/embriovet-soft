@@ -57,6 +57,17 @@ def _marcada(cur, animal_id: int):
     return cur.fetchone()
 
 
+def _inseminar(cur, animal_id: int):
+    """A tarefa "Inseminar" por fazer (hoje ou à frente), se houver."""
+    cur.execute(
+        """SELECT id, data_tarefa, motivo FROM trabalho_diario
+           WHERE animal_id = %s AND NOT concluida AND tipo = 'inseminar' AND data_tarefa >= CURRENT_DATE
+           ORDER BY data_tarefa, id LIMIT 1""",
+        (animal_id,),
+    )
+    return cur.fetchone()
+
+
 def _observacoes(motivo: str | None) -> str:
     """O motivo guarda "Próxima consulta" ou "Próxima consulta: <obs>"."""
     return (motivo or "").partition(": ")[2] if (motivo or "").startswith("Próxima consulta") else ""
@@ -88,12 +99,15 @@ def estado(animal_id: int, user: dict = Depends(get_current_user)):
                 (animal_id, TIPOS_CONSULTA),
             )
             outras = [{"tipo": t, "data": d.isoformat(), "motivo": mo} for t, d, mo in cur.fetchall()]
+            ins = _inseminar(cur, animal_id)
     return {
         # Já há uma marcada (ex.: viu-se a égua antes do dia): não falta.
         "falta": bool(falta) and not m,
         "terminadas": terminadas is not None,
         "marcada": {"id": m[0], "data": m[1].isoformat(), "observacoes": _observacoes(m[2])} if m else None,
         "outras": outras,
+        # Inseminação marcada (da indução): pode ser a próxima consulta.
+        "inseminar": {"id": ins[0], "data": ins[1].isoformat(), "motivo": ins[2]} if ins else None,
         "pode_terminar": user["nivel"] in ("Gestor", "Administrador"),
     }
 
@@ -181,3 +195,28 @@ def sem_proxima() -> list[dict]:
                 """
             )
             return [{"animal_id": i, "animal": n, "tipo": t, "dono": dn} for i, n, t, dn in cur.fetchall()]
+
+
+class InseminacaoIn(BaseModel):
+    data: date
+
+
+@router.put("/{animal_id:int}/proxima-consulta/inseminacao")
+def inseminacao_como_proxima(animal_id: int, d: InseminacaoIn, _user: dict = Depends(get_current_user)):
+    """A inseminação marcada é a próxima consulta: muda-se o dia dela (se
+    for preciso) e não se marca outra consulta."""
+    if d.data < date.today():
+        raise _erro(422, "web.next_visit.error.past")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _egua(cur, animal_id)
+            ins = _inseminar(cur, animal_id)
+            if not ins:
+                raise _erro(409, "web.next_visit.error.no_insemination")
+            cur.execute("UPDATE trabalho_diario SET data_tarefa = %s WHERE id = %s", (d.data, ins[0]))
+            cur.execute(
+                "UPDATE animais SET falta_proxima_consulta = FALSE, consultas_terminadas_em = NULL, consultas_terminadas_por = NULL WHERE id = %s",
+                (animal_id,),
+            )
+        conn.commit()
+    return {"ok": True}

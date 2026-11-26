@@ -2262,3 +2262,19 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.location.{_k}"] = _v
+for _k, *_txt in [
+    ("insemination", "Inseminação marcada para {data}", "Insemination scheduled for {data}", "Insémination prévue le {data}", "Besamung geplant am {data}"),
+    ("insemination_help", "Se a inseminação é a próxima consulta, confirme (pode mudar o dia) e não precisa de marcar outra.",
+     "If the insemination is the next visit, confirm it (you can change the day) — no need to schedule another.",
+     "Si l’insémination est la prochaine consultation, confirmez-la (le jour peut changer) — inutile d’en prévoir une autre.",
+     "Ist die Besamung die nächste Untersuchung, bestätigen (Tag änderbar) — keine weitere nötig."),
+    ("insemination_ok", "A inseminação é a próxima consulta", "The insemination is the next visit", "L’insémination est la prochaine consultation", "Die Besamung ist die nächste Untersuchung"),
+    ("insemination_saved", "Inseminação marcada para {data} como próxima consulta.", "Insemination on {data} set as the next visit.",
+     "Insémination du {data} retenue comme prochaine consultation.", "Besamung am {data} als nächste Untersuchung festgelegt."),
+    ("or_other", "Ou marque outra consulta:", "Or schedule another visit:", "Ou prévoyez une autre consultation :", "Oder eine andere Untersuchung planen:"),
+    ("error.past", "O dia não pode ser antes de hoje.", "The day cannot be before today.", "Le jour ne peut pas être avant aujourd’hui.", "Der Tag darf nicht vor heute liegen."),
+    ("error.no_insemination", "Esta égua já não tem inseminação marcada.", "This mare no longer has an insemination scheduled.",
+     "Cette jument n’a plus d’insémination prévue.", "Für diese Stute ist keine Besamung mehr geplant."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.next_visit.{_k}"] = _v

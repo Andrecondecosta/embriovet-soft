@@ -462,3 +462,17 @@ def test_edema_vai_ate_4_cruzes(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 4, "liquido": 0})).status_code == 201
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 5, "liquido": 0})).status_code == 422
+
+
+
+def test_inseminacao_marcada_pode_ser_a_proxima_consulta(ctx):
+    # A janela continua a abrir; mostra a inseminação marcada e deixa mudar-lhe o dia.
+    c, aid = ctx["c"], ctx["animal"]()
+    marcada = (datetime.now() + timedelta(days=1)).replace(hour=20, minute=0, second=0, microsecond=0)
+    c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"inducao": {"data": marcada.isoformat()}}))
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["falta"] is True and e["inseminar"]["data"] == (marcada + timedelta(hours=24)).date().isoformat()
+    novo = (date.today() + timedelta(days=3)).isoformat()
+    assert c.put(f"/api/animais/{aid}/proxima-consulta/inseminacao", json={"data": novo}).status_code == 200
+    e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
+    assert e["falta"] is False and e["inseminar"]["data"] == novo and e["marcada"] is None
