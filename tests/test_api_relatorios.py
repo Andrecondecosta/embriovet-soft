@@ -224,8 +224,9 @@ def test_exportar_por_cavalo_com_totais(client, modo):
     corpo = texto.strip().splitlines()[3:]
     assert corpo[-1].startswith("Total geral,") and corpo[-1].endswith(f",{sum(l['existencia_atual'] for l in linhas)}")
     if modo == "totais":
-        assert corpo[0] == "Garanhão,Lotes,Palhetas"
-        assert len(corpo) == 1 + len({l["garanhao_nome"] for l in linhas}) + 1
+        # Só as colunas pedidas: uma linha por proprietário + garanhão, com a soma.
+        assert corpo[0] == "Proprietário,Garanhão,Palhetas"
+        assert len(corpo) == 1 + len({(l["proprietario_nome"], l["garanhao_nome"]) for l in linhas}) + 1
     else:
         # Pela ordem em que as colunas foram escolhidas.
         assert corpo[0] == "Proprietário,Garanhão,Palhetas"

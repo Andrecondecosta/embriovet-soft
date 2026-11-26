@@ -454,6 +454,17 @@ def _com_totais(tab: dict) -> tuple[list[str], list[list], set[int]]:
         grupos.setdefault(nome(l) if cavalo else "", []).append(l)
 
     if tab.get("modo") == "totais":
+        chaves = [c for c in colunas if c not in somas]
+        if chaves:
+            # Uma linha por combinação das colunas escolhidas (ex.: proprietário +
+            # garanhão), pela ordem escolhida, com as somas — e nada a mais.
+            por: dict[tuple, list] = {}
+            for l in linhas:
+                por.setdefault(tuple(_valor_ficheiro(l.get(c)) for c in chaves), []).append(l)
+            ordem = sorted(por, key=lambda k: [normalizar(str(texto_celula(v) or "")) for v in k])
+            saida = [[k[chaves.index(c)] if c in chaves else soma(por[k], c) for c in colunas] for k in ordem]
+            total = [soma(linhas, c) if c in somas else (_t("web.reports.total_all") if c == chaves[0] else None) for c in colunas]
+            return [_t(f"web.reports.col.{c}") for c in colunas], saida + [total], {len(saida)}
         n_label = _t("web.reports.col.n_lots" if tab["titulo"] in TABELAS_LOTES else "web.reports.col.n_records")
         cab = ([_t(f"web.reports.col.{cavalo}")] if cavalo else []) + [n_label] + [_t(f"web.reports.col.{c}") for c in somas]
         saida = [([g] if cavalo else []) + [len(gr)] + [soma(gr, c) for c in somas] for g, gr in grupos.items()]
