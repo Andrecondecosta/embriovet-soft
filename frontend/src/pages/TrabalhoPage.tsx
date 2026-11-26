@@ -347,7 +347,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
 
   return (
     <Flex vertical gap={12}>
-      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} />
+      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} dia={x.dia} donoNome={x.dono} tipoInicial={x.filtroTipo} />
       <Card size="small">
         <Flex gap={48} align="center" wrap>
           <Statistic title={t("web.daily.kpi.todo")} value={r?.por_fazer ?? "—"} styles={{ content: { color: primary_color } }} />
@@ -599,7 +599,7 @@ function TrabalhoMobile({ x }: { x: T }) {
           {t("web.daily.export.button")}
         </MButton>
       </div>
-      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} />
+      <ExportarTrabalho aberto={exportar} onClose={() => setExportar(false)} dia={x.dia} donoNome={x.dono} tipoInicial={x.filtroTipo} />
       <MDatePicker
         visible={calendario}
         onClose={() => setCalendario(false)}

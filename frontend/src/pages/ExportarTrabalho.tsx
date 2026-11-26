@@ -28,7 +28,20 @@ const ATALHOS = [
  * proprietário (ou de todos) a ver nuns dias, em PDF ou Excel — por dia,
  * com as em atraso no topo.
  */
-export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose: () => void }) {
+export function ExportarTrabalho({
+  aberto,
+  onClose,
+  dia,
+  donoNome,
+  tipoInicial = "todos",
+}: {
+  aberto: boolean;
+  onClose: () => void;
+  /** O que está no ecrã: o dia visto, o proprietário e o tipo filtrados — o ficheiro começa igual. */
+  dia?: Dayjs;
+  donoNome?: string | null;
+  tipoInicial?: TipoTrabalho;
+}) {
   const t = useT();
   const isMobile = useIsMobile();
   const notifyError = useNotifyError();
@@ -37,12 +50,19 @@ export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose
   const [periodo, setPeriodo] = useState<[Dayjs, Dayjs]>([dayjs().add(1, "day"), dayjs().add(2, "day")]);
   const [tipo, setTipo] = useState<TipoTrabalho>("todos");
   const [formato, setFormato] = useState<Formato>("pdf");
-  // Incluir (no topo) as éguas com tarefas em atraso.
-  const [atrasadas, setAtrasadas] = useState(true);
+  // Incluir (no topo) as éguas com tarefas em atraso — só se se pedir.
+  const [atrasadas, setAtrasadas] = useState(false);
   const [aExportar, setAExportar] = useState(false);
 
+  // Ao abrir, começa no que está no ecrã (dia, proprietário, tipo), sem as em atraso.
   useEffect(() => {
-    if (aberto) setPeriodo([dayjs().add(1, "day"), dayjs().add(2, "day")]);
+    if (!aberto) return;
+    const d = dia ?? dayjs();
+    setPeriodo([d, d]);
+    setTipo(tipoInicial);
+    setAtrasadas(false);
+    setDono(donoNome ? ((donos.data ?? []).find((x) => x.nome === donoNome)?.id ?? null) : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
 
   const atalho = ATALHOS.find((a) => periodo[0].isSame(dayjs().add(a.de, "day"), "day") && periodo[1].isSame(dayjs().add(a.ate, "day"), "day"));
