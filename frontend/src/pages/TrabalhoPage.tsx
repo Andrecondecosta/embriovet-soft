@@ -17,6 +17,7 @@ import {
   Selector,
   SwipeAction,
   Switch as MSwitch,
+  Tag as MTag,
 } from "antd-mobile";
 
 import { api } from "../api/client";
@@ -61,6 +62,67 @@ const PEDEM_RESPOSTA = new Set(["verificar_ovulacao", "diagnostico_gestacao", "c
 
 const COR_URGENCIA: Record<string, string> = { urgente: "#dc2626", hoje: "#b45309", amanha: "#94a3b8", observacao: "#cbd5e1" };
 const FMT = "YYYY-MM-DD";
+
+// Retângulos à frente de cada tarefa: tratamentos a amarelo (com o que é: PG,
+// Ocitocina…), consultas e diagnósticos a verde, tudo o que é urgente a vermelho.
+const CONSULTAS = new Set([
+  "observacao_clinica",
+  "primeira_observacao",
+  "verificar_ovulacao",
+  "diagnostico_gestacao",
+  "confirmacao_gestacao",
+  "segunda_confirmacao",
+]);
+const SEMPRE_URGENTES = new Set(["inseminar", "induzir"]);
+const CORES = { vermelho: "#dc2626", amarelo: "#d48806", verde: "#389e0d" } as const;
+type Cor = keyof typeof CORES;
+
+function etiquetas(a: Tarefa, t: (k: string) => string): { textos: string[]; cor: Cor | null } {
+  const urgente = a.urgencia === "urgente" || SEMPRE_URGENTES.has(a.tipo);
+  let textos = [t(`web.task.${a.tipo}`)];
+  // "Tratamento: PG 1× · Ocitocina 2× 8h" → PG, Ocitocina.
+  if (a.tipo === "tratamento" && a.motivo)
+    textos = a.motivo
+      .replace(/^Tratamento:\s*/, "")
+      .split(" · ")
+      .map((p) => p.split(" ")[0])
+      .filter(Boolean);
+  // "Induzir — hCG às 20:00" → Induzir 20:00.
+  const hora = a.tipo === "induzir" && a.motivo?.match(/às (\d{2}:\d{2})/)?.[1];
+  if (hora) textos = [`${textos[0]} ${hora}`];
+  const cor: Cor | null = urgente ? "vermelho" : a.tipo === "tratamento" ? "amarelo" : CONSULTAS.has(a.tipo) ? "verde" : null;
+  return { textos, cor };
+}
+
+const COR_ANTD: Record<Cor, string> = { vermelho: "red", amarelo: "gold", verde: "green" };
+
+function Etiquetas({ a }: { a: Tarefa }) {
+  const t = useT();
+  const { textos, cor } = etiquetas(a, t);
+  return (
+    <>
+      {textos.map((x) => (
+        <Tag key={x} color={cor ? COR_ANTD[cor] : undefined} style={{ marginInlineEnd: 4 }}>
+          {x}
+        </Tag>
+      ))}
+    </>
+  );
+}
+
+function EtiquetasMobile({ a }: { a: Tarefa }) {
+  const t = useT();
+  const { textos, cor } = etiquetas(a, t);
+  return (
+    <>
+      {textos.map((x) => (
+        <MTag key={x} color={cor ? CORES[cor] : "default"} fill="outline" style={{ marginRight: 4 }}>
+          {x}
+        </MTag>
+      ))}
+    </>
+  );
+}
 
 /** Estado no endereço (dia, filtros) e pedidos — comum às duas versões. */
 function useTrabalho() {
@@ -165,7 +227,9 @@ function useTrabalho() {
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     // Tarefas com pormenor útil (hora da indução, o tratamento a fazer).
-    detalhe: (x: Tarefa) => (["inseminar", "tratamento", "observacao_clinica"].includes(x.tipo) && x.motivo ? x.motivo : null),
+    // Sem o "Tratamento:" à frente (o retângulo amarelo já diz o que é).
+    detalhe: (x: Tarefa) =>
+      ["inseminar", "induzir", "tratamento", "observacao_clinica"].includes(x.tipo) && x.motivo ? x.motivo.replace(/^Tratamento:\s*/, "") : null,
     urgencia: (x: Tarefa) => t(`web.dashboard.urg.${x.urgencia}`),
     atraso: (n: number) => (n === 1 ? t("web.daily.ago_one") : t("web.daily.ago", { n })),
     titulo: () => (ehHoje ? t("web.daily.today_title") : t("web.daily.day_title", { dia: dia.format("DD/MM") })),
@@ -255,7 +319,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
       key: "tipo",
       render: (_: unknown, a: Tarefa) => (
         <>
-          {x.tipo(a)}
+          <Etiquetas a={a} />
           {x.detalhe(a) && (
             <div>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -398,7 +462,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
                 columns={[
                   { key: "ok", width: 28, render: () => <span style={{ color: primary_color }}>✓</span> },
                   { key: "nome", render: (_, a) => <Typography.Text type="secondary">{x.nome(a)}</Typography.Text> },
-                  { key: "tipo", render: (_, a) => <Typography.Text type="secondary">{x.tipo(a)}</Typography.Text> },
+                  { key: "tipo", render: (_, a) => <Etiquetas a={a} /> },
                   { dataIndex: "concluida_por", width: 110, render: (v) => <Typography.Text type="secondary">{v ?? "—"}</Typography.Text> },
                 ]}
               />
@@ -451,7 +515,13 @@ function TrabalhoMobile({ x }: { x: T }) {
       <List.Item
         onClick={() => x.abrir(a)}
         arrow
-        description={`${a.dono ?? "—"} · ${x.detalhe(a) ?? x.tipo(a)}`}
+        description={
+          <>
+            <EtiquetasMobile a={a} />
+            {a.dono ?? "—"}
+            {x.detalhe(a) && ` · ${x.detalhe(a)}`}
+          </>
+        }
         extra={direita}
         style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
       >
@@ -559,7 +629,7 @@ function TrabalhoMobile({ x }: { x: T }) {
             <List.Item
               key={a.tarefa_id}
               prefix={<span style={{ color: primary_color }}>✓</span>}
-              description={x.tipo(a)}
+              description={<EtiquetasMobile a={a} />}
               extra={a.concluida_por ?? "—"}
             >
               <span style={{ color: "#888" }}>{x.nome(a)}</span>

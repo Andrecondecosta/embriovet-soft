@@ -215,8 +215,8 @@ def _concluir_tarefas_animal_hoje(animal_id: int, utilizador: str | None = None)
                OR (data_tarefa < CURRENT_DATE
                    AND tipo IN ('observacao_clinica', 'primeira_observacao', 'verificar_ovulacao')))
           -- Estas fecham-se com a resposta (o DG com o resultado, "Inseminar"
-          -- com a inseminação), não por haver um registo nesse dia.
-          AND tipo NOT IN ('inseminar', 'diagnostico_gestacao', 'confirmacao_gestacao', 'segunda_confirmacao')
+          -- com a inseminação, "Induzir" com a indução), não por haver um registo nesse dia.
+          AND tipo NOT IN ('inseminar', 'induzir', 'diagnostico_gestacao', 'confirmacao_gestacao', 'segunda_confirmacao')
     """
     # Ver a égua antes do dia marcado (ex.: passar à porta do cliente)
     # conta como a próxima observação marcada — só a primeira, e só se hoje

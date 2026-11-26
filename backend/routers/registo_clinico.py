@@ -354,8 +354,8 @@ def _tarefa(cur, animal_id: int, estadia_id: int, dia: date, motivo: str, utiliz
         INSERT INTO trabalho_diario (animal_id, estadia_id, data_tarefa, tipo, motivo, urgencia, criado_automaticamente, utilizador)
         VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id
         """,
-        # "Inseminar" (da indução) é sempre urgente: tem hora marcada.
-        (animal_id, estadia_id, dia, tipo, motivo[:500], "urgente" if tipo == "inseminar" else _urgencia(dia), utilizador[:50]),
+        # "Inseminar" e "Induzir" são sempre urgentes: têm hora marcada.
+        (animal_id, estadia_id, dia, tipo, motivo[:500], "urgente" if tipo in ("inseminar", "induzir") else _urgencia(dia), utilizador[:50]),
     )
     return cur.fetchone()[0]
 
@@ -497,12 +497,36 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                     # diário que esta égua tem de ser inseminada (a tarefa
                     # fecha-se ao registar a inseminação).
                     produto = f" {t.inducao.produto}" if t.inducao.produto else ""
-                    criadas.append(
-                        _tarefa(
-                            cur, animal_id, estadia_id, (t.inducao.data + timedelta(hours=24)).date(),
-                            f"Inseminar — indução{produto} a {t.inducao.data:%d/%m %H:%M}", user["username"], tipo="inseminar",
+                    dia_inseminar = (t.inducao.data + timedelta(hours=24)).date()
+                    motivo_ins = f"Inseminar — indução{produto} a {t.inducao.data:%d/%m %H:%M}"
+                    # Indução marcada para depois (outro dia, ou mais tarde hoje):
+                    # no dia aparece "Induzir" no Trabalho diário, com a hora.
+                    if t.inducao.data > d.data_registo:
+                        criadas.append(
+                            _tarefa(
+                                cur, animal_id, estadia_id, t.inducao.data.date(),
+                                f"Induzir —{produto} às {t.inducao.data:%H:%M}", user["username"], tipo="induzir",
+                            )
                         )
+                    else:
+                        # A indução marcada fez-se agora: fecha o "Induzir".
+                        cur.execute(
+                            """UPDATE trabalho_diario SET concluida = TRUE, data_conclusao = CURRENT_DATE, concluida_por = %s,
+                                      observacoes_conclusao = 'Induzida'
+                               WHERE animal_id = %s AND concluida = FALSE AND tipo = 'induzir'""",
+                            (user["username"][:50], animal_id),
+                        )
+                    # Um só "Inseminar" por indução: se já havia um (da indução
+                    # marcada), passa para a nova hora em vez de criar outro.
+                    cur.execute(
+                        """UPDATE trabalho_diario SET data_tarefa = %s, motivo = %s
+                           WHERE id = (SELECT id FROM trabalho_diario WHERE animal_id = %s AND concluida = FALSE
+                                       AND tipo = 'inseminar' AND data_tarefa >= CURRENT_DATE ORDER BY id DESC LIMIT 1)
+                           RETURNING id""",
+                        (dia_inseminar, motivo_ins[:500], animal_id),
                     )
+                    if not cur.fetchone():
+                        criadas.append(_tarefa(cur, animal_id, estadia_id, dia_inseminar, motivo_ins, user["username"], tipo="inseminar"))
                 conn.commit()
             except Exception:
                 conn.rollback()

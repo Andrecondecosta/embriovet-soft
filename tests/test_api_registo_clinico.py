@@ -127,7 +127,8 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
             }
         ),
     )
-    assert r.json()["tarefas_criadas"] == 2  # próxima toma daqui a 2 dias + inseminar (da indução)
+    # Próxima toma daqui a 2 dias + induzir (indução marcada para daqui a 2 dias) + inseminar 24 h depois.
+    assert r.json()["tarefas_criadas"] == 3
     tarefas = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'tratamento' ORDER BY id", (aid,))
     hoje = date.today()
     assert [t[0] for t in tarefas] == [hoje + timedelta(days=2)]  # intervalo, não dias seguidos
@@ -135,6 +136,9 @@ def test_tratamento_marca_tarefas_e_guarda_opcoes(ctx):
     # A indução deixa a tarefa "inseminar" para o dia seguinte (passagem de turno).
     ins = _todas("SELECT data_tarefa, motivo FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar'", (aid,))
     assert ins == [(inducao.date() + timedelta(days=1), f"Inseminar — indução a {inducao:%d/%m} 20:00")]
+    # A indução está marcada para outro dia: nesse dia aparece "Induzir", urgente.
+    ind = _todas("SELECT data_tarefa, motivo, urgencia FROM trabalho_diario WHERE animal_id = %s AND tipo = 'induzir'", (aid,))
+    assert ind == [(inducao.date(), "Induzir — às 20:00", "urgente")]
     lista = c.get(f"/api/animais/{aid}/registos").json()
     assert outro in lista["antibioticos"]
     assert lista["tratamentos_anteriores"][0]["texto"].startswith("Ocitocina 2× 8h")
@@ -436,3 +440,19 @@ def test_proxima_consulta_marcar_mudar_e_terminar(ctx):
     c.post(f"/api/animais/{aid}/registos", json=_registo(CER={"grau": 1}))
     e = c.get(f"/api/animais/{aid}/proxima-consulta").json()
     assert e["terminadas"] is False and e["falta"] is True
+
+
+
+def test_inducao_marcada_feita_no_dia(ctx):
+    # Marcada ontem para hoje às 20h; hoje grava-se a indução feita (agora):
+    # fecha o "Induzir" e o "Inseminar" passa para 24 h depois desta, sem duplicar.
+    c, aid = ctx["c"], ctx["animal"]()
+    marcada = (datetime.now() + timedelta(hours=3)).replace(second=0, microsecond=0)
+    c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"inducao": {"data": marcada.isoformat(), "produto": "hCG"}}))
+    assert _todas("SELECT tipo FROM trabalho_diario WHERE animal_id = %s AND NOT concluida AND tipo IN ('induzir', 'inseminar') ORDER BY tipo", (aid,)) == [
+        ("induzir",), ("inseminar",)]
+    feita = datetime.now().replace(second=0, microsecond=0)
+    c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"inducao": {"data": feita.isoformat(), "produto": "hCG"}}))
+    assert _todas("SELECT tipo, concluida FROM trabalho_diario WHERE animal_id = %s AND tipo = 'induzir'", (aid,)) == [("induzir", True)]
+    ins = _todas("SELECT data_tarefa FROM trabalho_diario WHERE animal_id = %s AND tipo = 'inseminar' AND NOT concluida", (aid,))
+    assert ins == [((feita + timedelta(hours=24)).date(),)]
