@@ -547,21 +547,8 @@ def criar(animal_id: int, d: RegistoIn, user: dict = Depends(get_current_user)):
                     (animal_id,),
                 )
             conn.commit()
-    # Com indução / inseminação já marcada, o passo seguinte já está no
-    # Trabalho diário: não é preciso marcar também a próxima consulta.
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """SELECT 1 FROM trabalho_diario WHERE animal_id = %s AND NOT concluida
-                   AND tipo IN ('induzir', 'inseminar') AND data_tarefa >= CURRENT_DATE LIMIT 1""",
-                (animal_id,),
-            )
-            pede_proxima = cur.fetchone() is None
-            if not pede_proxima:
-                cur.execute("UPDATE animais SET falta_proxima_consulta = FALSE WHERE id = %s", (animal_id,))
-        conn.commit()
     return {"id": rid, "tarefas_concluidas": concluidas, "tarefas_criadas": len(criadas), "resultado": resultado,
-            "dg_mesmo_dia": dg_mesmo_dia, "proxima_consulta": pede_proxima}
+            "dg_mesmo_dia": dg_mesmo_dia}
 
 
 def _do_animal(animal_id: int, rid: int):

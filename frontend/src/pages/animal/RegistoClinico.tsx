@@ -869,7 +869,7 @@ export function RegistoClinico({ animal, onConsulta }: { animal: Animal; onConsu
       const corpo = { data_registo: n.data, dados: n.dados, prioritario: n.prioritario, confirmar_pg: confirmarPg };
       return n.id
         ? api(`/animais/${animal.id}/registos/${n.id}`, "PUT", corpo)
-        : api<{ tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean; proxima_consulta?: boolean }>(
+        : api<{ tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean }>(
             `/animais/${animal.id}/registos`,
             "POST",
             corpo,
@@ -1146,7 +1146,7 @@ export function RegistoClinico({ animal, onConsulta }: { animal: Animal; onConsu
       const res = await gravar.mutateAsync({ n: novo, confirmarPg });
       if (novo.id) notifySuccess(t("web.animal.record_updated"));
       else {
-        const x = res as { tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean; proxima_consulta?: boolean };
+        const x = res as { tarefas_concluidas: number; tarefas_criadas: number; resultado: string | null; dg_mesmo_dia: boolean };
         notifySuccess(
           [
             t("web.animal.record_saved"),
@@ -1159,9 +1159,8 @@ export function RegistoClinico({ animal, onConsulta }: { animal: Animal; onConsu
             .join(" "),
         );
         if (x.dg_mesmo_dia) notifyWarning(t("web.registo.dg_same_day"));
-        // Consulta gravada: marca-se já a próxima (obrigatório) — menos quando
-        // já há indução / inseminação marcada (o passo seguinte já está lá).
-        if (x.proxima_consulta !== false) onConsulta?.();
+        // Consulta gravada: marca-se já a próxima (obrigatório).
+        onConsulta?.();
       }
       setNovo(null);
     } catch (err) {

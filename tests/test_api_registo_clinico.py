@@ -462,16 +462,3 @@ def test_edema_vai_ate_4_cruzes(ctx):
     c, aid = ctx["c"], ctx["animal"]()
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 4, "liquido": 0})).status_code == 201
     assert c.post(f"/api/animais/{aid}/registos", json=_registo(UT={"edema": 5, "liquido": 0})).status_code == 422
-
-
-
-def test_com_inducao_nao_pede_proxima_consulta(ctx):
-    # A indução marca "Induzir"/"Inseminar": não é preciso marcar também a consulta.
-    c, aid = ctx["c"], ctx["animal"]()
-    marcada = (datetime.now() + timedelta(days=1)).replace(hour=20, minute=0, second=0, microsecond=0)
-    r = c.post(f"/api/animais/{aid}/registos", json=_registo(TX={"inducao": {"data": marcada.isoformat()}}))
-    assert r.status_code == 201 and r.json()["proxima_consulta"] is False
-    assert c.get(f"/api/animais/{aid}/proxima-consulta").json()["falta"] is False
-    # Um exame normal continua a pedir.
-    _, outra = None, ctx["animal"]()
-    assert c.post(f"/api/animais/{outra}/registos", json=_registo(CER={"grau": 2})).json()["proxima_consulta"] is True
