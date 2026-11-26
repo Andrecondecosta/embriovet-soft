@@ -31,6 +31,7 @@ import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 import { ProximaConsulta } from "./animal/ProximaConsulta";
 import { ExportarTrabalho, TIPOS_TRABALHO, type TipoTrabalho } from "./ExportarTrabalho";
 import { abrirMapa } from "./animal/Localizacao";
+import { EscolherSemen } from "./animal/InseminacaoFresca";
 import { FORMATO_DATA } from "../components/datas";
 
 interface Tarefa {
@@ -182,6 +183,8 @@ function useTrabalho() {
   const minhas = params.get("minhas") === "1";
   const notifyError = useNotifyError();
   const dono = params.get("dono");
+  // Égua do "Inseminar" escolhido (fica montada para a janela do fresco abrir a seguir).
+  const [semen, setSemen] = useState<{ id: number; aberto: boolean } | null>(null);
   // Filtro por tipo: tratamentos (amarelo), consultas e diagnósticos (verde), urgentes (vermelho).
   const tipoSel = (TIPOS_TRABALHO.find((x) => x === params.get("tipo")) ?? "todos") as TipoTrabalho;
   // Filtro: todas, só as que estão na clínica, ou só as externas.
@@ -284,12 +287,13 @@ function useTrabalho() {
     // Tocar numa tarefa abre a ficha do animal logo no Diário clínico (onde
     // se faz o registo do dia). Nos garanhões, que não têm diário, abre o resumo.
     // "Inseminar" (da indução) abre logo a inseminação dessa égua.
+    // "Inseminar" pergunta, como o INS da consulta, se o sémen é fresco ou congelado.
     abrir: (x: Tarefa) =>
-      navigate(
-        x.tipo === "inseminar"
-          ? `/trabalho-diario/inseminacao?egua=${x.animal_id}`
-          : `/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`,
-      ),
+      x.tipo === "inseminar"
+        ? setSemen({ id: x.animal_id, aberto: true })
+        : navigate(`/animais/${x.animal_id}${x.tipo === "colheita" ? "" : "?tab=diario"}`),
+    semen,
+    fecharSemen: () => setSemen((s) => s && { ...s, aberto: false }),
     nome: (x: Tarefa) => (x.tipo === "colheita" ? t("web.daily.collection_of", { name: x.animal ?? "—" }) : (x.animal ?? "—")),
     tipo: (x: Tarefa) => t(`web.task.${x.tipo}`),
     // Tarefas com pormenor útil (hora da indução, o tratamento a fazer).
@@ -311,7 +315,12 @@ type T = ReturnType<typeof useTrabalho>;
 
 export function TrabalhoPage() {
   const x = useTrabalho();
-  return useIsMobile() ? <TrabalhoMobile x={x} /> : <TrabalhoDesktop x={x} />;
+  return (
+    <>
+      {x.semen && <EscolherSemen eguaId={x.semen.id} aberto={x.semen.aberto} onClose={x.fecharSemen} />}
+      {useIsMobile() ? <TrabalhoMobile x={x} /> : <TrabalhoDesktop x={x} />}
+    </>
+  );
 }
 
 /** Cor do atraso: laranja, vermelho a partir de 3 dias, forte a partir de 7. */
