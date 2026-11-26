@@ -2231,3 +2231,6 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Incluir as éguas em atraso (no topo)", "Include overdue mares (at the top)",
+                                                   "Inclure les juments en retard (en haut)", "Überfällige Stuten einschließen (oben)")):
+    WEB_TRANSLATIONS[_lang]["web.daily.export.with_overdue"] = _v

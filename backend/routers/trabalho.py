@@ -157,6 +157,7 @@ def exportar(
     formato: Literal["pdf", "xlsx"] = "pdf",
     dono_id: int | None = None,
     tipo: Categoria = "todos",
+    atrasadas: bool = True,
     _user: dict = Depends(get_current_user),
 ):
     if fim < inicio:
@@ -177,11 +178,11 @@ def exportar(
                 ) e ON TRUE
                 LEFT JOIN alojamentos al ON al.id = e.alojamento_id
                 WHERE NOT t.concluida AND t.data_tarefa <= %(fim)s
-                  AND (t.data_tarefa >= %(inicio)s OR t.data_tarefa < %(hoje)s)
+                  AND (t.data_tarefa >= %(inicio)s OR (%(atrasadas)s AND t.data_tarefa < %(hoje)s))
                   AND (%(dono)s::int IS NULL OR a.dono_id = %(dono)s)
                 ORDER BY t.data_tarefa, a.nome
                 """,
-                {"inicio": inicio, "fim": fim, "hoje": hoje, "dono": dono_id},
+                {"inicio": inicio, "fim": fim, "hoje": hoje, "dono": dono_id, "atrasadas": atrasadas},
             )
             linhas = cur.fetchall()
             nome_dono = None
@@ -196,7 +197,7 @@ def exportar(
     com_dono = dono_id is None
     cab = [_t("web.daily.export.done"), _t("web.dashboard.mare")] + ([_t("web.dashboard.owner")] if com_dono else []) + [
         _t("web.daily.export.where"), _t("web.dashboard.task_type"), _t("web.daily.export.detail")]
-    atrasadas, por_dia = [], {}
+    em_atraso, por_dia = [], {}
     for dia, tp, motivo, urg, egua, dono, tipo_registo, aloj in linhas:
         # Um tratamento urgente sai também em "Tratamentos" (e em "Urgentes").
         if tipo != "todos" and not (
@@ -208,14 +209,14 @@ def exportar(
         linha = ["", egua] + ([dono or "—"] if com_dono else []) + [local(tipo_registo, aloj), _rotulo(tp, motivo), _pormenor(tp, motivo)]
         urgente = categoria(tp, urg) == "urgentes"
         if dia < hoje and dia < inicio:
-            atrasadas.append((dia, urgente, linha))
+            em_atraso.append((dia, urgente, linha))
         else:
             por_dia.setdefault(dia, []).append((urgente, linha))
 
     tabelas = []
-    if atrasadas:
+    if em_atraso:
         tabelas.append((_t("web.daily.overdue"), cab + [_t("web.daily.export.since")],
-                        [l + [d.strftime("%d/%m/%Y")] for d, _, l in sorted(atrasadas, key=lambda x: (not x[1], x[0]))]))
+                        [l + [d.strftime("%d/%m/%Y")] for d, _, l in sorted(em_atraso, key=lambda x: (not x[1], x[0]))]))
     for dia in sorted(por_dia):
         # Urgentes primeiro; depois por égua.
         filas = [l for _, l in sorted(por_dia[dia], key=lambda x: (not x[0], x[1][1].lower()))]

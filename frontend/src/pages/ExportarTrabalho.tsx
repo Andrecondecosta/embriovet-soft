@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
-import { DatePicker, Flex, Modal, Segmented, Select, Typography } from "antd";
-import { Button as MButton, Popup, Selector } from "antd-mobile";
+import { Checkbox, DatePicker, Flex, Modal, Segmented, Select, Typography } from "antd";
+import { Button as MButton, Checkbox as MCheckbox, Popup, Selector } from "antd-mobile";
 
 import { useT } from "../i18n/I18n";
 import { useIsMobile } from "../components/responsive";
@@ -37,6 +37,8 @@ export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose
   const [periodo, setPeriodo] = useState<[Dayjs, Dayjs]>([dayjs().add(1, "day"), dayjs().add(2, "day")]);
   const [tipo, setTipo] = useState<TipoTrabalho>("todos");
   const [formato, setFormato] = useState<Formato>("pdf");
+  // Incluir (no topo) as éguas com tarefas em atraso.
+  const [atrasadas, setAtrasadas] = useState(true);
   const [aExportar, setAExportar] = useState(false);
 
   useEffect(() => {
@@ -52,7 +54,13 @@ export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose
   const exportar = async () => {
     setAExportar(true);
     try {
-      const q = new URLSearchParams({ inicio: periodo[0].format(ISO), fim: periodo[1].format(ISO), formato, tipo });
+      const q = new URLSearchParams({
+        inicio: periodo[0].format(ISO),
+        fim: periodo[1].format(ISO),
+        formato,
+        tipo,
+        atrasadas: String(atrasadas),
+      });
       if (dono !== null) q.set("dono_id", String(dono));
       await descarregar(`/trabalho/exportar?${q}`, "trabalho");
       notifySuccess(t("web.reports.downloaded"));
@@ -100,7 +108,11 @@ export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose
         <Selector columns={2} value={[tipo]} onChange={(v) => v[0] && setTipo(v[0])} options={opcoesTipo} />
         <div style={{ color: "#999", margin: "10px 0 6px" }}>{t("web.daily.export.format")}</div>
         <Selector columns={2} value={[formato]} onChange={(v) => v[0] && setFormato(v[0] as Formato)} options={opcoesFormato} />
-        <div style={{ color: "#999", fontSize: 12, marginTop: 10 }}>{t("web.daily.export.help")}</div>
+        <div style={{ marginTop: 12 }}>
+          <MCheckbox checked={atrasadas} onChange={setAtrasadas}>
+            {t("web.daily.export.with_overdue")}
+          </MCheckbox>
+        </div>
         <MButton block color="primary" loading={aExportar} style={{ marginTop: 14 }} onClick={exportar}>
           {t("web.daily.export.button")}
         </MButton>
@@ -154,9 +166,9 @@ export function ExportarTrabalho({ aberto, onClose }: { aberto: boolean; onClose
             <Segmented value={formato} onChange={(v) => setFormato(v as Formato)} options={opcoesFormato} />
           </div>
         </div>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t("web.daily.export.help")}
-        </Typography.Text>
+        <Checkbox checked={atrasadas} onChange={(e) => setAtrasadas(e.target.checked)}>
+          {t("web.daily.export.with_overdue")}
+        </Checkbox>
       </Flex>
     </Modal>
   );

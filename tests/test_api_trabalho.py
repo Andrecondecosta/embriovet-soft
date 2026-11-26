@@ -224,6 +224,10 @@ def test_exportar_por_proprietario_e_dias(client):
     texto = " | ".join(str(c.value) for ws in load_workbook(io.BytesIO(r.content)).worksheets for row in ws.iter_rows() for c in row if c.value)
     assert "PG" in texto and "Consulta" not in texto and "Induzir" not in texto
     assert client.get("/api/trabalho/exportar", params=params | {"formato": "pdf"}).headers["content-type"].startswith("application/pdf")
+    # Sem as em atraso.
+    r = client.get("/api/trabalho/exportar", params=params | {"formato": "xlsx", "atrasadas": False})
+    texto = " | ".join(str(c.value) for ws in load_workbook(io.BytesIO(r.content)).worksheets for row in ws.iter_rows() for c in row if c.value)
+    assert "PG" in texto and "Induzir" not in texto
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE animais SET dono_id = NULL WHERE dono_id = %s", (dono,))
