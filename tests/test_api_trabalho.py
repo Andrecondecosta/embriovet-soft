@@ -232,3 +232,27 @@ def test_exportar_por_proprietario_e_dias(client):
         with conn.cursor() as cur:
             cur.execute("UPDATE animais SET dono_id = NULL WHERE dono_id = %s", (dono,))
         conn.commit()
+
+
+
+def test_tarefas_dizem_se_a_egua_esta_na_clinica_ou_externa(client):
+    tid = _tarefa(0)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT animal_id FROM trabalho_diario WHERE id = %s", (tid,))
+            aid = cur.fetchone()[0]
+        conn.commit()
+    linha = lambda: next(x for x in client.get("/api/trabalho").json()["por_fazer"] if x["tarefa_id"] == tid)
+    assert linha()["situacao"] is None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO dono (nome, ativo) VALUES (%s, TRUE) RETURNING id", (f"{PREFIXO}Dono",))
+            dono = cur.fetchone()[0]
+            cur.execute("UPDATE animais SET dono_id = %s WHERE id = %s", (dono, aid))
+            cur.execute(
+                """INSERT INTO estadias (tipo_registo, animal_id, dono_id, data_entrada, motivo, estado)
+                   VALUES ('externo', %s, %s, CURRENT_DATE, 'inseminacao', 'externo')""",
+                (aid, dono),
+            )
+        conn.commit()
+    assert linha()["situacao"] == "externa"

@@ -48,16 +48,37 @@ def trabalho(dia: date | None = None, _user: dict = Depends(get_current_user)):
         key=lambda x: (URGENCIA_ORDEM.get(x["urgencia"], 9), (x["animal"] or "").lower()),
     )
     atrasadas = sorted((x for x in tarefas if x["dias_atraso"]), key=lambda x: -x["dias_atraso"])
+    feitas = registos(carregar_tarefas_feitas_hoje(), COLS + ["concluida_por", "data_conclusao"])
+    _situacao(tarefas + feitas)
     return {
         "dia": dia.isoformat(),
         # Fixo em hoje, como a barra da app atual (não muda com o dia visto).
         "resumo": carregar_resumo_tarefas_hoje(),
         "por_fazer": normais,
         "atrasadas": atrasadas,
-        "feitas": registos(carregar_tarefas_feitas_hoje(), COLS + ["concluida_por", "data_conclusao"]),
+        "feitas": feitas,
         # Éguas com consulta gravada e sem a próxima marcada.
         "sem_proxima": sem_proxima(),
     }
+
+
+def _situacao(tarefas: list[dict]) -> None:
+    """Junta a cada tarefa onde está a égua: "externa" (acompanhada em casa
+    do cliente), "clinica" (estadia ou visita) ou None (sem entrada aberta)."""
+    ids = list({x["animal_id"] for x in tarefas})
+    tipos: dict[int, str] = {}
+    if ids:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT DISTINCT ON (animal_id) animal_id, tipo_registo FROM estadias
+                       WHERE animal_id = ANY(%s) AND data_saida IS NULL ORDER BY animal_id, data_entrada DESC""",
+                    (ids,),
+                )
+                tipos = dict(cur.fetchall())
+    for x in tarefas:
+        t = tipos.get(x["animal_id"])
+        x["situacao"] = None if t is None else "externa" if t == "externo" else "clinica"
 
 
 # ── Concluir / cancelar à mão (também tarefas em atraso e de estadias já

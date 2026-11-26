@@ -2234,3 +2234,11 @@ for _k, *_txt in [
 for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Incluir as éguas em atraso (no topo)", "Include overdue mares (at the top)",
                                                    "Inclure les juments en retard (en haut)", "Überfällige Stuten einschließen (oben)")):
     WEB_TRANSLATIONS[_lang]["web.daily.export.with_overdue"] = _v
+for _k, *_txt in [
+    ("web.daily.where.label", "Onde", "Where", "Où", "Wo"),
+    ("web.daily.where.todas", "Todas", "All", "Toutes", "Alle"),
+    ("web.daily.where.clinica", "Na clínica", "In the clinic", "À la clinique", "In der Klinik"),
+    ("web.daily.where.externas", "Externas", "External", "Externes", "Extern"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][_k] = _v

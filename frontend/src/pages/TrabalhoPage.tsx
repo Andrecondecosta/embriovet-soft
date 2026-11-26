@@ -43,6 +43,8 @@ interface Tarefa {
   utilizador: string | null;
   dias_atraso?: number;
   concluida_por?: string | null;
+  /** Onde está a égua: externa (em casa do cliente), na clínica, ou sem entrada aberta. */
+  situacao?: "externa" | "clinica" | null;
 }
 interface Trabalho {
   dia: string;
@@ -125,6 +127,26 @@ function EtiquetasMobile({ a }: { a: Tarefa }) {
   );
 }
 
+/** Externa ou Na clínica, ao lado do nome (como na ficha da égua). */
+function Onde({ a }: { a: Tarefa }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  if (!a.situacao) return null;
+  const texto = a.situacao === "externa" ? t("web.stays.kind.externo") : t("web.stays.in_clinic");
+  return isMobile ? (
+    <MTag color={a.situacao === "externa" ? "default" : "primary"} fill="outline" style={{ marginLeft: 6, fontWeight: 400 }}>
+      {texto}
+    </MTag>
+  ) : (
+    <Tag color={a.situacao === "externa" ? undefined : "blue"} style={{ marginLeft: 6, fontWeight: 400 }}>
+      {texto}
+    </Tag>
+  );
+}
+
+type Situacao = "todas" | "clinica" | "externas";
+const SITUACOES: Situacao[] = ["todas", "clinica", "externas"];
+
 /** Estado no endereço (dia, filtros) e pedidos — comum às duas versões. */
 function useTrabalho() {
   const t = useT();
@@ -140,6 +162,8 @@ function useTrabalho() {
   const dono = params.get("dono");
   // Filtro por tipo: tratamentos (amarelo), consultas e diagnósticos (verde), urgentes (vermelho).
   const tipoSel = (TIPOS_TRABALHO.find((x) => x === params.get("tipo")) ?? "todos") as TipoTrabalho;
+  // Filtro: todas, só as que estão na clínica, ou só as externas.
+  const situacaoSel = (SITUACOES.find((x) => x === params.get("onde")) ?? "todas") as Situacao;
 
   // Tarefas automáticas de 1.ª observação, ao abrir (como a app atual).
   const gerar = useMutation({
@@ -193,7 +217,13 @@ function useTrabalho() {
     (tipoSel === "consultas" && CONSULTAS.has(x.tipo)) ||
     (tipoSel === "urgentes" && etiquetas(x, t).cor === "vermelho");
   const filtrar = (lista: Tarefa[]) =>
-    lista.filter((x) => (!minhas || x.utilizador === user.username) && (!dono || x.dono === dono) && doTipo(x));
+    lista.filter(
+      (x) =>
+        (!minhas || x.utilizador === user.username) &&
+        (!dono || x.dono === dono) &&
+        doTipo(x) &&
+        (situacaoSel === "todas" || (situacaoSel === "externas" ? x.situacao === "externa" : x.situacao === "clinica")),
+    );
   const donos = useMemo(
     () => [...new Set([...(q.data?.por_fazer ?? []), ...(q.data?.atrasadas ?? [])].map((x) => x.dono).filter(Boolean) as string[])].sort(),
     [q.data],
@@ -221,7 +251,9 @@ function useTrabalho() {
     atrasadas: filtrar(q.data?.atrasadas ?? []),
     feitas: q.data?.feitas ?? [],
     semProxima: q.data?.sem_proxima ?? [],
-    nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0) + (tipoSel !== "todos" ? 1 : 0),
+    nFiltros: (minhas ? 1 : 0) + (dono ? 1 : 0) + (tipoSel !== "todos" ? 1 : 0) + (situacaoSel !== "todas" ? 1 : 0),
+    situacao: situacaoSel,
+    mudarSituacao: (v: Situacao) => atualizar("onde", v === "todas" ? null : v),
     filtroTipo: tipoSel,
     mudarTipo: (v: TipoTrabalho) => atualizar("tipo", v === "todos" ? null : v),
     irPara: (d: Dayjs) => atualizar("dia", d.isSame(dayjs(), "day") ? null : d.format(FMT)),
@@ -324,7 +356,12 @@ function TrabalhoDesktop({ x }: { x: T }) {
     {
       title: t("web.dashboard.mare"),
       key: "animal",
-      render: (_: unknown, a: Tarefa) => <Typography.Text strong>{x.nome(a)}</Typography.Text>,
+      render: (_: unknown, a: Tarefa) => (
+        <>
+          <Typography.Text strong>{x.nome(a)}</Typography.Text>
+          <Onde a={a} />
+        </>
+      ),
     },
     { title: t("web.dashboard.owner"), dataIndex: "dono", render: (v: string | null) => v ?? "—" },
     {
@@ -395,6 +432,12 @@ function TrabalhoDesktop({ x }: { x: T }) {
                       value={x.filtroTipo}
                       onChange={(v) => x.mudarTipo(v)}
                       options={TIPOS_TRABALHO.map((v) => ({ value: v, label: `${t("web.daily.type.label")}: ${t(`web.daily.type.${v}`)}` }))}
+                    />
+                    <Select
+                      style={{ width: "100%" }}
+                      value={x.situacao}
+                      onChange={(v) => x.mudarSituacao(v)}
+                      options={SITUACOES.map((v) => ({ value: v, label: `${t("web.daily.where.label")}: ${t(`web.daily.where.${v}`)}` }))}
                     />
                   </Space>
                 }
@@ -552,6 +595,7 @@ function TrabalhoMobile({ x }: { x: T }) {
         style={{ boxShadow: `inset 3px 0 0 ${a.dias_atraso ? "#dc2626" : (COR_URGENCIA[a.urgencia] ?? "transparent")}` }}
       >
         {x.nome(a)}
+        <Onde a={a} />
       </List.Item>
     </SwipeAction>
   );
@@ -690,6 +734,13 @@ function TrabalhoMobile({ x }: { x: T }) {
           value={[x.filtroTipo]}
           onChange={(v) => v[0] && x.mudarTipo(v[0])}
           options={TIPOS_TRABALHO.map((v) => ({ value: v, label: t(`web.daily.type.${v}`) }))}
+        />
+        <div style={{ color: "#999", margin: "10px 0 6px" }}>{t("web.daily.where.label")}</div>
+        <Selector
+          columns={3}
+          value={[x.situacao]}
+          onChange={(v) => v[0] && x.mudarSituacao(v[0])}
+          options={SITUACOES.map((v) => ({ value: v, label: t(`web.daily.where.${v}`) }))}
         />
         <MButton block color="primary" style={{ marginTop: 14 }} onClick={() => setFiltros(false)}>
           OK
