@@ -2242,3 +2242,23 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
+for _k, *_txt in [
+    ("title", "Localização da égua", "Mare’s location", "Emplacement de la jument", "Standort der Stute"),
+    ("place", "Onde está", "Where she is", "Où elle se trouve", "Wo sie ist"),
+    ("place_help", "ex.: Coudelaria X, Alter do Chão", "e.g. X Stud, Alter do Chão", "ex. : Haras X, Alter do Chão", "z. B. Gestüt X, Alter do Chão"),
+    ("point", "Ponto no mapa (opcional)", "Map point (optional)", "Point sur la carte (facultatif)", "Kartenpunkt (optional)"),
+    ("point_help", "Link do Google Maps ou coordenadas", "Google Maps link or coordinates", "Lien Google Maps ou coordonnées", "Google-Maps-Link oder Koordinaten"),
+    ("use_here", "Usar a minha localização", "Use my location", "Utiliser ma position", "Meinen Standort verwenden"),
+    ("open_map", "Abrir no mapa", "Open in maps", "Ouvrir dans la carte", "In Karte öffnen"),
+    ("change", "Mudar localização", "Change location", "Changer l’emplacement", "Standort ändern"),
+    ("saved", "Localização guardada.", "Location saved.", "Emplacement enregistré.", "Standort gespeichert."),
+    ("none", "Sem localização", "No location", "Sans emplacement", "Kein Standort"),
+    ("has_point", "com ponto no mapa", "with map point", "avec point sur la carte", "mit Kartenpunkt"),
+    ("error.gps", "Não foi possível obter a localização. Confirme que deu autorização ao browser.", "Could not get the location. Check the browser permission.",
+     "Impossible d’obtenir la position. Vérifiez l’autorisation du navigateur.", "Standort nicht verfügbar. Bitte Browser-Berechtigung prüfen."),
+    ("error.map", "O ponto no mapa tem de ser um link (https://…) ou coordenadas (ex.: 38.57,-7.91).",
+     "The map point must be a link (https://…) or coordinates (e.g. 38.57,-7.91).",
+     "Le point doit être un lien (https://…) ou des coordonnées (ex. : 38.57,-7.91).", "Der Kartenpunkt muss ein Link (https://…) oder Koordinaten sein (z. B. 38.57,-7.91)."),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.location.{_k}"] = _v

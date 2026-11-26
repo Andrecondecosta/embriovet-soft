@@ -96,8 +96,18 @@ def ficha(animal_id: int, _user: dict = Depends(get_current_user)):
         "proprietario": proprietario,
         "estadia_ativa": _obter_estadia_activa(animal_id),
         "estadia_tipo": _tipo_da_entrada(animal_id),
+        "localizacao": _localizacao(animal_id),
         "estadia_inseminacao": {k: valor(v) for k, v in with_ins.items()} if with_ins else None,
     }
+
+
+def _localizacao(animal_id: int) -> dict | None:
+    """Onde está a égua externa (texto, ponto no mapa e o link para lá)."""
+    from backend.routers.localizacao import da_entrada
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            return da_entrada(cur, animal_id)
 
 
 def _tipo_da_entrada(animal_id: int) -> str | None:

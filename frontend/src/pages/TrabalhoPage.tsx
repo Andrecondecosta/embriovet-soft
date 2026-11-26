@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import dayjs, { type Dayjs } from "dayjs";
 import { Alert, Button, Card, Col, DatePicker, Flex, Popover, Row, Select, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
-import { CheckOutlined, CloseOutlined, DownloadOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, DownloadOutlined, EnvironmentOutlined, FilterOutlined, LeftOutlined, RightOutlined, WarningOutlined } from "@ant-design/icons";
 import {
   Button as MButton,
   DatePicker as MDatePicker,
@@ -30,6 +30,7 @@ import { Cabecalho } from "../components/mobile";
 import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 import { ProximaConsulta } from "./animal/ProximaConsulta";
 import { ExportarTrabalho, TIPOS_TRABALHO, type TipoTrabalho } from "./ExportarTrabalho";
+import { abrirMapa } from "./animal/Localizacao";
 import { FORMATO_DATA } from "../components/datas";
 
 interface Tarefa {
@@ -45,6 +46,8 @@ interface Tarefa {
   concluida_por?: string | null;
   /** Onde está a égua: externa (em casa do cliente), na clínica, ou sem entrada aberta. */
   situacao?: "externa" | "clinica" | null;
+  /** Externas: link "Abrir no mapa" (caminho até lá). */
+  mapa?: string | null;
 }
 interface Trabalho {
   dia: string;
@@ -133,14 +136,33 @@ function Onde({ a }: { a: Tarefa }) {
   const isMobile = useIsMobile();
   if (!a.situacao) return null;
   const texto = a.situacao === "externa" ? t("web.stays.kind.externo") : t("web.stays.in_clinic");
+  // Externas: o mapa abre o caminho até lá (sem abrir a ficha).
+  const mapa = a.mapa && (
+    <a
+      onClick={(e) => {
+        e.stopPropagation();
+        abrirMapa(a.mapa!);
+      }}
+      title={t("web.location.open_map")}
+      style={{ marginLeft: 4 }}
+    >
+      <EnvironmentOutlined />
+    </a>
+  );
   return isMobile ? (
-    <MTag color={a.situacao === "externa" ? "default" : "primary"} fill="outline" style={{ marginLeft: 6, fontWeight: 400 }}>
-      {texto}
-    </MTag>
+    <>
+      <MTag color={a.situacao === "externa" ? "default" : "primary"} fill="outline" style={{ marginLeft: 6, fontWeight: 400 }}>
+        {texto}
+      </MTag>
+      {mapa}
+    </>
   ) : (
-    <Tag color={a.situacao === "externa" ? undefined : "blue"} style={{ marginLeft: 6, fontWeight: 400 }}>
-      {texto}
-    </Tag>
+    <>
+      <Tag color={a.situacao === "externa" ? undefined : "blue"} style={{ marginLeft: 6, fontWeight: 400 }}>
+        {texto}
+      </Tag>
+      {mapa}
+    </>
   );
 }
 

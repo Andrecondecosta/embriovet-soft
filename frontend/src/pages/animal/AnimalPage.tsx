@@ -15,6 +15,7 @@ import type { Estadia } from "../estadias/api";
 import { ResumoTab } from "./ResumoTab";
 import { RegistoClinico } from "./RegistoClinico";
 import { ProximaConsulta, useEstadoConsulta } from "./ProximaConsulta";
+import { LocalizacaoExterna } from "./Localizacao";
 import { AlertasTab, EstadiasAnimalTab, FertilidadeTab, ProducaoTab, ReprodutivoTab } from "./OutrosTabs";
 
 /** Separadores da ficha — como a app atual, variam com o tipo do animal. */
@@ -141,6 +142,7 @@ export function AnimalPage() {
         <div style={{ background: "#fff", padding: "10px 12px 0" }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{animal.nome}</div>
           <div style={{ margin: "4px 0 2px" }}>{etiquetas}</div>
+          {animal.localizacao && <LocalizacaoExterna animalId={animal.id} loc={animal.localizacao} />}
           {botaoSaida}
         </div>
         <CapsuleTabs activeKey={tab} onChange={mudar} style={{ background: "#fff" }}>
@@ -165,6 +167,7 @@ export function AnimalPage() {
         {etiquetas}
         <div style={{ marginLeft: "auto" }}>{botaoSaida}</div>
       </Flex>
+      {animal.localizacao && <LocalizacaoExterna animalId={animal.id} loc={animal.localizacao} />}
       <Tabs activeKey={tab} onChange={mudar} destroyOnHidden items={tabs.map((x) => ({ key: x.id, label: t(x.label), children: x.el }))} />
     </Card>
   );

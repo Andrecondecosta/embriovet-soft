@@ -19,6 +19,7 @@ from backend.deps import get_current_user
 from backend.serial import registos
 from modules.db import get_connection
 from backend.routers.consultas import sem_proxima
+from backend.routers.localizacao import link_mapa, morada_do_dono
 from backend.routers.relatorios import TIPOS as TIPOS_FICHEIRO, _ficheiro, _t
 from modules.relatorio_export import gerar_excel, gerar_pdf
 from modules.pages.trabalho_diario_page import _gerar_tarefas_primeira_observacao
@@ -64,21 +65,25 @@ def trabalho(dia: date | None = None, _user: dict = Depends(get_current_user)):
 
 def _situacao(tarefas: list[dict]) -> None:
     """Junta a cada tarefa onde está a égua: "externa" (acompanhada em casa
-    do cliente), "clinica" (estadia ou visita) ou None (sem entrada aberta)."""
+    do cliente), "clinica" (estadia ou visita) ou None (sem entrada aberta);
+    nas externas também o link "Abrir no mapa"."""
     ids = list({x["animal_id"] for x in tarefas})
-    tipos: dict[int, str] = {}
+    entradas: dict[int, tuple] = {}
     if ids:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT DISTINCT ON (animal_id) animal_id, tipo_registo FROM estadias
+                    """SELECT DISTINCT ON (animal_id) animal_id, tipo_registo, localizacao, localizacao_mapa, dono_id FROM estadias
                        WHERE animal_id = ANY(%s) AND data_saida IS NULL ORDER BY animal_id, data_entrada DESC""",
                     (ids,),
                 )
-                tipos = dict(cur.fetchall())
+                for aid, tipo, texto, mapa, dono in cur.fetchall():
+                    link = link_mapa(texto, mapa, morada_do_dono(cur, dono)) if tipo == "externo" else None
+                    entradas[aid] = (tipo, link)
     for x in tarefas:
-        t = tipos.get(x["animal_id"])
-        x["situacao"] = None if t is None else "externa" if t == "externo" else "clinica"
+        tipo, link = entradas.get(x["animal_id"], (None, None))
+        x["situacao"] = None if tipo is None else "externa" if tipo == "externo" else "clinica"
+        x["mapa"] = link
 
 
 # ── Concluir / cancelar à mão (também tarefas em atraso e de estadias já

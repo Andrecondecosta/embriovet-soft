@@ -256,3 +256,30 @@ def test_tarefas_dizem_se_a_egua_esta_na_clinica_ou_externa(client):
             )
         conn.commit()
     assert linha()["situacao"] == "externa"
+
+
+
+def test_localizacao_da_egua_externa(client):
+    # Ao criar a entrada externa fica com a morada do dono; muda-se na ficha; o mapa abre lá.
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO dono (nome, ativo, morada, codigo_postal, cidade) VALUES (%s, TRUE, 'Rua A 1', '7000-100', 'Évora') RETURNING id",
+                (f"{PREFIXO}Dono2",),
+            )
+            dono = cur.fetchone()[0]
+            cur.execute("INSERT INTO animais (nome, tipo, ativo, dono_id) VALUES (%s, 'egua', TRUE, %s) RETURNING id", (f"{PREFIXO}Ext", dono))
+            aid = cur.fetchone()[0]
+        conn.commit()
+    r = client.post("/api/estadias", json={
+        "animal_id": aid, "tipo_registo": "externo", "dono_id": dono,
+        "data_entrada": date.today().isoformat(), "motivo": "inseminacao",
+    })
+    assert r.status_code in (200, 201), r.text
+    loc = client.get(f"/api/animais/{aid}").json()["localizacao"]
+    assert loc["texto"] == "Rua A 1, 7000-100 Évora" and "destination=Rua%20A%201" in loc["link"]
+    eid = loc["estadia_id"]
+    assert client.put(f"/api/estadias/{eid}/localizacao", json={"texto": "Herdade X", "mapa": "não é mapa"}).status_code == 422
+    assert client.put(f"/api/estadias/{eid}/localizacao", json={"texto": "Herdade X", "mapa": "38.57, -7.91"}).status_code == 200
+    loc = client.get(f"/api/animais/{aid}").json()["localizacao"]
+    assert loc["texto"] == "Herdade X" and loc["link"].endswith("destination=38.57,-7.91")

@@ -24,9 +24,20 @@ export interface Animal {
   estadia_ativa: number | null;
   /** Tipo da entrada em aberto (estadia / visita / externo). */
   estadia_tipo: "estadia" | "visita" | "externo" | null;
+  /** Égua externa: onde está (texto, ponto no mapa) e o link para lá. */
+  localizacao?: Localizacao | null;
   estadia_inseminacao: { id: number; garanhao: string | null; data_entrada: string | null } | null;
 }
-export type AnimalIn = Omit<Animal, "id" | "ativo" | "estadia_ativa" | "estadia_tipo" | "estadia_inseminacao" | "proprietario" | "is_receptora">;
+export interface Localizacao {
+  estadia_id: number;
+  texto: string | null;
+  mapa: string | null;
+  link: string | null;
+}
+export type AnimalIn = Omit<
+  Animal,
+  "id" | "ativo" | "estadia_ativa" | "estadia_tipo" | "estadia_inseminacao" | "proprietario" | "is_receptora" | "localizacao"
+>;
 
 export const COMPORTAMENTOS = ["cio_ativo", "sem_cio", "anestro", "pos_ovulacao"] as const;
 export interface Registo {

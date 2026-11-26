@@ -25,6 +25,7 @@ from modules.db import get_connection
 from modules.repositories.settings_repo import usar_alojamentos
 from modules.pages.estadias_page import _carregar_estadias
 
+from backend.routers.localizacao import preencher_da_morada
 router = APIRouter(prefix="/api", tags=["estadias"])
 
 TipoRegisto = Literal["estadia", "visita", "externo"]
@@ -356,6 +357,8 @@ def criar(d: EstadiaIn, user: dict = Depends(get_current_user)):
                     ),
                 )
                 estadia_id = cur.fetchone()[0]
+                # Externa: a localização começa na morada do proprietário.
+                preencher_da_morada(cur, estadia_id)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -412,6 +415,7 @@ def mudar_tipo(estadia_id: int, d: MudarTipoIn, user: dict = Depends(get_current
                 "UPDATE estadias SET tipo_registo = %s, estado = %s, alojamento_id = %s WHERE id = %s",
                 (d.tipo_registo, ESTADO_INICIAL[d.tipo_registo], d.alojamento_id, estadia_id),
             )
+            preencher_da_morada(cur, estadia_id)
             cur.execute(
                 """INSERT INTO estadias_mudancas (estadia_id, data, de, para, alojamento_id, utilizador)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
