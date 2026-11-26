@@ -44,6 +44,7 @@ import {
   type Movimento,
   type PorFaturar,
 } from "./api";
+import { agruparPorGaranhao, garanhaoDe, type Troco } from "./porGaranhao";
 
 const ISO = "YYYY-MM-DD";
 
@@ -61,6 +62,17 @@ const antesDaEntrada = (l: PorFaturar) =>
   l.tipo === "armazenamento" && !!l.entrada_app && l.inicio < l.entrada_app;
 const nDias = (l: { inicio: string; fim: string }) =>
   dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
+
+/** Sémen: só os totais por garanhão (os lotes juntos), como na tabela do "Por faturar". */
+const soSemen = (linhas: PorFaturar[]) => linhas.length > 0 && linhas.every((l) => l.tipo === "armazenamento");
+type FilaSemen = Troco & { garanhao: string; i: number; n: number };
+function filasSemen(linhas: PorFaturar[]): FilaSemen[] {
+  return agruparPorGaranhao(linhas)
+    .sort((a, b) => a.garanhao.localeCompare(b.garanhao))
+    .flatMap((g) => g.trocos.map((tr, i) => ({ ...tr, garanhao: g.garanhao, i, n: g.trocos.length })));
+}
+const quantidade = (linhas: PorFaturar[]) => linhas.reduce((s, l) => s + l.quantidade, 0);
+const textoDiferenca = (d: number | null) => (d ? `${d > 0 ? "+" : "−"}${Math.abs(d)}` : "—");
 
 interface Grupo {
   chave: string;
@@ -278,7 +290,7 @@ export function ResumoFaturar({
       if (l)
         porDono
           .get(String(l.dono_id ?? "sem"))
-          ?.movimentos.push({ lote: l.descricao, m });
+          ?.movimentos.push({ lote: garanhaoDe(l), m });
     }
     for (const g of porDono.values()) {
       g.linhas.sort(
@@ -400,7 +412,9 @@ export function ResumoFaturar({
     />
   );
   const totalTexto = (g: Grupo) =>
-    t("web.billing.total_owner", { dias: g.dias + g.ds });
+    soSemen(g.linhas)
+      ? t("web.billing.total_straw_days", { q: quantidade(g.linhas) })
+      : t("web.billing.total_owner", { dias: g.dias + g.ds });
   const numero = (g: Grupo) => numeros[g.chave] ?? "";
   const mudarNumero = (g: Grupo, v: string) =>
     setNumeros((n) => ({ ...n, [g.chave]: v }));
@@ -456,7 +470,18 @@ export function ResumoFaturar({
                 </div>
               }
             >
-              {g.linhas.map((l) => (
+              {soSemen(g.linhas)
+                ? filasSemen(g.linhas).map((f) => (
+                    <List.Item
+                      key={`${f.garanhao}|${f.inicio}`}
+                      description={`${dataCurta(f.inicio)} – ${dataCurta(f.fim)} · ${t("web.billing.days", { count: f.dias })}`}
+                      extra={t("web.billing.straw_days", { count: f.quantidade })}
+                    >
+                      {f.garanhao} · {t("web.billing.straws", { count: f.palhetas })}
+                      {f.diferenca ? ` (${textoDiferenca(f.diferenca)})` : ""}
+                    </List.Item>
+                  ))
+                : g.linhas.map((l) => (
                 <div key={l.k}>
                   <List.Item
                     description={`${dataCurta(l.inicio)} – ${dataCurta(l.fim)}`}
@@ -654,6 +679,26 @@ export function ResumoFaturar({
                   )
                 }
               >
+                {soSemen(g.linhas) ? (
+                  <Table<FilaSemen>
+                    size="small"
+                    pagination={false}
+                    rowKey={(f) => `${f.garanhao}|${f.inicio}`}
+                    dataSource={filasSemen(g.linhas)}
+                    columns={[
+                      {
+                        title: t("label.garanhao"),
+                        onCell: (f) => ({ rowSpan: f.i === 0 ? f.n : 0 }),
+                        render: (_, f) => <Typography.Text strong>{f.garanhao}</Typography.Text>,
+                      },
+                      { title: t("web.billing.col.straws"), align: "right", render: (_, f) => f.palhetas },
+                      { title: t("web.billing.col.diff"), align: "right", render: (_, f) => textoDiferenca(f.diferenca) },
+                      { title: t("web.billing.col.period"), render: (_, f) => `${dataCurta(f.inicio)} – ${dataCurta(f.fim)}` },
+                      { title: t("web.billing.col.days"), align: "right", render: (_, f) => f.dias },
+                      { title: t("web.billing.col.straw_days"), align: "right", render: (_, f) => f.quantidade },
+                    ]}
+                  />
+                ) : (
                 <Table<LinhaResumo>
                   size="small"
                   pagination={false}
@@ -724,6 +769,7 @@ export function ResumoFaturar({
                     },
                   ]}
                 />
+                )}
                 {g.movimentos.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <Typography.Text strong style={{ fontSize: 12 }}>
@@ -882,6 +928,44 @@ function FolhaImpressao({
               {d?.nif && <div>{t("web.billing.nif", { nif: d.nif })}</div>}
               {tx.morada(d) && <div>{tx.morada(d)}</div>}
             </div>
+            {soSemen(g.linhas) ? (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {[
+                      t("label.garanhao"),
+                      t("web.billing.col.straws"),
+                      t("web.billing.col.diff"),
+                      t("web.billing.col.period"),
+                      t("web.billing.col.days"),
+                      t("web.billing.col.straw_days"),
+                    ].map((h) => (
+                      <th key={h} style={{ ...celula, textAlign: "left", background: "#f2f2f2" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasSemen(g.linhas).map((f) => (
+                    <tr key={`${f.garanhao}|${f.inicio}`}>
+                      {f.i === 0 && (
+                        <td style={{ ...celula, fontWeight: 700 }} rowSpan={f.n}>
+                          {f.garanhao}
+                        </td>
+                      )}
+                      <td style={{ ...celula, textAlign: "right" }}>{f.palhetas}</td>
+                      <td style={{ ...celula, textAlign: "right" }}>{textoDiferenca(f.diferenca)}</td>
+                      <td style={celula}>
+                        {dataCurta(f.inicio)} – {dataCurta(f.fim)}
+                      </td>
+                      <td style={{ ...celula, textAlign: "right" }}>{f.dias}</td>
+                      <td style={{ ...celula, textAlign: "right" }}>{f.quantidade}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
@@ -923,6 +1007,7 @@ function FolhaImpressao({
                 ))}
               </tbody>
             </table>
+            )}
             {g.movimentos.length > 0 && (
               <div style={{ marginTop: 12, fontSize: 12 }}>
                 <div style={{ fontWeight: 700 }}>
@@ -943,7 +1028,9 @@ function FolhaImpressao({
                 fontSize: 13,
               }}
             >
-              {t("web.billing.total_owner", { dias: g.dias + g.ds })}
+              {soSemen(g.linhas)
+                ? t("web.billing.total_straw_days", { q: quantidade(g.linhas) })
+                : t("web.billing.total_owner", { dias: g.dias + g.ds })}
             </div>
           </section>
         );

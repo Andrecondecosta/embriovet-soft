@@ -2196,3 +2196,5 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.billing.{_k}"] = _v
+for _lang, _v in zip(("pt-PT", "en", "fr", "de"), ("Total: {q} palhetas × dias", "Total: {q} straws × days", "Total : {q} paillettes × jours", "Summe: {q} Pailletten × Tage")):
+    WEB_TRANSLATIONS[_lang]["web.billing.total_straw_days"] = _v
