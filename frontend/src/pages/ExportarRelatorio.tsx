@@ -16,6 +16,8 @@ export interface Tabela {
   /** As que se podem pôr no ficheiro (inclui as do ecrã). */
   disponiveis: string[];
   linhas: Linha[];
+  /** Por que coluna se agrupam os totais ("Todos os proprietários": por proprietário). */
+  agrupar?: string;
 }
 /** Escolha enviada à API; sem ela sai o ficheiro de sempre. */
 export interface CorpoExportar {
@@ -72,9 +74,11 @@ function normalizar(s: string): string {
     .toLowerCase();
 }
 
-function igual(a: string[], b: string[]) {
-  return a.length === b.length && a.every((x) => b.includes(x));
+/** Mantém a ordem em que as colunas foram marcadas (as novas vão para o fim). */
+export function pelaOrdem(antes: string[], agora: string[]) {
+  return [...antes.filter((c) => agora.includes(c)), ...agora.filter((c) => !antes.includes(c))];
 }
+
 
 interface Props {
   aberto: boolean;
@@ -110,12 +114,9 @@ function useExportar(p: Props) {
       tabelas: Object.fromEntries(
         p.tabelas.map((tab) => {
           const gt = g?.tabelas?.[tab.titulo];
-          const colunas = gt?.colunas?.filter((c) => tab.disponiveis.includes(c)) ?? tab.colunas;
           const linhas: Linhas = selecionadas(tab).length ? "selecionadas" : "todas";
-          return [
-            tab.titulo,
-            { incluir: gt?.incluir ?? true, colunas: colunas.length ? colunas : tab.colunas, linhas, modo: gt?.modo ?? "linhas" },
-          ];
+          // Colunas começam todas desmarcadas: sai só o que se marcar, pela ordem em que se marca.
+          return [tab.titulo, { incluir: gt?.incluir ?? true, colunas: [], linhas, modo: gt?.modo ?? "linhas" }];
         }),
       ),
     });
@@ -130,27 +131,19 @@ function useExportar(p: Props) {
   const descarregar = async () => {
     if (!e) return;
     guardar(p.chave, e);
-    const alterado =
-      !e.resumo ||
-      p.tabelas.some((tab) => {
-        const et = e.tabelas[tab.titulo];
-        return !et.incluir || et.linhas !== "todas" || et.modo !== "linhas" || !igual(et.colunas, tab.colunas);
-      });
-    // Sem nada mudado sai o ficheiro de sempre (o PDF do garanhão, o stock completo…).
-    const corpo: CorpoExportar | undefined = alterado
-      ? {
-          formato: e.formato,
-          resumo: e.resumo && p.temResumo,
-          tabelas: p.tabelas
-            .filter((tab) => e.tabelas[tab.titulo].incluir)
-            .map((tab) => ({
-              titulo: tab.titulo,
-              colunas: e.tabelas[tab.titulo].colunas,
-              ids: ids(tab, e.tabelas[tab.titulo].linhas),
-              modo: e.tabelas[tab.titulo].modo,
-            })),
-        }
-      : undefined;
+    // Sai sempre exatamente o que está marcado (colunas pela ordem em que se marcaram).
+    const corpo: CorpoExportar = {
+      formato: e.formato,
+      resumo: e.resumo && p.temResumo,
+      tabelas: p.tabelas
+        .filter((tab) => e.tabelas[tab.titulo].incluir)
+        .map((tab) => ({
+          titulo: tab.titulo,
+          colunas: e.tabelas[tab.titulo].colunas,
+          ids: ids(tab, e.tabelas[tab.titulo].linhas),
+          modo: e.tabelas[tab.titulo].modo,
+        })),
+    };
     await p.exportar(e.formato, corpo);
     notifySuccess(t("web.reports.downloaded"));
     p.fechar();
@@ -165,6 +158,23 @@ function useExportar(p: Props) {
     p.tabelas.some((tab) => e.tabelas[tab.titulo].incluir && e.tabelas[tab.titulo].linhas === "selecionadas" && !selecionadas(tab).length);
 
   return { e, setE, mudar, selecionadas, descarregar, vazio, faltamLinhas };
+}
+
+/** Totais por cavalo ou, em "Todos os proprietários", por proprietário. */
+function rotuloTotais(tab: Tabela, chave: "show_lines" | "show_totals") {
+  return `web.reports.export.${chave}${tab.agrupar === "proprietario_nome" ? "_owner" : ""}`;
+}
+
+/** O que vai sair no ficheiro, pela ordem em que se marcou. */
+function VaiSair({ colunas }: { colunas: string[] }) {
+  const t = useT();
+  return (
+    <div style={{ marginTop: 6, fontSize: 12, color: colunas.length ? "#555" : "#b45309" }}>
+      {colunas.length
+        ? `${t("web.reports.export.will_export")}: ${colunas.map((c) => t(`web.reports.col.${c}`)).join(" · ")}`
+        : t("web.reports.export.no_columns")}
+    </div>
+  );
 }
 
 export function ExportarRelatorio(p: Props) {
@@ -218,11 +228,15 @@ function ExportarDesktop(p: Props) {
                   </Checkbox>
                 }
                 extra={
-                  et.incluir &&
-                  !igual(et.colunas, tab.colunas) && (
-                    <Button size="small" type="link" onClick={() => x.mudar(tab.titulo, { colunas: tab.colunas })}>
-                      {t("web.reports.export.reset")}
-                    </Button>
+                  et.incluir && (
+                    <Space size={0}>
+                      <Button size="small" type="link" onClick={() => x.mudar(tab.titulo, { colunas: tab.colunas })}>
+                        {t("web.reports.export.screen_columns")}
+                      </Button>
+                      <Button size="small" type="link" disabled={!et.colunas.length} onClick={() => x.mudar(tab.titulo, { colunas: [] })}>
+                        {t("web.reports.export.clear_columns")}
+                      </Button>
+                    </Space>
                   )
                 }
                 styles={{ body: et.incluir ? undefined : { display: "none" } }}
@@ -233,9 +247,10 @@ function ExportarDesktop(p: Props) {
                     <Checkbox.Group
                       style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", rowGap: 4, marginTop: 4 }}
                       value={et.colunas}
-                      onChange={(v) => x.mudar(tab.titulo, { colunas: v as string[] })}
+                      onChange={(v) => x.mudar(tab.titulo, { colunas: pelaOrdem(et.colunas, v as string[]) })}
                       options={tab.disponiveis.map((c) => ({ value: c, label: t(`web.reports.col.${c}`) }))}
                     />
+                    <VaiSair colunas={et.colunas} />
                   </div>
                   <div>
                     <Typography.Text type="secondary">{t("web.reports.export.rows")}</Typography.Text>
@@ -268,8 +283,8 @@ function ExportarDesktop(p: Props) {
                           value={et.modo}
                           onChange={(ev) => x.mudar(tab.titulo, { modo: ev.target.value })}
                           options={[
-                            { value: "linhas", label: t("web.reports.export.show_lines") },
-                            { value: "totais", label: t("web.reports.export.show_totals") },
+                            { value: "linhas", label: t(rotuloTotais(tab, "show_lines")) },
+                            { value: "totais", label: t(rotuloTotais(tab, "show_totals")) },
                           ]}
                         />
                       </div>
@@ -390,14 +405,19 @@ function ExportarMobile(p: Props) {
                   </MCheckbox>
                   {et.incluir && (
                     <>
-                      <div style={{ color: "#999", margin: "8px 0 6px" }}>{t("web.reports.export.columns")}</div>
+                      <div style={{ color: "#999", margin: "8px 0 6px", display: "flex", gap: 12 }}>
+                        <span style={{ flex: 1 }}>{t("web.reports.export.columns")}</span>
+                        <a onClick={() => x.mudar(tab.titulo, { colunas: tab.colunas })}>{t("web.reports.export.screen_columns")}</a>
+                        {et.colunas.length > 0 && <a onClick={() => x.mudar(tab.titulo, { colunas: [] })}>{t("web.reports.export.clear_columns")}</a>}
+                      </div>
                       <Selector
                         multiple
                         columns={2}
                         value={et.colunas}
-                        onChange={(v) => x.mudar(tab.titulo, { colunas: v })}
+                        onChange={(v) => x.mudar(tab.titulo, { colunas: pelaOrdem(et.colunas, v) })}
                         options={tab.disponiveis.map((c) => ({ value: c, label: t(`web.reports.col.${c}`) }))}
                       />
+                      <VaiSair colunas={et.colunas} />
                       <div style={{ color: "#999", margin: "8px 0 6px" }}>{t("web.reports.export.rows")}</div>
                       <Selector
                         columns={1}
@@ -425,8 +445,8 @@ function ExportarMobile(p: Props) {
                             value={[et.modo]}
                             onChange={(v) => v[0] && x.mudar(tab.titulo, { modo: v[0] as Modo })}
                             options={[
-                              { value: "linhas", label: t("web.reports.export.show_lines") },
-                              { value: "totais", label: t("web.reports.export.show_totals") },
+                              { value: "linhas", label: t(rotuloTotais(tab, "show_lines")) },
+                              { value: "totais", label: t(rotuloTotais(tab, "show_totals")) },
                             ]}
                           />
                         </>

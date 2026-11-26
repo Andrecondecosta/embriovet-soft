@@ -157,6 +157,17 @@ def test_exportar_todos(client, modo, formato, tipo):
             assert "\nProprietário,Garanhão," in texto and "Total geral," in texto
 
 
+def test_exportar_colunas_pela_ordem_escolhida(client):
+    # Sai só o que se marcou, pela ordem em que se marcou (ex.: Proprietário, Palhetas, Garanhão).
+    params = {"modo": "proprietario", "todos": True}
+    tab = client.get("/api/relatorios", params=params).json()["tabelas"][0]
+    escolha = {"formato": "csv", "resumo": False, "tabelas": [{
+        "titulo": tab["titulo"], "colunas": ["proprietario_nome", "existencia_atual", "garanhao_nome"], "ids": None, "modo": "linhas",
+    }]}
+    texto = client.post("/api/relatorios/exportar", params=params, json=escolha).content.decode("utf-8-sig")
+    assert "Proprietário,Palhetas,Garanhão" in texto.splitlines()
+
+
 def test_exportar_so_lotes_e_colunas_escolhidos(client):
     r = client.get("/api/relatorios", params={"modo": "historico", "hist": "stock"}).json()
     tab = r["tabelas"][0]
@@ -216,7 +227,8 @@ def test_exportar_por_cavalo_com_totais(client, modo):
         assert corpo[0] == "Garanhão,Lotes,Palhetas"
         assert len(corpo) == 1 + len({l["garanhao_nome"] for l in linhas}) + 1
     else:
-        assert corpo[0] == "Garanhão,Proprietário,Palhetas"
+        # Pela ordem em que as colunas foram escolhidas.
+        assert corpo[0] == "Proprietário,Garanhão,Palhetas"
         assert sum(1 for c in corpo if c.startswith("Total ") and not c.startswith("Total geral")) == len({l["garanhao_nome"] for l in linhas})
 
 

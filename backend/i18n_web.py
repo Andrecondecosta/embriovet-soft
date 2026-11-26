@@ -2170,3 +2170,15 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][_k] = _v
+for _k, *_txt in [
+    ("screen_columns", "Só as do ecrã", "Screen columns", "Colonnes de l’écran", "Spalten der Ansicht"),
+    ("clear_columns", "Desmarcar todas", "Untick all", "Tout décocher", "Alle abwählen"),
+    ("will_export", "Vai sair", "Will export", "Sera exporté", "Wird exportiert"),
+    ("no_columns", "Nenhuma coluna marcada: esta parte não sai no ficheiro.", "No columns ticked: this part is left out of the file.",
+     "Aucune colonne cochée : cette partie ne sort pas dans le fichier.", "Keine Spalte gewählt: dieser Teil fehlt in der Datei."),
+    ("show_lines_owner", "Lote a lote, com o total de cada proprietário", "Lot by lot, with each owner's total",
+     "Lot par lot, avec le total par propriétaire", "Charge für Charge, mit Summe pro Besitzer"),
+    ("show_totals_owner", "Só os totais de cada proprietário", "Only each owner's totals", "Seulement les totaux par propriétaire", "Nur Summen pro Besitzer"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.reports.export.{_k}"] = _v

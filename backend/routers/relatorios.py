@@ -411,7 +411,8 @@ def _aplicar_escolha(r: dict, e: Escolha) -> dict:
     tabelas = []
     for et in e.tabelas:
         tab = por_titulo.get(et.titulo)
-        colunas = [c for c in (tab or {}).get("disponiveis", []) if c in et.colunas]
+        # Pela ordem em que se marcaram (só as que existem nesta tabela).
+        colunas = [c for c in et.colunas if c in (tab or {}).get("disponiveis", [])]
         if not tab or not colunas:
             continue
         ids = set(et.ids) if et.ids is not None else None
@@ -459,10 +460,8 @@ def _com_totais(tab: dict) -> tuple[list[str], list[list], set[int]]:
         total = ([_t("web.reports.total_all")] if cavalo else []) + [len(linhas)] + [soma(linhas, c) for c in somas]
         return cab, saida + [total], {len(saida)}
 
-    # Lote a lote: o cavalo vai à frente (é por ele que se agrupa) e o texto
-    # do total fica na primeira coluna que não é número.
-    if cavalo in colunas:
-        colunas = [cavalo] + [c for c in colunas if c != cavalo]
+    # Lote a lote, pela ordem das colunas escolhida; o texto do total fica na
+    # primeira coluna que não é número.
     rotulo = next((c for c in colunas if c not in somas), None)
 
     def linha_total(texto, grupo):
