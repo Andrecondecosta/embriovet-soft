@@ -280,6 +280,18 @@ def test_primeira_fatura_pode_comecar_antes_da_entrada_sem_mudar_o_lote(ctx):
     assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 2/2026", HOJE.isoformat(), [outra])).status_code == 409
 
 
+def test_antes_da_entrada_mas_nunca_antes_da_producao(ctx):
+    # O lote foi produzido há 20 dias e entrou na app há 10: não se fatura antes da produção.
+    c = ctx["fat"]
+    _exec("UPDATE estoque_dono SET data_embriovet = %s WHERE id = %s", (d(20).isoformat(), ctx["lote"]))
+    params = {"inicio": "1990-01-01", "fim": HOJE.isoformat(), "dono_id": ctx["dono"], "tipo": "armazenamento"}
+    l = c.get("/api/faturacao/por-faturar", params=params).json()[0]
+    antes = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": d(30).isoformat(), "fim": l["fim"]}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 9/2026", HOJE.isoformat(), [antes])).status_code == 409
+    desde = {**antes, "inicio": d(20).isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 9/2026", HOJE.isoformat(), [desde])).status_code == 200
+
+
 def test_saida_com_dias_ja_faturados_avisa(ctx):
     # A estadia aberta foi faturada até hoje; a saída verdadeira foi há 2 dias.
     c = ctx["fat"]

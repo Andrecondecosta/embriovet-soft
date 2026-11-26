@@ -61,6 +61,13 @@ const primeiraDoLote = (l: PorFaturar) =>
 /** Linha (já ajustada ao período) que começa antes da entrada na app. */
 const antesDaEntrada = (l: PorFaturar) =>
   l.tipo === "armazenamento" && !!l.entrada_app && l.inicio < l.entrada_app;
+/** Data de produção em "AAAA-MM-DD" (na base é texto livre). */
+const diaProducao = (v?: string | null): string | null => {
+  const x = (v ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(x)) return x.slice(0, 10);
+  const m = x.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+};
 const nDias = (l: { inicio: string; fim: string }) =>
   dayjs(l.fim).diff(dayjs(l.inicio), "day") + 1;
 
@@ -186,9 +193,13 @@ export function ResumoFaturar({
       if (porLinha[k]) [inicio, fim] = porLinha[k];
       else if (periodo) {
         const [de, ate] = [periodo[0].format(ISO), periodo[1].format(ISO)];
+        // Antes da entrada na app (primeira fatura), mas nunca antes da produção.
+        const prod = diaProducao(l.data_producao);
         inicio =
           primeiraDoLote(l) && de < l.inicio
-            ? de
+            ? prod && prod > de && prod < l.inicio
+              ? prod
+              : de
             : l.inicio > de
               ? l.inicio
               : de;

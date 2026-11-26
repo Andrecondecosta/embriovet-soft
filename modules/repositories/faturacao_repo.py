@@ -19,7 +19,7 @@ Regras de contagem:
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from modules.db import get_connection
 
@@ -249,6 +249,19 @@ class JaFaturado(Exception):
     pass
 
 
+def dia_producao(v) -> date | None:
+    """Data de produção do lote (texto livre na base: "AAAA-MM-DD" ou "DD/MM/AAAA")."""
+    if isinstance(v, date):
+        return v
+    texto = str(v or "").strip()[:10]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(texto, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
 def _palhetas_fixas(item: dict, a: date, b: date) -> int | None:
     """Palhetas do troço, se forem as mesmas em todos os dias (o ecrã manda
     sempre troços assim); senão None (fica só o total palhetas × dia)."""
@@ -287,6 +300,8 @@ def faturar(faturas: list[dict], utilizador: str) -> int:
                         # não muda; fica só nesta linha faturada.
                         l["tipo"] == "armazenamento" and it["limite"][1] == b and a < it["limite"][0]
                         and not _faturados(cur, "armazenamento", [l["ref_id"]]).get(l["ref_id"])
+                        # …mas nunca antes de o sémen ser produzido.
+                        and not ((prod := dia_producao(it.get("data_producao"))) and a < prod < it["limite"][0])
                     ):
                         # Fora das datas da estadia/lote (ou ainda no futuro).
                         raise JaFaturado()

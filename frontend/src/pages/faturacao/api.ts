@@ -20,6 +20,8 @@ export interface PorFaturar {
   // Lote: as palhetas deste troço (a linha divide-se quando mudam).
   local?: string | null;
   garanhao?: string | null;
+  /** Data de produção do lote (texto: "AAAA-MM-DD" ou "DD/MM/AAAA"). */
+  data_producao?: string | null;
   palhetas: number | null;
   /** Dia em que o lote entrou na app. */
   entrada_app?: string;
