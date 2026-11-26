@@ -2164,3 +2164,9 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang].setdefault(_k, _v)
+for _k, *_txt in [
+    ("web.reports.all_stallions", "Todos os garanhões", "All stallions", "Tous les étalons", "Alle Hengste"),
+    ("web.reports.all_owners", "Todos os proprietários", "All owners", "Tous les propriétaires", "Alle Besitzer"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][_k] = _v

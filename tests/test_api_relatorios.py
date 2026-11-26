@@ -126,6 +126,37 @@ def test_exportar_todos_os_relatorios(client, opcoes, modo, formato, tipo):
 
 
 
+def test_todos_os_garanhoes_e_proprietarios(client):
+    # "Todos": um só relatório com tudo; o total bate com o stock completo.
+    completo = client.get("/api/relatorios", params={"modo": "historico", "hist": "stock"}).json()["tabelas"][0]
+    total = sum(l["existencia_atual"] or 0 for l in completo["linhas"])
+    g = client.get("/api/relatorios", params={"modo": "garanhao", "todos": True}).json()
+    assert g["tabelas"][0]["colunas"][0] == "garanhao_nome"
+    assert g["kpis"][0] == ["reports.kpi.straws_stock", total]
+    p = client.get("/api/relatorios", params={"modo": "proprietario", "todos": True}).json()
+    assert p["tabelas"][0]["colunas"][0] == "proprietario_nome"
+    assert p["kpis"][0] == ["reports.kpi.straws_stock", total]
+    # O filtro por garanhão continua a funcionar em "Todos os proprietários".
+    if p["filtros"]["gar"]:
+        gar = p["filtros"]["gar"][0]
+        f = client.get("/api/relatorios", params={"modo": "proprietario", "todos": True, "f_gar": [gar]}).json()
+        assert {l["garanhao_nome"] for l in f["tabelas"][0]["linhas"]} <= {gar}
+
+
+@pytest.mark.parametrize("formato, tipo", [("pdf", "application/pdf"), ("csv", "text/csv"), ("xlsx", "spreadsheetml")])
+@pytest.mark.parametrize("modo", ["garanhao", "proprietario"])
+def test_exportar_todos(client, modo, formato, tipo):
+    r = client.get("/api/relatorios/exportar", params={"modo": modo, "todos": True, "formato": formato})
+    assert r.status_code == 200, r.text
+    assert tipo in r.headers["content-type"] and r.content
+    if formato == "csv":
+        texto = r.content.decode("utf-8-sig")
+        assert ("Todos os garanhões" if modo == "garanhao" else "Todos os proprietários") in texto
+        if modo == "proprietario":
+            # Uma só tabela com a coluna Proprietário à frente e o total geral.
+            assert "\nProprietário,Garanhão," in texto and "Total geral," in texto
+
+
 def test_exportar_so_lotes_e_colunas_escolhidos(client):
     r = client.get("/api/relatorios", params={"modo": "historico", "hist": "stock"}).json()
     tab = r["tabelas"][0]

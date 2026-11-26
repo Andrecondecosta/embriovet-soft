@@ -25,6 +25,8 @@ import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
 import { ExportarRelatorio, type CorpoExportar, type Formato, type Tabela } from "./ExportarRelatorio";
 
+// "Todos" os garanhões / proprietários (no endereço; à API vai como `todos=true`).
+const TODOS = "*";
 type Modo = "garanhao" | "proprietario" | "contentor" | "historico";
 type Hist = "insem" | "transf_int" | "transf_ext" | "stock";
 type FiltroChave = "prop" | "gar" | "can" | "and";
@@ -86,8 +88,14 @@ function useRelatorio() {
   const contentor = params.get("c") ?? (opcoes.data?.contentores[0] ? String(opcoes.data.contentores[0].id) : null);
 
   const consulta = new URLSearchParams({ modo });
-  if (modo === "garanhao" && garanhao) consulta.set("garanhao", garanhao);
-  if (modo === "proprietario" && proprietario) consulta.set("proprietario", proprietario);
+  if (modo === "garanhao" && garanhao) {
+    if (garanhao === TODOS) consulta.set("todos", "true");
+    else consulta.set("garanhao", garanhao);
+  }
+  if (modo === "proprietario" && proprietario) {
+    if (proprietario === TODOS) consulta.set("todos", "true");
+    else consulta.set("proprietario", proprietario);
+  }
   if (modo === "contentor" && contentor) consulta.set("contentor", contentor);
   if (modo === "historico") consulta.set("hist", hist);
   if (inicio) consulta.set("inicio", inicio);
@@ -211,7 +219,7 @@ function RelatoriosDesktop({ r }: { r: R }) {
         style={{ width: 280 }}
         value={r.garanhao ?? undefined}
         onChange={(v) => r.escolher("g", v)}
-        options={o.garanhoes.map((g) => ({ value: g, label: g }))}
+        options={[{ value: TODOS, label: t("web.reports.all_stallions") }, ...o.garanhoes.map((g) => ({ value: g, label: g }))]}
         placeholder={t("reports.select_stallion")}
       />
     ) : r.modo === "proprietario" ? (
@@ -221,7 +229,7 @@ function RelatoriosDesktop({ r }: { r: R }) {
         style={{ width: 280 }}
         value={r.proprietario ?? undefined}
         onChange={(v) => r.escolher("p", v)}
-        options={o.proprietarios.map((p) => ({ value: String(p.id), label: p.nome }))}
+        options={[{ value: TODOS, label: t("web.reports.all_owners") }, ...o.proprietarios.map((p) => ({ value: String(p.id), label: p.nome }))]}
         placeholder={t("reports.select_owner")}
       />
     ) : r.modo === "contentor" ? (
@@ -374,7 +382,7 @@ function RelatoriosMobile({ r }: { r: R }) {
               titulo={t("reports.select_stallion")}
               value={r.garanhao}
               onChange={(v) => r.escolher("g", v)}
-              opcoes={o.garanhoes.map((g) => ({ value: g, label: g }))}
+              opcoes={[{ value: TODOS, label: t("web.reports.all_stallions") }, ...o.garanhoes.map((g) => ({ value: g, label: g }))]}
             />
           </List.Item>
         )}
@@ -384,7 +392,7 @@ function RelatoriosMobile({ r }: { r: R }) {
               titulo={t("reports.select_owner")}
               value={r.proprietario}
               onChange={(v) => r.escolher("p", v)}
-              opcoes={o.proprietarios.map((p) => ({ value: String(p.id), label: p.nome }))}
+              opcoes={[{ value: TODOS, label: t("web.reports.all_owners") }, ...o.proprietarios.map((p) => ({ value: String(p.id), label: p.nome }))]}
             />
           </List.Item>
         )}

@@ -118,12 +118,15 @@ class Pedido:
         f_gar: list[str] = Query(default=[]),
         f_can: list[int] = Query(default=[]),
         f_and: list[int] = Query(default=[]),
+        todos: bool = False,
     ):
         if inicio and fim and inicio > fim:
             raise _erro(422, "reports.invalid_period")
         self.modo, self.garanhao, self.proprietario, self.contentor, self.hist = modo, garanhao, proprietario, contentor, hist
         self.inicio, self.fim = inicio, fim
         self.f_prop, self.f_gar, self.f_can, self.f_and = f_prop, f_gar, f_can, f_and
+        # "Todos" os garanhões / proprietários (num só relatório e ficheiro).
+        self.todos = todos
 
 
 def _dados(p: Pedido) -> dict:
@@ -143,11 +146,14 @@ def _dados(p: Pedido) -> dict:
 def _por_garanhao(p: Pedido, d: dict) -> dict:
     g = p.garanhao
     stock, insem, transf, ext = d["stock"], d["insem"], d["transf"], d["transf_ext"]
-    base = stock[stock["garanhao_nome"] == g] if not stock.empty else pd.DataFrame()
+    if p.todos:
+        base, i, tr, te = stock, insem, transf, ext
+    else:
+        base = stock[stock["garanhao_nome"] == g] if not stock.empty else pd.DataFrame()
+        i = insem[insem["garanhao_nome"] == g] if not insem.empty else pd.DataFrame()
+        tr = transf[transf["garanhao"] == g] if not transf.empty else pd.DataFrame()
+        te = ext[ext["garanhao"] == g] if not ext.empty else pd.DataFrame()
     s = base[base["proprietario_nome"].isin(p.f_prop)] if p.f_prop and not base.empty else base
-    i = insem[insem["garanhao_nome"] == g] if not insem.empty else pd.DataFrame()
-    tr = transf[transf["garanhao"] == g] if not transf.empty else pd.DataFrame()
-    te = ext[ext["garanhao"] == g] if not ext.empty else pd.DataFrame()
     return {
         "s": s, "i": i, "tr": tr, "te": te,
         "filtros": {"prop": _unicos(base, "proprietario_nome")},
@@ -162,11 +168,14 @@ def _por_garanhao(p: Pedido, d: dict) -> dict:
 
 def _por_proprietario(p: Pedido, d: dict) -> dict:
     stock, insem, transf = d["stock"], d["insem"], d["transf"]
-    base = stock[stock["dono_id"] == p.proprietario] if not stock.empty else pd.DataFrame()
+    if p.todos:
+        base, i, t_in, t_out = stock, insem, transf, transf
+    else:
+        base = stock[stock["dono_id"] == p.proprietario] if not stock.empty else pd.DataFrame()
+        i = insem[insem["dono_id"] == p.proprietario] if not insem.empty else pd.DataFrame()
+        t_in = transf[transf["proprietario_destino_id"] == p.proprietario] if not transf.empty else pd.DataFrame()
+        t_out = transf[transf["proprietario_origem_id"] == p.proprietario] if not transf.empty else pd.DataFrame()
     s = base[base["garanhao_nome"].isin(p.f_gar)] if p.f_gar and not base.empty else base
-    i = insem[insem["dono_id"] == p.proprietario] if not insem.empty else pd.DataFrame()
-    t_in = transf[transf["proprietario_destino_id"] == p.proprietario] if not transf.empty else pd.DataFrame()
-    t_out = transf[transf["proprietario_origem_id"] == p.proprietario] if not transf.empty else pd.DataFrame()
     return {
         "s": s,
         "filtros": {"gar": _unicos(base, "garanhao_nome")},
@@ -227,25 +236,35 @@ def _montar(p: Pedido, d: dict | None = None) -> dict:
     """O relatório que o ecrã mostra — e de onde saem os ficheiros."""
     d = d if d is not None else _dados(p)
     if p.modo == "garanhao":
-        if not p.garanhao:
+        if not p.garanhao and not p.todos:
             return VAZIO
         r = _por_garanhao(p, d)
+        # Todos: a coluna do garanhão vai à frente (os totais são por garanhão).
+        cg, ci = (["garanhao_nome"] + COL_STOCK_G, ["garanhao_nome"] + COL_INSEM_G) if p.todos else (COL_STOCK_G, COL_INSEM_G)
         return {
             "kpis": r["kpis"],
             "filtros": r["filtros"],
-            "titulo": ("reports.mode.stallion", p.garanhao),
+            "titulo": ("reports.mode.stallion", "web.reports.all_stallions" if p.todos else p.garanhao),
             "tabelas": [
-                _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), COL_STOCK_G, EXTRA_STOCK),
-                _tabela("reports.section.inseminations", _ordenar(r["i"], "data_inseminacao"), COL_INSEM_G, EXTRA_INSEM),
+                _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), cg, EXTRA_STOCK),
+                _tabela("reports.section.inseminations", _ordenar(r["i"], "data_inseminacao"), ci, EXTRA_INSEM),
             ],
         }
     if p.modo == "proprietario":
-        if p.proprietario is None:
+        if p.proprietario is None and not p.todos:
             return VAZIO
         r = _por_proprietario(p, d)
+        if p.todos:
+            # Uma só tabela com a coluna Proprietário; totais por proprietário.
+            tab = _tabela("reports.section.stock", _ordenar(r["s"], "existencia_atual"), ["proprietario_nome"] + COL_STOCK_P, EXTRA_STOCK)
+            return {
+                "kpis": r["kpis"],
+                "filtros": r["filtros"],
+                "titulo": ("reports.mode.owner", "web.reports.all_owners"),
+                "tabelas": [tab | {"agrupar": "proprietario_nome"}],
+            }
         props = carregar_proprietarios()
         nome = props.loc[props["id"] == p.proprietario, "nome"]
-        i = d["insem"][d["insem"]["dono_id"] == p.proprietario] if not d["insem"].empty else pd.DataFrame()
         return {
             "kpis": r["kpis"],
             "filtros": r["filtros"],
@@ -310,7 +329,7 @@ TIPOS = {
 @router.get("/exportar")
 def exportar(formato: Literal["csv", "pdf", "xlsx"], p: Pedido = Depends(), _user: dict = Depends(get_current_user)):
     d = _dados(p)
-    if p.modo == "garanhao" and p.garanhao and formato in ("csv", "pdf"):
+    if p.modo == "garanhao" and p.garanhao and not p.todos and formato in ("csv", "pdf"):
         r = _por_garanhao(p, d)
         if formato == "pdf":
             pdf = gerar_pdf_garanhao(p.garanhao, r["s"], r["i"], r["tr"], r["te"])
@@ -329,7 +348,7 @@ def exportar(formato: Literal["csv", "pdf", "xlsx"], p: Pedido = Depends(), _use
                 csv += f"\n{_t(chave)}:\n{df.to_csv(index=False)}\n"
         return _ficheiro(csv.encode("utf-8"), f"garanhao_{p.garanhao}.csv", TIPOS["csv"])
 
-    if p.modo == "proprietario" and p.proprietario is not None and formato == "csv":
+    if p.modo == "proprietario" and p.proprietario is not None and not p.todos and formato == "csv":
         r = _por_proprietario(p, d)
         props = carregar_proprietarios()
         nome = props.loc[props["id"] == p.proprietario, "nome"]
@@ -415,7 +434,8 @@ def _com_totais(tab: dict) -> tuple[list[str], list[list], set[int]]:
     do ficheiro. Lote a lote: ordenado por cavalo, com o total de cada
     cavalo e o total geral no fim. Só totais: uma linha por cavalo."""
     colunas, linhas = tab["colunas"], tab["linhas"]
-    cavalo = next((c for c in COL_CAVALO if c in tab.get("disponiveis", colunas)), None)
+    # Agrupa por cavalo (ou pelo que a tabela pedir, ex.: proprietário em "Todos").
+    cavalo = tab.get("agrupar") or next((c for c in COL_CAVALO if c in tab.get("disponiveis", colunas)), None)
     somas = [c for c in colunas if c in SOMAVEIS]
     if tab.get("modo") == "totais" and not somas:
         somas = [c for c in tab.get("disponiveis", []) if c in SOMAVEIS][:1]
