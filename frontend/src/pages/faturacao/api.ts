@@ -19,6 +19,7 @@ export interface PorFaturar {
   saida?: string | null;
   // Lote: as palhetas deste troço (a linha divide-se quando mudam).
   local?: string | null;
+  garanhao?: string | null;
   palhetas: number | null;
   /** Dia em que o lote entrou na app. */
   entrada_app?: string;

@@ -2182,3 +2182,17 @@ for _k, *_txt in [
 ]:
     for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
         WEB_TRANSLATIONS[_lang][f"web.reports.export.{_k}"] = _v
+for _k, *_txt in [
+    ("col.diff", "Diferença", "Change", "Différence", "Änderung"),
+    ("col.straw_days", "Palhetas × dias", "Straws × days", "Paillettes × jours", "Pailletten × Tage"),
+    ("semen_total", "{n} garanhões · Total: {q} palhetas × dias", "{n} stallions · Total: {q} straws × days",
+     "{n} étalons · Total : {q} paillettes × jours", "{n} Hengste · Summe: {q} Pailletten × Tage"),
+    ("semen_selected", "{n} garanhões escolhidos · {q} palhetas × dias", "{n} stallions selected · {q} straws × days",
+     "{n} étalons choisis · {q} paillettes × jours", "{n} Hengste gewählt · {q} Pailletten × Tage"),
+    ("lots_of", "Lotes de {name}", "Lots of {name}", "Lots de {name}", "Chargen von {name}"),
+    ("n_lots", "{count} lotes", "{count} lots", "{count} lots", "{count} Chargen"),
+    ("n_lots_one", "{count} lote", "{count} lot", "{count} lot", "{count} Charge"),
+    ("total_label", "Total", "Total", "Total", "Summe"),
+]:
+    for _lang, _v in zip(("pt-PT", "en", "fr", "de"), _txt):
+        WEB_TRANSLATIONS[_lang][f"web.billing.{_k}"] = _v

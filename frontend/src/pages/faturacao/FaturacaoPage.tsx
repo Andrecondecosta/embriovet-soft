@@ -11,6 +11,7 @@ import {
   Flex,
   Input,
   Modal,
+  Popover,
   Segmented,
   Row,
   Select,
@@ -62,6 +63,7 @@ import {
   type TipoFat,
 } from "./api";
 
+import { agruparPorGaranhao, type GrupoGaranhao, type Troco } from "./porGaranhao";
 const TABS = ["atraso", "anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
 // Primeiro ano do quadro "Por ano" (início da faturação na app); cada ano
@@ -295,6 +297,7 @@ function PorFaturarTab() {
   const isMobile = useIsMobile();
   const errorMessage = useErrorMessage();
   const tx = useTextos();
+  const textoTroco = useTextoTroco();
   const p = usePeriodo();
   const { tipo } = useArea();
   const [pesquisa, setPesquisa] = useState("");
@@ -306,15 +309,42 @@ function PorFaturarTab() {
     const s = pesquisa.trim().toLowerCase();
     return (q.data ?? []).filter((l) => !s || `${l.dono_nome ?? ""} ${l.descricao}`.toLowerCase().includes(s));
   }, [q.data, pesquisa]);
+  // Sémen: por garanhão (os lotes juntos, com o total de palhetas); escolhe-se o garanhão.
+  const semen = tipo === "armazenamento";
+  const grupos = useMemo(() => (semen ? agruparPorGaranhao(linhas) : []), [semen, linhas]);
   // Só contam as escolhidas que ainda estão na lista (o período/filtro pode ter mudado).
-  const escolhidas = linhas.filter((l) => sel.includes(chave(l)));
+  const gruposEscolhidos = grupos.filter((g) => sel.includes(g.chave));
+  const escolhidas = semen ? gruposEscolhidos.flatMap((g) => g.lotes) : linhas.filter((l) => sel.includes(chave(l)));
   const dias = totalDias(escolhidas.length ? escolhidas : linhas);
-  const resumo = escolhidas.length
-    ? t("web.billing.summary", { linhas: escolhidas.length, dias })
-    : t("web.billing.total", { dias });
+  const contaGrupos = gruposEscolhidos.length ? gruposEscolhidos : grupos;
+  const resumo = semen
+    ? t(gruposEscolhidos.length ? "web.billing.semen_selected" : "web.billing.semen_total", {
+        n: contaGrupos.length,
+        q: contaGrupos.reduce((s, g) => s + g.quantidade, 0),
+      })
+    : escolhidas.length
+      ? t("web.billing.summary", { linhas: escolhidas.length, dias })
+      : t("web.billing.total", { dias });
 
   const exportar = () =>
-    baixarCsv(
+    semen
+      ? baixarCsv(
+          `por-faturar-semen_${p.filtro.inicio}_${p.filtro.fim}.csv`,
+          [
+            t("label.owner"),
+            t("label.garanhao"),
+            t("web.billing.col.straws"),
+            t("web.billing.col.diff"),
+            t("web.billing.col.period"),
+            "",
+            t("web.billing.col.days"),
+            t("web.billing.col.straw_days"),
+          ],
+          grupos.flatMap((g) =>
+            g.trocos.map((tr) => [seguro(tx.dono(g)), seguro(g.garanhao), tr.palhetas, tr.diferenca ?? "", tr.inicio, tr.fim, tr.dias, tr.quantidade]),
+          ),
+        )
+      : baixarCsv(
       `por-faturar_${p.filtro.inicio}_${p.filtro.fim}.csv`,
       [t("label.owner"), t("web.billing.col.what"), t("web.billing.type.all"), t("web.billing.col.period"), "", t("web.billing.col.straws"), t("web.billing.col.days"), t("web.billing.col.qty")],
       linhas.map((l) => [
@@ -357,6 +387,29 @@ function PorFaturarTab() {
           </div>
         ) : !linhas.length ? (
           <ErrorBlock status="empty" title={t("web.billing.empty_pending")} description="" />
+        ) : semen ? (
+          <MCheckbox.Group value={sel} onChange={(v) => setSel(v as string[])}>
+            <List>
+              {[...grupos]
+                .sort((a, b) => tx.dono(a).localeCompare(tx.dono(b)) || a.garanhao.localeCompare(b.garanhao))
+                .map((g) => (
+                  <List.Item
+                    key={g.chave}
+                    prefix={<MCheckbox value={g.chave} />}
+                    description={
+                      <>
+                        {tx.dono(g)}
+                        {g.trocos.map((tr) => (
+                          <div key={tr.inicio}>{textoTroco(tr)}</div>
+                        ))}
+                      </>
+                    }
+                  >
+                    {g.garanhao}
+                  </List.Item>
+                ))}
+            </List>
+          </MCheckbox.Group>
         ) : (
           <MCheckbox.Group value={sel} onChange={(v) => setSel(v as string[])}>
             <List>
@@ -396,6 +449,9 @@ function PorFaturarTab() {
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
         {t("web.billing.mark_help")}
       </Typography.Paragraph>
+      {semen ? (
+        <TabelaGaranhoes grupos={grupos} loading={q.isFetching} sel={sel} setSel={setSel} />
+      ) : (
       <Table<PorFaturar>
         size="small"
         bordered
@@ -417,15 +473,135 @@ function PorFaturarTab() {
             ),
           },
           { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
-          // Palhetas só na área do sémen.
-          ...(tipo === "armazenamento"
-            ? [{ title: t("web.billing.col.straws"), align: "right" as const, render: (_: unknown, l: PorFaturar) => tx.palhetas(l) }]
-            : []),
           { title: t("web.billing.col.days"), align: "right", render: (_, l) => <Typography.Text strong>{tx.dias(l)}</Typography.Text> },
         ]}
       />
+      )}
       {janela}
     </>
+  );
+}
+
+/** "30 palhetas (−4) · 05/11 – 30/11 · 26 dias · 780 palhetas × dia". */
+function useTextoTroco() {
+  const t = useT();
+  return (tr: Troco) =>
+    [
+      `${t("web.billing.straws", { count: tr.palhetas })}${tr.diferenca ? ` (${tr.diferenca > 0 ? "+" : "−"}${Math.abs(tr.diferenca)})` : ""}`,
+      `${dataCurta(tr.inicio)} – ${dataCurta(tr.fim)}`,
+      t("web.billing.days", { count: tr.dias }),
+      t("web.billing.straw_days", { count: tr.quantidade }),
+    ].join(" · ");
+}
+
+/** Sémen por faturar, por garanhão: o total de palhetas em cada período (e a diferença); os lotes ao carregar no número. */
+function TabelaGaranhoes({
+  grupos,
+  loading,
+  sel,
+  setSel,
+}: {
+  grupos: GrupoGaranhao[];
+  loading: boolean;
+  sel: string[];
+  setSel: (v: string[]) => void;
+}) {
+  const t = useT();
+  const tx = useTextos();
+  const diferenca = (tr: Troco) =>
+    tr.diferenca ? (
+      <Typography.Text type={tr.diferenca < 0 ? "danger" : "success"}>
+        {tr.diferenca > 0 ? "+" : "−"}
+        {Math.abs(tr.diferenca)}
+      </Typography.Text>
+    ) : (
+      <Typography.Text type="secondary">—</Typography.Text>
+    );
+  // Uma linha por período; o proprietário e o garanhão ocupam as linhas do seu grupo.
+  type Fila = Troco & { g: GrupoGaranhao; i: number };
+  const filas: Fila[] = [...grupos]
+    .sort((a, b) => tx.dono(a).localeCompare(tx.dono(b)) || a.garanhao.localeCompare(b.garanhao))
+    .flatMap((g) => g.trocos.map((tr, i) => ({ ...tr, g, i })));
+  const junta = (f: Fila) => ({ rowSpan: f.i === 0 ? f.g.trocos.length : 0 });
+  const total = grupos.reduce((s, g) => s + g.quantidade, 0);
+  return (
+    <Table<Fila>
+      size="small"
+      bordered
+      loading={loading}
+      rowKey={(f) => `${f.g.chave}|${f.inicio}`}
+      dataSource={filas}
+      locale={{ emptyText: t("web.billing.empty_pending") }}
+      pagination={false}
+      columns={[
+        {
+          title: (
+            <Checkbox
+              checked={grupos.length > 0 && sel.length === grupos.length}
+              indeterminate={sel.length > 0 && sel.length < grupos.length}
+              onChange={(e) => setSel(e.target.checked ? grupos.map((g) => g.chave) : [])}
+            />
+          ),
+          width: 40,
+          onCell: junta,
+          render: (_, f) => (
+            <Checkbox
+              checked={sel.includes(f.g.chave)}
+              onChange={(e) => setSel(e.target.checked ? [...sel, f.g.chave] : sel.filter((k) => k !== f.g.chave))}
+            />
+          ),
+        },
+        { title: t("label.owner"), onCell: junta, render: (_, f) => tx.dono(f.g) },
+        {
+          title: t("label.garanhao"),
+          onCell: junta,
+          render: (_, f) => (
+            <>
+              <Typography.Text strong>{f.g.garanhao}</Typography.Text>
+              <Popover
+                trigger="click"
+                title={t("web.billing.lots_of", { name: f.g.garanhao })}
+                content={
+                  <Table<PorFaturar>
+                    size="small"
+                    pagination={false}
+                    rowKey={chave}
+                    dataSource={f.g.lotes}
+                    columns={[
+                      { title: t("web.billing.col.what"), render: (_, l) => l.descricao + (l.local ? ` · ${l.local}` : "") },
+                      { title: t("web.billing.col.period"), render: (_, l) => tx.periodo(l) },
+                      { title: t("web.billing.col.straws"), align: "right", render: (_, l) => l.palhetas },
+                      { title: t("web.billing.col.days"), align: "right", render: (_, l) => nDias(l) },
+                    ]}
+                  />
+                }
+              >
+                <Button type="link" size="small">
+                  {t("web.billing.n_lots", { count: new Set(f.g.lotes.map((l) => l.ref_id)).size })}
+                </Button>
+              </Popover>
+            </>
+          ),
+        },
+        { title: t("web.billing.col.straws"), align: "right", render: (_, f) => <Typography.Text strong>{f.palhetas}</Typography.Text> },
+        { title: t("web.billing.col.diff"), align: "right", render: (_, f) => diferenca(f) },
+        { title: t("web.billing.col.period"), render: (_, f) => `${dataCurta(f.inicio)} – ${dataCurta(f.fim)}` },
+        { title: t("web.billing.col.days"), align: "right", render: (_, f) => f.dias },
+        { title: t("web.billing.col.straw_days"), align: "right", render: (_, f) => f.quantidade },
+      ]}
+      summary={() =>
+        filas.length ? (
+          <Table.Summary.Row>
+            <Table.Summary.Cell index={0} colSpan={7}>
+              <Typography.Text strong>{t("web.billing.total_label")}</Typography.Text>
+            </Table.Summary.Cell>
+            <Table.Summary.Cell index={7} align="right">
+              <Typography.Text strong>{total}</Typography.Text>
+            </Table.Summary.Cell>
+          </Table.Summary.Row>
+        ) : null
+      }
+    />
   );
 }
 
