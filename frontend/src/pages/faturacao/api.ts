@@ -57,9 +57,10 @@ export interface FiltroFat {
 const params = (o: object) =>
   new URLSearchParams(Object.entries(o as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined && v !== "").map(([k, v]) => [k, String(v)]));
 
-export const usePorFaturar = (f: FiltroFat & { tipo: TipoFat | null }) =>
+export const usePorFaturar = (f: FiltroFat & { tipo: TipoFat | null }, ativo = true) =>
   useQuery({
     queryKey: ["faturacao", "por-faturar", f],
+    enabled: ativo,
     placeholderData: keepPreviousData,
     queryFn: () => api<PorFaturar[]>(`/faturacao/por-faturar?${params(f)}`),
   });

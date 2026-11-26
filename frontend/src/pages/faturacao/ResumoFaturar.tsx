@@ -39,6 +39,7 @@ import { dataCurta } from "../../components/csv";
 import {
   numerosUsados,
   useFaturar,
+  usePorFaturar,
   useResumo,
   type DonoFat,
   type Movimento,
@@ -148,7 +149,26 @@ export function ResumoFaturar({
   // Primeira faturação de um lote (nunca faturado): o "De" pode ir para antes
   // da entrada do sémen na app — já estava guardado antes. Só na fatura; o
   // lote não muda. Depois da primeira fatura já não.
-  const temPrimeira = selecionadas.some(primeiraDoLote);
+  // Lotes nunca faturados entre os escolhidos: o "De" pode recuar até antes da
+  // entrada na app mesmo que as linhas do ecrã comecem mais tarde (o período
+  // do "Por faturar" era, por exemplo, só este mês). Ao recuar, pedem-se as
+  // linhas desses lotes desde a entrada, para as palhetas de cada período
+  // baterem certo.
+  const nuncaFaturados = useMemo(
+    () => new Set(selecionadas.filter((l) => l.tipo === "armazenamento" && l.pode_mudar_inicio).map((l) => l.ref_id)),
+    [selecionadas],
+  );
+  const recuar = !!(aberto && periodo && limites && nuncaFaturados.size && periodo[0].isBefore(limites[0], "day"));
+  const desdeEntrada = usePorFaturar(
+    { inicio: "1990-01-01", fim: limites?.[1].format(ISO) ?? dayjs().format(ISO), dono_id: null, tipo: "armazenamento" },
+    recuar,
+  );
+  const base = useMemo<PorFaturar[]>(() => {
+    if (!recuar || !desdeEntrada.data) return selecionadas;
+    const novas = desdeEntrada.data.filter((l) => nuncaFaturados.has(l.ref_id));
+    return [...selecionadas.filter((l) => !nuncaFaturados.has(l.ref_id)), ...novas];
+  }, [recuar, desdeEntrada.data, selecionadas, nuncaFaturados]);
+  const temPrimeira = base.some(primeiraDoLote) || nuncaFaturados.size > 0;
   // Datas mudadas numa linha só (clicando nas datas dessa linha). Mudar o
   // período geral volta a aplicá-lo a todas.
   const [porLinha, setPorLinha] = useState<Record<string, [string, string]>>(
@@ -159,7 +179,7 @@ export function ResumoFaturar({
     setPorLinha({});
   };
   const linhas = useMemo<LinhaResumo[]>(() => {
-    return selecionadas.flatMap((l) => {
+    return base.flatMap((l) => {
       const k = chaveLinha(l);
       let inicio = l.inicio;
       let fim = l.fim;
@@ -188,7 +208,7 @@ export function ResumoFaturar({
         },
       ];
     });
-  }, [selecionadas, periodo, porLinha]);
+  }, [base, periodo, porLinha]);
   const mudarLinha = (l: LinhaResumo, v: [Dayjs, Dayjs]) =>
     setPorLinha((x) => ({ ...x, [l.k]: [v[0].format(ISO), v[1].format(ISO)] }));
   /** Limites de uma linha: só encurta; na primeira fatura de um lote o início
