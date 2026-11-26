@@ -46,6 +46,7 @@ import {
   type PorFaturar,
 } from "./api";
 import { agruparPorGaranhao, garanhaoDe, type Troco } from "./porGaranhao";
+import { FORMATO_DATA } from "../../components/datas";
 
 const ISO = "YYYY-MM-DD";
 
@@ -627,7 +628,7 @@ export function ResumoFaturar({
                     {t("web.billing.invoice_date")}
                   </Typography.Text>
                   <DatePicker
-                    format="DD/MM/YYYY"
+                    format={FORMATO_DATA}
                     allowClear={false}
                     value={data}
                     onChange={(v) => v && setData(v)}
@@ -672,7 +673,7 @@ export function ResumoFaturar({
               {t("web.billing.period_to_bill")}
             </Typography.Text>
             <DatePicker.RangePicker
-              format="DD/MM/YYYY"
+              format={FORMATO_DATA}
               allowClear={false}
               value={periodo}
               disabledDate={foraDosLimites}
@@ -780,7 +781,7 @@ export function ResumoFaturar({
                           <DatePicker.RangePicker
                             size="small"
                             variant="borderless"
-                            format="DD/MM/YYYY"
+                            format={FORMATO_DATA}
                             allowClear={false}
                             suffixIcon={null}
                             value={[dayjs(l.inicio), dayjs(l.fim)]}

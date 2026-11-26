@@ -36,6 +36,7 @@ import {
   type TipoAnimal,
   type TipoRegisto,
 } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 const FMT = "YYYY-MM-DD";
 
@@ -319,7 +320,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores, m }: { aberto: boolean; 
                       ))}
                       <Col xs={12} sm={8}>
                         <Form.Item name={["novo", "data_nascimento"]} label={t("web.stays.form.birth")}>
-                          <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+                          <DatePicker format={FORMATO_DATA} style={{ width: "100%" }} />
                         </Form.Item>
                       </Col>
                       <Col xs={12} sm={4}>
@@ -394,7 +395,7 @@ function NovaEstadiaDesktop({ aberto, onClose, valores, m }: { aberto: boolean; 
               label={tipoRegisto === "externo" ? t("web.stays.form.service_date") : t("web.stays.form.entry_date")}
               rules={[{ required: true }]}
             >
-              <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
+              <DatePicker format={FORMATO_DATA} allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           {tipoRegisto && tipoRegisto !== "externo" && usarAloj && (

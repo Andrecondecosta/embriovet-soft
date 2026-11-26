@@ -48,6 +48,7 @@ import { localizacao, referencia, type Lote } from "./stock/api";
 import { QtdPalhetas, SelecionarLotesModal } from "./stock/transfer/TransferenciasTab";
 import { SelecionarLotesMobile } from "./stock/transfer/TransferenciasMobile";
 import { InseminacaoFresca } from "./animal/InseminacaoFresca";
+import { FORMATO_DATA } from "../components/datas";
 
 interface LoteInsem {
   id: number;
@@ -496,7 +497,7 @@ function InseminacaoDesktop({ x }: { x: X }) {
                   <Typography.Text type="secondary">{t("label.insemination_date")}</Typography.Text>
                   <DatePicker
                     style={{ width: "100%" }}
-                    format="DD/MM/YYYY"
+                    format={FORMATO_DATA}
                     allowClear={false}
                     value={dayjs(x.data)}
                     onChange={(d) => d && x.setData(d.format("YYYY-MM-DD"))}

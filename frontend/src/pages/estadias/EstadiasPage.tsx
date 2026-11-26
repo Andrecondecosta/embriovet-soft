@@ -44,6 +44,7 @@ import {
   type EstadoSaida,
   type TipoAnimal,
 } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 const TABS = [
   { id: "internadas", label: "web.stays.tab.internal" },
@@ -577,7 +578,7 @@ export function RegistarSaida({ estadia, onClose }: { estadia: Estadia | null; o
         <Row gutter={12}>
           <Col span={12}>
             <Form.Item name="data_saida" label={t("web.stays.exit.date")} rules={[{ required: true }]}>
-              <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} />
+              <DatePicker format={FORMATO_DATA} allowClear={false} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>

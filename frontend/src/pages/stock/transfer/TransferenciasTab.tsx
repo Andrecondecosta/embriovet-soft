@@ -32,6 +32,7 @@ import { DonoSelect } from "../LoteForm";
 import { HistoricoOperacoes } from "./HistoricoOperacoes";
 import { TransferenciasMobile } from "./TransferenciasMobile";
 import { MOTIVOS, useCriarOperacao, useEditarOperacao, useOperacao, type LinhaOperacao, type Motivo, type OperacaoIn } from "./api";
+import { FORMATO_DATA } from "../../../components/datas";
 
 /** Uma linha da operação: um lote e quantas palhetas saem dele. */
 interface LinhaSel {
@@ -528,7 +529,7 @@ function TransferenciasDesktop() {
                       <Typography.Text type="secondary">{t("web.transfer.exit_date")}</Typography.Text>
                       <DatePicker
                         style={{ width: "100%" }}
-                        format="DD/MM/YYYY"
+                        format={FORMATO_DATA}
                         allowClear={false}
                         value={dayjs(dataSaida ?? undefined)}
                         maxDate={dayjs()}

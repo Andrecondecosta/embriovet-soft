@@ -9,6 +9,7 @@ import { useIsMobile } from "../../../components/responsive";
 import { notifySuccess, useErrorMessage, useNotifyError } from "../../../components/errors";
 import { Lista } from "../../../components/Lista";
 import { useAnular, useHistorico, type OpHistorico } from "./api";
+import { FORMATO_DATA } from "../../../components/datas";
 
 const FMT = "YYYY-MM-DD";
 export const hora = (iso: string | null) => (iso ? dayjs(iso).format("HH:mm") : "—");
@@ -64,7 +65,7 @@ export function HistoricoOperacoes({
           value={dia}
           onChange={(d) => d && irPara(d)}
           allowClear={false}
-          format="DD/MM/YYYY"
+          format={FORMATO_DATA}
           style={{ flex: isMobile ? 1 : undefined }}
         />
         <Button icon={<RightOutlined />} onClick={() => irPara(dia.add(1, "day"))} aria-label="▶" />

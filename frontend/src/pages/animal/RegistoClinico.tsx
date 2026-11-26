@@ -47,6 +47,7 @@ import { useUser } from "../../components/User";
 import { confirmar, notifySuccess, notifyWarning, useNotifyError } from "../../components/errors";
 import { Cabecalho } from "../../components/mobile";
 import type { Animal } from "./api";
+import { FORMATO_DATA, FORMATO_DATA_HORA } from "../../components/datas";
 
 /* Registo clínico das éguas — desenho com ovário esquerdo/direito, útero e
  * cérvix; DG (diagnóstico de gestação), TX (tratamento), ! (prioritário) e
@@ -316,7 +317,7 @@ function DataHora({
     <DatePicker
       allowClear={false}
       showTime={hora ? { format: "HH:mm" } : false}
-      format={fmt}
+      format={hora ? FORMATO_DATA_HORA : FORMATO_DATA}
       value={dayjs(valor)}
       disabledDate={(d) => (futuro === true ? d.isBefore(dayjs(), "day") : futuro === false ? d.isAfter(dayjs(), "day") : false)}
       onChange={(d) => d && onChange(iso(d))}

@@ -41,6 +41,7 @@ import { DonoSelect } from "../stock/LoteForm";
 import { useOpcoes } from "../stock/api";
 import { OwnerFormModal } from "../owners/OwnerFormModal";
 import { useAgendarColheita, useCancelarColheita, useColheitas, useEditarAnimal, type Animal, type AnimalIn } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 const TIPOS = ["egua", "garanhao", "receptora"] as const;
 const TEXTOS: [keyof AnimalIn, string][] = [
@@ -303,7 +304,7 @@ function EditarAnimal({ animal, aberto, onClose }: { animal: Animal; aberto: boo
           ))}
           <Col xs={12} sm={8}>
             <Form.Item name="data_nascimento" label={t("web.stays.form.birth")}>
-              <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+              <DatePicker format={FORMATO_DATA} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={12} sm={8}>
@@ -422,7 +423,7 @@ function Colheitas({ animal }: { animal: Animal }) {
         <DatePicker
           value={data ? dayjs(data) : null}
           onChange={(d) => setData(d ? d.format("YYYY-MM-DD") : null)}
-          format="DD/MM/YYYY"
+          format={FORMATO_DATA}
           disabledDate={(d) => d.isBefore(dayjs(), "day")}
         />
         <Button type="primary" loading={agendar.isPending} onClick={fazerAgendar} disabled={!data}>

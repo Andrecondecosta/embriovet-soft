@@ -28,6 +28,7 @@ import { confirmar, notifySuccess, useErrorMessage, useNotifyError } from "../co
 import { Cabecalho } from "../components/mobile";
 import { usePesquisaAnimais, type AnimalPesquisa } from "./estadias/api";
 import { ProximaConsulta } from "./animal/ProximaConsulta";
+import { FORMATO_DATA } from "../components/datas";
 
 interface Tarefa {
   tarefa_id: number;
@@ -319,7 +320,7 @@ function TrabalhoDesktop({ x }: { x: T }) {
           >
             <Flex gap={6} align="center" style={{ marginBottom: 10 }}>
               <Button icon={<LeftOutlined />} onClick={() => x.irPara(x.dia.subtract(1, "day"))} />
-              <DatePicker value={x.dia} onChange={(d) => d && x.irPara(d)} allowClear={false} format="DD/MM/YYYY" />
+              <DatePicker value={x.dia} onChange={(d) => d && x.irPara(d)} allowClear={false} format={FORMATO_DATA} />
               <Button icon={<RightOutlined />} onClick={() => x.irPara(x.dia.add(1, "day"))} />
               {!x.ehHoje && (
                 <Button type="link" onClick={() => x.irPara(dayjs())}>

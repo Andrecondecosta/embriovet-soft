@@ -7,6 +7,7 @@ import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { DataCampo, PickerCampo, abrirAoTocar } from "../../components/mobile";
 import { useMudarTipo, useOpcoesEstadia, type TipoRegisto } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 /** "Interno" (estadia) ou "Externo" (acompanhada fora da clínica). */
 export type Destino = "estadia" | "externo";
@@ -122,7 +123,7 @@ export function MudarTipo({ entrada, onClose }: { entrada: EntradaAberta | null;
       <Typography.Paragraph type="secondary">{agora}</Typography.Paragraph>
       <Form form={form} layout="vertical" preserve={false} initialValues={{ data: dayjs(), alojamento_id: null }} onFinish={guardar}>
         <Form.Item name="data" label={t("web.stays.change.date")} rules={[{ required: true }]}>
-          <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} disabledDate={(d) => d.isAfter(dayjs(), "day")} />
+          <DatePicker format={FORMATO_DATA} allowClear={false} style={{ width: "100%" }} disabledDate={(d) => d.isAfter(dayjs(), "day")} />
         </Form.Item>
         {usarAloj && (
           <Form.Item name="alojamento_id" label={t("web.stays.form.housing")} rules={regraAloj}>

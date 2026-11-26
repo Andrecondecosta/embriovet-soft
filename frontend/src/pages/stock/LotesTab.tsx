@@ -47,6 +47,7 @@ import {
 } from "./api";
 import { LoteDrawer } from "./LoteDrawer";
 import { LotesMobile } from "./LotesMobile";
+import { FORMATO_DATA } from "../../components/datas";
 
 const SEM_DONO = "sem-dono";
 
@@ -135,7 +136,7 @@ function LotesDesktop({ onNovoLote }: { onNovoLote: () => void }) {
   const periodo = (de: (typeof PERIODOS)[number], ate: (typeof PERIODOS)[number]) => (
     <DatePicker.RangePicker
       style={{ width: "100%" }}
-      format="DD/MM/YYYY"
+      format={FORMATO_DATA}
       allowEmpty={[true, true]}
       value={[periodos[de] ? dayjs(periodos[de]) : null, periodos[ate] ? dayjs(periodos[ate]) : null]}
       onChange={(v) =>

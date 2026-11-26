@@ -24,6 +24,7 @@ import { dataCurta, dataHora } from "../components/csv";
 import { descarregar } from "../components/download";
 import { Cabecalho, PickerCampo, SeletorPesquisa } from "../components/mobile";
 import { ExportarRelatorio, type CorpoExportar, type Formato, type Tabela } from "./ExportarRelatorio";
+import { FORMATO_DATA } from "../components/datas";
 
 // "Todos" os garanhões / proprietários (no endereço; à API vai como `todos=true`).
 const TODOS = "*";
@@ -257,7 +258,7 @@ function RelatoriosDesktop({ r }: { r: R }) {
         <Typography.Text type="secondary">{t("web.reports.period")}</Typography.Text>
         <DatePicker.RangePicker
           style={{ width: "100%" }}
-          format="DD/MM/YYYY"
+          format={FORMATO_DATA}
           allowEmpty={[true, true]}
           value={[r.inicio ? dayjs(r.inicio) : null, r.fim ? dayjs(r.fim) : null]}
           onChange={(v) => r.mudarPeriodo(v?.[0]?.format(FMT) ?? null, v?.[1]?.format(FMT) ?? null)}

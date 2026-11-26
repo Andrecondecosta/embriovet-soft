@@ -49,6 +49,7 @@ import {
   type Animal,
   type Inseminacao,
 } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 const COR_RESULTADO: Record<string, string> = { pendente: "default", gestacao_confirmada: "success", falhou: "error" };
 const COR_RESULTADO_M: Record<string, "default" | "success" | "danger"> = {
@@ -179,7 +180,7 @@ export function ReprodutivoTab({ animal }: { animal: Animal }) {
           <Space>
             <Typography.Text type="secondary">{t("web.animal.dg.exam_date")}</Typography.Text>
             <DatePicker
-              format="DD/MM/YYYY"
+              format={FORMATO_DATA}
               allowClear={false}
               value={dayjs(dg.dia)}
               disabledDate={(d) => d.isAfter(dayjs(), "day") || d.isBefore(minDg, "day")}
@@ -427,7 +428,7 @@ export function EstadiasAnimalTab({ animal }: { animal: Animal }) {
               {ETAPAS.map(([k, l]) => (
                 <Col key={k} xs={12} sm={8}>
                   <Form.Item name={k} label={t(l)}>
-                    <DatePicker format="DD/MM/YYYY" style={{ width: "100%" }} />
+                    <DatePicker format={FORMATO_DATA} style={{ width: "100%" }} />
                   </Form.Item>
                 </Col>
               ))}

@@ -12,6 +12,7 @@ import { confirmar, notifySuccess, useNotifyError } from "../../components/error
 import { DataCampo, FolhaEcraInteiro, SeletorPesquisa, abrirAoTocar } from "../../components/mobile";
 import { GaranhaoInput } from "../stock/LoteForm";
 import { useOpcoes } from "../stock/api";
+import { FORMATO_DATA } from "../../components/datas";
 
 /**
  * INS no registo clínico: pergunta se o sémen é fresco ou congelado.
@@ -255,7 +256,7 @@ export function InseminacaoFresca({
         </Form.Item>
         <Flex gap={12}>
           <Form.Item name="data" label={t("label.date")} rules={[{ required: true }]} style={{ flex: 1 }}>
-            <DatePicker format="DD/MM/YYYY" allowClear={false} style={{ width: "100%" }} disabledDate={(d) => d.isAfter(dayjs(), "day")} />
+            <DatePicker format={FORMATO_DATA} allowClear={false} style={{ width: "100%" }} disabledDate={(d) => d.isAfter(dayjs(), "day")} />
           </Form.Item>
           <Form.Item name="hora" label={t("web.insem.time")} rules={[{ required: true, message: t("web.insem.error.time_required") }]} style={{ flex: 1 }}>
             <TimePicker format="HH:mm" allowClear={false} style={{ width: "100%" }} />

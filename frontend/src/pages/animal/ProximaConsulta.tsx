@@ -9,6 +9,7 @@ import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { notifySuccess, useNotifyError } from "../../components/errors";
 import { DataCampo } from "../../components/mobile";
+import { FORMATO_DATA } from "../../components/datas";
 
 export interface EstadoConsulta {
   falta: boolean;
@@ -199,7 +200,7 @@ export function ProximaConsulta({ animalId, nome, aberto, onClose }: { animalId:
           <div>
             <Typography.Text type="secondary">{t("web.next_visit.date")}</Typography.Text>
             <DatePicker
-              format="DD/MM/YYYY"
+              format={FORMATO_DATA}
               allowClear={false}
               style={{ width: "100%", marginTop: 4 }}
               value={data ? dayjs(data) : null}

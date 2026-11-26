@@ -64,6 +64,7 @@ import {
 } from "./api";
 
 import { agruparPorGaranhao, type GrupoGaranhao, type Troco } from "./porGaranhao";
+import { FORMATO_DATA } from "../../components/datas";
 const TABS = ["atraso", "anos", "por-faturar", "faturado"] as const;
 const ISO = "YYYY-MM-DD";
 // Primeiro ano do quadro "Por ano" (início da faturação na app); cada ano
@@ -239,7 +240,7 @@ function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; chi
       />
       {ate ? (
         <DatePicker
-          format="DD/MM/YYYY"
+          format={FORMATO_DATA}
           allowClear={false}
           value={p.periodo[1]}
           onChange={(v) => v && p.setPeriodo([dayjs(INICIO), v])}
@@ -247,7 +248,7 @@ function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; chi
         />
       ) : (
         <DatePicker.RangePicker
-          format="DD/MM/YYYY"
+          format={FORMATO_DATA}
           allowClear={false}
           value={p.periodo}
           onChange={(v) => v?.[0] && v[1] && p.setPeriodo([v[0], v[1]])}

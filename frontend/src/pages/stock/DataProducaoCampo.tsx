@@ -6,6 +6,7 @@ import { Button as MButton, DatePicker as MDatePicker } from "antd-mobile";
 import { useT } from "../../i18n/I18n";
 import { useIsMobile } from "../../components/responsive";
 import { diaProducao } from "./api";
+import { FORMATO_DATA } from "../../components/datas";
 
 /** Data de produção escolhida num calendário: grava sempre AAAA-MM-DD.
  *  Num lote antigo com texto que não é um dia certo ("2014", "Várias"),
@@ -52,7 +53,7 @@ export function DataProducaoCampo({ value, onChange }: { value?: string; onChang
     <Flex vertical gap={4}>
       <DatePicker
         style={{ width: "100%" }}
-        format="DD/MM/YYYY"
+        format={FORMATO_DATA}
         placeholder={t("web.stock.prod_date_choose")}
         value={dia ? dayjs(dia) : null}
         // Limpar num lote antigo apaga também o texto antigo.
