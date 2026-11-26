@@ -128,7 +128,6 @@ def _qtd_estadia(_item: dict, a: date, b: date) -> int:
 # ── Armazenamento de sémen ───────────────────────────────────────────────
 
 def _lotes(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | None = None) -> list[dict]:
-    hoje = date.today()
     cur.execute(
         """
         SELECT l.id, l.dono_id, d.nome, COALESCE(a.nome, l.garanhao),
@@ -171,7 +170,9 @@ def _lotes(cur, inicio: date, fim: date, dono_id: int | None, ids: list[int] | N
         saidas[ref].append((dia, q))
     itens = []
     for lid, dono, dono_nome, garanhao, criado, atual, origem, data_prod, cont, can, andar in lotes:
-        a, b = max(criado, inicio), min(hoje, fim)
+        # Sémen é aluguer de espaço: pode faturar-se para a frente (ex.: até ao
+        # fim do ano), com as palhetas de hoje.
+        a, b = max(criado, inicio), fim
         if a > b:
             continue
         item = {

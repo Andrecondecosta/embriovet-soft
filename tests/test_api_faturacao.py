@@ -345,3 +345,29 @@ def test_externo_que_passa_a_clinica_so_fatura_os_dias_na_clinica(ctx):
     assert linhas() == []  # o dia 1 já está faturado; depois é externo
     e = _exec("SELECT tipo_registo, estado, data_entrada FROM estadias WHERE id = %s", (eid,))
     assert e == ("externo", "externo", d(5))
+
+
+def test_faturar_desde_antes_da_entrada_com_varios_periodos(ctx):
+    # Como no resumo: as linhas do lote desde a entrada (uma por período com as
+    # mesmas palhetas), a primeira recuada para antes da entrada; tudo numa fatura.
+    c = ctx["fat"]
+    params = {"inicio": "1990-01-01", "fim": HOJE.isoformat(), "dono_id": ctx["dono"], "tipo": "armazenamento"}
+    linhas = c.get("/api/faturacao/por-faturar", params=params).json()
+    assert len(linhas) > 1
+    envio = [{"tipo": l["tipo"], "ref_id": l["ref_id"], "inicio": l["inicio"], "fim": l["fim"]} for l in linhas]
+    envio[0]["inicio"] = d(30).isoformat()
+    r = c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 7/2026", HOJE.isoformat(), envio))
+    assert r.status_code == 200, r.text
+
+
+def test_semen_fatura_se_para_a_frente_ate_ao_fim_do_ano(ctx):
+    # Aluguer de espaço: pode faturar-se já até ao fim do ano, com as palhetas de hoje.
+    c = ctx["fat"]
+    fim_ano = date(HOJE.year, 12, 31) if HOJE < date(HOJE.year, 12, 31) else HOJE + timedelta(days=10)
+    params = {"inicio": HOJE.isoformat(), "fim": fim_ano.isoformat(), "dono_id": ctx["dono"], "tipo": "armazenamento"}
+    l = c.get("/api/faturacao/por-faturar", params=params).json()
+    assert [(x["inicio"], x["fim"], x["palhetas"]) for x in l] == [(HOJE.isoformat(), fim_ano.isoformat(), 4)]
+    linha = {"tipo": "armazenamento", "ref_id": ctx["lote"], "inicio": HOJE.isoformat(), "fim": fim_ano.isoformat()}
+    assert c.post("/api/faturacao/faturar", json=_fatura(ctx["dono"], "FT 8/2026", HOJE.isoformat(), [linha])).status_code == 200
+    f = c.get("/api/faturacao/faturado", params={"inicio": HOJE.isoformat(), "fim": fim_ano.isoformat(), "dono_id": ctx["dono"]}).json()
+    assert [(x["fim"], x["quantidade"]) for x in f] == [(fim_ano.isoformat(), 4 * ((fim_ano - HOJE).days + 1))]

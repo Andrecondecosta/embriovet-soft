@@ -75,10 +75,12 @@ const desdeInicio = (p: [Dayjs, Dayjs]) => p[0].format(ISO) === INICIO;
 
 /** Atalhos de "Tudo até": hoje, fim do mês passado e fim dos últimos anos
  *  (ex.: faturar agora tudo até ao fim de 2024; 2025 e 2026 ficam para depois). */
-const ATE = () => {
+const ATE = (semen = false) => {
   const ano = dayjs().year();
   return [
     { id: "hoje", data: dayjs() },
+    // Sémen (aluguer de espaço): pode faturar-se já até ao fim do ano.
+    ...(semen ? [{ id: String(ano), data: dayjs().endOf("year") }] : []),
     { id: "mes", data: dayjs().subtract(1, "month").endOf("month") },
     ...[1, 2, 3].map((n) => ({ id: String(ano - n), data: dayjs(`${ano - n}-12-31`) })),
   ];
@@ -220,6 +222,7 @@ function useRotuloAte() {
 function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; children?: React.ReactNode }) {
   const t = useT();
   const rotuloAte = useRotuloAte();
+  const semen = useArea().tipo === "armazenamento";
   const donos = useOpcoes("proprietarios");
   const ate = desdeInicio(p.periodo);
   return (
@@ -240,7 +243,7 @@ function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; chi
           allowClear={false}
           value={p.periodo[1]}
           onChange={(v) => v && p.setPeriodo([dayjs(INICIO), v])}
-          presets={ATE().map((x) => ({ label: rotuloAte(x.id), value: x.data }))}
+          presets={ATE(semen).map((x) => ({ label: rotuloAte(x.id), value: x.data }))}
         />
       ) : (
         <DatePicker.RangePicker
@@ -271,9 +274,10 @@ function FiltrosDesktop({ p, children }: { p: ReturnType<typeof usePeriodo>; chi
 function PeriodoMobile({ p }: { p: ReturnType<typeof usePeriodo> }) {
   const t = useT();
   const rotuloAte = useRotuloAte();
+  const semen = useArea().tipo === "armazenamento";
   const opcoes = [
     ...PERIODOS.map((x) => ({ value: x.id, label: t(`web.billing.${x.id}`), de: x.de(), ate: x.ate() })),
-    ...ATE().map((x) => ({ value: `ate-${x.id}`, label: rotuloAte(x.id), de: dayjs(INICIO), ate: x.data })),
+    ...ATE(semen).map((x) => ({ value: `ate-${x.id}`, label: rotuloAte(x.id), de: dayjs(INICIO), ate: x.data })),
   ];
   const atual = opcoes.find((x) => x.de.isSame(p.periodo[0], "day") && x.ate.isSame(p.periodo[1], "day"))?.value;
   return (

@@ -156,25 +156,32 @@ export function ResumoFaturar({
   // Primeira faturação de um lote (nunca faturado): o "De" pode ir para antes
   // da entrada do sémen na app — já estava guardado antes. Só na fatura; o
   // lote não muda. Depois da primeira fatura já não.
-  // Lotes nunca faturados entre os escolhidos: o "De" pode recuar até antes da
-  // entrada na app mesmo que as linhas do ecrã comecem mais tarde (o período
-  // do "Por faturar" era, por exemplo, só este mês). Ao recuar, pedem-se as
-  // linhas desses lotes desde a entrada, para as palhetas de cada período
-  // baterem certo.
+  // Sémen: o período do resumo pode ir além das linhas escolhidas — para trás
+  // (lotes nunca faturados: antes da entrada na app) e para a frente (ex.: até
+  // ao fim do ano, depois de hoje; conta as palhetas que há hoje). Nesse caso
+  // pedem-se de novo as linhas desses lotes no período todo, para as palhetas
+  // de cada período baterem certo.
+  const semen = soSemen(selecionadas);
   const nuncaFaturados = useMemo(
     () => new Set(selecionadas.filter((l) => l.tipo === "armazenamento" && l.pode_mudar_inicio).map((l) => l.ref_id)),
     [selecionadas],
   );
-  const recuar = !!(aberto && periodo && limites && nuncaFaturados.size && periodo[0].isBefore(limites[0], "day"));
-  const desdeEntrada = usePorFaturar(
-    { inicio: "1990-01-01", fim: limites?.[1].format(ISO) ?? dayjs().format(ISO), dono_id: null, tipo: "armazenamento" },
-    recuar,
+  const lotesEscolhidos = useMemo(() => new Set(selecionadas.map((l) => l.ref_id)), [selecionadas]);
+  const recuar = !!(periodo && limites && nuncaFaturados.size && periodo[0].isBefore(limites[0], "day"));
+  const avancar = !!(semen && periodo && limites && periodo[1].isAfter(limites[1], "day"));
+  const alargado = usePorFaturar(
+    {
+      inicio: recuar ? "1990-01-01" : (limites?.[0].format(ISO) ?? dayjs().format(ISO)),
+      fim: (avancar ? periodo![1] : limites?.[1] ?? dayjs()).format(ISO),
+      dono_id: null,
+      tipo: "armazenamento",
+    },
+    aberto && (recuar || avancar),
   );
   const base = useMemo<PorFaturar[]>(() => {
-    if (!recuar || !desdeEntrada.data) return selecionadas;
-    const novas = desdeEntrada.data.filter((l) => nuncaFaturados.has(l.ref_id));
-    return [...selecionadas.filter((l) => !nuncaFaturados.has(l.ref_id)), ...novas];
-  }, [recuar, desdeEntrada.data, selecionadas, nuncaFaturados]);
+    if (!(recuar || avancar) || !alargado.data) return selecionadas;
+    return alargado.data.filter((l) => lotesEscolhidos.has(l.ref_id));
+  }, [recuar, avancar, alargado.data, selecionadas, lotesEscolhidos]);
   const temPrimeira = base.some(primeiraDoLote) || nuncaFaturados.size > 0;
   // Datas mudadas numa linha só (clicando nas datas dessa linha). Mudar o
   // período geral volta a aplicá-lo a todas.
@@ -251,11 +258,13 @@ export function ResumoFaturar({
           label: t("web.billing.until_end_of", { ano: dayjs().year() - 1 }),
           data: dayjs(`${dayjs().year() - 1}-12-31`),
         },
+        // Sémen: pode faturar-se já até ao fim deste ano.
+        ...(semen ? [{ label: t("web.billing.until_end_of", { ano: dayjs().year() }), data: dayjs().endOf("year") }] : []),
       ]
         .filter(
           (x) =>
             !x.data.isBefore(limites[0], "day") &&
-            x.data.isBefore(limites[1], "day"),
+            (semen || x.data.isBefore(limites[1], "day")),
         )
         .map((x) => ({
           label: x.label,
@@ -264,7 +273,8 @@ export function ResumoFaturar({
     : [];
   const foraDosLimites = (d: Dayjs) =>
     !!limites &&
-    (d.isAfter(limites[1], "day") ||
+    // No sémen pode faturar-se para a frente (ex.: até ao fim do ano).
+    ((!semen && d.isAfter(limites[1], "day")) ||
       (!temPrimeira && d.isBefore(limites[0], "day")));
 
   const refs = useMemo(

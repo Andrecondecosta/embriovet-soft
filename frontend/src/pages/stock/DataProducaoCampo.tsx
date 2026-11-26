@@ -42,7 +42,7 @@ export function DataProducaoCampo({ value, onChange }: { value?: string; onChang
           onClose={() => setAberto(false)}
           value={dia ? dayjs(dia).toDate() : new Date()}
           min={dayjs().subtract(40, "year").toDate()}
-          max={new Date()}
+          max={dayjs().add(10, "year").toDate()}
           onConfirm={(v) => onChange?.(dayjs(v).format("YYYY-MM-DD"))}
         />
       </Flex>
@@ -55,7 +55,6 @@ export function DataProducaoCampo({ value, onChange }: { value?: string; onChang
         format="DD/MM/YYYY"
         placeholder={t("web.stock.prod_date_choose")}
         value={dia ? dayjs(dia) : null}
-        disabledDate={(d) => d.isAfter(dayjs(), "day")}
         // Limpar num lote antigo apaga também o texto antigo.
         onChange={(d) => onChange?.(d ? d.format("YYYY-MM-DD") : "")}
       />
